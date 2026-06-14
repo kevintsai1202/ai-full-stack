@@ -1,23 +1,23 @@
       
 <truncated 45283 bytes>
-'**集合類**：`@NotEmpty`（集合不可空）、`@Size(min, max)`（集合元素數量範圍）',
-558:                 '**巢狀物件**：`@Valid` 標在欄位上 → 對該物件的欄位遞迴驗證（如 List 裡的每個元素）'
-559:               ],
-560:               callout: {
-561:                 type: 'info',
-562:                 title: '@Valid 與 @Validated 的差別',
-563:                 body: '@Valid 是 Jakarta EE 標準，@Validated 是 Spring 的擴充版本。功能幾乎相同，差別在於 @Validated 支援「群組驗證（Validation Groups）」，可以為「新增」和「修改」分別定義不同的規則組合。一般情況用 @Valid 就夠；需要分組時再換 @Validated。'
-564:               }
-565:             },
-566:             {
-567:               title: 'AI 提示詞練習',
-568:               type: 'text',
-569:               paragraphs: [
-570:                 '示範專案跑起來後，試著用以下問題請 AI 助手解釋細節，加深對 Spring MVC 的理解：'
-571:               ],
-572:               bullets: [
-573:                 '「`@RestController` 與 `@Controller` 差別是什麼？如果改用 `@Controller`，我需要在哪裡加什麼才能讓回傳值變成 JSON？」',
-574:                 '「現在的 ProductService 用 List 存資料，如果我要換成 HashMap 以加速 ID 查詢，應該怎麼改？請幫我重寫 findById 的邏輯。」',
+'**集合類**：`@NotEmpty`（集合不可空）、`@Size(min, max)`（集合元素數量範圍）',
+558:                 '**巢狀物件**：`@Valid` 標在欄位上 → 對該物件的欄位遞迴驗證（如 List 裡的每個元素）'
+559:               ],
+560:               callout: {
+561:                 type: 'info',
+562:                 title: '@Valid 與 @Validated 的差別',
+563:                 body: '@Valid 是 Jakarta EE 標準，@Validated 是 Spring 的擴充版本。功能幾乎相同，差別在於 @Validated 支援「群組驗證（Validation Groups）」，可以為「新增」和「修改」分別定義不同的規則組合。一般情況用 @Valid 就夠；需要分組時再換 @Validated。'
+564:               }
+565:             },
+566:             {
+567:               title: 'AI 提示詞練習',
+568:               type: 'text',
+569:               paragraphs: [
+570:                 '示範專案跑起來後，試著用以下問題請 AI 助手解釋細節，加深對 Spring MVC 的理解：'
+571:               ],
+572:               bullets: [
+573:                 '「`@RestController` 與 `@Controller` 差別是什麼？如果改用 `@Controller`，我需要在哪裡加什麼才能讓回傳值變成 JSON？」',
+574:                 '「現在的 ProductService 用 List 存資料，如果我要換成 HashMap 以加速 ID 查詢，應該怎麼改？請幫我重寫 findById 的邏輯。」',
 575:                 '「為什麼 getBy
 ```
 
@@ -714,7 +714,7 @@ console.log('Successfully merged and generated d:/GitHub/hahow-ai-full-stack/tea
       q: 'Embabel（0.4.0）教學專案的環境需求，何者正確？',
       options: [
         'Java 8 即可，Spring Boot 版本不限',
-        'Java 21 以上、Spring Boot 3.5.x（MVC 用 spring-boot-starter-web）；Boot 4 需等 Embabel 2.0',
+        'Java 21 以上、Spring Boot 4.0.x + Spring AI 2.0.x（MVC 用 spring-boot-starter-web）',
         '只能用 Kotlin 開發'
       ],
       answer: 1,
@@ -1560,7 +1560,7 @@ function DayBlock({ course, dayMeta, taskState, onToggleTask, accordionOpen, sea
   "quiz": [
     {
       "id": "q1",
-      "q": "在 Spring Boot 3.5.x 中，為了支援向量資料庫 pgvector 的 vector 欄位，我們在 Docker Compose 中應該使用哪一個映像檔？",
+      "q": "在 Spring Boot 4.0.x 中，為了支援向量資料庫 pgvector 的 vector 欄位，我們在 Docker Compose 中應該使用哪一個映像檔？",
       "options": [
         "postgres:16",
         "pgvector/pgvector:pg16",

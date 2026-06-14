@@ -1,0 +1,13 @@
+/* ===========================================================================
+   凱文大叔 Design System — global entry point
+   ---------------------------------------------------------------------------
+   This file is the single stylesheet consumers link. It is a manifest of
+   @import lines only — no rules live here. Everything reachable from these
+   imports (tokens + @font-face / webfont declarations) ships to consumers.
+   =========================================================================== */
+
+@import "tokens/fonts.css";
+@import "tokens/colors.css";
+@import "tokens/typography.css";
+@import "tokens/spacing.css";
+@import "tokens/effects.css";

@@ -517,7 +517,7 @@ function conceptVisual(heading) {
 
 /** 首頁全幅 Hero */
 function renderHero(meta) {
-  const techPills = ["Spring Boot 3.5", "React 19 + Vite", "Spring AI", "pgvector RAG", "MCP", "Demo Day"];
+  const techPills = ["Spring Boot 4", "React 19 + Vite", "Spring AI 2.0", "pgvector RAG", "MCP", "Demo Day"];
   return `<div class="hero-band"><section class="hero" id="top">
     <div class="hero-media"><img src="assets/illustrations/cover.png" alt="AI CRM 課程全幅主視覺"/></div>
     <div class="hero-overlay"><div class="hero-copy">

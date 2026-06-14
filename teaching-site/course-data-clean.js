@@ -1,38 +1,38 @@
       
 <truncated 45283 bytes>
-'**集合類**：`@NotEmpty`（集合不可空）、`@Size(min, max)`（集合元素數量範圍）',
-558:                 '**巢狀物件**：`@Valid` 標在欄位上 → 對該物件的欄位遞迴驗證（如 List 裡的每個元素）'
-559:               ],
-560:               callout: {
-561:                 type: 'info',
-562:                 title: '@Valid 與 @Validated 的差別',
-563:                 body: '@Valid 是 Jakarta EE 標準，@Validated 是 Spring 的擴充版本。功能幾乎相同，差別在於 @Validated 支援「群組驗證（Validation Groups）」，可以為「新增」和「修改」分別定義不同的規則組合。一般情況用 @Valid 就夠；需要分組時再換 @Validated。'
-564:               }
-565:             },
-566:             {
-567:               title: 'AI 提示詞練習',
-568:               type: 'text',
-569:               paragraphs: [
-570:                 '示範專案跑起來後，試著用以下問題請 AI 助手解釋細節，加深對 Spring MVC 的理解：'
-571:               ],
-572:               bullets: [
-573:                 '「`@RestController` 與 `@Controller` 差別是什麼？如果改用 `@Controller`，我需要在哪裡加什麼才能讓回傳值變成 JSON？」',
-574:                 '「現在的 ProductService 用 List 存資料，如果我要換成 HashMap 以加速 ID 查詢，應該怎麼改？請幫我重寫 findById 的邏輯。」',
+'**集合類**：`@NotEmpty`（集合不可空）、`@Size(min, max)`（集合元素數量範圍）',
+558:                 '**巢狀物件**：`@Valid` 標在欄位上 → 對該物件的欄位遞迴驗證（如 List 裡的每個元素）'
+559:               ],
+560:               callout: {
+561:                 type: 'info',
+562:                 title: '@Valid 與 @Validated 的差別',
+563:                 body: '@Valid 是 Jakarta EE 標準，@Validated 是 Spring 的擴充版本。功能幾乎相同，差別在於 @Validated 支援「群組驗證（Validation Groups）」，可以為「新增」和「修改」分別定義不同的規則組合。一般情況用 @Valid 就夠；需要分組時再換 @Validated。'
+564:               }
+565:             },
+566:             {
+567:               title: 'AI 提示詞練習',
+568:               type: 'text',
+569:               paragraphs: [
+570:                 '示範專案跑起來後，試著用以下問題請 AI 助手解釋細節，加深對 Spring MVC 的理解：'
+571:               ],
+572:               bullets: [
+573:                 '「`@RestController` 與 `@Controller` 差別是什麼？如果改用 `@Controller`，我需要在哪裡加什麼才能讓回傳值變成 JSON？」',
+574:                 '「現在的 ProductService 用 List 存資料，如果我要換成 HashMap 以加速 ID 查詢，應該怎麼改？請幫我重寫 findById 的邏輯。」',
 575:                 '「為什麼 getBy
-      '透過 Spring AI 建立串流對話、工具呼叫與 RAG 問答能力',
-      '完成可展示、可驗證、可持續擴充的智慧商城客服系統'
-    ],
-    techStack: [
-      'Spring Boot 4.0.0',
-      'Spring AI 2.0.0-M8',
-      'Spring Data JPA',
-      'PostgreSQL / pgvector',
-      'Flyway',
-      'ChatClient / SSE / MCP'
-    ]
-  },
-  overview: {
-    pillars: [
+      '透過 Spring AI 建立串流對話、工具呼叫與 RAG 問答能力',
+      '完成可展示、可驗證、可持續擴充的智慧商城客服系統'
+    ],
+    techStack: [
+      'Spring Boot 4.0.0',
+      'Spring AI 2.0.0-M8',
+      'Spring Data JPA',
+      'PostgreSQL / pgvector',
+      'Flyway',
+      'ChatClient / SSE / MCP'
+    ]
+  },
+  overview: {
+    pillars: [
       
     flow: ["環境檢查", "後端骨架", "前端骨架", "連線驗證"],
     colors: [palette.blue, palette.cyan, palette.green, palette.amber]
@@ -178,14 +178,14 @@
         "time": "09:00 ~ 12:00",
         "goals": [
           "建立 Windows (PowerShell 7+) 或 macOS (zsh + Homebrew) 下的 Java 21 / Node.js / Docker 開發環境",
-          "初始化 backend (Spring Boot 3.5.x) 與 frontend (Vite + React) 專案目錄結構",
+          "初始化 backend (Spring Boot 4.0.x) 與 frontend (Vite + React) 專案目錄結構",
           "理解 AI Agent 協作三部曲：讀取需求、產生程式、運行驗證",
           "在後端實作 /api/health，在前端實作連線健康狀態呼吸燈"
         ],
         "concepts": [
           {
             "heading": "本機開發環境版本基準與架構考量",
-            "body": "本課程同時支援 Windows 與 macOS 兩種開發環境。後端基於 Java 21 與 Spring Boot 3.5.x。Java 21 LTS 引入的虛擬執行緒 (Virtual Threads) 能以極低的記憶體代價建立數百萬個輕量級執行緒，非常適合高併發的企業級 CRM 系統。前端使用 React 19 與 Vite，React 19 全新編譯器能自動處理元件 memoization，免除手動 useMemo / useCallback 的累贅。Windows 以 PowerShell 7+ 做為命令列，而 macOS 以 zsh 搭配 Homebrew 快速安裝 Java 及工具鏈。資料庫採用 Docker Compose 執行 Postg
+            "body": "本課程同時支援 Windows 與 macOS 兩種開發環境。後端基於 Java 21 與 Spring Boot 4.0.x。Java 21 LTS 引入的虛擬執行緒 (Virtual Threads) 能以極低的記憶體代價建立數百萬個輕量級執行緒，非常適合高併發的企業級 CRM 系統。前端使用 React 19 與 Vite，React 19 全新編譯器能自動處理元件 memoization，免除手動 useMemo / useCallback 的累贅。Windows 以 PowerShell 7+ 做為命令列，而 macOS 以 zsh 搭配 Homebrew 快速安裝 Java 及工具鏈。資料庫採用 Docker Compose 執行 Postg
 
 
 
@@ -221,7 +221,7 @@
           },
           {
             "id": "d1-u1-t2",
-            "label": "建立後端 Spring Boot 3.5.x 專案，新增 /api/health 回傳 status=UP 的 JSON"
+            "label": "建立後端 Spring Boot 4.0.x 專案，新增 /api/health 回傳 status=UP 的 JSON"
           },
           {
             "id": "d1-u1-t3",
@@ -255,7 +255,7 @@
             "spec": "Monorepo / Health Check / PowerShell / Zsh"
           }
         ],
-        "prompt": "你是一位精通 Windows 11 (PowerShell 7+) 環境的資深軟體架構師。現在我們需要初始化一套名為「AI CRM 智慧業務助理」的企業級全端專案。\n此專案採用前後端分離架構，後端使用 Spring Boot 3.5.x + Java 21，前端使用 Vite + React + TypeScript。\n請為我規劃並產生一套適用於 Windows 環境的環境檢查與專案初始化腳本。\n\n要求：\n1. 設計環境檢查腳本 `check-env.ps1` (PowerShell 7)，檢查項目包含：\n   - 檢查 JDK 21 是否安裝，並驗證 `java -version` 是否包含 \"21\"。\n   - 檢查 Maven 是否安裝，驗證 `mvn -version`。\n   - 檢查 Node.js 是否安裝 (要求 v18+)，驗證 `node -v` 與 `npm -v`。\n   - 檢查 Docker 是否正在運行，驗證 `docker info`（使用 Docker Desktop）。\n   - 若任何檢查失敗，以 `Write-Host -ForegroundColor Red` 顯示明確錯誤訊息，並提供 Windows 安裝指引（winget 指令或官網下載連結）。\n\n2. 提供初始化專案目錄結構的 PowerShell 指令：\n   - 根目錄：`ai-crm/`\n   - 後端目錄：`ai-crm/backend/` (由 Spring Initializr 建立，包含 Spring Web, JPA, Flyway, PostgreSQL, Security, Spring AI 等依賴)\n   - 前端目錄：`ai-crm/frontend/` (
+        "prompt": "你是一位精通 Windows 11 (PowerShell 7+) 環境的資深軟體架構師。現在我們需要初始化一套名為「AI CRM 智慧業務助理」的企業級全端專案。\n此專案採用前後端分離架構，後端使用 Spring Boot 4.0.x + Java 21，前端使用 Vite + React + TypeScript。\n請為我規劃並產生一套適用於 Windows 環境的環境檢查與專案初始化腳本。\n\n要求：\n1. 設計環境檢查腳本 `check-env.ps1` (PowerShell 7)，檢查項目包含：\n   - 檢查 JDK 21 是否安裝，並驗證 `java -version` 是否包含 \"21\"。\n   - 檢查 Maven 是否安裝，驗證 `mvn -version`。\n   - 檢查 Node.js 是否安裝 (要求 v18+)，驗證 `node -v` 與 `npm -v`。\n   - 檢查 Docker 是否正在運行，驗證 `docker info`（使用 Docker Desktop）。\n   - 若任何檢查失敗，以 `Write-Host -ForegroundColor Red` 顯示明確錯誤訊息，並提供 Windows 安裝指引（winget 指令或官網下載連結）。\n\n2. 提供初始化專案目錄結構的 PowerShell 指令：\n   - 根目錄：`ai-crm/`\n   - 後端目錄：`ai-crm/backend/` (由 Spring Initializr 建立，包含 Spring Web, JPA, Flyway, PostgreSQL, Security, Spring AI 等依賴)\n   - 前端目錄：`ai-crm/frontend/` (
 
         "principle": "AI 協作開發的核心原則是：『先讀懂需求，再產生程式碼，最後用自動化腳本驗證。』本課程同時支援 Windows 與 macOS：Windows 以 PowerShell 7+、macOS 以 zsh + Homebrew 管理工具鏈，確保環境變數與目錄結構一致，避免因作業系統不同導致的通訊死角。"
       },
@@ -564,22 +564,22 @@ async function writeCourse(course) {
         "subtitle": "Axios 攔截器、TypeScript 介面對接與 Dashboard/Kanban 實作",
         "features": [
           "React 登入頁與 CRM Dash
-              title: 'AI 提示詞練習',
-              type: 'text',
-              paragraphs: [
-                '示範專案跑起來後，試著用以下問題請 AI 助手解釋細節，加深對 Spring MVC 的理解：'
-              ],
-              bullets: [
-                '「`@RestController` 與 `@Controller` 差別是什麼？如果改用 `@Controller`，我需要在哪裡加什麼才能讓回傳值變成 JSON？」',
-                '「現在的 ProductService 用 List 存資料，如果我要換成 HashMap 以加速 ID 查詢，應該怎麼改？請幫我重寫 findById 的邏輯。」',
-                '「為什麼 getById 回傳 `ResponseEntity<Product>` 而不是直接回傳 `Product`？兩種做法有什麼差別？」',
-                '「請幫我在 ProductController 加一個 DELETE /api/products/{id} 端點，成功刪除回傳 204，找不到回傳 404。」'
-              ]
-            }
-          ]
-        },
-        {
-          id: 'd1-u3',
+              title: 'AI 提示詞練習',
+              type: 'text',
+              paragraphs: [
+                '示範專案跑起來後，試著用以下問題請 AI 助手解釋細節，加深對 Spring MVC 的理解：'
+              ],
+              bullets: [
+                '「`@RestController` 與 `@Controller` 差別是什麼？如果改用 `@Controller`，我需要在哪裡加什麼才能讓回傳值變成 JSON？」',
+                '「現在的 ProductService 用 List 存資料，如果我要換成 HashMap 以加速 ID 查詢，應該怎麼改？請幫我重寫 findById 的邏輯。」',
+                '「為什麼 getById 回傳 `ResponseEntity<Product>` 而不是直接回傳 `Product`？兩種做法有什麼差別？」',
+                '「請幫我在 ProductController 加一個 DELETE /api/products/{id} 端點，成功刪除回傳 204，找不到回傳 404。」'
+              ]
+            }
+          ]
+        },
+        {
+          id: 'd1-u3',
      
 
 
@@ -822,8 +822,8 @@ async function writeCourse(course) {
           }
         ],
         "prompt": "請接續 Unit 6 的 AI 串流助理與 Tool Calling 實作。現在我們要進入 Unit 7：向量搜尋 (RAG) 與外部工具 (MCP) 擴充。我們要在資料庫中為 `pgvector` 建立產品型錄、常見銷售話術 (Playbook) 與服務條款的 vector table。當業務詢問產品推薦或合約規範時，AI 助理能自動檢索最相關的知識庫文件片段進行 RAG (Retrieval-Augmented Generation) 回答。此外，我們將設計 MCP (Model Context Protocol) 服務以擴充外部工具連結能力。\n\n要求：\n1. RAG 知識庫架構與 Ingestion 實作：\n   - 建立向量資料表 `knowledge_documents`，欄位包含主鍵、內容文字、向量欄位 `embedding` (使用 pgvector vector 類型) 與元資料 `metadata` (JS
-              type: 'code',
-              paragraphs: [
+              type: 'code',
+              paragraphs: [
                 '這是本課程 Product Entity 的結構，對應到 Flyway V1 建立的 `prod
       </div>
       <div className="quiz-container">
@@ -1119,7 +1119,7 @@ async function writeCourse(course) {
           "spec": "Monorepo / Health Check / PowerShell / Zsh"
         }
       ],
-      "prompt": "你是一位同時精通 Windows 11 (PowerShell 7+) 與 macOS (zsh + Homebrew) 環境的資深軟體架構師。現在我們需要初始化一套名為「AI CRM 智慧業務助理」的企業級全端專案。\n此專案採用前後端分離架構，後端使用 Spring Boot 3.5.x + Java 21，前端使用 Vite + React + TypeScript。\n請為我規劃並產生一套「跨平台」的環境檢查與專案初始化腳本，必須同時支援 Windows 與 macOS 兩種開發環境。\n\n要求：\n1. 設計環境檢查腳本，需同時提供 Windows 版 `check-env.ps1` (PowerShell 7) 與 macOS / Linux 版 `check-env.sh` (zsh / bash) 兩個版本，檢查項目一致：\n   - 檢查 JDK 21 是否安裝，並驗證 `java -version` 是否包含 \"21\"。\n   - 檢查 Maven 是否安裝，驗證 `mvn -version`。\n   - 檢查 Node.js 是否安裝 (要求 v18+)，驗證 `node -v` 與 `npm -v`。\n   - 檢查 Docker 是否正在運行，驗證 `docker info`（Windows 使用 Docker Desktop；macOS 可用 Docker Desktop 或 colima）。\n   - 若任何檢查失敗，以醒目顏色（PowerShell 用紅色、bash 用 ANSI 紅色）顯示明確錯誤訊息與對應平台的安裝指引：Windows 提供 winget 或官網下載連結；macOS 提供 Homebrew 安裝指令（例如 `brew ins
+      "prompt": "你是一位同時精通 Windows 11 (PowerShell 7+) 與 macOS (zsh + Homebrew) 環境的資深軟體架構師。現在我們需要初始化一套名為「AI CRM 智慧業務助理」的企業級全端專案。\n此專案採用前後端分離架構，後端使用 Spring Boot 4.0.x + Java 21，前端使用 Vite + React + TypeScript。\n請為我規劃並產生一套「跨平台」的環境檢查與專案初始化腳本，必須同時支援 Windows 與 macOS 兩種開發環境。\n\n要求：\n1. 設計環境檢查腳本，需同時提供 Windows 版 `check-env.ps1` (PowerShell 7) 與 macOS / Linux 版 `check-env.sh` (zsh / bash) 兩個版本，檢查項目一致：\n   - 檢查 JDK 21 是否安裝，並驗證 `java -version` 是否包含 \"21\"。\n   - 檢查 Maven 是否安裝，驗證 `mvn -version`。\n   - 檢查 Node.js 是否安裝 (要求 v18+)，驗證 `node -v` 與 `npm -v`。\n   - 檢查 Docker 是否正在運行，驗證 `docker info`（Windows 使用 Docker Desktop；macOS 可用 Docker Desktop 或 colima）。\n   - 若任何檢查失敗，以醒目顏色（PowerShell 用紅色、bash 用 ANSI 紅色）顯示明確錯誤訊息與對應平台的安裝指引：Windows 提供 winget 或官網下載連結；macOS 提供 Homebrew 安裝指令（例如 `brew ins
       "principle": "AI 協作開發的核心原則是：『先讀懂需求，再產生程式碼，最後用自動化腳本驗證。』本課程同時支援 Windows 與 macOS：Windows 以 PowerShell 7+、macOS 以 zsh + Homebrew 管理工具鏈，確保環境變數與目錄結構一致，避免因作業系統不同導致的通訊死角。"
     },
     {
@@ -1296,22 +1296,22 @@ async function writeCourse(course) {
 
 
 
-              ],
-              code: {
-                language: 'java',
-                title: 'ProductController.java — 加入 OpenAPI 標註',
-                content: '@RestController\n@RequestMapping("/api/products")\n@Tag(name = "商品管理", description = "商品的新增、查詢、修改與刪除")\npublic class ProductController {\n\n    @Operation(\n        summary = "查詢所有商品",\n        description = "回傳完整商品清單，可加 keyword 參數進行模糊搜尋"\n    )\n    @GetMapping\n    public ResponseEntity<List<Product>> getProducts(\n            @Parameter(description = "商品名稱關鍵字（選填）")\n            @RequestParam(required = false) String keyword) {\n        // ...\n    }\n\n    @Operation(summary = "新增商品")\n    @ApiResponses({\n        @ApiResponse(responseCode = "201", description = "新增成功"),\n        @ApiResponse(responseCode = "400", description = "輸入資料驗證失敗")\n    })\n    @PostMapping\n    public ResponseEntity<Product> createProduct(\n            @Valid @RequestBody Product product) {\n        // ...\n    }\n}'
-              }
-            },
-            {
-              title: '設定全域 API 資訊',
-              type: 'code',
-              paragraphs: [
-                '建立一個 `@Configuration` 類別，設定整份文件的標題、版本與聯絡資訊，讓 Swagger UI 頁首顯示正確的專案說明。'
-              ],
-              code: {
-                language: 'java',
-                title: 'OpenApiConfig.java',
+              ],
+              code: {
+                language: 'java',
+                title: 'ProductController.java — 加入 OpenAPI 標註',
+                content: '@RestController\n@RequestMapping("/api/products")\n@Tag(name = "商品管理", description = "商品的新增、查詢、修改與刪除")\npublic class ProductController {\n\n    @Operation(\n        summary = "查詢所有商品",\n        description = "回傳完整商品清單，可加 keyword 參數進行模糊搜尋"\n    )\n    @GetMapping\n    public ResponseEntity<List<Product>> getProducts(\n            @Parameter(description = "商品名稱關鍵字（選填）")\n            @RequestParam(required = false) String keyword) {\n        // ...\n    }\n\n    @Operation(summary = "新增商品")\n    @ApiResponses({\n        @ApiResponse(responseCode = "201", description = "新增成功"),\n        @ApiResponse(responseCode = "400", description = "輸入資料驗證失敗")\n    })\n    @PostMapping\n    public ResponseEntity<Product> createProduct(\n            @Valid @RequestBody Product product) {\n        // ...\n    }\n}'
+              }
+            },
+            {
+              title: '設定全域 API 資訊',
+              type: 'code',
+              paragraphs: [
+                '建立一個 `@Configuration` 類別，設定整份文件的標題、版本與聯絡資訊，讓 Swagger UI 頁首顯示正確的專案說明。'
+              ],
+              code: {
+                language: 'java',
+                title: 'OpenApiConfig.java',
                 content: '@Configuration\npublic class Ope
 
 
@@ -1597,7 +1597,7 @@ async function writeCourse(course) {
 
 
 
-              type: 'text',
+              type: 'text',
       "subtitle": "GOAP 目標規劃、型別安全 Action Record、Trace 看板與 Playwright 驗收",
       "features": [
         "Embabel Agent Flow 智慧建議",
@@ -1797,25 +1797,25 @@ async function writeCourse(course) {
 
 
 
-              image: 'assets/teaching-site/09-swagger-ui-dashboard.png',
-              imageAlt: 'Swagger UI 儀表板',
-              imageCaption: '登入成功後的 Swagger UI 儀表板，可在此進行 Token 授權與 API 存取控制測試。'
-            },
-            {
-              title: 'PowerShell 驗證命令（可選）',
-              type: 'code',
-              paragraphs: [
-                '若您偏好命令列測試，可在 PowerShell 7+ 中依序執行以下命令進行登入與 API 安全性存取測試。'
-              ],
-              bullets: [
-                '管理員帳號：`admin`，密碼為資料庫已加密儲存值',
-                '一般用戶帳號：`user`，密碼為資料庫已加密儲存值',
-                '1. 使用 `user` 登入取得 Token，測試呼叫新增商品 API，預期應回傳 403 Forbidden',
-                '2. 使用 `admin` 登入取得 Token，測試呼叫新增商品 API，預期應回傳 201 Created'
-              ],
-              code: {
-                language: 'powershell',
-                title: '驗證 API 存取控制',
+              image: 'assets/teaching-site/09-swagger-ui-dashboard.png',
+              imageAlt: 'Swagger UI 儀表板',
+              imageCaption: '登入成功後的 Swagger UI 儀表板，可在此進行 Token 授權與 API 存取控制測試。'
+            },
+            {
+              title: 'PowerShell 驗證命令（可選）',
+              type: 'code',
+              paragraphs: [
+                '若您偏好命令列測試，可在 PowerShell 7+ 中依序執行以下命令進行登入與 API 安全性存取測試。'
+              ],
+              bullets: [
+                '管理員帳號：`admin`，密碼為資料庫已加密儲存值',
+                '一般用戶帳號：`user`，密碼為資料庫已加密儲存值',
+                '1. 使用 `user` 登入取得 Token，測試呼叫新增商品 API，預期應回傳 403 Forbidden',
+                '2. 使用 `admin` 登入取得 Token，測試呼叫新增商品 API，預期應回傳 201 Created'
+              ],
+              code: {
+                language: 'powershell',
+                title: '驗證 API 存取控制',
                 content: '# 1. \u4ee5\u666e\u901a\u7528\u6236\u767b\u5165\n$loginUser = Invoke-RestMethod -Uri \"http://localhost:8080/api/auth/login\" -Method Post -ContentType \"application/json\" -Body \'{\"username\":\"user\",\"password\":\"password\"}\'\n$userToken = $loginUser.token\n\n# 2. \u6e2c\u8a66\u666e\u901a\u7528\u6236\u65b0\u589e\u5
 
 
@@ -2064,25 +2064,25 @@ async function writeCourse(course) {
 
 
 
-              }
-            },
-            {
-              title: '@Tool vs ToolCallback 選型原則',
-              type: 'text',
-              paragraphs: [
-                '工具呼叫有兩種宣告方式，選擇依據是你是否有原始碼的修改權限。'
-              ],
-              bullets: [
-                '`@Tool` — 自己開發的業務方法，直接在方法上標註，最簡單',
-                '`MethodToolCallback` — 第三方 JAR（無法加註解），用反射包裝現有方法',
-                '`FunctionToolCallback` — 需要客製化邏輯的外部工具，用 Lambda + DTO 封裝',
-                '無論哪種方式，都應透過 Service 層取得資料，不讓模型直接碰資料庫連線'
-              ]
-            },
-            {
-              title: 'MethodToolCallback 包裝第三方工具',
-              type: 'code',
-              paragraphs: [
+              }
+            },
+            {
+              title: '@Tool vs ToolCallback 選型原則',
+              type: 'text',
+              paragraphs: [
+                '工具呼叫有兩種宣告方式，選擇依據是你是否有原始碼的修改權限。'
+              ],
+              bullets: [
+                '`@Tool` — 自己開發的業務方法，直接在方法上標註，最簡單',
+                '`MethodToolCallback` — 第三方 JAR（無法加註解），用反射包裝現有方法',
+                '`FunctionToolCallback` — 需要客製化邏輯的外部工具，用 Lambda + DTO 封裝',
+                '無論哪種方式，都應透過 Service 層取得資料，不讓模型直接碰資料庫連線'
+              ]
+            },
+            {
+              title: 'MethodToolCallback 包裝第三方工具',
+              type: 'code',
+              paragraphs: [
                 '當需要把第三方 JAR 的方法暴露給模型時，使用 `MethodTo
 
 
@@ -2365,22 +2365,22 @@ async function writeCourse(course) {
 
 
 
-              bullets: [
-                '① 使用者呼叫 `GET http://localhost:8081/api/mcp/chat?message=有哪些商品`',
-                '② MCP Client（port 8081）的 ChatClient 收到訊息，交由 LLM 判斷意圖',
-                '③ AI 判斷需要查商品，透過已建立的 SSE 連線，向 MCP Server（port 8080）發送 getProducts 工具呼叫請求',
-                '④ MCP Server 執行 `ProductTools.getProducts("")` → 查詢 PostgreSQL → 回傳商品 JSON',
-                '⑤ MCP Client 收到工具執行結果，AI 組合成自然語言回答',
-                '⑥ 使用者收到：「目前商城共有 5 項商品：1. 無線耳機 Pro（NT$2,999，庫存 50）...」'
-              ]
-            },
-            {
-              title: 'Skills 是什麼：把專業知識打包給 AI',
-              type: 'text',
-              paragraphs: [
-                'Skills（Agent Skills）是 Anthropic 於 2025 年提出的開放標準：把某個領域的程序性知識（操作流程、規範、範本、輔助腳本）打包成一個資料夾，核心是一份帶有名稱與描述的 SKILL.md 說明檔。AI 平時只看到每個 Skill 的一行描述，judged 相關時才載入完整內容，這種「漸進式載入」讓模型能掛上大量專業知識而不撐爆上下文。',
-                '如果說 Tool Calling 與 MCP 解決的是「AI 能呼叫什麼工具、拿到什麼資料」，Skills 解決的則是「AI 應該照什麼流程與規範做事」。兩者互補，不是替代關係。'
-              ],
-              bullets: [
-                'Skill = 資料夾 + SKILL.md（frontmatter 描述）+ 選配的範本與腳本',
+              bullets: [
+                '① 使用者呼叫 `GET http://localhost:8081/api/mcp/chat?message=有哪些商品`',
+                '② MCP Client（port 8081）的 ChatClient 收到訊息，交由 LLM 判斷意圖',
+                '③ AI 判斷需要查商品，透過已建立的 SSE 連線，向 MCP Server（port 8080）發送 getProducts 工具呼叫請求',
+                '④ MCP Server 執行 `ProductTools.getProducts("")` → 查詢 PostgreSQL → 回傳商品 JSON',
+                '⑤ MCP Client 收到工具執行結果，AI 組合成自然語言回答',
+                '⑥ 使用者收到：「目前商城共有 5 項商品：1. 無線耳機 Pro（NT$2,999，庫存 50）...」'
+              ]
+            },
+            {
+              title: 'Skills 是什麼：把專業知識打包給 AI',
+              type: 'text',
+              paragraphs: [
+                'Skills（Agent Skills）是 Anthropic 於 2025 年提出的開放標準：把某個領域的程序性知識（操作流程、規範、範本、輔助腳本）打包成一個資料夾，核心是一份帶有名稱與描述的 SKILL.md 說明檔。AI 平時只看到每個 Skill 的一行描述，judged 相關時才載入完整內容，這種「漸進式載入」讓模型能掛上大量專業知識而不撐爆上下文。',
+                '如果說 Tool Calling 與 MCP 解決的是「AI 能呼叫什麼工具、拿到什麼資料」，Skills 解決的則是「AI 應該照什麼流程與規範做事」。兩者互補，不是替代關係。'
+              ],
+              bullets: [
+                'Skill = 資料夾 + SKILL.md（frontmatter 描述）+ 選配的範本與腳本',
                 '平時只載入描述，被點名才載入
