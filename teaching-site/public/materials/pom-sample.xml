@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- pom-sample.xml — u-5 依賴範本（提示詞⑤的期望輸出範例）
+     版本現況（2026-06）：Embabel 0.4.0 建構於 Spring Boot 3.5.x + Spring AI 1.1.x，
+     尚不支援 Spring Boot 4（啟動拋 NoSuchMethodError；Boot 4 支援隨 Embabel 2.0 推出，
+     追蹤 embabel/embabel-agent#1052）。實測組合：Boot 3.5.14 + Embabel 0.4.0。
+     Spring AI 由 Embabel starter 傳遞帶入，勿自行加 Spring AI BOM。 -->
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- 用 Boot 3.5.x parent；Embabel 2.0 之前不可用 Boot 4 -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.5.14</version>
+  </parent>
+
+  <groupId>com.antechinus</groupId>
+  <artifactId>customer-care-agent</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+
+  <properties>
+    <java.version>21</java.version>
+    <!-- 以 Embabel 官方文件公告的相容版本為準（2026-06 時為 0.4.0） -->
+    <embabel.version>CHECK-OFFICIAL-DOCS</embabel.version>
+  </properties>
+
+  <dependencies>
+    <!-- Spring Boot 3.x 的 MVC starter（spring-boot-starter-webmvc 是 Boot 4 世代名稱） -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- Embabel 核心 agent 能力 -->
+    <dependency>
+      <groupId>com.embabel.agent</groupId>
+      <artifactId>embabel-agent-starter</artifactId>
+      <version>${embabel.version}</version>
+    </dependency>
+
+    <!-- 互動式 shell（開發期操作 agent） -->
+    <dependency>
+      <groupId>com.embabel.agent</groupId>
+      <artifactId>embabel-agent-starter-shell</artifactId>
+      <version>${embabel.version}</version>
+    </dependency>
+
+    <!-- 模型供應商（OpenAI；Anthropic / Gemini 等 Spring AI 支援皆可換） -->
+    <dependency>
+      <groupId>com.embabel.agent</groupId>
+      <artifactId>embabel-agent-starter-openai</artifactId>
+      <version>${embabel.version}</version>
+    </dependency>
+  </dependencies>
+</project>

@@ -1,0 +1,19 @@
+# application-sample.yml — u-5 設定範本（提示詞⑤的期望輸出範例）
+# 業務門檻走 @ConfigurationProperties，不寫死在 prompt 裡
+
+spring:
+  application:
+    name: customer-care-agent
+
+# 模型供應商 API key 走環境變數，不進版控
+# 例：$env:OPENAI_API_KEY = '...'
+
+example:
+  activity-summarizer:
+    max-words: 80                    # 摘要字數上限
+    high-spender-threshold: 2000.0   # 高消費門檻（期間總額）
+    high-trips-per-year-threshold: 10  # 常旅客門檻（每年趟次）
+
+logging:
+  level:
+    com.embabel: INFO                # 觀察 action / plan 事件時改 DEBUG

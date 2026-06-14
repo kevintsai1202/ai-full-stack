@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img" aria-labelledby="u4-term-title u4-term-desc">
+  <title id="u4-term-title">Unit 4｜專業術語解釋</title>
+  <desc id="u4-term-desc">把抽象名詞變成可快速複習的概念圖卡。</desc>
+  
+    <defs>
+      <linearGradient id="u4-term-bg" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#f8fafc"/>
+        <stop offset="52%" stop-color="#eff6ff"/>
+        <stop offset="100%" stop-color="#ecfeff"/>
+      </linearGradient>
+      <linearGradient id="u4-term-accent" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#7c3aed"/>
+        <stop offset="100%" stop-color="#0f172a"/>
+      </linearGradient>
+      <filter id="u4-term-shadow" x="-20%" y="-20%" width="140%" height="150%">
+        <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#0f172a" flood-opacity="0.16"/>
+      </filter>
+      <marker id="u4-term-arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+        <path d="M2,2 L12,7 L2,12 Z" fill="#7c3aed"/>
+      </marker>
+    </defs>
+  <rect width="1200" height="675" rx="36" fill="url(#u4-term-bg)"/>
+  <path d="M0 126 C220 40 335 120 520 62 C715 0 835 82 1200 26 L1200 0 L0 0 Z" fill="#7c3aed" opacity="0.1"/>
+  <circle cx="1030" cy="108" r="116" fill="#7c3aed" opacity="0.09"/>
+  <circle cx="112" cy="572" r="92" fill="#14b8a6" opacity="0.08"/>
+  <text x="56" y="70" fill="#0f172a" font-size="34" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Unit 4｜專業術語解釋</text>
+  <text x="58" y="108" fill="#475569" font-size="18" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">把抽象名詞變成可快速複習的概念圖卡。</text>
+  
+      <g transform="translate(90,190)" filter="url(#u4-term-shadow)">
+      <rect width="310" height="320" rx="28" fill="#ffffff" stroke="#dbe4ef"/>
+      <rect x="0" y="0" width="310" height="78" rx="28" fill="#e11d48" opacity="0.96"/>
+      <text x="32" y="50" fill="#ffffff" font-size="24" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">JWT</text>
+      <text x="32" y="104" fill="#475569" font-size="17" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">登入後簽發的權杖，前端放在</text><text x="32" y="132" fill="#475569" font-size="17" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Authorization header。</text>
+      <path d="M32 260 L278 260" stroke="#e2e8f0" stroke-width="2"/>
+      <text x="32" y="294" fill="#e11d48" font-size="15" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Unit 4 keyword</text>
+    </g><g transform="translate(440,190)" filter="url(#u4-term-shadow)">
+      <rect width="310" height="320" rx="28" fill="#ffffff" stroke="#dbe4ef"/>
+      <rect x="0" y="0" width="310" height="78" rx="28" fill="#d97706" opacity="0.96"/>
+      <text x="32" y="50" fill="#ffffff" font-size="24" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Security Filter</text>
+      <text x="32" y="104" fill="#475569" font-size="17" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">在 Controller 前攔截請求，驗</text><text x="32" y="132" fill="#475569" font-size="17" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">證身分與角色。</text>
+      <path d="M32 260 L278 260" stroke="#e2e8f0" stroke-width="2"/>
+      <text x="32" y="294" fill="#d97706" font-size="15" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Unit 4 keyword</text>
+    </g><g transform="translate(790,190)" filter="url(#u4-term-shadow)">
+      <rect width="310" height="320" rx="28" fill="#ffffff" stroke="#dbe4ef"/>
+      <rect x="0" y="0" width="310" height="78" rx="28" fill="#7c3aed" opacity="0.96"/>
+      <text x="32" y="50" fill="#ffffff" font-size="24" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">ProblemDetail</text>
+      <text x="32" y="104" fill="#475569" font-size="17" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">RFC 7807 錯誤格式，讓前後端</text><text x="32" y="132" fill="#475569" font-size="17" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">能穩定判讀例外。</text>
+      <path d="M32 260 L278 260" stroke="#e2e8f0" stroke-width="2"/>
+      <text x="32" y="294" fill="#7c3aed" font-size="15" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Unit 4 keyword</text>
+    </g>
+      <text x="90" y="562" fill="#64748b" font-size="17" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">這張圖用於章節內快速回顧，協助學員把術語和實作位置連起來。</text>
+</svg>

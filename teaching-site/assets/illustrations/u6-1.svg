@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img" aria-labelledby="u6-hero-title u6-hero-desc">
+  <title id="u6-hero-title">Unit 6｜Spring AI Streaming</title>
+  <desc id="u6-hero-desc">ChatClient、SSE 與 Tool Calling</desc>
+  
+    <defs>
+      <linearGradient id="u6-hero-bg" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#f8fafc"/>
+        <stop offset="52%" stop-color="#eff6ff"/>
+        <stop offset="100%" stop-color="#ecfeff"/>
+      </linearGradient>
+      <linearGradient id="u6-hero-accent" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#7c3aed"/>
+        <stop offset="100%" stop-color="#0f172a"/>
+      </linearGradient>
+      <filter id="u6-hero-shadow" x="-20%" y="-20%" width="140%" height="150%">
+        <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#0f172a" flood-opacity="0.16"/>
+      </filter>
+      <marker id="u6-hero-arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+        <path d="M2,2 L12,7 L2,12 Z" fill="#7c3aed"/>
+      </marker>
+    </defs>
+  <rect width="1200" height="675" rx="36" fill="url(#u6-hero-bg)"/>
+  <path d="M0 126 C220 40 335 120 520 62 C715 0 835 82 1200 26 L1200 0 L0 0 Z" fill="#7c3aed" opacity="0.1"/>
+  <circle cx="1030" cy="108" r="116" fill="#7c3aed" opacity="0.09"/>
+  <circle cx="112" cy="572" r="92" fill="#14b8a6" opacity="0.08"/>
+  <text x="56" y="70" fill="#0f172a" font-size="34" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Unit 6｜Spring AI Streaming</text>
+  <text x="58" y="108" fill="#475569" font-size="18" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">ChatClient、SSE 與 Tool Calling</text>
+  
+      <g filter="url(#u6-hero-shadow)">
+        <rect x="64" y="152" width="672" height="350" rx="28" fill="#ffffff" stroke="#cbd5e1"/>
+        <rect x="64" y="152" width="672" height="64" rx="28" fill="#0f172a"/>
+        <circle cx="110" cy="184" r="8" fill="#ef4444"/>
+        <circle cx="136" cy="184" r="8" fill="#f59e0b"/>
+        <circle cx="162" cy="184" r="8" fill="#22c55e"/>
+        <text x="198" y="192" fill="#e2e8f0" font-size="18" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">AI CRM Workspace</text>
+        <rect x="104" y="250" width="218" height="206" rx="22" fill="#eff6ff" stroke="#bfdbfe"/>
+        <text x="130" y="286" fill="#2563eb" font-size="18" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Customer Snapshot</text>
+        <rect x="130" y="318" width="150" height="14" rx="7" fill="#93c5fd"/>
+        <rect x="130" y="350" width="112" height="14" rx="7" fill="#bfdbfe"/>
+        <rect x="130" y="392" width="164" height="36" rx="18" fill="#7c3aed" opacity="0.88"/>
+        <text x="155" y="416" fill="#ffffff" font-size="15" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Verified Data</text>
+        <rect x="356" y="250" width="330" height="206" rx="22" fill="#f8fafc" stroke="#dbe4ef"/>
+        <path d="M390 410 C440 322 492 352 536 296 C578 242 632 304 664 260" fill="none" stroke="#7c3aed" stroke-width="8" stroke-linecap="round"/>
+        <circle cx="390" cy="410" r="10" fill="#2563eb"/>
+        <circle cx="536" cy="296" r="10" fill="#16a34a"/>
+        <circle cx="664" cy="260" r="10" fill="#0891b2"/>
+        <text x="388" y="286" fill="#0f172a" font-size="18" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Delivery Signal</text>
+        <text x="388" y="438" fill="#64748b" font-size="15" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">每章產出都回到同一套 AI CRM</text>
+      </g>
+      <g filter="url(#u6-hero-shadow)">
+        <rect x="780" y="156" width="334" height="350" rx="28" fill="#0f172a" opacity="0.96"/>
+        <text x="818" y="208" fill="#ffffff" font-size="24" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Engineering Stack</text>
+        <text x="818" y="242" fill="#cbd5e1" font-size="16" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">可測試、可維運、可追蹤</text>
+        <rect x="740" y="322" width="38" height="134" rx="12" fill="#7c3aed" opacity="0.82"/><rect x="806" y="364" width="38" height="92" rx="12" fill="#2563eb" opacity="0.82"/><rect x="872" y="288" width="38" height="168" rx="12" fill="#16a34a" opacity="0.82"/><rect x="938" y="338" width="38" height="118" rx="12" fill="#0891b2" opacity="0.82"/>
+        <rect x="818" y="472" width="240" height="2" fill="#334155"/>
+        <text x="818" y="306" fill="#e2e8f0" font-size="17" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Spring AI Streaming</text>
+        <text x="818" y="338" fill="#94a3b8" font-size="15" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Chapter hero visual</text>
+      </g>
+      <g transform="translate(88,548)">
+      <rect width="196" height="54" rx="27" fill="#ffffff" stroke="#7c3aed" stroke-width="2"/>
+      <circle cx="30" cy="27" r="10" fill="#7c3aed"/>
+      <text x="52" y="34" fill="#0f172a" font-size="17" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">User Prompt</text>
+    </g><g transform="translate(334,548)">
+      <rect width="196" height="54" rx="27" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+      <circle cx="30" cy="27" r="10" fill="#2563eb"/>
+      <text x="52" y="34" fill="#0f172a" font-size="17" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">ChatClient</text>
+    </g><g transform="translate(580,548)">
+      <rect width="196" height="54" rx="27" fill="#ffffff" stroke="#16a34a" stroke-width="2"/>
+      <circle cx="30" cy="27" r="10" fill="#16a34a"/>
+      <text x="52" y="34" fill="#0f172a" font-size="17" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Tool Call</text>
+    </g><g transform="translate(826,548)">
+      <rect width="196" height="54" rx="27" fill="#ffffff" stroke="#0891b2" stroke-width="2"/>
+      <circle cx="30" cy="27" r="10" fill="#0891b2"/>
+      <text x="52" y="34" fill="#0f172a" font-size="17" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Streaming UI</text>
+    </g>
+</svg>

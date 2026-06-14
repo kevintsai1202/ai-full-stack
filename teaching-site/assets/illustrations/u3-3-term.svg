@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img" aria-labelledby="u3-term-title u3-term-desc">
+  <title id="u3-term-title">Unit 3｜專業術語解釋</title>
+  <desc id="u3-term-desc">把抽象名詞變成可快速複習的概念圖卡。</desc>
+  
+    <defs>
+      <linearGradient id="u3-term-bg" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#f8fafc"/>
+        <stop offset="52%" stop-color="#eff6ff"/>
+        <stop offset="100%" stop-color="#ecfeff"/>
+      </linearGradient>
+      <linearGradient id="u3-term-accent" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#2563eb"/>
+        <stop offset="100%" stop-color="#0f172a"/>
+      </linearGradient>
+      <filter id="u3-term-shadow" x="-20%" y="-20%" width="140%" height="150%">
+        <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#0f172a" flood-opacity="0.16"/>
+      </filter>
+      <marker id="u3-term-arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+        <path d="M2,2 L12,7 L2,12 Z" fill="#2563eb"/>
+      </marker>
+    </defs>
+  <rect width="1200" height="675" rx="36" fill="url(#u3-term-bg)"/>
+  <path d="M0 126 C220 40 335 120 520 62 C715 0 835 82 1200 26 L1200 0 L0 0 Z" fill="#2563eb" opacity="0.1"/>
+  <circle cx="1030" cy="108" r="116" fill="#2563eb" opacity="0.09"/>
+  <circle cx="112" cy="572" r="92" fill="#14b8a6" opacity="0.08"/>
+  <text x="56" y="70" fill="#0f172a" font-size="34" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Unit 3｜專業術語解釋</text>
+  <text x="58" y="108" fill="#475569" font-size="18" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">把抽象名詞變成可快速複習的概念圖卡。</text>
+  
+      <g transform="translate(90,190)" filter="url(#u3-term-shadow)">
+      <rect width="310" height="320" rx="28" fill="#ffffff" stroke="#dbe4ef"/>
+      <rect x="0" y="0" width="310" height="78" rx="28" fill="#16a34a" opacity="0.96"/>
+      <text x="32" y="50" fill="#ffffff" font-size="24" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Flyway</text>
+      <text x="32" y="104" fill="#475569" font-size="17" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">用版本化 SQL 管理資料庫結構</text><text x="32" y="132" fill="#475569" font-size="17" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">，避免 ddl-auto 不可控變更。</text>
+      <path d="M32 260 L278 260" stroke="#e2e8f0" stroke-width="2"/>
+      <text x="32" y="294" fill="#16a34a" font-size="15" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Unit 3 keyword</text>
+    </g><g transform="translate(440,190)" filter="url(#u3-term-shadow)">
+      <rect width="310" height="320" rx="28" fill="#ffffff" stroke="#dbe4ef"/>
+      <rect x="0" y="0" width="310" height="78" rx="28" fill="#d97706" opacity="0.96"/>
+      <text x="32" y="50" fill="#ffffff" font-size="24" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">JPA Entity</text>
+      <text x="32" y="104" fill="#475569" font-size="17" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">對應資料表的物件模型，描述關</text><text x="32" y="132" fill="#475569" font-size="17" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">聯與交易邊界。</text>
+      <path d="M32 260 L278 260" stroke="#e2e8f0" stroke-width="2"/>
+      <text x="32" y="294" fill="#d97706" font-size="15" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Unit 3 keyword</text>
+    </g><g transform="translate(790,190)" filter="url(#u3-term-shadow)">
+      <rect width="310" height="320" rx="28" fill="#ffffff" stroke="#dbe4ef"/>
+      <rect x="0" y="0" width="310" height="78" rx="28" fill="#2563eb" opacity="0.96"/>
+      <text x="32" y="50" fill="#ffffff" font-size="24" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Specification</text>
+      <text x="32" y="104" fill="#475569" font-size="17" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">以 Criteria API 組合查詢條件</text><text x="32" y="132" fill="#475569" font-size="17" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">，避免方法爆炸與 SQL 注入。</text>
+      <path d="M32 260 L278 260" stroke="#e2e8f0" stroke-width="2"/>
+      <text x="32" y="294" fill="#2563eb" font-size="15" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Unit 3 keyword</text>
+    </g>
+      <text x="90" y="562" fill="#64748b" font-size="17" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">這張圖用於章節內快速回顧，協助學員把術語和實作位置連起來。</text>
+</svg>

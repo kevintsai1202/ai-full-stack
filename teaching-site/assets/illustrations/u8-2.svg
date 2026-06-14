@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img" aria-labelledby="u8-diagram-title u8-diagram-desc">
+  <title id="u8-diagram-title">Unit 8｜可追蹤 Agent Flow</title>
+  <desc id="u8-diagram-desc">把章節核心流程轉成可維護的工程圖，而不是裝飾性圖案。</desc>
+  
+    <defs>
+      <linearGradient id="u8-diagram-bg" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#f8fafc"/>
+        <stop offset="52%" stop-color="#eff6ff"/>
+        <stop offset="100%" stop-color="#ecfeff"/>
+      </linearGradient>
+      <linearGradient id="u8-diagram-accent" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#e11d48"/>
+        <stop offset="100%" stop-color="#0f172a"/>
+      </linearGradient>
+      <filter id="u8-diagram-shadow" x="-20%" y="-20%" width="140%" height="150%">
+        <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#0f172a" flood-opacity="0.16"/>
+      </filter>
+      <marker id="u8-diagram-arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+        <path d="M2,2 L12,7 L2,12 Z" fill="#e11d48"/>
+      </marker>
+    </defs>
+  <rect width="1200" height="675" rx="36" fill="url(#u8-diagram-bg)"/>
+  <path d="M0 126 C220 40 335 120 520 62 C715 0 835 82 1200 26 L1200 0 L0 0 Z" fill="#e11d48" opacity="0.1"/>
+  <circle cx="1030" cy="108" r="116" fill="#e11d48" opacity="0.09"/>
+  <circle cx="112" cy="572" r="92" fill="#14b8a6" opacity="0.08"/>
+  <text x="56" y="70" fill="#0f172a" font-size="34" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Unit 8｜可追蹤 Agent Flow</text>
+  <text x="58" y="108" fill="#475569" font-size="18" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">把章節核心流程轉成可維護的工程圖，而不是裝飾性圖案。</text>
+  
+      
+    <style>
+      @keyframes flow-u8 {
+        to {
+          stroke-dashoffset: -18;
+        }
+      }
+      @keyframes scale-pulse-u8 {
+        0%, 100% {
+          transform: scale(1);
+          filter: drop-shadow(0 2px 4px rgba(15,23,42,0.06));
+        }
+        50% {
+          transform: scale(1.06);
+          filter: drop-shadow(0 12px 20px rgba(15,23,42,0.12));
+        }
+      }
+      .flow-arrow-u8 {
+        stroke-dasharray: 10, 8;
+        animation: flow-u8 1.2s linear infinite;
+      }
+      .node-u8-anim {
+        transform-box: fill-box;
+        transform-origin: center;
+      }
+      .node-u8-0 {
+        animation: scale-pulse-u8 3s ease-in-out infinite;
+        animation-delay: 0s;
+      }
+      .node-u8-1 {
+        animation: scale-pulse-u8 3s ease-in-out infinite;
+        animation-delay: 0.6s;
+      }
+      .node-u8-2 {
+        animation: scale-pulse-u8 3s ease-in-out infinite;
+        animation-delay: 1.2s;
+      }
+      .node-u8-3 {
+        animation: scale-pulse-u8 3s ease-in-out infinite;
+        animation-delay: 1.8s;
+      }
+    </style>
+  
+      <g filter="url(#u8-diagram-shadow)">
+        <rect x="64" y="152" width="1072" height="386" rx="30" fill="#ffffff" stroke="#cbd5e1"/>
+        <text x="96" y="206" fill="#0f172a" font-size="24" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">核心流程</text>
+        <text x="96" y="238" fill="#64748b" font-size="16" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">用固定形狀語彙表示狀態、處理、判斷與目標</text>
+        <path class="flow-arrow-u8" d="M286 305 L328 305" stroke="#e11d48" stroke-width="5" fill="none" marker-end="url(#u8-diagram-arrow)"/><path class="flow-arrow-u8" d="M544 305 L588 305" stroke="#e11d48" stroke-width="5" fill="none" marker-end="url(#u8-diagram-arrow)"/><path class="flow-arrow-u8" d="M804 305 L858 305" stroke="#e11d48" stroke-width="5" fill="none" marker-end="url(#u8-diagram-arrow)"/>
+        <g transform="translate(92,260)">
+        <g class="node-u8-anim node-u8-0">
+          <rect width="180" height="90" rx="45" fill="#ffffff" stroke="#7c3aed" stroke-width="3"/>
+          <text x="90" y="52" text-anchor="middle" fill="#0f172a" font-size="20" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Snapshot</text>
+        </g>
+      </g><g transform="translate(350,260)">
+      <g class="node-u8-anim node-u8-1">
+        <rect width="180" height="90" rx="18" fill="#ffffff" stroke="#e11d48" stroke-width="3"/>
+        <text x="90" y="52" text-anchor="middle" fill="#0f172a" font-size="20" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Risk Review</text>
+      </g>
+    </g><g transform="translate(610,260)">
+        <g class="node-u8-anim node-u8-2">
+          <polygon points="90,0 180,45 90,90 0,45" fill="#ffffff" stroke="#d97706" stroke-width="3"/>
+          <text x="90" y="52" text-anchor="middle" fill="#0f172a" font-size="19" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Draft Action</text>
+        </g>
+      </g><g transform="translate(880,260)">
+        <g class="node-u8-anim node-u8-3">
+          <polygon points="28,0 152,0 180,45 152,90 28,90 0,45" fill="#ffffff" stroke="#16a34a" stroke-width="3"/>
+          <text x="90" y="52" text-anchor="middle" fill="#0f172a" font-size="19" font-weight="900" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Trace Panel</text>
+        </g>
+      </g>
+        <g transform="translate(132,444)">
+          <rect width="934" height="54" rx="16" fill="#f8fafc" stroke="#e2e8f0"/>
+          <circle cx="34" cy="27" r="10" fill="#7c3aed"/><text x="54" y="33" fill="#475569" font-size="15" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">條件 / 狀態</text>
+          <rect x="206" y="17" width="20" height="20" rx="5" fill="#e11d48"/><text x="238" y="33" fill="#475569" font-size="15" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">處理步驟</text>
+          <polygon points="422,17 442,27 422,37 402,27" fill="#d97706"/><text x="458" y="33" fill="#475569" font-size="15" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">判斷點</text>
+          <polygon points="650,17 688,17 700,27 688,37 650,37 638,27" fill="#16a34a"/><text x="716" y="33" fill="#475569" font-size="15" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">目標產出</text>
+        </g>
+      </g>
+</svg>
