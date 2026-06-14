@@ -31,3 +31,10 @@ node scripts/verify-render.mjs
 ## 開發規範
 1. 所有程式碼均需具備中文註解。
 2. 開發新功能時，請先參閱 `teaching-site/CLAUDE.md` 中更詳細的開發規範。
+
+## GitHub Pages 部署
+
+本專案配置了自動化 GitHub Actions 部署工作流，當推送至 `main` 分支時，會自動將 `teaching-site` 發布至 GitHub Pages。
+
+- **官方發布網址**：https://kevintsai1202.github.io/ai-full-stack/
+- **手動觸發部署**：可於 GitHub 專案的 `Actions` 頁面，手動觸發 `Deploy static content to Pages` 工作流。
