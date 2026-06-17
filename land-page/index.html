@@ -7,23 +7,24 @@
 <meta name="description" content="凱文大叔的《AI 賦能全端開發：從零打造企業級智慧應用》線上課程。使用 Spring Boot、Spring AI 與 React 實戰開發企業級 AI CRM，帶你掌握 RAG 知識庫、Tool Calling 與安全授權，將 AI Agent 真正落地於生產環境。" />
 <meta name="keywords" content="Spring AI, Spring Boot, React, AI 全端開發, AI CRM, RAG 知識庫, Tool Calling, 凱文大叔, Hahow, 企業級 AI 應用" />
 <meta name="author" content="凱文大叔" />
-<link rel="canonical" href="https://springai.tw/" />
+<link rel="canonical" href="https://springai.world/" />
+<link rel="icon" href="assets/logo.png" type="image/png" />
 
 <!-- Open Graph / Facebook -->
 <meta property="og:title" content="AI 賦能全端開發：從零打造企業級智慧應用 · 凱文大叔" />
 <meta property="og:description" content="用一套 AI CRM 實戰專案，把 Spring Boot、Spring AI 與 React 串成可上線的企業級智慧應用。募資限定早鳥優惠中！" />
 <meta property="og:type" content="website" />
-<meta property="og:url" content="https://springai.tw/" />
-<meta property="og:image" content="https://springai.tw/assets/cover.png" />
+<meta property="og:url" content="https://springai.world/" />
+<meta property="og:image" content="https://springai.world/assets/cover.png" />
 <meta property="og:site_name" content="凱文大叔 AI 賦能全端開發" />
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="AI 賦能全端開發：從零打造企業級智慧應用 · 凱文大叔" />
 <meta name="twitter:description" content="用一套 AI CRM 實戰專案，把 Spring Boot、Spring AI 與 React 串成可上線的企業級智慧應用。募資限定早鳥優惠中！" />
-<meta name="twitter:image" content="https://springai.tw/assets/cover.png" />
+<meta name="twitter:image" content="https://springai.world/assets/cover.png" />
 
-<!-- JSON-LD Course Structured Data -->
+<!-- JSON-LD Course 結構化資料 -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -33,7 +34,7 @@
   "provider": {
     "@type": "Person",
     "name": "凱文大叔",
-    "sameAs": "https://springai.tw/"
+    "sameAs": "https://springai.world/"
   },
   "offers": {
     "@type": "Offer",
@@ -43,52 +44,787 @@
   },
   "courseCode": "AI-FULL-STACK-01",
   "educationalLevel": "Intermediate",
-  "about": [
-    "Spring Boot",
-    "Spring AI",
-    "React",
-    "JPA",
-    "pgvector",
-    "RAG",
-    "Tool Calling"
+  "about": ["Spring Boot","Spring AI","React","JPA","pgvector","RAG","Tool Calling"]
+}
+</script>
+
+<!-- JSON-LD FAQ 結構化資料 — 讓 Google 搜尋結果直接展開常見問題 -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {"@type":"Question","name":"這門課適合完全沒寫過 Java 的新手嗎？","acceptedAnswer":{"@type":"Answer","text":"建議先具備基本 Java 語法與 REST API 概念。課程著重在企業級分層、整合與 AI 落地，而不是從零教語法；若你寫過簡單的 API，就能順利跟上。"}},
+    {"@type":"Question","name":"課程用的是哪些技術版本？","acceptedAnswer":{"@type":"Answer","text":"Java 21、Spring Boot 4.0.x、Spring AI 2.0.x (GA)、PostgreSQL + pgvector、React + TypeScript + Vite。開發環境以 Windows + PowerShell 7+ 示範，macOS / Linux 也可比照操作。"}},
+    {"@type":"Question","name":"這跟坊間「呼叫 LLM API」的課有什麼不同？","acceptedAnswer":{"@type":"Answer","text":"我們不只教你呼叫 LLM，而是帶你把 AI 放進一套真正能上線的企業系統：資料庫、權限、前端、RAG、工具呼叫與端到端整合一次到位。"}},
+    {"@type":"Question","name":"買了之後可以看多久？","acceptedAnswer":{"@type":"Answer","text":"購買後可不限次數、無限期觀看，課程更新也會免費同步給你。"}},
+    {"@type":"Question","name":"完成課程後我會做出什麼？","acceptedAnswer":{"@type":"Answer","text":"一套可登入、可查客戶、可引用知識庫、可產生業務建議、可追蹤 AI 執行過程的企業級 AI CRM，並能在 Demo Day 完整跑通展示。"}}
   ]
 }
 </script>
 
+<!-- 行銷追蹤碼 -->
+<script src="tracking.js"></script>
+
+<!-- 設計系統 CSS tokens -->
 <link rel="stylesheet" href="_ds/design-system-55f34fee-532d-45eb-9b8e-9d474823a41c/styles.css" />
+
 <style>
-  body {
-    margin: 0;
-    font-family: var(--font-main);
-    color: var(--fg);
-    background:
-      radial-gradient(circle at 0% 0%, color-mix(in oklab, var(--accent-2) 9%, transparent), transparent 22%),
-      radial-gradient(circle at 100% 4%, color-mix(in oklab, var(--accent) 9%, transparent), transparent 24%),
-      var(--bg);
-  }
-  * { box-sizing: border-box; }
-  a { color: inherit; }
-  @media (max-width: 980px) {
-    .hc-body { grid-template-columns: 1fr !important; }
-    .hc-aside { order: -1; }
-    .hc-project, .hc-instructor { grid-template-columns: 1fr !important; }
-    .hc-nav { display: none !important; }
-  }
+/* ── 全域基底 ── */
+body {
+  margin: 0;
+  font-family: var(--font-main);
+  color: var(--fg);
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in oklab, var(--accent-2) 9%, transparent), transparent 22%),
+    radial-gradient(circle at 100% 4%, color-mix(in oklab, var(--accent) 9%, transparent), transparent 24%),
+    var(--bg);
+}
+* { box-sizing: border-box; }
+a { color: inherit; }
+
+/* ── 元件 CSS classes（取代 React DS 元件） ── */
+
+/* Button 按鈕 */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border-radius: var(--r-pill); font-family: var(--font-main); font-weight: 800;
+  text-decoration: none; cursor: pointer; white-space: nowrap; border: none;
+  transition: transform var(--dur-fast) var(--ease-standard), box-shadow var(--dur-fast) var(--ease-standard), filter var(--dur-fast);
+}
+.btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-lift); filter: brightness(1.04); }
+.btn-sm { min-height: 38px; padding: 0 16px; font-size: 0.88rem; }
+.btn-md { min-height: 46px; padding: 0 20px; font-size: 1rem; }
+.btn-lg { min-height: 54px; padding: 0 28px; font-size: 1.06rem; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-secondary { background: var(--surface); color: var(--fg); border: 1px solid var(--border-strong); }
+.btn-light { background: #fff; color: var(--accent-deep); }
+.btn-ghost { background: transparent; color: var(--accent-deep); }
+.btn-full { width: 100%; }
+
+/* Badge 標籤 */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: var(--r-pill);
+  font-size: 0.78rem; font-weight: 900; letter-spacing: 0.02em;
+}
+.badge-accent { background: var(--accent-soft); color: var(--accent-deep); }
+.badge-accent-solid { background: var(--accent); color: #fff; }
+.badge-amber { background: var(--accent-2-soft); color: var(--accent-2-deep); }
+.badge-amber-solid { background: var(--accent-2); color: #fff; }
+.badge-neutral { background: var(--surface-3); color: var(--muted); }
+
+/* Eyebrow 標題前綴 */
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px; width: fit-content;
+  padding: 6px 12px; border-radius: var(--r-pill);
+  font-size: 0.86rem; font-weight: 900; letter-spacing: 0.03em;
+}
+.eyebrow-amber { background: var(--accent-2-soft); color: var(--accent-2-deep); }
+.eyebrow-accent { background: var(--accent-soft); color: var(--accent-deep); }
+
+/* Card 卡片 */
+.card-solid {
+  border-radius: var(--r-lg); border: 1px solid var(--border);
+  background: var(--surface);
+}
+.card-sunken {
+  border-radius: var(--r-lg); border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.card-hover { transition: box-shadow var(--dur-fast) var(--ease-out); }
+.card-hover:hover { box-shadow: var(--shadow-md); }
+
+/* Accordion 手風琴（純 <details> 實作） */
+details.accordion {
+  overflow: hidden; border: 1px solid var(--border); border-radius: var(--r-lg);
+  background: color-mix(in oklab, var(--surface) 90%, transparent);
+}
+details.accordion summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 18px 22px; cursor: pointer; list-style: none;
+  font-size: 1.04rem; font-weight: 800; color: var(--fg);
+}
+details.accordion summary::-webkit-details-marker { display: none; }
+details.accordion .acc-plus {
+  color: var(--accent-deep); font-size: 1.35rem; line-height: 1;
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+details.accordion[open] .acc-plus { transform: rotate(45deg); }
+details.accordion .acc-body {
+  padding: 0 22px 20px; color: var(--muted); line-height: var(--leading-loose);
+}
+
+/* Callout 提示框 */
+.callout {
+  padding: 16px 18px; border-radius: var(--r-md);
+  border: 1px solid var(--border); color: var(--muted); line-height: var(--leading-body);
+}
+.callout-amber {
+  border-left: 4px solid var(--accent-2);
+  background: color-mix(in oklab, var(--accent-2) 10%, transparent);
+}
+
+/* Progress Bar 進度條 */
+.progress-track {
+  height: 9px; overflow: hidden; border-radius: var(--r-pill); background: var(--surface-3);
+}
+.progress-fill {
+  height: 100%; border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+/* Toast 通知 */
+.toast {
+  position: fixed; left: 50%; bottom: -80px; transform: translateX(-50%); z-index: 200;
+  display: flex; align-items: center; gap: 12px; padding: 14px 22px;
+  border-radius: var(--r-pill); background: var(--fg); color: var(--bg);
+  box-shadow: var(--shadow-lift); font-weight: 800;
+  transition: bottom var(--dur-med) var(--ease-out);
+}
+.toast.show { bottom: 28px; }
+
+/* ── Section Title 共用 ── */
+.section-title { scroll-margin-top: 88px; margin-bottom: 28px; }
+.section-title h2 { margin: 14px 0 0; font-size: clamp(1.6rem, 3vw, 2.1rem); font-weight: 900; line-height: 1.2; }
+.section-title .lead { margin: 12px 0 0; max-width: 680px; color: var(--muted); line-height: 1.9; font-size: 1.02rem; }
+
+/* ── Lucide 圖標 ── */
+.lucide { display: block; flex: 0 0 auto; }
+
+/* ── 版面佈局 ── */
+.hc-body {
+  max-width: 1180px; margin: 0 auto;
+  padding: clamp(32px,5vw,56px) clamp(16px,4vw,40px);
+  display: grid; grid-template-columns: minmax(0,1fr) 360px; gap: 40; align-items: start;
+}
+.hc-main { display: grid; gap: clamp(40px, 5vw, 64px); min-width: 0; }
+.hc-aside .purchase-card { position: sticky; top: 88px; }
+
+@media (max-width: 980px) {
+  .hc-body { grid-template-columns: 1fr !important; }
+  .hc-aside { order: -1; }
+  .hc-project, .hc-instructor { grid-template-columns: 1fr !important; }
+  .hc-nav { display: none !important; }
+}
 </style>
 </head>
 <body>
-<div id="hc-app"></div>
-<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- ============================================================ -->
+<!-- Header 頂部導航列 -->
+<!-- ============================================================ -->
+<header style="position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:14px clamp(16px,4vw,56px);background:color-mix(in oklab, var(--surface) 88%, transparent);border-bottom:1px solid var(--border);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);">
+  <div style="display:flex;align-items:center;gap:10px;font-weight:900;font-size:1.15rem;">
+    <img src="assets/logo.png" alt="凱文大叔" style="width:40px;height:40px;border-radius:var(--r-pill);flex:0 0 auto;" />
+    <span style="color:var(--accent)">凱文</span>大叔
+    <span style="font-size:0.72rem;font-weight:800;color:var(--muted-2);letter-spacing:0.16em;text-transform:uppercase;margin-left:4px">Uncle Kevin</span>
+  </div>
+  <nav style="display:flex;gap:4px;align-items:center;" class="hc-nav">
+    <a href="#intro" class="nav-link">課程介紹</a>
+    <a href="#career" class="nav-link">職涯加速</a>
+    <a href="#curriculum" class="nav-link">課程大綱</a>
+    <a href="#project" class="nav-link">實戰專案</a>
+    <a href="#testimonials" class="nav-link">學員好評</a>
+    <a href="#instructor" class="nav-link">講師介紹</a>
+    <a href="#faq" class="nav-link">常見問題</a>
+  </nav>
+  <style>
+    .nav-link { padding:8px 14px; border-radius:var(--r-pill); text-decoration:none; color:var(--muted); font-weight:700; font-size:0.94rem; transition: background var(--dur-fast), color var(--dur-fast); }
+    .nav-link:hover { background:var(--surface-2); color:var(--fg); }
+  </style>
+  <button class="btn btn-sm btn-primary" onclick="enroll('header')">立即報名 <i data-lucide="arrow-right" style="width:16px;height:16px;"></i></button>
+</header>
+
+<!-- ============================================================ -->
+<!-- Hero 主視覺 -->
+<!-- ============================================================ -->
+<section style="position:relative;overflow:hidden;color:#fff;">
+  <div style="position:absolute;inset:0;">
+    <img src="assets/cover.png" alt="" style="width:100%;height:100%;object-fit:cover;opacity:0.28;mix-blend-mode:luminosity;" />
+  </div>
+  <div style="position:absolute;inset:0;background:linear-gradient(120deg, oklch(20% 0.04 248 / 0.94), oklch(34% 0.07 232 / 0.78));"></div>
+  <div style="position:relative;max-width:1100px;margin:0 auto;padding:clamp(48px,7vw,88px) clamp(16px,4vw,56px);">
+    <span class="eyebrow eyebrow-amber"><span aria-hidden="true">★</span> Hahow 線上課程募資中</span>
+    <h1 style="margin:20px 0 18px;font-size:clamp(2.2rem,5vw,4rem);line-height:1.08;font-weight:900;max-width:920px;">AI 賦能全端開發：從零打造企業級智慧應用</h1>
+    <p style="margin:0;max-width:760px;font-size:clamp(1.02rem,1.6vw,1.2rem);line-height:1.9;color:oklch(96% 0.01 250 / 0.92);">用一套 AI CRM 實戰專案，把 Spring Boot、Spring AI 與 React 串成可上線的企業級智慧應用。</p>
+    <div style="display:flex;flex-wrap:wrap;gap:22px;margin-top:30px;align-items:center;">
+      <div><div style="font-size:1.9rem;font-weight:900;line-height:1;color:var(--accent-2)">8</div><div style="font-size:0.84rem;color:oklch(94% 0.01 250 / 0.78);margin-top:5px;font-weight:700">實戰單元</div></div>
+      <div style="width:1px;height:34px;background:oklch(100% 0 0 / 0.18)"></div>
+      <div><div style="font-size:1.9rem;font-weight:900;line-height:1;color:var(--accent-2)">32hr</div><div style="font-size:0.84rem;color:oklch(94% 0.01 250 / 0.78);margin-top:5px;font-weight:700">紮實課程時數</div></div>
+      <div style="width:1px;height:34px;background:oklch(100% 0 0 / 0.18)"></div>
+      <div><div style="font-size:1.9rem;font-weight:900;line-height:1;color:var(--accent-2)">1</div><div style="font-size:0.84rem;color:oklch(94% 0.01 250 / 0.78);margin-top:5px;font-weight:700">完整 AI CRM 專案</div></div>
+      <div style="width:1px;height:34px;background:oklch(100% 0 0 / 0.18)"></div>
+      <div><div style="font-size:1.9rem;font-weight:900;line-height:1;color:var(--accent-2)">11+</div><div style="font-size:0.84rem;color:oklch(94% 0.01 250 / 0.78);margin-top:5px;font-weight:700">技術棧整合</div></div>
+      <div style="width:1px;height:34px;background:oklch(100% 0 0 / 0.18)"></div>
+      <div><div style="font-size:1.9rem;font-weight:900;line-height:1;color:var(--accent-2)" id="hero-backers">0</div><div style="font-size:0.84rem;color:oklch(94% 0.01 250 / 0.78);margin-top:5px;font-weight:700">已報名學員</div></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:30px;">
+      <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid oklch(100% 0 0 / 0.2);background:oklch(100% 0 0 / 0.1);font-size:0.86rem;font-weight:700;">Java 21</span>
+      <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid oklch(100% 0 0 / 0.2);background:oklch(100% 0 0 / 0.1);font-size:0.86rem;font-weight:700;">Spring Boot 4.0</span>
+      <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid oklch(100% 0 0 / 0.2);background:oklch(100% 0 0 / 0.1);font-size:0.86rem;font-weight:700;">Spring MVC</span>
+      <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid oklch(100% 0 0 / 0.2);background:oklch(100% 0 0 / 0.1);font-size:0.86rem;font-weight:700;">Spring Data JPA</span>
+      <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid oklch(100% 0 0 / 0.2);background:oklch(100% 0 0 / 0.1);font-size:0.86rem;font-weight:700;">PostgreSQL + pgvector</span>
+      <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid oklch(100% 0 0 / 0.2);background:oklch(100% 0 0 / 0.1);font-size:0.86rem;font-weight:700;">Flyway</span>
+      <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid oklch(100% 0 0 / 0.2);background:oklch(100% 0 0 / 0.1);font-size:0.86rem;font-weight:700;">Spring Security + JWT</span>
+      <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid oklch(100% 0 0 / 0.2);background:oklch(100% 0 0 / 0.1);font-size:0.86rem;font-weight:700;">SpringDoc OpenAPI</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 主內容區 + 側邊購買卡 -->
+<!-- ============================================================ -->
+<div class="hc-body">
+  <main class="hc-main">
+
+    <!-- 完課能力 -->
+    <section style="padding-top:8px;">
+      <div class="section-title" id="intro">
+        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 課程介紹</span>
+        <h2>完課後，你會做出什麼？</h2>
+        <p class="lead">這不是一堆零散範例，而是一套從登入到 AI 對話完整跑通的企業級 AI CRM。以下是你會親手建立的能力：</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:16px;">
+        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;"><span style="display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:color-mix(in oklab, var(--accent) 14%, transparent);color:var(--accent);font-weight:900;">01</span><strong style="font-size:1.04rem;line-height:1.3;">從零搭起全端骨架</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.95rem;">建立 Spring Boot + React 的 AI CRM 專案，前後端分離、可啟動可驗證。</p>
+        </div>
+        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;"><span style="display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:color-mix(in oklab, var(--accent) 14%, transparent);color:var(--accent);font-weight:900;">02</span><strong style="font-size:1.04rem;line-height:1.3;">企業級後端分層</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.95rem;">用 Spring MVC 設計客戶、商機、互動紀錄與任務管理 API，分層清楚。</p>
+        </div>
+        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;"><span style="display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:color-mix(in oklab, var(--accent) 14%, transparent);color:var(--accent);font-weight:900;">03</span><strong style="font-size:1.04rem;line-height:1.3;">可維護的資料模型</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.95rem;">用 Spring Data JPA、Specification 與 Flyway 建立可遷移的資料庫。</p>
+        </div>
+        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;"><span style="display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:color-mix(in oklab, var(--accent) 14%, transparent);color:var(--accent);font-weight:900;">04</span><strong style="font-size:1.04rem;line-height:1.3;">登入與權限控管</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.95rem;">用 Spring Security + JWT 完成登入、角色與 API 授權保護。</p>
+        </div>
+        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;"><span style="display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:color-mix(in oklab, var(--accent) 14%, transparent);color:var(--accent);font-weight:900;">05</span><strong style="font-size:1.04rem;line-height:1.3;">React CRM 工作台</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.95rem;">用 React 19 建立 CRM Dashboard、客戶列表、商機看板與 AI 助理介面。</p>
+        </div>
+        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;"><span style="display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:color-mix(in oklab, var(--accent) 14%, transparent);color:var(--accent);font-weight:900;">06</span><strong style="font-size:1.04rem;line-height:1.3;">可串流的 AI 助理</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.95rem;">用 Spring AI ChatClient + SSE 打造 token-by-token 回應的 CRM 助理。</p>
+        </div>
+        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;"><span style="display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:color-mix(in oklab, var(--accent) 14%, transparent);color:var(--accent);font-weight:900;">07</span><strong style="font-size:1.04rem;line-height:1.3;">讓 AI 讀真實資料</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.95rem;">用 tool calling 與 pgvector RAG，讓 AI 引用文件、不憑空亂答。</p>
+        </div>
+        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;"><span style="display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:color-mix(in oklab, var(--accent) 14%, transparent);color:var(--accent);font-weight:900;">08</span><strong style="font-size:1.04rem;line-height:1.3;">端到端整合驗收</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.95rem;">完成結訓專案整合、效能調校與 Demo Day 展示驗收，產出可展示的完整作品。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 課程特色 -->
+    <section>
+      <div class="section-title">
+        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 為什麼選這門課</span>
+        <h2>不只教你呼叫 LLM，而是讓 AI 真正上線</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));gap:16px;">
+        <div class="card-sunken" style="padding:24px;display:flex;gap:16px;">
+          <span style="display:grid;place-items:center;width:48px;height:48px;border-radius:14px;flex:0 0 auto;background:var(--surface);border:1px solid var(--border);color:var(--accent);"><i data-lucide="layers" style="width:24px;height:24px;"></i></span>
+          <div><strong style="display:block;font-size:1.06rem;margin-bottom:6px;">一條產品開發路線</strong><p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.95rem;">不是把多門課拼在一起，而是用同一套 AI CRM 範例，把每個技術放進同一條開發路線。</p></div>
+        </div>
+        <div class="card-sunken" style="padding:24px;display:flex;gap:16px;">
+          <span style="display:grid;place-items:center;width:48px;height:48px;border-radius:14px;flex:0 0 auto;background:var(--surface);border:1px solid var(--border);color:var(--accent);"><i data-lucide="shield-check" style="width:24px;height:24px;"></i></span>
+          <div><strong style="display:block;font-size:1.06rem;margin-bottom:6px;">技術由工具算、文字由模型寫</strong><p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.95rem;">所有金額、訂單、權限由 Java domain service 提供；LLM 只負責摘要、分類、建議與草稿。</p></div>
+        </div>
+        <div class="card-sunken" style="padding:24px;display:flex;gap:16px;">
+          <span style="display:grid;place-items:center;width:48px;height:48px;border-radius:14px;flex:0 0 auto;background:var(--surface);border:1px solid var(--border);color:var(--accent);"><i data-lucide="bot" style="width:24px;height:24px;"></i></span>
+          <div><strong style="display:block;font-size:1.06rem;margin-bottom:6px;">AI Agent 協作開發</strong><p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.95rem;">每單元都附 AI 提示詞主題：先讀需求、再產程式、最後驗證，產出可測試可維運的程式碼。</p></div>
+        </div>
+        <div class="card-sunken" style="padding:24px;display:flex;gap:16px;">
+          <span style="display:grid;place-items:center;width:48px;height:48px;border-radius:14px;flex:0 0 auto;background:var(--surface);border:1px solid var(--border);color:var(--accent);"><i data-lucide="git-branch" style="width:24px;height:24px;"></i></span>
+          <div><strong style="display:block;font-size:1.06rem;margin-bottom:6px;">章章相連、產出累積</strong><p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.95rem;">每一章的產出都成為下一章的基礎，避免只學到零散範例。</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 市場數據 -->
+    <section>
+      <div class="section-title">
+        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 市場趨勢</span>
+        <h2>數字會說話：AI 工程師的市場優勢</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;">
+        <div class="card-solid card-hover" style="padding:24px;text-align:center;box-shadow:var(--shadow-sm);">
+          <div style="font-size:clamp(1.6rem,3vw,2.2rem);font-weight:900;color:var(--accent);line-height:1;">NT$73K+</div>
+          <div style="font-size:0.95rem;font-weight:700;margin-top:10px;color:var(--fg);line-height:1.4;">台灣軟體工程師月薪中位數</div>
+          <div style="font-size:0.78rem;color:var(--muted-2);margin-top:6px;">NodeFlair 2026</div>
+        </div>
+        <div class="card-solid card-hover" style="padding:24px;text-align:center;box-shadow:var(--shadow-sm);">
+          <div style="font-size:clamp(1.6rem,3vw,2.2rem);font-weight:900;color:var(--accent);line-height:1;">25%</div>
+          <div style="font-size:0.95rem;font-weight:700;margin-top:10px;color:var(--fg);line-height:1.4;">AI 技能薪資溢價</div>
+          <div style="font-size:0.78rem;color:var(--muted-2);margin-top:6px;">市場調查 2026</div>
+        </div>
+        <div class="card-solid card-hover" style="padding:24px;text-align:center;box-shadow:var(--shadow-sm);background:linear-gradient(135deg, color-mix(in oklab, var(--accent) 12%, var(--surface)), var(--surface));">
+          <div style="font-size:clamp(1.6rem,3vw,2.2rem);font-weight:900;color:var(--accent);line-height:1;">56%</div>
+          <div style="font-size:0.95rem;font-weight:700;margin-top:10px;color:var(--fg);line-height:1.4;">全球 AI 技能工資溢價</div>
+          <div style="font-size:0.78rem;color:var(--muted-2);margin-top:6px;">Kaggle AI Jobs 2025-2026</div>
+        </div>
+        <div class="card-solid card-hover" style="padding:24px;text-align:center;box-shadow:var(--shadow-sm);">
+          <div style="font-size:clamp(1.6rem,3vw,2.2rem);font-weight:900;color:var(--accent);line-height:1;">NT$160K</div>
+          <div style="font-size:0.95rem;font-weight:700;margin-top:10px;color:var(--fg);line-height:1.4;">資深 AI 工程師月薪上限</div>
+          <div style="font-size:0.78rem;color:var(--muted-2);margin-top:6px;">台灣就業市場 2026</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 職涯加速 -->
+    <section>
+      <div class="section-title" id="career">
+        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 職涯加速</span>
+        <h2>學完這門課，對你的職涯有什麼幫助？</h2>
+        <p class="lead">AI 不只是技術趨勢，更是薪資與職涯成長的加速器。以下是這門課為你帶來的具體競爭優勢：</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:16px;">
+        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden;">
+          <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:color-mix(in oklab, var(--accent) 8%, transparent);"></div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;position:relative;"><span style="display:grid;place-items:center;width:44px;height:44px;border-radius:14px;background:color-mix(in oklab, var(--accent) 14%, transparent);color:var(--accent);"><i data-lucide="trending-up" style="width:22px;height:22px;"></i></span><strong style="font-size:1.04rem;line-height:1.3;">AI 工程師薪資溢價 25%↑</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.93rem;position:relative;">根據 2026 年市場調查，具備 AI 技能的軟體工程師比同職位不具 AI 技能者薪資高出 25%，全球平均溢價更達 56%。</p>
+        </div>
+        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden;">
+          <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:color-mix(in oklab, var(--accent) 8%, transparent);"></div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;position:relative;"><span style="display:grid;place-items:center;width:44px;height:44px;border-radius:14px;background:color-mix(in oklab, var(--accent) 14%, transparent);color:var(--accent);"><i data-lucide="briefcase" style="width:22px;height:22px;"></i></span><strong style="font-size:1.04rem;line-height:1.3;">Spring Boot 市場需求穩定成長</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.93rem;position:relative;">台灣企業級 Java 後端開發職缺持續成長，Spring Boot 已成為企業標準框架，掌握此技能等於打開絕大多數 Java 職缺的大門。</p>
+        </div>
+        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden;">
+          <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:color-mix(in oklab, var(--accent) 8%, transparent);"></div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;position:relative;"><span style="display:grid;place-items:center;width:44px;height:44px;border-radius:14px;background:color-mix(in oklab, var(--accent) 14%, transparent);color:var(--accent);"><i data-lucide="rocket" style="width:22px;height:22px;"></i></span><strong style="font-size:1.04rem;line-height:1.3;">全端 + AI 雙核心競爭力</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.93rem;position:relative;">單純前端或後端工程師市場已趨飽和，能同時掌握全端開發與 AI 整合的工程師，是企業最渴求的稀缺人才。</p>
+        </div>
+        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden;">
+          <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:color-mix(in oklab, var(--accent) 8%, transparent);"></div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;position:relative;"><span style="display:grid;place-items:center;width:44px;height:44px;border-radius:14px;background:color-mix(in oklab, var(--accent) 14%, transparent);color:var(--accent);"><i data-lucide="target" style="width:22px;height:22px;"></i></span><strong style="font-size:1.04rem;line-height:1.3;">作品即履歷</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.93rem;position:relative;">課程產出的 AI CRM 專案可直接放入 GitHub 作品集，展示你具備企業級架構、安全性、AI 整合與端到端交付的能力。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 適用職涯場景 -->
+    <section>
+      <div class="section-title">
+        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 誰該來學</span>
+        <h2>不管你現在站在哪裡，這門課帶你往前一步</h2>
+        <p class="lead">無論你是想升級技能、轉職、推動公司 AI 轉型，還是用作品集求職——這門課都能給你具體成果。</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));gap:16px;">
+        <div class="card-hover" style="display:flex;gap:16px;padding:20px 22px;border-radius:var(--r-lg);border:1px solid var(--border);background:var(--surface);">
+          <span style="display:grid;place-items:center;width:48px;height:48px;border-radius:14px;flex:0 0 auto;background:color-mix(in oklab, var(--accent-2) 14%, transparent);color:var(--accent-2);"><i data-lucide="code-2" style="width:24px;height:24px;"></i></span>
+          <div><strong style="display:block;font-size:1.02rem;margin-bottom:6px;color:var(--fg);">在職工程師技能升級</strong><p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">已有 Java 或 Spring Boot 經驗，想快速掌握 AI 整合能力，在團隊中成為 AI 落地的推手。</p></div>
+        </div>
+        <div class="card-hover" style="display:flex;gap:16px;padding:20px 22px;border-radius:var(--r-lg);border:1px solid var(--border);background:var(--surface);">
+          <span style="display:grid;place-items:center;width:48px;height:48px;border-radius:14px;flex:0 0 auto;background:color-mix(in oklab, var(--accent-2) 14%, transparent);color:var(--accent-2);"><i data-lucide="repeat" style="width:24px;height:24px;"></i></span>
+          <div><strong style="display:block;font-size:1.02rem;margin-bottom:6px;color:var(--fg);">轉職全端 AI 工程師</strong><p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">具備程式基礎，想轉型為能同時處理前後端與 AI 的全端工程師，用完整作品集敲開面試大門。</p></div>
+        </div>
+        <div class="card-hover" style="display:flex;gap:16px;padding:20px 22px;border-radius:var(--r-lg);border:1px solid var(--border);background:var(--surface);">
+          <span style="display:grid;place-items:center;width:48px;height:48px;border-radius:14px;flex:0 0 auto;background:color-mix(in oklab, var(--accent-2) 14%, transparent);color:var(--accent-2);"><i data-lucide="building-2" style="width:24px;height:24px;"></i></span>
+          <div><strong style="display:block;font-size:1.02rem;margin-bottom:6px;color:var(--fg);">企業 AI 轉型先鋒</strong><p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">公司計畫導入 AI，你需要一套可落地的技術方案，而不只是 ChatGPT API 的 Hello World。</p></div>
+        </div>
+        <div class="card-hover" style="display:flex;gap:16px;padding:20px 22px;border-radius:var(--r-lg);border:1px solid var(--border);background:var(--surface);">
+          <span style="display:grid;place-items:center;width:48px;height:48px;border-radius:14px;flex:0 0 auto;background:color-mix(in oklab, var(--accent-2) 14%, transparent);color:var(--accent-2);"><i data-lucide="graduation-cap" style="width:24px;height:24px;"></i></span>
+          <div><strong style="display:block;font-size:1.02rem;margin-bottom:6px;color:var(--fg);">畢業生求職加速</strong><p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">即將畢業或剛畢業，用企業級專案作品在履歷中脫穎而出，展現不只是寫得動而是寫得好的能力。</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 適合對象 -->
+    <section>
+      <div class="section-title">
+        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 適合對象</span>
+        <h2>這門課為誰而設計</h2>
+      </div>
+      <div style="display:grid;gap:12px;">
+        <div style="display:flex;align-items:flex-start;gap:14px;padding:16px 18px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface);">
+          <span style="color:var(--success);margin-top:1px;"><i data-lucide="circle-check-big" style="width:22px;height:22px;"></i></span>
+          <span style="line-height:1.75;color:var(--fg);">已具備 Java 基礎，想把 Spring Boot、React 與 AI 串成完整產品的工程師。</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:14px;padding:16px 18px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface);">
+          <span style="color:var(--success);margin-top:1px;"><i data-lucide="circle-check-big" style="width:22px;height:22px;"></i></span>
+          <span style="line-height:1.75;color:var(--fg);">會寫基本 REST API，但還不熟企業級分層、權限、錯誤處理與前後端整合的開發者。</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:14px;padding:16px 18px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface);">
+          <span style="color:var(--success);margin-top:1px;"><i data-lucide="circle-check-big" style="width:22px;height:22px;"></i></span>
+          <span style="line-height:1.75;color:var(--fg);">想理解 Spring AI 與 RAG 如何落地在真實 JVM 系統，而不只做聊天機器人 demo 的後端工程師。</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:14px;padding:16px 18px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface);">
+          <span style="color:var(--success);margin-top:1px;"><i data-lucide="circle-check-big" style="width:22px;height:22px;"></i></span>
+          <span style="line-height:1.75;color:var(--fg);">想用 AI Agent 協作開發，但希望產出可測試、可維運、可上線程式碼的全端工程師。</span>
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <div class="callout callout-amber">
+          <strong style="display:block;margin-bottom:8px;color:var(--fg);font-weight:800;">先備知識</strong>
+          需具備基本 Java 語法與 REST API 概念。課程著重企業級分層、整合與 AI 落地，不從零教語法——寫過簡單 API 就能跟上。
+        </div>
+      </div>
+    </section>
+
+    <!-- 實戰專案展示 -->
+    <section>
+      <div class="section-title" id="project">
+        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 貫穿案例</span>
+        <h2>一套 B2B AI CRM 智慧業務助理</h2>
+        <p class="lead">從基本 CRM 功能開始，逐步加入 AI 能力。AI 不替代決策，而是提供可追蹤的建議——金額與權限由 Java 算，摘要與草稿由模型寫。</p>
+      </div>
+      <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:22px;align-items:stretch;" class="hc-project">
+        <div class="card-solid" style="overflow:hidden;padding:0;">
+          <img src="assets/cover.png" alt="AI CRM Dashboard" style="width:100%;height:260px;object-fit:cover;display:block;" />
+          <div style="padding:18px 20px;">
+            <strong style="display:block;margin-bottom:6px;">業務打開客戶頁，系統自動整理近況</strong>
+            <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.94rem;">客戶是否活躍？有哪些風險訊號？是否可能流失？該推薦什麼方案？下一步該寄信、約會議還是請主管介入？</p>
+          </div>
+        </div>
+        <div style="display:grid;gap:10px;">
+          <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface);"><div style="flex:1;"><strong style="font-size:0.98rem;">認證與權限</strong><div style="color:var(--muted);font-size:0.86rem;margin-top:2px;">登入、JWT、角色權限、API 保護</div></div><span class="badge badge-accent">Spring Security</span></div>
+          <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface);"><div style="flex:1;"><strong style="font-size:0.98rem;">客戶管理</strong><div style="color:var(--muted);font-size:0.86rem;margin-top:2px;">客戶、聯絡人、標籤、分級</div></div><span class="badge badge-accent">Spring MVC + JPA</span></div>
+          <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface);"><div style="flex:1;"><strong style="font-size:0.98rem;">商機管理</strong><div style="color:var(--muted);font-size:0.86rem;margin-top:2px;">階段、金額、預計成交日、風險狀態</div></div><span class="badge badge-accent">JPA + Specification</span></div>
+          <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface);"><div style="flex:1;"><strong style="font-size:0.98rem;">AI 摘要</strong><div style="color:var(--muted);font-size:0.86rem;margin-top:2px;">客戶摘要、風險訊號、下一步建議</div></div><span class="badge badge-accent">Spring AI</span></div>
+          <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface);"><div style="flex:1;"><strong style="font-size:0.98rem;">RAG 知識庫</strong><div style="color:var(--muted);font-size:0.86rem;margin-top:2px;">產品文件、銷售話術、條款檢索</div></div><span class="badge badge-accent">pgvector</span></div>
+          <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface);"><div style="flex:1;"><strong style="font-size:0.98rem;">工具呼叫</strong><div style="color:var(--muted);font-size:0.86rem;margin-top:2px;">讀真實資料、算商機健康分數</div></div><span class="badge badge-accent">Tool Calling</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 課程大綱 -->
+    <section>
+      <div class="section-title" id="curriculum">
+        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 課程大綱</span>
+        <h2>8 大單元，章章相連</h2>
+        <p class="lead">每個單元都有明確產出，且全部接到同一套 AI CRM 專案。可拆成 4 天工作坊或 Hahow 線上章節。</p>
+      </div>
+      <div style="display:grid;gap:12px;">
+        <details class="accordion" open>
+          <summary><span style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;"><span style="font-size:1.5rem;font-weight:900;color:var(--accent-2);line-height:1;">01</span><span style="font-weight:800;">開發環境、專案骨架與 AI 協作流程</span></span><span class="acc-plus" aria-hidden="true">+</span></summary>
+          <div class="acc-body">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 16px;"><span class="badge badge-neutral">環境建置</span><span class="badge badge-neutral">Monorepo</span><span class="badge badge-neutral">AI 協作</span></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:10px;margin-bottom:16px;">
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>JDK 21 / Maven / Node / Docker 安裝與驗證</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>Spring Initializr + Vite 建立前後端</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>後端 /api/health、前端健康狀態紅綠燈</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>第一份 AI Agent 提示詞：檢查本機環境</div>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--success) 12%, transparent);color:var(--success);font-weight:800;font-size:0.9rem;"><i data-lucide="package-check" style="width:17px;height:17px;"></i>核心產出 · 可啟動的 full-stack monorepo</div>
+          </div>
+        </details>
+        <details class="accordion">
+          <summary><span style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;"><span style="font-size:1.5rem;font-weight:900;color:var(--accent-2);line-height:1;">02</span><span style="font-weight:800;">Spring MVC、REST API 與 CRM Domain Modeling</span></span><span class="acc-plus" aria-hidden="true">+</span></summary>
+          <div class="acc-body">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 16px;"><span class="badge badge-neutral">Spring MVC</span><span class="badge badge-neutral">REST</span><span class="badge badge-neutral">DTO</span></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:10px;margin-bottom:16px;">
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>DispatcherServlet 與請求生命週期</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>Customer / Contact / Interaction / Opportunity 拆解</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>Controller / Service 分工與 DTO 邊界</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>Bean Validation 與可讀的 400 錯誤</div>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--success) 12%, transparent);color:var(--success);font-weight:800;font-size:0.9rem;"><i data-lucide="package-check" style="width:17px;height:17px;"></i>核心產出 · 客戶與互動紀錄 API</div>
+          </div>
+        </details>
+        <details class="accordion">
+          <summary><span style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;"><span style="font-size:1.5rem;font-weight:900;color:var(--accent-2);line-height:1;">03</span><span style="font-weight:800;">PostgreSQL、Flyway、JPA 與動態查詢</span></span><span class="acc-plus" aria-hidden="true">+</span></summary>
+          <div class="acc-body">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 16px;"><span class="badge badge-neutral">JPA</span><span class="badge badge-neutral">Flyway</span><span class="badge badge-neutral">Specification</span></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:10px;margin-bottom:16px;">
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>Docker Compose 啟動 PostgreSQL + pgvector</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>Flyway 命名規則與 migration 策略</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>Entity mapping、關聯與 audit 欄位</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>用 Specification 組合多條件搜尋</div>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--success) 12%, transparent);color:var(--success);font-weight:800;font-size:0.9rem;"><i data-lucide="package-check" style="width:17px;height:17px;"></i>核心產出 · CRM 資料庫與查詢服務</div>
+          </div>
+        </details>
+        <details class="accordion">
+          <summary><span style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;"><span style="font-size:1.5rem;font-weight:900;color:var(--accent-2);line-height:1;">04</span><span style="font-weight:800;">Spring Security、JWT、OpenAPI 與企業級錯誤處理</span></span><span class="acc-plus" aria-hidden="true">+</span></summary>
+          <div class="acc-body">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 16px;"><span class="badge badge-neutral">Security</span><span class="badge badge-neutral">JWT</span><span class="badge badge-neutral">OpenAPI</span></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:10px;margin-bottom:16px;">
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>Filter chain 與密碼雜湊</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>JWT 簽發、角色與過期時間</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>保護 /api/customers/**、/api/opportunities/**</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>@ControllerAdvice + ProblemDetail 統一錯誤</div>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--success) 12%, transparent);color:var(--success);font-weight:800;font-size:0.9rem;"><i data-lucide="package-check" style="width:17px;height:17px;"></i>核心產出 · 安全可測的後端 API</div>
+          </div>
+        </details>
+        <details class="accordion">
+          <summary><span style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;"><span style="font-size:1.5rem;font-weight:900;color:var(--accent-2);line-height:1;">05</span><span style="font-weight:800;">React CRM 工作台與前後端整合</span></span><span class="acc-plus" aria-hidden="true">+</span></summary>
+          <div class="acc-body">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 16px;"><span class="badge badge-neutral">React</span><span class="badge badge-neutral">TypeScript</span><span class="badge badge-neutral">整合</span></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:10px;margin-bottom:16px;">
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>API client、JWT 儲存與自動帶 token</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>CRM Dashboard 資訊架構</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>客戶列表、搜尋、客戶詳情頁</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>商機看板與 loading / error / empty 狀態</div>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--success) 12%, transparent);color:var(--success);font-weight:800;font-size:0.9rem;"><i data-lucide="package-check" style="width:17px;height:17px;"></i>核心產出 · 可登入的 CRM UI</div>
+          </div>
+        </details>
+        <details class="accordion">
+          <summary><span style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;"><span style="font-size:1.5rem;font-weight:900;color:var(--accent-2);line-height:1;">06</span><span style="font-weight:800;">Spring AI ChatClient、SSE 與 tool calling</span></span><span class="acc-plus" aria-hidden="true">+</span></summary>
+          <div class="acc-body">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 16px;"><span class="badge badge-neutral">Spring AI</span><span class="badge badge-neutral">SSE</span><span class="badge badge-neutral">Tool Calling</span></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:10px;margin-bottom:16px;">
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>ChatClient 與 system prompt 設計</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>SSE endpoint 與 React 串流顯示</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>CrmInsightTools：客戶統計、商機健康分數</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>信任邊界：數字由工具算、文字由模型寫</div>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--success) 12%, transparent);color:var(--success);font-weight:800;font-size:0.9rem;"><i data-lucide="package-check" style="width:17px;height:17px;"></i>核心產出 · AI CRM 助理聊天室</div>
+          </div>
+        </details>
+        <details class="accordion">
+          <summary><span style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;"><span style="font-size:1.5rem;font-weight:900;color:var(--accent-2);line-height:1;">07</span><span style="font-weight:800;">RAG、pgvector、MCP 與知識庫擴充</span></span><span class="acc-plus" aria-hidden="true">+</span></summary>
+          <div class="acc-body">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 16px;"><span class="badge badge-neutral">RAG</span><span class="badge badge-neutral">pgvector</span><span class="badge badge-neutral">MCP</span></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:10px;margin-bottom:16px;">
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>文件切片、embedding 與 metadata 設計</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>pgvector schema 與檢索流程</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>AI 推薦產品時引用知識庫來源</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>domain tool / RAG / MCP 的選用判斷</div>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--success) 12%, transparent);color:var(--success);font-weight:800;font-size:0.9rem;"><i data-lucide="package-check" style="width:17px;height:17px;"></i>核心產出 · 可引用文件的 AI 建議</div>
+          </div>
+        </details>
+        <details class="accordion">
+          <summary><span style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;"><span style="font-size:1.5rem;font-weight:900;color:var(--accent-2);line-height:1;">08</span><span style="font-weight:800;">結訓專案衝刺與 Demo Day 驗收</span></span><span class="acc-plus" aria-hidden="true">+</span></summary>
+          <div class="acc-body">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 16px;"><span class="badge badge-neutral">整合</span><span class="badge badge-neutral">測試</span><span class="badge badge-neutral">Demo Day</span></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:10px;margin-bottom:16px;">
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>端到端整合：CORS、JWT、seed data 對齊</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>三種典型客戶場景的端到端測試</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>上線檢查清單：安全 / 效能 / 可觀測性</div>
+              <div style="display:flex;gap:9px;align-items:flex-start;font-size:0.92rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>Demo Day 腳本：登入→客戶→AI→RAG→Swagger</div>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--success) 12%, transparent);color:var(--success);font-weight:800;font-size:0.9rem;"><i data-lucide="package-check" style="width:17px;height:17px;"></i>核心產出 · 可展示的完整 AI CRM</div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- 課程比較 -->
+    <section>
+      <div class="section-title">
+        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 課程比較</span>
+        <h2>跟市面上其他課程有什麼不同？</h2>
+        <p class="lead">不是所有 AI 課程都一樣——這門課帶你從企業級後端、安全授權到 AI 串流整合，一次到位。</p>
+      </div>
+      <div class="card-solid" style="overflow:auto;box-shadow:var(--shadow-sm);padding:0;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.92rem;min-width:600px;">
+          <thead>
+            <tr style="background:color-mix(in oklab, var(--accent) 8%, var(--surface));">
+              <th style="padding:14px 16px;text-align:left;font-weight:800;border-bottom:2px solid var(--border);color:var(--fg);">比較項目</th>
+              <th style="padding:14px 16px;text-align:left;font-weight:800;border-bottom:2px solid var(--border);color:var(--fg);">一般 LLM 課程</th>
+              <th style="padding:14px 16px;text-align:left;font-weight:800;border-bottom:2px solid var(--border);color:var(--fg);">一般 Spring Boot 課程</th>
+              <th style="padding:14px 16px;text-align:left;font-weight:800;border-bottom:2px solid var(--border);color:var(--accent);">本課程</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid var(--border);"><td style="padding:12px 16px;font-weight:700;color:var(--fg);">專案完整度</td><td style="padding:12px 16px;color:var(--muted);">只有聊天機器人 Demo</td><td style="padding:12px 16px;color:var(--muted);">零散範例、無全端整合</td><td style="padding:12px 16px;color:var(--accent);background:color-mix(in oklab, var(--accent) 4%, transparent);">✓ 完整 AI CRM，從登入到 AI 對話</td></tr>
+            <tr style="border-bottom:1px solid var(--border);"><td style="padding:12px 16px;font-weight:700;color:var(--fg);">AI 整合深度</td><td style="padding:12px 16px;color:var(--muted);">呼叫 API、看回應</td><td style="padding:12px 16px;color:var(--muted);">不涉及 AI</td><td style="padding:12px 16px;color:var(--accent);background:color-mix(in oklab, var(--accent) 4%, transparent);">✓ Tool Calling + RAG + SSE 串流</td></tr>
+            <tr style="border-bottom:1px solid var(--border);"><td style="padding:12px 16px;font-weight:700;color:var(--fg);">企業級實踐</td><td style="padding:12px 16px;color:var(--muted);">無安全、無權限</td><td style="padding:12px 16px;color:var(--muted);">有基本權限</td><td style="padding:12px 16px;color:var(--accent);background:color-mix(in oklab, var(--accent) 4%, transparent);">✓ JWT + 角色 + ProblemDetail 錯誤處理</td></tr>
+            <tr style="border-bottom:1px solid var(--border);"><td style="padding:12px 16px;font-weight:700;color:var(--fg);">前端整合</td><td style="padding:12px 16px;color:var(--muted);">無前端或極簡 UI</td><td style="padding:12px 16px;color:var(--muted);">無前端</td><td style="padding:12px 16px;color:var(--accent);background:color-mix(in oklab, var(--accent) 4%, transparent);">✓ React 19 完整 CRM 工作台</td></tr>
+            <tr style="border-bottom:1px solid var(--border);"><td style="padding:12px 16px;font-weight:700;color:var(--fg);">AI 協作開發</td><td style="padding:12px 16px;color:var(--muted);">無</td><td style="padding:12px 16px;color:var(--muted);">無</td><td style="padding:12px 16px;color:var(--accent);background:color-mix(in oklab, var(--accent) 4%, transparent);">✓ 每單元附 AI Agent 提示詞</td></tr>
+            <tr style="border-bottom:1px solid var(--border);"><td style="padding:12px 16px;font-weight:700;color:var(--fg);">結訓產出</td><td style="padding:12px 16px;color:var(--muted);">無完整作品</td><td style="padding:12px 16px;color:var(--muted);">零散練習</td><td style="padding:12px 16px;color:var(--accent);background:color-mix(in oklab, var(--accent) 4%, transparent);">✓ 可展示的 Demo Day 作品集</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 學員好評 -->
+    <section>
+      <div class="section-title" id="testimonials">
+        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 學員迴響</span>
+        <h2>他們學完之後，職涯這樣改變</h2>
+        <p class="lead">來自不同背景的學員，分享他們的真實學習體驗與職涯轉變。</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:16px;">
+        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:48px;height:48px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.5rem;">🧑‍💻</span><div><strong style="font-size:1.02rem;">陳同學</strong><div style="font-size:0.82rem;color:var(--accent);font-weight:700;margin-top:2px;">後端工程師 → AI 全端工程師</div></div></div>
+          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「之前只會寫 REST API，學完這門課後成功在面試中展示自己的 AI CRM 專案，順利拿到年薪加 30% 的 offer。課程的 RAG 與 Tool Calling 實戰幫了大忙。」</p>
+          <div style="display:flex;gap:3px;color:var(--warning);">★★★★★</div>
+        </div>
+        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:48px;height:48px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.5rem;">👨‍💼</span><div><strong style="font-size:1.02rem;">林同學</strong><div style="font-size:0.82rem;color:var(--accent);font-weight:700;margin-top:2px;">資深 Java 工程師</div></div></div>
+          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「公司正在導入 AI，但團隊不知道怎麼把 LLM 放進現有的 Spring Boot 系統。上完課後我直接帶著課程架構提案，成功推動部門的 AI 轉型專案。」</p>
+          <div style="display:flex;gap:3px;color:var(--warning);">★★★★★</div>
+        </div>
+        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:48px;height:48px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.5rem;">👩‍🎓</span><div><strong style="font-size:1.02rem;">張同學</strong><div style="font-size:0.82rem;color:var(--accent);font-weight:700;margin-top:2px;">轉職者（非本科）</div></div></div>
+          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「有 Java 基礎但不知道怎麼串成完整產品。這門課從環境建置到 Demo Day 一條龍帶完，結訓作品讓我在求職時非常有底氣。」</p>
+          <div style="display:flex;gap:3px;color:var(--warning);">★★★★★</div>
+        </div>
+        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:48px;height:48px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.5rem;">🧑‍🎨</span><div><strong style="font-size:1.02rem;">王同學</strong><div style="font-size:0.82rem;color:var(--accent);font-weight:700;margin-top:2px;">前端工程師</div></div></div>
+          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「一直想補強後端和 AI，但怕學太散。這門課用同一套專案把所有技術串起來，終於理解前後端整合和 AI 落地的全貌。」</p>
+          <div style="display:flex;gap:3px;color:var(--warning);">★★★★★</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 講師介紹 -->
+    <section>
+      <div class="section-title" id="instructor">
+        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 講師介紹</span>
+        <h2>你的講師：凱文大叔</h2>
+      </div>
+      <div class="card-solid" style="overflow:hidden;padding:0;display:grid;grid-template-columns:300px 1fr;" class="hc-instructor">
+        <div style="background:linear-gradient(150deg, oklch(34% 0.07 232), oklch(22% 0.04 248));display:grid;place-items:center;padding:28px;">
+          <img src="assets/logo.png" alt="凱文大叔" style="width:156px;height:156px;border-radius:var(--r-pill);border:2px solid oklch(100% 0 0 / 0.3);background:oklch(100% 0 0 / 0.06);" />
+        </div>
+        <div style="padding:28px 30px;">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <strong style="font-size:1.4rem;">凱文大叔 Uncle Kevin</strong>
+            <span class="badge badge-amber-solid">Spring AI 作者</span>
+          </div>
+          <p style="margin:12px 0 18px;color:var(--muted);line-height:1.9;">專注把 Spring Boot、Spring AI 與 React 串成可上線的企業級系統。教學風格務實——不堆砌名詞，帶你一行一行把 AI 放進真實產品。</p>
+          <div style="display:grid;gap:10px;">
+            <div style="display:flex;gap:10px;align-items:flex-start;font-size:0.95rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="badge-check" style="width:19px;height:19px;"></i></span>《Spring AI》系列技術作者，鐵人賽 30 天 Spring AI 連載</div>
+            <div style="display:flex;gap:10px;align-items:flex-start;font-size:0.95rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="badge-check" style="width:19px;height:19px;"></i></span>深耕 Java / Spring Boot 企業開發與 AI 落地教學</div>
+            <div style="display:flex;gap:10px;align-items:flex-start;font-size:0.95rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="badge-check" style="width:19px;height:19px;"></i></span>經營 AI 全端開發社群，帶領上千名工程師導入 AI Agent 協作</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 常見問題 -->
+    <section>
+      <div class="section-title" id="faq">
+        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 常見問題</span>
+        <h2>報名前，先看這些</h2>
+      </div>
+      <div style="display:grid;gap:12px;">
+        <details class="accordion"><summary><span>這門課適合完全沒寫過 Java 的新手嗎？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">建議先具備基本 Java 語法與 REST API 概念。課程著重在企業級分層、整合與 AI 落地，而不是從零教語法；若你寫過簡單的 API，就能順利跟上。</div></details>
+        <details class="accordion"><summary><span>課程用的是哪些技術版本？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">Java 21、Spring Boot 4.0.x、Spring AI 2.0.x (GA)、PostgreSQL + pgvector、React + TypeScript + Vite。開發環境以 Windows + PowerShell 7+ 示範，macOS / Linux 也可比照操作。</div></details>
+        <details class="accordion"><summary><span>這跟坊間「呼叫 LLM API」的課有什麼不同？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">我們不只教你呼叫 LLM，而是帶你把 AI 放進一套真正能上線的企業系統：資料庫、權限、前端、RAG、工具呼叫與端到端整合一次到位。</div></details>
+        <details class="accordion"><summary><span>Embabel / AI Agent 框架會教嗎？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">Embabel 的 GOAP、Action、Goal、Blackboard 內容會以選修附錄提供。Embabel 0.4.x 目前基於 Spring Boot 3.5.x，團隊已預告即將發布相容 Spring AI 2.0 GA 的新版本，届時將納入正式單元。</div></details>
+        <details class="accordion"><summary><span>買了之後可以看多久？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">購買後可不限次數、無限期觀看，課程更新也會免費同步給你。</div></details>
+        <details class="accordion"><summary><span>完成課程後我會做出什麼？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">一套可登入、可查客戶、可引用知識庫、可產生業務建議、可追蹤 AI 執行過程的企業級 AI CRM，並能在 Demo Day 完整跑通展示。</div></details>
+      </div>
+    </section>
+
+    <!-- 底部 CTA -->
+    <section>
+      <div class="card-solid" style="overflow:hidden;position:relative;color:#fff;border:none;padding:0;border-radius:var(--r-lg);">
+        <div style="position:absolute;inset:0;background:linear-gradient(120deg, oklch(30% 0.07 248), oklch(46% 0.12 240));"></div>
+        <div style="position:relative;padding:clamp(32px,5vw,56px);text-align:center;">
+          <span class="eyebrow eyebrow-amber"><span aria-hidden="true">★</span> 募資限定 · 早鳥優惠</span>
+          <h2 style="margin:18px 0 10px;font-size:clamp(1.7rem,3.5vw,2.6rem);font-weight:900;">現在報名，鎖定最低早鳥價</h2>
+          <p style="margin:0 auto 22px;max-width:560px;line-height:1.85;color:oklch(96% 0.01 250 / 0.9);">完課後你會擁有一套可登入、可查資料、可引用知識庫、可產生業務建議的企業級 AI CRM。</p>
+          <div style="display:flex;align-items:baseline;justify-content:center;gap:12px;margin-bottom:22px;">
+            <span style="font-size:2.6rem;font-weight:900;color:var(--accent-2);">NT$ 3,680</span>
+            <span style="text-decoration:line-through;opacity:0.7;font-weight:700;">NT$ 5,200</span>
+          </div>
+          <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
+            <button class="btn btn-lg btn-light" onclick="enroll('bottom_cta')">立即報名 <i data-lucide="arrow-right" style="width:18px;height:18px;"></i></button>
+            <button class="btn btn-lg btn-ghost" onclick="enroll('bottom_cta_trial')" style="color:#fff;border:1px solid oklch(100% 0 0 / 0.32);">免費試看單元</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 側邊購買卡 -->
+  <aside class="hc-aside">
+    <div class="card-solid purchase-card" style="overflow:hidden;padding:0;">
+      <div style="position:relative;">
+        <img src="assets/cover.png" alt="課程封面" style="width:100%;height:168px;object-fit:cover;" />
+        <button onclick="enroll('purchase_card_play')" aria-label="播放試看" style="position:absolute;inset:0;margin:auto;width:58px;height:58px;border-radius:var(--r-pill);border:none;cursor:pointer;background:color-mix(in oklab, var(--accent) 92%, black);color:#fff;display:grid;place-items:center;box-shadow:var(--shadow-lift);">
+          <i data-lucide="play" style="width:24px;height:24px;margin-left:3px;"></i>
+        </button>
+        <span style="position:absolute;top:12px;left:12px;" class="badge badge-amber-solid">早鳥募資中</span>
+      </div>
+      <div style="padding:20px 22px 24px;">
+        <div style="display:flex;align-items:baseline;gap:10px;">
+          <span style="font-size:1.9rem;font-weight:900;color:var(--accent-deep);">NT$ 3,680</span>
+          <span style="color:var(--muted-2);text-decoration:line-through;font-weight:700;">NT$ 5,200</span>
+        </div>
+        <div style="margin-top:16px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:0.9rem;font-weight:800;color:var(--fg);">
+            <span>募資目標達成率</span>
+            <span style="color:var(--accent-deep);" id="card-goal-pct">0%</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" id="card-progress" style="width:0%;"></div></div>
+          <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:0.86rem;color:var(--muted);font-weight:700;">
+            <span><b style="color:var(--fg);" id="card-backers">0</b> 人贊助</span>
+            <span>倒數 <b style="color:var(--accent-2-deep);">18</b> 天</span>
+          </div>
+        </div>
+        <div style="display:grid;gap:10px;margin-top:20px;">
+          <button class="btn btn-lg btn-primary btn-full" onclick="enroll('purchase_card')">立即報名 · 鎖定早鳥價</button>
+          <button class="btn btn-md btn-secondary btn-full" onclick="enroll('purchase_card_trial')"><i data-lucide="play" style="width:16px;height:16px;"></i> 免費試看單元</button>
+        </div>
+        <div style="display:grid;gap:11px;margin-top:22px;">
+          <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:0.92rem;font-weight:600;"><span style="color:var(--success);"><i data-lucide="clapperboard" style="width:18px;height:18px;"></i></span>8 大單元 · 40+ 實戰影片</div>
+          <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:0.92rem;font-weight:600;"><span style="color:var(--success);"><i data-lucide="infinity" style="width:18px;height:18px;"></i></span>購買後終身無限觀看</div>
+          <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:0.92rem;font-weight:600;"><span style="color:var(--success);"><i data-lucide="sparkles" style="width:18px;height:18px;"></i></span>全課 AI Agent 提示詞包</div>
+          <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:0.92rem;font-weight:600;"><span style="color:var(--success);"><i data-lucide="file-badge" style="width:18px;height:18px;"></i></span>結業證書與專案原始碼</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- Footer -->
+<footer style="text-align:center;padding:40px 16px 28px;color:var(--muted);line-height:1.9;">
+  <div style="font-weight:900;font-size:1.05rem;color:var(--fg);margin-bottom:6px;">
+    <span style="color:var(--accent)">凱文</span>大叔 · AI 賦能全端開發
+  </div>
+  <div style="font-size:0.9rem;">AI-Empowered Full-Stack · Building Enterprise-Grade Smart Apps</div>
+  <div style="font-size:0.82rem;margin-top:12px;color:var(--muted-2);">© 2026 Uncle Kevin. Hahow 課程銷售頁範本 · 內容整理自 ai-full-stack 課綱。</div>
+</footer>
+
+<!-- Toast 通知 -->
+<div class="toast" id="toast">
+  <i data-lucide="party-popper" style="width:20px;height:20px;"></i>已加入購物車 · 早鳥價已為你鎖定！
+</div>
+
+<!-- ============================================================ -->
+<!-- Lucide 圖標（DOM 掃描模式，不需要 React） -->
+<!-- ============================================================ -->
 <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
-<script src="_ds/design-system-55f34fee-532d-45eb-9b8e-9d474823a41c/_ds_bundle.js"></script>
-<script src="data.js"></script>
-<script type="text/babel" src="icons.jsx"></script>
-<script type="text/babel" src="parts1.jsx"></script>
-<script type="text/babel" src="parts2.jsx"></script>
-<script type="text/babel" src="parts3.jsx"></script>
-<script type="text/babel" src="parts4.jsx"></script>
-<script type="text/babel" src="App.jsx"></script>
+<script>
+/** 初始化 Lucide 圖標 — 將所有 <i data-lucide="name"> 替換為 SVG */
+lucide.createIcons();
+
+/** 報名按鈕點擊 — 顯示 Toast 並發送追蹤事件 */
+var __toastTimer;
+function enroll(source) {
+  var toast = document.getElementById('toast');
+  toast.classList.add('show');
+  clearTimeout(__toastTimer);
+  __toastTimer = setTimeout(function() { toast.classList.remove('show'); }, 2600);
+  if (window.Tracking) {
+    window.Tracking.event('enroll_click', { source: source || 'unknown', value: 3680 });
+  }
+}
+
+/** 串接 Hahow API — 即時更新贊助人數與募資進度 */
+(function() {
+  var courseId = '';
+  if (!courseId) return;
+  fetch('https://api.hahow.in/api/courses/' + courseId)
+    .then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); })
+    .then(function(data) {
+      var backers = data.numSoldTickets || 0;
+      var target = (data.successCriteria && data.successCriteria.numSoldTickets) || 10;
+      var pct = Math.round((backers / target) * 100);
+      document.getElementById('hero-backers').textContent = backers.toLocaleString();
+      document.getElementById('card-backers').textContent = backers.toLocaleString();
+      document.getElementById('card-goal-pct').textContent = pct + '%';
+      document.getElementById('card-progress').style.width = Math.min(pct, 100) + '%';
+    })
+    .catch(function(err) { console.warn('無法取得 Hahow 課程資料:', err); });
+})();
+</script>
+
 </body>
 </html>
