@@ -32,6 +32,9 @@ public class EmailLog {
 
     private String error;
 
+    @Column(name = "campaign_id")
+    private Long campaignId;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -39,15 +42,22 @@ public class EmailLog {
     protected EmailLog() {
     }
 
-    /** 建立一筆寄送記錄 */
+    /** 建立一筆寄送記錄（不指定 campaign，campaignId 為 null） */
     public EmailLog(String recipient, String subject, String type,
                     String providerMessageId, String status, String error) {
+        this(recipient, subject, type, providerMessageId, status, error, null);
+    }
+
+    /** 建立一筆寄送記錄（可指定所屬 campaign） */
+    public EmailLog(String recipient, String subject, String type,
+                    String providerMessageId, String status, String error, Long campaignId) {
         this.recipient = recipient;
         this.subject = subject;
         this.type = type;
         this.providerMessageId = providerMessageId;
         this.status = status;
         this.error = error;
+        this.campaignId = campaignId;
     }
 
     public Long getId() { return id; }
@@ -57,5 +67,7 @@ public class EmailLog {
     public String getProviderMessageId() { return providerMessageId; }
     public String getStatus() { return status; }
     public String getError() { return error; }
+    public Long getCampaignId() { return campaignId; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
+    public void setStatus(String status) { this.status = status; }
 }
