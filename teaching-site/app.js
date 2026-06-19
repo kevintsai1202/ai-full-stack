@@ -512,6 +512,7 @@ function conceptVisual(heading) {
     "AOP 解決了什麼問題": "concept-aop.png",
     "後端安全設定範例 (SecurityConfig.java)": "concept-security-chain.png",
     "安全防護重點": "concept-security-chain.png",
+    "JWT 是什麼？三段式結構與無狀態認證": "concept-jwt-structure.png",
     "開發端代理與後端 API 串接 (Vite Proxy)": "concept-vite-proxy.png",
     "串流輸出為什麼重要": "concept-sse-stream.png",
     "為什麼選擇 SSE (Server-Sent Events)": "concept-sse-stream.png",
