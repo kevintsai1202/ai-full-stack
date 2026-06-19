@@ -704,14 +704,12 @@ window.COURSE = {
             "body": "AI CRM 系統的角色設計反映真實企業的組織層級：\n\n**ROLE_SALES（業務人員）**\n- 可查看/編輯自己負責的客戶、商機與互動紀錄\n- 可使用 AI 助理進行客戶分析與行動建議\n- 不可查看其他業務人員的客戶資料\n\n**ROLE_MANAGER（業務主管）**\n- 可查看團隊內所有業務人員的客戶與商機\n- 可查看團隊的銷售報表與 AI 預測分析\n- 可指派任務給業務人員\n\n**ROLE_ADMIN（系統管理員）**\n- 可管理使用者帳號、角色與權限\n- 可管理 RAG 知識庫（上傳/刪除產品文件、銷售話術）\n- 可查看系統日誌與 AI 使用統計\n\n**權限控制實作要點**\n- API 層：用 `@PreAuthorize` 標註控制端點存取\n- 資料層：用 Specification 自動加入 `salesRepId` 過濾條件\n- AI 層：工具呼叫自動注入當前使用者的權限範圍，確保 AI 不會洩露跨業務的客戶資料"
           }
         ],
-        "prompt": "請接續 Unit 3 的實作內容。現在我們要進入 Unit 4：Spring Security、JWT、OpenAPI 與企業級錯誤處理。\n\n我們將使用 AI 協作方式來輔助開發。請在與 AI 溝通時，參考以下高級協作提示詞大師範本以獲取精準的程式碼：\n\n### AI Agent 提示詞 — 身分驗證與角色授權實作\n請在現有專案中，使用 Spring Security 與 JWT 實作安全防護與登入驗證功能：\n1. 引入安全防護套件（Spring Security）與 JWT 依賴，限制除了登入相關的 API 之外，其餘所有的 API 都需要攜帶 JWT Token 進行驗證才能存取。\n2. 實作一個登入 API（例如 POST /api/auth/login），供使用者傳入帳號密碼進行身分驗證。登入成功後，請在 JWT Token 中寫入使用者的角色（簡單區分「管理員 ADMIN」與「一般用戶 USER」），並將 Token 回傳給前端。\n3. 實作角色權限控制：限制客戶資料刪除 API 必須具備「管理員 ADMIN」角色才能執行，而一般查詢與編輯功能則僅需「用戶 USER」或已登入身分即可。\n4. 保護我們的 API 文件（Swagger UI 網頁與相關端點），設定必須在登入驗證並攜帶 JWT Token 後才能正常瀏覽與測試。\n",
-        "promptMac": "請接續 Unit 3 的實作內容。現在我們要進入 Unit 4：Spring Security、JWT、OpenAPI 與企業級錯誤處理。\n\n我們將使用 AI 協作方式來輔助開發。請在與 AI 溝通時，參考以下高級協作提示詞大師範本以獲取精準的程式碼：\n\n### AI Agent 提示詞 — 身分驗證與角色授權實作\n請在現有專案中，使用 Spring Security 與 JWT 實作安全防護與登入驗證功能：\n1. 引入安全防護套件（Spring Security）與 JWT 依賴，限制除了登入相關的 API 之外，其餘所有的 API 都需要攜帶 JWT Token 進行驗證才能存取。\n2. 實作一個登入 API（例如 POST /api/auth/login），供使用者傳入帳號密碼進行身分驗證。登入成功後，請在 JWT Token 中寫入使用者的角色（簡單區分「管理員 ADMIN」與「一般用戶 USER」），並將 Token 回傳給前端。\n3. 實作角色權限控制：限制客戶資料刪除 API 必須具備「管理員 ADMIN」角色才能執行，而一般查詢與編輯功能則僅需「用戶 USER」或已登入身分即可。\n4. 保護我們的 API 文件（Swagger UI 網頁與相關端點），設定必須在登入驗證並攜帶 JWT Token 後才能正常瀏覽與測試。\n",
+        "prompt": "請接續 Unit 3。本章我們把專案升級到企業級：用 Spring Security + JWT 做登入與角色授權、用 OpenAPI 產生 API 文件、用 ProblemDetail 做統一錯誤處理。理解原理後，依序使用下方提示詞請 AI Agent 完成，最後在 Swagger 上驗證權限流程。",
+        "promptMac": "請接續 Unit 3。本章我們把專案升級到企業級：用 Spring Security + JWT 做登入與角色授權、用 OpenAPI 產生 API 文件、用 ProblemDetail 做統一錯誤處理。理解原理後，依序使用下方提示詞請 AI Agent 完成，最後在 Swagger 上驗證權限流程。",
         "prompts": [
-          {
-            "title": "高級 AI 協作提示詞大師範本（Windows 版）",
-            "note": "可直接交給 Codex / Gemini 進行輔助開發",
-            "text": "請接續 Unit 3 的實作內容。現在我們要進入 Unit 4：Spring Security、JWT、OpenAPI 與企業級錯誤處理。\n\n我們將使用 AI 協作方式來輔助開發。請在與 AI 溝通時，參考以下高級協作提示詞大師範本以獲取精準的程式碼：\n\n### AI Agent 提示詞 — 身分驗證與角色授權實作\n請在現有專案中，使用 Spring Security 與 JWT 實作安全防護與登入驗證功能：\n1. 引入安全防護套件（Spring Security）與 JWT 依賴，限制除了登入相關的 API 之外，其餘所有的 API 都需要攜帶 JWT Token 進行驗證才能存取。\n2. 實作一個登入 API（例如 POST /api/auth/login），供使用者傳入帳號密碼進行身分驗證。登入成功後，請在 JWT Token 中寫入使用者的角色（簡單區分「管理員 ADMIN」與「一般用戶 USER」），並將 Token 回傳給前端。\n3. 實作角色權限控制：限制客戶資料刪除 API 必須具備「管理員 ADMIN」角色才能執行，而一般查詢與編輯功能則僅需「用戶 USER」或已登入身分即可。\n4. 保護我們的 API 文件（Swagger UI 網頁與相關端點），設定必須在登入驗證並攜帶 JWT Token 後才能正常瀏覽與測試。\n"
-          }
+          { "title": "① 加上 JWT 登入與角色授權", "kind": "build", "note": "ADMIN 與一般使用者；只有 ADMIN 能刪客戶", "text": "請用 Spring Security + JWT 為現有 CRM API 加上登入與角色授權：登入以外的 API 都要帶 Token 才能存取；角色分 ADMIN 與一般使用者，只有 ADMIN 能刪客戶；提供一支登入 API 回傳 Token。請加中文註解。完成後我要能：一般帳號登入後查得到客戶、刪客戶被擋；用 admin 才刪得掉。" },
+          { "title": "② 補 API 文件與統一錯誤處理", "kind": "build", "note": "OpenAPI/Swagger + ProblemDetail 一致錯誤格式", "text": "請為專案加上 OpenAPI / Swagger UI 線上文件，並設計一致的錯誤回應格式（用 ProblemDetail），讓驗證失敗、查無資料、無權限等情況都回傳結構一致、好讀的錯誤。Swagger UI 也要在登入帶 Token 後才能瀏覽與測試。請加中文註解。" },
+          { "title": "✅ 驗證 — 在 Swagger 上跑一次權限流程", "kind": "verify", "note": "一般使用者刪客戶應被擋、admin 應成功", "text": "請帶我在 Swagger UI 上驗證：先呼叫登入 API 拿 Token 並授權，接著用一般使用者身分試刪客戶（應被擋），再換 admin 重試（應成功），確認角色授權與錯誤回應都如預期。" }
         ],
         "tasks": [
           {
