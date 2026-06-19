@@ -1045,11 +1045,31 @@ body.sidebar-hidden .sidebar-restore-btn {
   padding: 0 22px 22px;
 }
 
+/* AI CRM 情境區塊的視覺差異化 */
+.accordion-item + .accordion-item {
+  margin-top: 8px;
+}
+.accordion .accordion-item:last-child:not(:first-child) .accordion-summary {
+  color: var(--accent-deep);
+  background: linear-gradient(135deg,
+    color-mix(in oklab, var(--accent) 6%, transparent),
+    color-mix(in oklab, var(--accent-deep) 4%, transparent));
+  border-left: 3px solid var(--accent);
+}
+
 .concept {
   padding: 18px;
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   background: color-mix(in oklab, var(--surface-2) 80%, transparent);
+  min-width: 0; /* 防止 grid 項目被內部 pre 等長內容撐開，造成水平溢出與圖片遮擋 */
+}
+
+/* 群組內多個概念段落的間距與分隔線 */
+.concept-list .concept + .concept {
+  margin-top: 16px;
+  padding-top: 20px;
+  border-top: 2px solid color-mix(in oklab, var(--accent) 18%, var(--border));
 }
 
 .concept-heading {
@@ -1149,6 +1169,23 @@ body.sidebar-hidden .sidebar-restore-btn {
   font-size: 10px;
   letter-spacing: 0.06em;
   vertical-align: middle;
+}
+
+/* 驗證提示詞徽章：綠色，標示「驗證」 */
+.prompt-box.is-verify {
+  border-left-color: oklch(72% 0.17 150);
+}
+.prompt-box.is-verify .prompt-head strong::before {
+  content: "驗證";
+  background: oklch(72% 0.17 150);
+}
+/* 排錯提示詞徽章：琥珀色，標示「排錯」 */
+.prompt-box.is-fix {
+  border-left-color: oklch(75% 0.15 70);
+}
+.prompt-box.is-fix .prompt-head strong::before {
+  content: "排錯";
+  background: oklch(75% 0.15 70);
 }
 
 .prompt-head span {
@@ -1946,7 +1983,9 @@ body.sidebar-hidden .sidebar-restore-btn {
 
 .concept-visual-col {
   width: 100%;
-  max-width: 760px;
+  max-width: 100%;
+  min-width: 0; /* 防止 flex 容器被大圖撐開 */
+  flex-shrink: 1; /* 允許 flex 項目收縮 */
   margin: 0 auto 12px;
   display: flex;
   align-items: center;
@@ -1968,10 +2007,12 @@ body.sidebar-hidden .sidebar-restore-btn {
   background: color-mix(in oklab, var(--surface-2) 60%, transparent);
 }
 
+/* 概念圖片樣式：保持原始比例、寬度撐滿、高度等比例自動計算，防止變形或裁切 */
 .concept-svg-illustration {
   width: 100%;
+  max-width: 100%;
   height: auto;
-  max-height: 380px;
+  display: block;
 }
 
 /* 1. Spring MVC 請求流動動畫 */
