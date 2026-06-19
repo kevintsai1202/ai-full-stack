@@ -297,10 +297,31 @@ details.accordion .acc-body {
   line-height: 1.8;
   font-size: 0.94rem;
 }
+.ai-crm-demo-video {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in oklab, var(--accent) 26%, var(--border));
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.ai-crm-demo-video video {
+  display: block;
+  width: 100%;
+  max-height: 720px;
+  aspect-ratio: 6 / 5;
+  object-fit: contain;
+  background: #0f172a;
+}
+.ai-crm-demo-video .visual-caption {
+  border-top: 1px solid var(--border);
+  background: color-mix(in oklab, var(--accent) 6%, transparent);
+}
 .ai-crm-chart-grid {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
 }
 .ai-crm-chart-card {
   overflow: hidden;
@@ -308,21 +329,29 @@ details.accordion .acc-body {
   border: 1px solid var(--border);
   background: var(--surface);
 }
+.ai-crm-chart-card:first-child {
+  grid-column: 1 / -1;
+}
 .ai-crm-chart-card img {
   display: block;
   width: 100%;
-  height: 210px;
-  object-fit: cover;
+  height: 260px;
+  object-fit: contain;
   object-position: top center;
   background: var(--surface-2);
 }
 .ai-crm-chart-card:first-child img {
-  height: 250px;
+  height: 360px;
 }
 .ai-crm-interaction-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.ai-crm-interaction-grid .promo-visual img {
+  aspect-ratio: 16 / 10;
+  object-fit: contain;
+  background: var(--surface-2);
 }
 .ai-crm-poster-grid {
   display: grid;
@@ -448,6 +477,7 @@ details.accordion .acc-body {
     <a href="#testimonials" class="nav-link">學員好評</a>
     <a href="#instructor" class="nav-link">講師介紹</a>
     <a href="#faq" class="nav-link">常見問題</a>
+    <a href="survey.html" class="nav-link">課程調查</a>
   </nav>
   <style>
     .nav-link { padding:8px 14px; border-radius:var(--r-pill); text-decoration:none; color:var(--muted); font-weight:700; font-size:0.94rem; transition: background var(--dur-fast), color var(--dur-fast); }
@@ -766,6 +796,19 @@ details.accordion .acc-body {
             <figcaption class="visual-caption"><strong>AI 助理對話</strong>浮動聊天視窗展示 RAG、Tool Calling 與客戶風險分析流程。</figcaption>
           </figure>
         </div>
+        <figure class="ai-crm-demo-video">
+          <video
+            src="assets/ai-crm/promo-screenshots/video/ai-crm-operation-flow.webm"
+            poster="assets/ai-crm/dashboard-full.png"
+            controls
+            muted
+            loop
+            playsinline
+            preload="metadata"
+            aria-label="AI CRM 實際操作影片"
+          ></video>
+          <figcaption class="visual-caption"><strong>AI CRM 實機操作影片</strong>直接展示 React CRM 工作台從報表、客戶資料到 AI 助理的操作流程，讓訪客不用只看截圖就能理解完課作品會如何運作。</figcaption>
+        </figure>
         <div class="ai-crm-poster-grid" aria-label="Hahow 直式宣傳圖稿">
           <img src="assets/ai-crm/hahow-style-vertical/01-ai-crm-system-map.png" alt="Hahow 直式文宣：AI CRM 貫穿全端開發作品主軸。" loading="lazy" />
           <img src="assets/ai-crm/hahow-style-vertical/02-eight-unit-roadmap.png" alt="Hahow 直式文宣：8 大單元章章接到同一套專案。" loading="lazy" />
