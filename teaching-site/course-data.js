@@ -1290,14 +1290,12 @@ window.COURSE = {
             "note": "Demo 的目的是證明系統可用，不是展示所有功能。選擇最能體現整合價值的路徑。"
           }
         ],
-        "prompt": "請接續 Unit 7 的 RAG 知識庫與 MCP 實作。現在我們要進入 Unit 8：結訓專案衝刺與 Demo Day 驗收。目標是把 Unit 1-7 的所有產出整合成一套可展示的 AI CRM 系統，並建立端到端測試與上線檢查清單。\n\n要求：\n1. 全端整合驗證：\n   - 確認 Spring Boot 後端、PostgreSQL 資料庫、React 前端三層能正確啟動與串接。\n   - 驗證 JWT 登入流程、客戶 CRUD、AI 對話 SSE 串流、RAG 知識庫查詢的完整路徑。\n   - 排除常見整合問題：CORS 設定、JWT header 格式、seed data ID 一致性。\n2. 端到端測試案例：\n   - 涵蓋三個典型客戶場景，對應 Unit 3 seed data 的三種客戶：\n     (1) 高價值活躍客戶 → 完整走過 AI 對話與 RAG 查詢流程。\n     (2) 資料不足客戶 → AI 應誠實回答「查無資料」而非編造。\n     (3) 流失風險客戶 → AI 摘要能正確反映互動頻率下降趨勢。\n3. 上線檢查清單：\n   - 安全性：JWT secret 替換、CORS 白名單收斂、rate limiting。\n   - 效能：SSE timeout、RAG topK/threshold、連線池大小。\n   - 可觀測性：結構化日誌、AI token 消耗記錄。\n   - 錯誤處理：LLM API fallback、前端錯誤訊息。\n4. Demo Day 展示準備：\n   - 準備展示腳本：登入 → 客戶列表 → AI 對話 → RAG 查詢 → Swagger UI。\n   - 預先準備測試資料，確保現場展示流暢。\n5. 程式碼需要有函式級別註解(註解使用中文)，重要變數或物件也需要加上註解。\n6. 在 PowerShell 7+ (Windows) 或 zsh / bash (macOS) 終端機中執行驗證測試，確認全站功能通過驗收。",
-        "promptMac": "請接續 Unit 7 的 RAG 知識庫與 MCP 實作。現在我們要進入 Unit 8：結訓專案衝刺與 Demo Day 驗收。目標是把 Unit 1-7 的所有產出整合成一套可展示的 AI CRM 系統，並建立端到端測試與上線檢查清單。\n\n要求：\n1. 全端整合驗證：\n   - 確認 Spring Boot 後端、PostgreSQL 資料庫、React 前端三層能正確啟動與串接。\n   - 驗證 JWT 登入流程、客戶 CRUD、AI 對話 SSE 串流、RAG 知識庫查詢的完整路徑。\n   - 排除常見整合問題：CORS 設定、JWT header 格式、seed data ID 一致性。\n2. 端到端測試案例：\n   - 涵蓋三個典型客戶場景，對應 Unit 3 seed data 的三種客戶：\n     (1) 高價值活躍客戶 → 完整走過 AI 對話與 RAG 查詢流程。\n     (2) 資料不足客戶 → AI 應誠實回答「查無資料」而非編造。\n     (3) 流失風險客戶 → AI 摘要能正確反映互動頻率下降趨勢。\n3. 上線檢查清單：\n   - 安全性：JWT secret 替換、CORS 白名單收斂、rate limiting。\n   - 效能：SSE timeout、RAG topK/threshold、連線池大小。\n   - 可觀測性：結構化日誌、AI token 消耗記錄。\n   - 錯誤處理：LLM API fallback、前端錯誤訊息。\n4. Demo Day 展示準備：\n   - 準備展示腳本：登入 → 客戶列表 → AI 對話 → RAG 查詢 → Swagger UI。\n   - 預先準備測試資料，確保現場展示流暢。\n5. 程式碼需要有函式級別註解(註解使用中文)，重要變數或物件也需要加上註解。\n6. 在 zsh / bash (macOS) 終端機中執行驗證測試，確認全站功能通過驗收。",
+        "prompt": "請接續 Unit 7。本章是結訓衝刺：把 Unit 1–7 的所有產出整合成一套可展示的 AI CRM，建立端到端測試與上線檢查清單，並準備 Demo Day。理解重點後，依序使用下方提示詞請 AI Agent 完成整合與準備，最後完整走一次 Demo 流程驗收。",
+        "promptMac": "請接續 Unit 7。本章是結訓衝刺：把 Unit 1–7 的所有產出整合成一套可展示的 AI CRM，建立端到端測試與上線檢查清單，並準備 Demo Day。理解重點後，依序使用下方提示詞請 AI Agent 完成整合與準備，最後完整走一次 Demo 流程驗收。",
         "prompts": [
-          {
-            "title": "高級 AI 協作提示詞大師範本（Windows 版）",
-            "note": "可直接交給 Codex / Claude Code / Gemini 進行輔助開發",
-            "text": "請接續 Unit 7 的 RAG 知識庫與 MCP 實作。現在我們要進入 Unit 8：結訓專案衝刺與 Demo Day 驗收。目標是把 Unit 1-7 的所有產出整合成一套可展示的 AI CRM 系統，並建立端到端測試與上線檢查清單。\n\n要求：\n1. 全端整合驗證：\n   - 確認 Spring Boot 後端、PostgreSQL 資料庫、React 前端三層能正確啟動與串接。\n   - 驗證 JWT 登入流程、客戶 CRUD、AI 對話 SSE 串流、RAG 知識庫查詢的完整路徑。\n2. 端到端測試案例：涵蓋高價值客戶、資料不足客戶、流失風險客戶三個場景。\n3. 上線檢查清單：安全性、效能、可觀測性、錯誤處理。\n4. Demo Day 展示準備：登入 → 客戶列表 → AI 對話 → RAG 查詢 → Swagger UI。\n5. 程式碼需要有函式級別註解(註解使用中文)。"
-          }
+          { "title": "① 整合 Unit 1–7 成可展示的 AI CRM", "kind": "build", "note": "三層串接 + 三個客戶場景的端到端測試", "text": "請接續前面所有產出，把後端（Spring Boot + PostgreSQL）、前端（React）與 AI / RAG / MCP 功能整合成一套可展示的 AI CRM，確認三層能正確啟動串接，並針對高價值客戶、資料不足客戶、流失風險客戶三個場景建立端到端測試。請加中文註解。" },
+          { "title": "② 上線檢查與 Demo 準備", "kind": "build", "note": "檢查清單 + 一條龍 Demo 腳本", "text": "請幫我整理一份上線檢查清單（安全性、效能、可觀測性、錯誤處理）並逐項檢查；再準備一套 Demo Day 展示腳本，依序串起：登入 → 客戶列表 → AI 對話 → RAG 文件問答 → Swagger UI。" },
+          { "title": "✅ 驗證 — 完整走一次 Demo 流程", "kind": "verify", "note": "從零跑通即通過結訓驗收", "text": "請陪我從零跑一次完整流程驗收：啟動三層服務、登入、瀏覽客戶、與 AI 對話並確認它查到真實資料、上傳文件做一次 RAG 問答、開 Swagger 看文件，全程沒有錯誤即通過結訓驗收。" }
         ],
         "tasks": [
           {
