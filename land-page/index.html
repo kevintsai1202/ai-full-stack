@@ -66,10 +66,43 @@
 <!-- 行銷追蹤碼 -->
 <script src="tracking.js"></script>
 
-<!-- 設計系統 CSS tokens -->
-<link rel="stylesheet" href="_ds/design-system-55f34fee-532d-45eb-9b8e-9d474823a41c/styles.css" />
-
 <style>
+/* ── 設計系統 token fallback：讓銷售頁在純靜態部署時不依賴外部 _ds 目錄 ── */
+:root {
+  --font-main: "Inter", "Noto Sans TC", "Microsoft JhengHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --bg: #f7fafc;
+  --fg: #102033;
+  --muted: #5c6b7d;
+  --muted-2: #8190a3;
+  --surface: #ffffff;
+  --surface-2: #f1f6f9;
+  --surface-3: #e6edf3;
+  --border: #dce5ee;
+  --border-strong: #b9c7d7;
+  --accent: #0d9488;
+  --accent-deep: #0f766e;
+  --accent-soft: #d9f3ef;
+  --accent-2: #f59e0b;
+  --accent-2-deep: #b45309;
+  --accent-2-soft: #fff2cc;
+  --success: #16a34a;
+  --warning: #f59e0b;
+  --r-pill: 999px;
+  --r-md: 14px;
+  --r-lg: 22px;
+  --shadow-sm: 0 10px 28px rgb(15 23 42 / 0.08);
+  --shadow-md: 0 18px 42px rgb(15 23 42 / 0.12);
+  --shadow-lift: 0 16px 34px rgb(15 23 42 / 0.18);
+  --glass-blur: blur(18px);
+  --dur-fast: 160ms;
+  --dur-med: 260ms;
+  --dur-slow: 520ms;
+  --ease-standard: cubic-bezier(.2,.8,.2,1);
+  --ease-out: cubic-bezier(.16,1,.3,1);
+  --leading-body: 1.75;
+  --leading-loose: 1.9;
+}
+
 /* ── 全域基底 ── */
 body {
   margin: 0;
@@ -81,7 +114,10 @@ body {
     var(--bg);
 }
 * { box-sizing: border-box; }
+html, body { max-width: 100%; overflow-x: hidden; }
 a { color: inherit; }
+h1, h2, h3, p, strong, span, a, button { overflow-wrap: anywhere; }
+img { max-width: 100%; }
 
 /* ── 元件 CSS classes（取代 React DS 元件） ── */
 
@@ -175,6 +211,136 @@ details.accordion .acc-body {
   transition: width var(--dur-slow) var(--ease-out);
 }
 
+/* 宣傳圖片：用穩定比例與卡片化處理，避免圖片載入造成版面跳動 */
+.promo-visual {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  isolation: isolate;
+}
+.promo-visual img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+.promo-visual::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
+}
+.promo-visual-dark {
+  border-color: color-mix(in oklab, var(--accent) 28%, transparent);
+  background: #0f172a;
+}
+.visual-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+.visual-caption {
+  padding: 14px 16px 16px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.75;
+}
+.visual-caption strong {
+  display: block;
+  color: var(--fg);
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+.section-visual {
+  margin: 20px 0 22px;
+}
+.ai-crm-showcase {
+  display: grid;
+  gap: 22px;
+  margin-top: 22px;
+}
+.ai-crm-hero-shot {
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.ai-crm-hero-shot img {
+  display: block;
+  width: 100%;
+  max-height: 560px;
+  object-fit: cover;
+  object-position: top center;
+}
+.ai-crm-shot-caption {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+  border-top: 1px solid var(--border);
+}
+.ai-crm-shot-caption strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 1.04rem;
+}
+.ai-crm-shot-caption p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.8;
+  font-size: 0.94rem;
+}
+.ai-crm-chart-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 16px;
+}
+.ai-crm-chart-card {
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.ai-crm-chart-card img {
+  display: block;
+  width: 100%;
+  height: 210px;
+  object-fit: cover;
+  object-position: top center;
+  background: var(--surface-2);
+}
+.ai-crm-chart-card:first-child img {
+  height: 250px;
+}
+.ai-crm-interaction-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
+  gap: 16px;
+}
+.ai-crm-poster-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.ai-crm-poster-grid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.mobile-only { display: none; }
+
 /* Toast 通知 */
 .toast {
   position: fixed; left: 50%; bottom: -80px; transform: translateX(-50%); z-index: 200;
@@ -199,14 +365,67 @@ details.accordion .acc-body {
   padding: clamp(32px,5vw,56px) clamp(16px,4vw,40px);
   display: grid; grid-template-columns: minmax(0,1fr) 360px; gap: 40; align-items: start;
 }
-.hc-main { display: grid; gap: clamp(40px, 5vw, 64px); min-width: 0; }
+.hc-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(40px, 5vw, 64px); min-width: 0; }
+.hc-main > section { min-width: 0; width: 100%; }
 .hc-aside .purchase-card { position: sticky; top: 88px; }
+.hc-aside, .purchase-card, .card-solid, .card-sunken, .promo-visual { min-width: 0; max-width: 100%; }
 
 @media (max-width: 980px) {
   .hc-body { grid-template-columns: 1fr !important; }
   .hc-aside { order: -1; }
   .hc-project, .hc-instructor { grid-template-columns: 1fr !important; }
+  .visual-grid { grid-template-columns: 1fr; }
+  .ai-crm-chart-grid,
+  .ai-crm-interaction-grid { grid-template-columns: 1fr; }
+  .ai-crm-poster-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .hc-nav { display: none !important; }
+}
+
+@media (max-width: 560px) {
+  body > section:first-of-type h1 {
+    max-width: 100% !important;
+    font-size: clamp(2rem, 11vw, 2.55rem) !important;
+    line-height: 1.12 !important;
+    word-break: break-all;
+  }
+  body > section:first-of-type p {
+    max-width: 100% !important;
+  }
+  body > section:first-of-type > div[style*="position:relative"] {
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+  }
+  .ai-crm-shot-caption { display: grid; }
+  .ai-crm-chart-card img,
+  .ai-crm-chart-card:first-child img { height: auto; aspect-ratio: 16 / 10; }
+  .ai-crm-poster-grid { grid-template-columns: 1fr; }
+  .hc-body {
+    width: 100%;
+    max-width: 100vw !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+    overflow: hidden;
+  }
+  .mobile-only { display: initial; }
+  body > header {
+    padding: 12px 14px !important;
+    gap: 10px !important;
+  }
+  body > header > div {
+    min-width: 0;
+    font-size: 1rem !important;
+    gap: 8px !important;
+  }
+  body > header > div > span:last-child {
+    display: none !important;
+  }
+  body > header img {
+    width: 34px !important;
+    height: 34px !important;
+  }
+  body > header .btn {
+    display: none !important;
+  }
 }
 </style>
 </head>
@@ -242,12 +461,12 @@ details.accordion .acc-body {
 <!-- ============================================================ -->
 <section style="position:relative;overflow:hidden;color:#fff;">
   <div style="position:absolute;inset:0;">
-    <img src="assets/cover.png" alt="" style="width:100%;height:100%;object-fit:cover;opacity:0.28;mix-blend-mode:luminosity;" />
+    <img src="assets/promo/hero-ai-full-stack.png" alt="" style="width:100%;height:100%;object-fit:cover;opacity:0.34;mix-blend-mode:luminosity;" />
   </div>
-  <div style="position:absolute;inset:0;background:linear-gradient(120deg, oklch(20% 0.04 248 / 0.94), oklch(34% 0.07 232 / 0.78));"></div>
+  <div style="position:absolute;inset:0;background:linear-gradient(120deg, oklch(18% 0.04 248 / 0.96) 0%, oklch(24% 0.05 242 / 0.9) 52%, oklch(34% 0.07 232 / 0.72) 100%);"></div>
   <div style="position:relative;max-width:1100px;margin:0 auto;padding:clamp(48px,7vw,88px) clamp(16px,4vw,56px);">
     <span class="eyebrow eyebrow-amber"><span aria-hidden="true">★</span> Hahow 線上課程募資中</span>
-    <h1 style="margin:20px 0 18px;font-size:clamp(2.2rem,5vw,4rem);line-height:1.08;font-weight:900;max-width:920px;">AI 賦能全端開發：從零打造企業級智慧應用</h1>
+    <h1 style="margin:20px 0 18px;font-size:clamp(2.2rem,5vw,4rem);line-height:1.08;font-weight:900;max-width:920px;"><span style="display:block;">AI 賦能全端開發</span><span style="display:block;">從零打造<br class="mobile-only" />企業級智慧應用</span></h1>
     <p style="margin:0;max-width:760px;font-size:clamp(1.02rem,1.6vw,1.2rem);line-height:1.9;color:oklch(96% 0.01 250 / 0.92);">用一套 AI CRM 實戰專案，把 Spring Boot、Spring AI 與 React 串成可上線的企業級智慧應用。</p>
     <div style="display:flex;flex-wrap:wrap;gap:22px;margin-top:30px;align-items:center;">
       <div><div style="font-size:1.9rem;font-weight:900;line-height:1;color:var(--accent-2)">8</div><div style="font-size:0.84rem;color:oklch(94% 0.01 250 / 0.78);margin-top:5px;font-weight:700">實戰單元</div></div>
@@ -286,6 +505,9 @@ details.accordion .acc-body {
         <h2>完課後，你會做出什麼？</h2>
         <p class="lead">這不是一堆零散範例，而是一套從登入到 AI 對話完整跑通的企業級 AI CRM。以下是你會親手建立的能力：</p>
       </div>
+      <figure class="promo-visual section-visual">
+        <img src="assets/promo/tech-stack-map.png" alt="企業級 AI 全端技術棧：React、Spring Boot、Security、JPA、PostgreSQL、Spring AI、RAG 與 Tool Calling 串成完整系統。" loading="lazy" />
+      </figure>
       <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:16px;">
         <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;"><span style="display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:color-mix(in oklab, var(--accent) 14%, transparent);color:var(--accent);font-weight:900;">01</span><strong style="font-size:1.04rem;line-height:1.3;">從零搭起全端骨架</strong></div>
@@ -346,6 +568,16 @@ details.accordion .acc-body {
           <div><strong style="display:block;font-size:1.06rem;margin-bottom:6px;">章章相連、產出累積</strong><p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.95rem;">每一章的產出都成為下一章的基礎，避免只學到零散範例。</p></div>
         </div>
       </div>
+      <div class="visual-grid">
+        <figure class="promo-visual">
+          <img src="assets/promo/feature-tool-calling.png" alt="Tool Calling 概念圖：AI 透過 Java Service 讀取 CRM 真實資料，再產生可信任建議。" loading="lazy" />
+          <figcaption class="visual-caption"><strong>讓 AI 有工程邊界</strong>金額、權限與狀態由系統計算，模型負責摘要與建議，避免 Demo 看起來炫但不能上線。</figcaption>
+        </figure>
+        <figure class="promo-visual">
+          <img src="assets/promo/feature-rag-knowledge.png" alt="RAG 知識庫流程圖：文件切片、Embedding、pgvector 檢索、引用來源與可靠回答。" loading="lazy" />
+          <figcaption class="visual-caption"><strong>讓回答能追溯來源</strong>用 pgvector 與 RAG 把產品文件、服務條款、銷售話術變成 AI 可引用的知識庫。</figcaption>
+        </figure>
+      </div>
     </section>
 
     <!-- 市場數據 -->
@@ -376,6 +608,9 @@ details.accordion .acc-body {
           <div style="font-size:0.78rem;color:var(--muted-2);margin-top:6px;">台灣就業市場 2026</div>
         </div>
       </div>
+      <figure class="promo-visual section-visual">
+        <img src="assets/promo/market-advantage.png" alt="AI 工程師市場優勢資訊圖：AI 應用落地、全端整合能力、企業級架構與從 Demo 到可上線。" loading="lazy" />
+      </figure>
     </section>
 
     <!-- 職涯加速 -->
@@ -385,6 +620,9 @@ details.accordion .acc-body {
         <h2>學完這門課，對你的職涯有什麼幫助？</h2>
         <p class="lead">AI 不只是技術趨勢，更是薪資與職涯成長的加速器。以下是這門課為你帶來的具體競爭優勢：</p>
       </div>
+      <figure class="promo-visual promo-visual-dark section-visual">
+        <img src="assets/promo/career-boost.png" alt="後端工程師升級為 AI 全端工程師的職涯加速視覺，包含作品集、企業級 AI 專案與成長曲線。" loading="lazy" />
+      </figure>
       <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:16px;">
         <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);position:relative;overflow:hidden;">
           <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:color-mix(in oklab, var(--accent) 8%, transparent);"></div>
@@ -442,6 +680,9 @@ details.accordion .acc-body {
         <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 適合對象</span>
         <h2>這門課為誰而設計</h2>
       </div>
+      <figure class="promo-visual section-visual">
+        <img src="assets/promo/audience-fit.png" alt="適合對象圖卡：Java 工程師、後端工程師、前端工程師與技術主管都能透過 AI CRM 專案補齊企業級 AI 全端能力。" loading="lazy" />
+      </figure>
       <div style="display:grid;gap:12px;">
         <div style="display:flex;align-items:flex-start;gap:14px;padding:16px 18px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface);">
           <span style="color:var(--success);margin-top:1px;"><i data-lucide="circle-check-big" style="width:22px;height:22px;"></i></span>
@@ -476,11 +717,14 @@ details.accordion .acc-body {
         <p class="lead">從基本 CRM 功能開始，逐步加入 AI 能力。AI 不替代決策，而是提供可追蹤的建議——金額與權限由 Java 算，摘要與草稿由模型寫。</p>
       </div>
       <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:22px;align-items:stretch;" class="hc-project">
-        <div class="card-solid" style="overflow:hidden;padding:0;">
-          <img src="assets/cover.png" alt="AI CRM Dashboard" style="width:100%;height:260px;object-fit:cover;display:block;" />
-          <div style="padding:18px 20px;">
-            <strong style="display:block;margin-bottom:6px;">業務打開客戶頁，系統自動整理近況</strong>
-            <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.94rem;">客戶是否活躍？有哪些風險訊號？是否可能流失？該推薦什麼方案？下一步該寄信、約會議還是請主管介入？</p>
+        <div class="ai-crm-hero-shot">
+          <img src="assets/ai-crm/dashboard-full.png" alt="AI CRM 真實工作台畫面：Dashboard 報表、客戶列表、AI 助理與 Agent Trace 同頁呈現。" loading="lazy" />
+          <div class="ai-crm-shot-caption">
+            <div>
+              <strong>這是課程實際會做出的 AI CRM 工作台</strong>
+              <p>包含登入後的報表總覽、客戶列表、AI 助理、Agent Trace 與可下鑽的 CRM 圖表，不是靜態 mockup。</p>
+            </div>
+            <span class="badge badge-accent-solid">真實畫面</span>
           </div>
         </div>
         <div style="display:grid;gap:10px;">
@@ -492,6 +736,45 @@ details.accordion .acc-body {
           <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--surface);"><div style="flex:1;"><strong style="font-size:0.98rem;">工具呼叫</strong><div style="color:var(--muted);font-size:0.86rem;margin-top:2px;">讀真實資料、算商機健康分數</div></div><span class="badge badge-accent">Tool Calling</span></div>
         </div>
       </div>
+      <div class="ai-crm-showcase">
+        <div class="section-title" style="margin:18px 0 0;">
+          <span class="eyebrow eyebrow-amber"><span aria-hidden="true">●</span> AI CRM 畫面展示</span>
+          <h3 style="margin:12px 0 0;font-size:clamp(1.5rem,2.5vw,2.1rem);">報表、互動與 AI 建議，都能拆開當作品集素材</h3>
+          <p class="lead">Landing page 直接放入最新截圖，讓訪客一眼看到完課後會產出的產品畫面與 Hahow 提案用視覺素材。</p>
+        </div>
+        <div class="ai-crm-chart-grid">
+          <figure class="ai-crm-chart-card">
+            <img src="assets/ai-crm/charts/pipeline-funnel.png" alt="AI CRM 銷售漏斗圖表截圖" loading="lazy" />
+            <figcaption class="visual-caption"><strong>銷售漏斗 Pipeline</strong>階段金額、筆數與下鑽入口，展示 CRM 報表不是只有數字卡。</figcaption>
+          </figure>
+          <figure class="ai-crm-chart-card">
+            <img src="assets/ai-crm/charts/monthly-forecast.png" alt="AI CRM 月度營收 Forecast 圖表截圖" loading="lazy" />
+            <figcaption class="visual-caption"><strong>月度營收 Forecast</strong>營收趨勢圖可點月份查看底層商機。</figcaption>
+          </figure>
+          <figure class="ai-crm-chart-card">
+            <img src="assets/ai-crm/charts/risk-breakdown.png" alt="AI CRM 客戶風險結構圖表截圖" loading="lazy" />
+            <figcaption class="visual-caption"><strong>客戶風險結構</strong>高、中、低風險客戶分布可直接連到客戶明細。</figcaption>
+          </figure>
+        </div>
+        <div class="ai-crm-interaction-grid">
+          <figure class="promo-visual">
+            <img src="assets/ai-crm/interactions/chart-drilldown-open.png" alt="AI CRM 圖表下鑽互動截圖：點擊銷售漏斗後開啟底層商機明細。" loading="lazy" />
+            <figcaption class="visual-caption"><strong>圖表互動下鑽</strong>點擊圖表段落後，直接展開底層客戶與商機，適合放進宣傳頁說明「能操作」。</figcaption>
+          </figure>
+          <figure class="promo-visual">
+            <img src="assets/ai-crm/interactions/ai-chat-response.png" alt="AI CRM AI 助理聊天互動截圖" loading="lazy" />
+            <figcaption class="visual-caption"><strong>AI 助理對話</strong>浮動聊天視窗展示 RAG、Tool Calling 與客戶風險分析流程。</figcaption>
+          </figure>
+        </div>
+        <div class="ai-crm-poster-grid" aria-label="Hahow 直式宣傳圖稿">
+          <img src="assets/ai-crm/hahow-style-vertical/01-ai-crm-system-map.png" alt="Hahow 直式文宣：AI CRM 貫穿全端開發作品主軸。" loading="lazy" />
+          <img src="assets/ai-crm/hahow-style-vertical/02-eight-unit-roadmap.png" alt="Hahow 直式文宣：8 大單元章章接到同一套專案。" loading="lazy" />
+          <img src="assets/ai-crm/hahow-style-vertical/03-interactive-dashboard.png" alt="Hahow 直式文宣：CRM 圖表可下鑽操作與互動展示。" loading="lazy" />
+          <img src="assets/ai-crm/hahow-style-vertical/04-rag-tool-calling.png" alt="Hahow 直式文宣：RAG 與 Tool Calling 讓 AI 回答接回真實資料。" loading="lazy" />
+          <img src="assets/ai-crm/hahow-style-vertical/05-ai-agent-workflow.png" alt="Hahow 直式文宣：AI 協作開發與工程驗收流程。" loading="lazy" />
+          <img src="assets/ai-crm/hahow-style-vertical/06-demo-day-outcome.png" alt="Hahow 直式文宣：Demo Day 結訓作品與端到端展示成果。" loading="lazy" />
+        </div>
+      </div>
     </section>
 
     <!-- 課程大綱 -->
@@ -501,6 +784,9 @@ details.accordion .acc-body {
         <h2>8 大單元，章章相連</h2>
         <p class="lead">每個單元都有明確產出，且全部接到同一套 AI CRM 專案。可拆成 4 天工作坊或 Hahow 線上章節。</p>
       </div>
+      <figure class="promo-visual section-visual">
+        <img src="assets/promo/curriculum-roadmap.png" alt="8 大單元課程路線圖：環境與骨架、REST API、JPA 與資料庫、Security + JWT、React CRM、Spring AI、RAG + MCP、Demo Day。" loading="lazy" />
+      </figure>
       <div style="display:grid;gap:12px;">
         <details class="accordion" open>
           <summary><span style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;"><span style="font-size:1.5rem;font-weight:900;color:var(--accent-2);line-height:1;">01</span><span style="font-weight:800;">開發環境、專案骨架與 AI 協作流程</span></span><span class="acc-plus" aria-hidden="true">+</span></summary>
@@ -607,6 +893,9 @@ details.accordion .acc-body {
           </div>
         </details>
       </div>
+      <figure class="promo-visual promo-visual-dark section-visual">
+        <img src="assets/promo/demo-day-flow.png" alt="Demo Day 完整流程圖：登入、客戶、AI、RAG、Swagger，完整跑通 AI CRM 結訓專案。" loading="lazy" />
+      </figure>
     </section>
 
     <!-- 課程比較 -->
@@ -616,6 +905,9 @@ details.accordion .acc-body {
         <h2>跟市面上其他課程有什麼不同？</h2>
         <p class="lead">不是所有 AI 課程都一樣——這門課帶你從企業級後端、安全授權到 AI 串流整合，一次到位。</p>
       </div>
+      <figure class="promo-visual section-visual">
+        <img src="assets/promo/course-comparison.png" alt="課程比較圖：一般 LLM API 課、一般 Spring Boot 課與本課程的完整 AI CRM、RAG + Tool Calling、React 工作台、Demo Day 作品差異。" loading="lazy" />
+      </figure>
       <div class="card-solid" style="overflow:auto;box-shadow:var(--shadow-sm);padding:0;">
         <table style="width:100%;border-collapse:collapse;font-size:0.92rem;min-width:600px;">
           <thead>
@@ -645,6 +937,9 @@ details.accordion .acc-body {
         <h2>他們學完之後，職涯這樣改變</h2>
         <p class="lead">來自不同背景的學員，分享他們的真實學習體驗與職涯轉變。</p>
       </div>
+      <figure class="promo-visual section-visual">
+        <img src="assets/promo/learning-workspace.png" alt="線上學習情境：桌面上同時顯示課程影片、Spring Boot 程式碼、React CRM 預覽與 PowerShell 指令筆記。" loading="lazy" />
+      </figure>
       <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:16px;">
         <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
           <div style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:48px;height:48px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.5rem;">🧑‍💻</span><div><strong style="font-size:1.02rem;">陳同學</strong><div style="font-size:0.82rem;color:var(--accent);font-weight:700;margin-top:2px;">後端工程師 → AI 全端工程師</div></div></div>
@@ -704,7 +999,7 @@ details.accordion .acc-body {
         <details class="accordion"><summary><span>這門課適合完全沒寫過 Java 的新手嗎？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">建議先具備基本 Java 語法與 REST API 概念。課程著重在企業級分層、整合與 AI 落地，而不是從零教語法；若你寫過簡單的 API，就能順利跟上。</div></details>
         <details class="accordion"><summary><span>課程用的是哪些技術版本？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">Java 21、Spring Boot 4.0.x、Spring AI 2.0.x (GA)、PostgreSQL + pgvector、React + TypeScript + Vite。開發環境以 Windows + PowerShell 7+ 示範，macOS / Linux 也可比照操作。</div></details>
         <details class="accordion"><summary><span>這跟坊間「呼叫 LLM API」的課有什麼不同？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">我們不只教你呼叫 LLM，而是帶你把 AI 放進一套真正能上線的企業系統：資料庫、權限、前端、RAG、工具呼叫與端到端整合一次到位。</div></details>
-        <details class="accordion"><summary><span>Embabel / AI Agent 框架會教嗎？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">Embabel 的 GOAP、Action、Goal、Blackboard 內容會以選修附錄提供。Embabel 0.4.x 目前基於 Spring Boot 3.5.x，團隊已預告即將發布相容 Spring AI 2.0 GA 的新版本，届時將納入正式單元。</div></details>
+        <details class="accordion"><summary><span>Embabel / AI Agent 框架會教嗎？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">本課程不會教 Embabel，僅在補充說明中簡介其 GOAP、Action、Goal、Blackboard 等概念，供有興趣的學員延伸參考。課程主軸聚焦於 Spring Boot 4 + Spring AI 2.0 的企業級 AI 應用實作。</div></details>
         <details class="accordion"><summary><span>買了之後可以看多久？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">購買後可不限次數、無限期觀看，課程更新也會免費同步給你。</div></details>
         <details class="accordion"><summary><span>完成課程後我會做出什麼？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">一套可登入、可查客戶、可引用知識庫、可產生業務建議、可追蹤 AI 執行過程的企業級 AI CRM，並能在 Demo Day 完整跑通展示。</div></details>
       </div>
@@ -713,7 +1008,10 @@ details.accordion .acc-body {
     <!-- 底部 CTA -->
     <section>
       <div class="card-solid" style="overflow:hidden;position:relative;color:#fff;border:none;padding:0;border-radius:var(--r-lg);">
-        <div style="position:absolute;inset:0;background:linear-gradient(120deg, oklch(30% 0.07 248), oklch(46% 0.12 240));"></div>
+        <div style="position:absolute;inset:0;">
+          <img src="assets/promo/early-bird-cta.png" alt="" style="width:100%;height:100%;object-fit:cover;opacity:0.28;mix-blend-mode:luminosity;" loading="lazy" />
+        </div>
+        <div style="position:absolute;inset:0;background:linear-gradient(120deg, oklch(24% 0.06 248 / 0.94), oklch(42% 0.1 240 / 0.82));"></div>
         <div style="position:relative;padding:clamp(32px,5vw,56px);text-align:center;">
           <span class="eyebrow eyebrow-amber"><span aria-hidden="true">★</span> 募資限定 · 早鳥優惠</span>
           <h2 style="margin:18px 0 10px;font-size:clamp(1.7rem,3.5vw,2.6rem);font-weight:900;">現在報名，鎖定最低早鳥價</h2>
@@ -736,7 +1034,7 @@ details.accordion .acc-body {
   <aside class="hc-aside">
     <div class="card-solid purchase-card" style="overflow:hidden;padding:0;">
       <div style="position:relative;">
-        <img src="assets/cover.png" alt="課程封面" style="width:100%;height:168px;object-fit:cover;" />
+        <img src="assets/promo/hero-ai-full-stack.png" alt="課程封面" style="width:100%;height:168px;object-fit:cover;" />
         <button onclick="enroll('purchase_card_play')" aria-label="播放試看" style="position:absolute;inset:0;margin:auto;width:58px;height:58px;border-radius:var(--r-pill);border:none;cursor:pointer;background:color-mix(in oklab, var(--accent) 92%, black);color:#fff;display:grid;place-items:center;box-shadow:var(--shadow-lift);">
           <i data-lucide="play" style="width:24px;height:24px;margin-left:3px;"></i>
         </button>
