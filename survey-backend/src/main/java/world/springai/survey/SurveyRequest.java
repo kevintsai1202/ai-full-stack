@@ -13,9 +13,14 @@ public class SurveyRequest {
     private String email;
     @Size(max = 100)
     private String name;
+    @Size(max = 50)
     private String role;
+    @Size(max = 50)
     private String experience;
+    /** 複選主題，限制數量避免濫用 */
+    @Size(max = 20)
     private List<String> interest;
+    @Size(max = 50)
     private String budget;
     private Map<String, String> utm;
     /** 必須為 true 才算同意（PDPA） */

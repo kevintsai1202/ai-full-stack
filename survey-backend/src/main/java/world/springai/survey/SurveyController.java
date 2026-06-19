@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 
 /** 問卷收集與管理查詢端點 */
@@ -51,7 +54,9 @@ public class SurveyController {
     @GetMapping("/api/admin/survey")
     public ResponseEntity<?> list(@RequestHeader(value = "X-Admin-Key", required = false) String key,
                                   @RequestParam(value = "format", required = false) String format) {
-        if (key == null || !key.equals(adminApiKey)) {
+        // 用固定時間比對避免 timing attack
+        if (key == null || !MessageDigest.isEqual(
+                key.getBytes(StandardCharsets.UTF_8), adminApiKey.getBytes(StandardCharsets.UTF_8))) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid admin key");
         }
         List<SurveyResponse> all = repository.findAllByOrderByCreatedAtDesc();
@@ -77,15 +82,15 @@ public class SurveyController {
               .append(csv(r.getBudget())).append(',')
               .append(r.isConsent()).append(',')
               .append(r.isUnsubscribed()).append(',')
-              .append(r.getCreatedAt()).append('\n');
+              .append(csv(r.getCreatedAt() == null ? "" : r.getCreatedAt().toString())).append('\n');
         }
         return sb.toString();
     }
 
-    /** CSV 欄位跳脫：含逗號/引號/換行時用雙引號包並把內部引號加倍 */
+    /** CSV 欄位跳脫：含逗號/引號/換行(CR/LF)時用雙引號包並把內部引號加倍（RFC 4180） */
     private String csv(String v) {
         if (v == null) return "";
-        if (v.contains(",") || v.contains("\"") || v.contains("\n")) {
+        if (v.contains(",") || v.contains("\"") || v.contains("\n") || v.contains("\r")) {
             return '"' + v.replace("\"", "\"\"") + '"';
         }
         return v;

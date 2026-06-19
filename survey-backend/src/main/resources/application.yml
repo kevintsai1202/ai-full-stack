@@ -11,7 +11,7 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
-    baseline-on-migrate: true
+    # 全新空白資料庫：不要 baseline，否則會跳過 V1 導致 validate 找不到資料表
 server:
   port: ${PORT:8080}
 app:
