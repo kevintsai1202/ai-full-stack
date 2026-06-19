@@ -23,4 +23,16 @@ public interface SurveyResponseRepository extends JpaRepository<SurveyResponse, 
     /** 可寄送名單：同意且未退訂的去重 email（小寫），供未來批量發送使用 */
     @Query("select distinct lower(s.email) from SurveyResponse s where s.consent = true and s.unsubscribed = false")
     List<String> findDistinctRecipients();
+
+    /**
+     * 可寄送名單（去重小寫 email）：同意且未退訂；
+     * role 為 null 不限；interest 為 null 不限，否則用 jsonb 包含比對。
+     */
+    @Query(value = """
+        select distinct lower(email) from survey_response
+        where consent = true and unsubscribed = false
+          and (:role is null or role = :role)
+          and (:interest is null or interest @> jsonb_build_array(:interest))
+        """, nativeQuery = true)
+    java.util.List<String> findRecipients(@Param("role") String role, @Param("interest") String interest);
 }
