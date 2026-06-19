@@ -198,7 +198,12 @@ function parseMarkdown(mdText) {
     }
 
     flushList();
-    parts.push(`<p class="preview-paragraph">${inlineMarkdown(line)}</p>`);
+    // 檢查此行是否包含 HTML 標籤結構以避免轉義，直接輸出 HTML 標籤
+    if (/<[a-zA-Z\/][^>]*>/.test(line)) {
+      parts.push(line);
+    } else {
+      parts.push(`<p class="preview-paragraph">${inlineMarkdown(line)}</p>`);
+    }
   }
 
   flushList();
@@ -493,22 +498,54 @@ function svgEtlPipeline() {
  */
 function conceptVisual(heading) {
   if (!heading) return "";
-  switch (heading.trim()) {
-    case "環境準備重點": return svgEnvironmentPrep();
-    case "Spring MVC 的核心：請求如何流動": return svgSpringMvcFlow();
-    case "什麼是 REST API": return svgRestApi();
-    case "JPA 解決了什麼問題": return svgJpaMapping();
-    case "Flyway 的角色": return svgFlywayStrategy();
-    case "AOP 概念圖解": return svgAopConcept();
-    case "後端安全設定範例 (SecurityConfig.java)": return svgSecurityChain();
-    case "開發端代理與後端 API 串接 (Vite Proxy)": return svgViteProxy();
-    case "串流輸出為什麼重要": return svgSseStream();
-    case "GOAP規劃":
-    case "Embabel 智慧 Agent、GOAP 演算法與 Blackboard 機制": return svgAgentGoap();
-    case "RAG 的基本想法": return `<img src="assets/illustrations/rag_flow.png" class="concept-svg-illustration" alt="RAG 的基本想法"/>`;
-    case "ETL 三步驟：文件到向量庫": return `<img src="assets/illustrations/etl_pipeline.png" class="concept-svg-illustration" alt="ETL 三步驟：文件到向量庫"/>`;
-    default: return "";
-  }
+  /** 觀念標題 → PNG 檔名對應表（原行內 SVG 已轉為 PNG，可陸續替換為新圖） */
+  const conceptImageMap = {
+    /* ── 既有技術概念圖 ── */
+    "環境準備重點": "concept-environment-prep.png",
+    "Spring MVC 的核心：請求如何流動": "concept-spring-mvc-flow.png",
+    "Spring MVC 核心架構": "concept-spring-mvc-flow.png",
+    "什麼是 REST API": "concept-rest-api.png",
+    "JPA 解決了什麼問題": "concept-jpa-mapping.png",
+    "JPA 核心概念與 Entity 設計": "concept-jpa-mapping.png",
+    "Flyway 的角色": "concept-flyway-strategy.png",
+    "AOP 概念圖解": "concept-aop.png",
+    "AOP 解決了什麼問題": "concept-aop.png",
+    "後端安全設定範例 (SecurityConfig.java)": "concept-security-chain.png",
+    "安全防護重點": "concept-security-chain.png",
+    "開發端代理與後端 API 串接 (Vite Proxy)": "concept-vite-proxy.png",
+    "串流輸出為什麼重要": "concept-sse-stream.png",
+    "為什麼選擇 SSE (Server-Sent Events)": "concept-sse-stream.png",
+    "GOAP規劃": "concept-agent-goap.png",
+    "Embabel 智慧 Agent、GOAP 演算法與 Blackboard 機制": "concept-agent-goap.png",
+    "RAG 的基本想法": "rag_flow.png",
+    "RAG 核心概念": "rag_flow.png",
+    "ETL 三步驟：文件到向量庫": "etl_pipeline.png",
+
+    /* ── AI CRM 情境圖（每章 1 張） ── */
+    "為什麼選 CRM 作為實作題目": "crm-u1-why-crm.png",
+    "CRM Domain Model 設計思維": "crm-u2-domain-model.png",
+    "CRM 資料模型如何對應 JPA Entity": "crm-u3-data-model.png",
+    "CRM 角色與權限模型": "crm-u4-security.png",
+    "CRM 工作台 UI 設計思維": "crm-u5-frontend.png",
+    "AI CRM 助理的商業價值": "crm-u6-ai-value.png",
+    "CRM 知識庫設計：哪些文件該向量化": "crm-u7-knowledge.png",
+
+    /* ── 新增技術資訊圖表 ── */
+    "輸入驗證：為什麼不能信任前端傳來的資料": "concept-bean-validation.png",
+    "Controller / Service 怎麼分工": "concept-controller-service.png",
+    "為什麼資料庫要容器化": "concept-docker-postgres.png",
+    "@Transactional 核心規則": "concept-transactional.png",
+    "為什麼需要動態查詢": "concept-specification.png",
+    "為什麼需要 API 文件": "concept-openapi.png",
+    "統一錯誤回應設計": "concept-global-exception.png",
+    "ChatClient 核心概念": "concept-chatclient.png",
+    "工具呼叫核心概念": "concept-tool-calling.png",
+    "MCP 核心概念": "concept-mcp.png",
+    "為什麼需要對話歷史 RAG": "concept-conversation-memory.png",
+  };
+  const filename = conceptImageMap[heading.trim()];
+  if (!filename) return "";
+  return `<img src="assets/illustrations/${filename}" class="concept-svg-illustration" alt="${heading}"/>`;
 }
 
 /* ──────────────────────────────────────────────
@@ -565,9 +602,16 @@ function renderFeatureRoadmap(course) {
 /** 貫穿全程的 AI CRM 情境 */
 function renderSharedCase(sharedCase) {
   if (!sharedCase) return "";
+  /** 品牌 ID 與企業示意圖檔名的對應表 */
+  const brandImageMap = {
+    brand1: "brand-apim.png",
+    brand2: "brand-globalmart.png",
+    brand3: "brand-apexfin.png"
+  };
   const brands = sharedCase.brands.map((brand) => {
     const rows = brand.rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${inlineMarkdown(v)}</td></tr>`).join("");
-    return `<article class="brand-card brand-card-split"><div class="brand-card-info"><small>${esc(brand.type)}</small><h4>${esc(brand.name)}</h4><table class="data-table"><tbody>${rows}</tbody></table></div><div class="brand-card-media"><img src="assets/illustrations/office.png" alt="${esc(brand.name)} 辦公空間"/></div></article>`;
+    const brandImg = brandImageMap[brand.id] || "office.png";
+    return `<article class="brand-card brand-card-split"><div class="brand-card-info"><small>${esc(brand.type)}</small><h4>${esc(brand.name)}</h4><table class="data-table"><tbody>${rows}</tbody></table></div><div class="brand-card-media"><img src="assets/illustrations/${brandImg}" alt="${esc(brand.name)} 企業示意圖"/></div></article>`;
   }).join("");
   const roles = sharedCase.roles.map(([name, brand, role, desc]) =>
     `<article class="summary-card"><small>${esc(brand)}</small><strong>${esc(name)} / ${esc(role)}</strong><p>${esc(desc)}</p></article>`
@@ -605,38 +649,117 @@ function renderConcept(concept) {
   return `<article class="concept">${concept.heading ? `<h5 class="concept-heading">${esc(concept.heading)}</h5>` : ""}${content}${kvHtml}${tableHtml}${noteHtml}</article>`;
 }
 
-/** 觀念手風琴（橫向 Tabs 與步進器） */
-function renderConceptAccordion(unit) {
-  if (!unit.concepts?.length) return "";
-  const activeTab = conceptTabState[unit.id] || 0;
-  const tabs = unit.concepts.map((c, i) => {
-    const title = esc(c.heading || `觀念 ${i + 1}`);
-    return `<button class="concept-tab-btn${activeTab === i ? " active" : ""}" type="button" data-action="concept-tab" data-unit="${esc(unit.id)}" data-index="${i}">${title}</button>`;
-  }).join("");
-  const dots = unit.concepts.map((_, i) =>
-    `<span class="concept-dot${activeTab === i ? " active" : ""}" data-action="concept-tab" data-unit="${esc(unit.id)}" data-index="${i}" role="button" aria-label="跳至觀念 ${i + 1}" title="跳至觀念 ${i + 1}"></span>`
-  ).join("");
-  return `<details class="accordion-item"${accordionOpen ? " open" : ""}>
-    <summary class="accordion-summary">核心觀念與工程判斷</summary>
-    <div class="accordion-body">
-      <div class="concept-tabs-nav-wrapper">
-        <button class="concept-tabs-nav-arrow" type="button" data-action="concept-prev" data-unit="${esc(unit.id)}"${activeTab === 0 ? " disabled" : ""} title="上一觀念" aria-label="上一觀念">&larr;</button>
-        <div class="concept-tabs">${tabs}</div>
-        <button class="concept-tabs-nav-arrow" type="button" data-action="concept-next" data-unit="${esc(unit.id)}"${activeTab === unit.concepts.length - 1 ? " disabled" : ""} title="下一觀念" aria-label="下一觀念">&rarr;</button>
-      </div>
-      <div class="concept-list">${renderConcept(unit.concepts[activeTab])}</div>
-      <div class="concept-nav-footer">
-        <button class="concept-nav-btn" type="button" data-action="concept-prev" data-unit="${esc(unit.id)}"${activeTab === 0 ? " disabled" : ""}>&larr; 上一觀念</button>
-        <div class="concept-dots">${dots}</div>
-        <button class="concept-nav-btn" type="button" data-action="concept-next" data-unit="${esc(unit.id)}"${activeTab === unit.concepts.length - 1 ? " disabled" : ""}>下一觀念 &rarr;</button>
-      </div>
-    </div>
-  </details>`;
+/**
+ * 判斷群組名稱是否為 AI CRM 相關
+ * @param {string} groupName - 群組名稱
+ * @returns {boolean}
+ */
+function isCrmGroup(groupName) {
+  return groupName.includes("CRM");
 }
 
-/** 可複製的 AI 協作提示詞 */
-function renderPromptBox(title, note, text, key) {
-  return `<div class="prompt-box">
+/**
+ * 渲染概念 Tab 列的共用函式
+ * @param {string} unitId - 單元 ID
+ * @param {string[]} groupOrder - 群組名稱陣列
+ * @param {object} groupMap - 群組名稱 → 概念陣列
+ * @param {string} stateKey - 用於 conceptTabState 的鍵名（區分技術/CRM Tab 狀態）
+ * @returns {string} HTML 字串
+ */
+function renderConceptTabPanel(unitId, groupOrder, groupMap, stateKey) {
+  if (!groupOrder.length) return "";
+
+  const activeGroupIdx = conceptTabState[stateKey] || 0;
+  const safeIdx = Math.min(activeGroupIdx, groupOrder.length - 1);
+
+  /** 群組 Tab 按鈕列 */
+  const tabs = groupOrder.map((groupName, i) =>
+    `<button class="concept-tab-btn${safeIdx === i ? " active" : ""}" type="button" data-action="concept-tab" data-unit="${esc(stateKey)}" data-index="${i}">${esc(groupName)}</button>`
+  ).join("");
+
+  /** 步進器圓點 */
+  const dots = groupOrder.map((_, i) =>
+    `<span class="concept-dot${safeIdx === i ? " active" : ""}" data-action="concept-tab" data-unit="${esc(stateKey)}" data-index="${i}" role="button" aria-label="跳至群組 ${i + 1}" title="跳至群組 ${i + 1}"></span>`
+  ).join("");
+
+  /** 選中群組內的所有概念 */
+  const activeGroupName = groupOrder[safeIdx];
+  const groupConcepts = groupMap[activeGroupName] || [];
+  const conceptsHtml = groupConcepts.map((concept) => renderConcept(concept)).join("");
+
+  return `
+      <div class="concept-tabs-nav-wrapper">
+        <button class="concept-tabs-nav-arrow" type="button" data-action="concept-prev" data-unit="${esc(stateKey)}"${safeIdx === 0 ? " disabled" : ""} title="上一群組" aria-label="上一群組">&larr;</button>
+        <div class="concept-tabs">${tabs}</div>
+        <button class="concept-tabs-nav-arrow" type="button" data-action="concept-next" data-unit="${esc(stateKey)}"${safeIdx === groupOrder.length - 1 ? " disabled" : ""} title="下一群組" aria-label="下一群組">&rarr;</button>
+      </div>
+      <div class="concept-list">${conceptsHtml}</div>
+      <div class="concept-nav-footer">
+        <button class="concept-nav-btn" type="button" data-action="concept-prev" data-unit="${esc(stateKey)}"${safeIdx === 0 ? " disabled" : ""}>&larr; 上一群組</button>
+        <div class="concept-dots">${dots}</div>
+        <button class="concept-nav-btn" type="button" data-action="concept-next" data-unit="${esc(stateKey)}"${safeIdx === groupOrder.length - 1 ? " disabled" : ""}>下一群組 &rarr;</button>
+      </div>`;
+}
+
+/** 觀念手風琴（分為技術概念與 AI CRM 兩個獨立區塊） */
+function renderConceptAccordion(unit) {
+  if (!unit.concepts?.length) return "";
+
+  /**
+   * 依 group 欄位分組，同時區分技術群組與 CRM 群組
+   */
+  const techGroupOrder = [];
+  const techGroupMap = {};
+  const crmGroupOrder = [];
+  const crmGroupMap = {};
+
+  for (const concept of unit.concepts) {
+    const groupName = concept.group || concept.heading || "其他";
+    if (isCrmGroup(groupName)) {
+      if (!crmGroupMap[groupName]) {
+        crmGroupMap[groupName] = [];
+        crmGroupOrder.push(groupName);
+      }
+      crmGroupMap[groupName].push(concept);
+    } else {
+      if (!techGroupMap[groupName]) {
+        techGroupMap[groupName] = [];
+        techGroupOrder.push(groupName);
+      }
+      techGroupMap[groupName].push(concept);
+    }
+  }
+
+  /** 技術概念 accordion（先講） */
+  let techHtml = "";
+  if (techGroupOrder.length) {
+    const techPanel = renderConceptTabPanel(unit.id, techGroupOrder, techGroupMap, unit.id);
+    techHtml = `<details class="accordion-item"${accordionOpen ? " open" : ""}>
+    <summary class="accordion-summary">核心觀念與工程判斷</summary>
+    <div class="accordion-body">${techPanel}
+    </div>
+  </details>`;
+  }
+
+  /** AI CRM 情境 accordion（後講） */
+  let crmHtml = "";
+  if (crmGroupOrder.length) {
+    const crmStateKey = unit.id + "__crm";
+    const crmPanel = renderConceptTabPanel(unit.id, crmGroupOrder, crmGroupMap, crmStateKey);
+    crmHtml = `<details class="accordion-item"${accordionOpen ? " open" : ""}>
+    <summary class="accordion-summary">🏢 AI CRM 情境應用</summary>
+    <div class="accordion-body">${crmPanel}
+    </div>
+  </details>`;
+  }
+
+  return techHtml + crmHtml;
+}
+
+/** 可複製的 AI 協作提示詞；kind 控制徽章樣式（build/verify/fix） */
+function renderPromptBox(title, note, text, key, kind) {
+  const cls = kind === "verify" ? " is-verify" : (kind === "fix" ? " is-fix" : "");
+  return `<div class="prompt-box${cls}">
     <div class="prompt-head"><div><strong>${esc(title)}</strong>${note ? `<span>${esc(note)}</span>` : ""}</div>
       <button class="prompt-copy-btn" type="button" data-action="copy-prompt" data-prompt-key="${esc(key)}" data-label="複製提示詞">複製提示詞</button>
     </div>
@@ -649,28 +772,20 @@ function renderPromptAccordion(unit, platform) {
   const hasOsSpecific = unit.prompt && unit.promptMac && unit.prompt !== unit.promptMac;
   const effectivePrompt = (platform === "mac" && unit.promptMac) ? unit.promptMac : unit.prompt;
   const promptCards = [];
-  const hasPlaceholder = (unit.prompts || []).some((p) => p.text && p.text.includes("(完整提示詞詳見"));
-
-  if (hasPlaceholder) {
-    (unit.prompts || []).forEach((p) => {
-      const text = (p.text && p.text.includes("(完整提示詞詳見")) ? effectivePrompt : p.text;
-      promptCards.push({ title: translatePlatformText(p.title, platform), note: translatePlatformText(p.note, platform), text });
+  if (Array.isArray(unit.prompts) && unit.prompts.length) {
+    // 新結構：依序渲染 prompts[]，保留平台文字轉換，攜帶 kind 供徽章使用
+    unit.prompts.forEach((p) => {
+      promptCards.push({
+        title: translatePlatformText(p.title, platform),
+        note: translatePlatformText(p.note, platform),
+        text: translatePlatformText(p.text, platform),
+        kind: p.kind || "build"
+      });
     });
-  } else {
-    const alreadyContainsEffective = (unit.prompts || []).some((p) => p.text === unit.prompt || (p.title && p.title.includes("大師範本")));
-    if (effectivePrompt && !alreadyContainsEffective) {
-      const platformLabel = hasOsSpecific ? (platform === "mac" && unit.promptMac ? "（macOS 版）" : "（Windows 版）") : "";
-      promptCards.push({ title: translatePlatformText(`高級 AI 協作提示詞大師範本 ${platformLabel}`, platform).trim(), note: translatePlatformText("可直接交給 Codex / Claude Code / Gemini 進行輔助開發", platform), text: effectivePrompt });
-    }
-    (unit.prompts || []).forEach((prompt) => {
-      if (alreadyContainsEffective && (prompt.text === unit.prompt || (prompt.title && prompt.title.includes("大師範本")))) {
-        const platformLabel = hasOsSpecific ? (platform === "mac" && unit.promptMac ? "（macOS 版）" : "（Windows 版）") : "";
-        promptCards.push({ title: translatePlatformText(`高級 AI 協作提示詞大師範本 ${platformLabel}`, platform).trim(), note: translatePlatformText("可直接交給 Codex / Claude Code / Gemini 進行輔助開發", platform), text: effectivePrompt });
-      } else {
-        const text = (prompt.text === unit.prompt && platform === "mac" && unit.promptMac) ? unit.promptMac : prompt.text;
-        promptCards.push({ title: translatePlatformText(prompt.title, platform), note: translatePlatformText(prompt.note, platform), text });
-      }
-    });
+  } else if (effectivePrompt) {
+    // 舊結構退回：整章總提示詞單卡
+    const platformLabel = hasOsSpecific ? (platform === "mac" && unit.promptMac ? "（macOS 版）" : "（Windows 版）") : "";
+    promptCards.push({ title: translatePlatformText(`AI 協作提示詞 ${platformLabel}`, platform).trim(), note: "", text: effectivePrompt, kind: "build" });
   }
 
   if (!promptCards.length) return "";
@@ -678,7 +793,7 @@ function renderPromptAccordion(unit, platform) {
   // 將提示詞文字存入全域 map 供複製時取用
   promptCards.forEach((card, i) => { promptTextMap[`${unit.id}-${i}`] = card.text; });
 
-  const cardsHtml = promptCards.map((card, i) => renderPromptBox(card.title, card.note, card.text, `${unit.id}-${i}`)).join("");
+  const cardsHtml = promptCards.map((card, i) => renderPromptBox(card.title, card.note, card.text, `${unit.id}-${i}`, card.kind)).join("");
   const platformBar = hasOsSpecific ? `<div class="prompt-platform-bar">
     <span class="prompt-platform-label">當前提示詞環境偏好：</span>
     <button class="prompt-platform-btn${platform === "windows" ? " active" : ""}" type="button" data-action="set-platform" data-platform="windows">Windows</button>
@@ -1018,14 +1133,28 @@ document.addEventListener("click", (e) => {
     }
 
     case "concept-next": {
-      const unitId = target.dataset.unit;
-      const current = conceptTabState[unitId] || 0;
+      const stateKey = target.dataset.unit;
+      const current = conceptTabState[stateKey] || 0;
       const course = window.COURSE;
       const allUnits = getAllUnits(course);
-      const unitData = allUnits.find((u) => u.unit.id === unitId);
-      if (unitData && current < unitData.unit.concepts.length - 1) {
-        conceptTabState[unitId] = current + 1;
-        renderApp();
+      /** stateKey 可能是 "u1" 或 "u1__crm"，需要解析出真實 unitId */
+      const realUnitId = stateKey.replace("__crm", "");
+      const isCrm = stateKey.endsWith("__crm");
+      const unitData = allUnits.find((u) => u.unit.id === realUnitId);
+      if (unitData) {
+        /** 依據是否為 CRM 區塊，計算對應的群組數量 */
+        const groupNames = new Set(
+          unitData.unit.concepts
+            .filter((c) => {
+              const g = c.group || c.heading;
+              return isCrm ? isCrmGroup(g) : !isCrmGroup(g);
+            })
+            .map((c) => c.group || c.heading)
+        );
+        if (current < groupNames.size - 1) {
+          conceptTabState[stateKey] = current + 1;
+          renderApp();
+        }
       }
       break;
     }

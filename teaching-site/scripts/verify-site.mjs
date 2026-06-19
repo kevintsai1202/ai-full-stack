@@ -49,13 +49,25 @@ async function main() {
   }
 
   if (!course.title.includes("AI 賦能全端開發")) errors.push("course title mismatch");
-  if (!Array.isArray(course.units) || course.units.length !== 8) errors.push("course must contain 8 units");
 
-  for (const unit of course.units || []) {
-    if (!unit.prompt || unit.prompt.length < 800) errors.push(`${unit.id} prompt is too thin`);
+  // 畫面真正渲染來源：day1.units + day2.units
+  const allUnits = [...(course.day1?.units || []), ...(course.day2?.units || [])];
+  if (allUnits.length !== 8) errors.push(`course must contain 8 units (got ${allUnits.length})`);
+
+  for (const unit of allUnits) {
     if (!unit.principle || unit.principle.length < 80) errors.push(`${unit.id} principle is too thin`);
     if (!Array.isArray(unit.illustrations) || unit.illustrations.length < 3) errors.push(`${unit.id} needs hero, diagram and term illustrations`);
-    if (!unit.prompt.includes("請接續") && unit.id !== "u1") errors.push(`${unit.id} prompt does not continue from previous unit`);
+
+    const prompts = Array.isArray(unit.prompts) ? unit.prompts : [];
+    const builds = prompts.filter((p) => (p.kind || "build") === "build");
+    const verifies = prompts.filter((p) => p.kind === "verify");
+    if (!builds.length) errors.push(`${unit.id} needs at least one build prompt`);
+    if (!verifies.length) errors.push(`${unit.id} needs at least one verify prompt`);
+    // 提示詞不得貼程式碼（三反引號）
+    for (const p of prompts) {
+      if (p.text && p.text.includes("```")) errors.push(`${unit.id} prompt "${p.title}" must not contain code fences`);
+    }
+
     for (const illustration of unit.illustrations || []) {
       const asset = path.join(root, "assets", "illustrations", illustration.name);
       if (!(await exists(asset))) errors.push(`${unit.id} missing illustration: ${illustration.name}`);
@@ -68,8 +80,8 @@ async function main() {
     return;
   }
 
-  const assetCount = (course.units || []).reduce((sum, unit) => sum + (unit.illustrations?.length || 0), 1);
-  console.log(`OK: ${course.units.length} units, ${assetCount} referenced visual assets verified.`);
+  const assetCount = allUnits.reduce((sum, unit) => sum + (unit.illustrations?.length || 0), 1);
+  console.log(`OK: ${allUnits.length} units, ${assetCount} referenced visual assets verified.`);
 }
 
 main().catch((error) => {
