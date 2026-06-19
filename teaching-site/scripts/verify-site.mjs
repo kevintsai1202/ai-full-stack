@@ -38,8 +38,7 @@ async function main() {
     "index.html",
     "styles.css",
     "course-data.js",
-    "src/main.jsx",
-    "src/App.jsx",
+    "app.js",
     "assets/illustrations/cover.png",
     "assets/illustrations/cover.svg"
   ];
