@@ -1177,7 +1177,8 @@ body.sidebar-hidden .sidebar-restore-btn {
 }
 .prompt-box.is-verify .prompt-head strong::before {
   content: "驗證";
-  background: oklch(72% 0.17 150);
+  /* 背景降低亮度以確保白字對比（深淺色模式皆可讀） */
+  background: oklch(56% 0.15 150);
 }
 /* 排錯提示詞徽章：琥珀色，標示「排錯」 */
 .prompt-box.is-fix {
@@ -1185,7 +1186,8 @@ body.sidebar-hidden .sidebar-restore-btn {
 }
 .prompt-box.is-fix .prompt-head strong::before {
   content: "排錯";
-  background: oklch(75% 0.15 70);
+  /* 背景降低亮度以確保白字對比（深淺色模式皆可讀） */
+  background: oklch(58% 0.14 65);
 }
 
 .prompt-head span {
