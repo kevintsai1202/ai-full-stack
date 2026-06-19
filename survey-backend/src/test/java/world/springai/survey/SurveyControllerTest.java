@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** SurveyController 行為測試：驗證、蜜罐、admin 金鑰、即時統計、退訂 token、歡迎信觸發 */
 @WebMvcTest(SurveyController.class)
-@Import(UnsubscribeTokenService.class) // 用真實 token 服務以便計算合法 token
+@Import({UnsubscribeTokenService.class, AdminKeyGuard.class}) // 用真實 token 服務以便計算合法 token，並注入金鑰守衛
 @TestPropertySource(properties = {
     "app.admin-api-key=test-key",
     "app.cors-allowed-origins=http://localhost",

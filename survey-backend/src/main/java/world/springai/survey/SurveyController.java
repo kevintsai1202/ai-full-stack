@@ -2,7 +2,6 @@ package world.springai.survey;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -13,10 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -27,22 +23,22 @@ import java.util.stream.Stream;
 @RestController
 public class SurveyController {
     private final SurveyResponseRepository repository;
-    private final String adminApiKey;
     private final ObjectMapper objectMapper;
     private final UnsubscribeTokenService tokenService;     // 退訂 token 驗證
     private final WelcomeMailService welcomeMailService;    // 問卷送出後寄歡迎信
+    private final AdminKeyGuard adminKeyGuard;              // 集中管理 X-Admin-Key 驗證
 
-    /** 注入資料層、管理金鑰、JSON 序列化器、退訂 token 服務與歡迎信服務 */
+    /** 注入資料層、JSON 序列化器、退訂 token 服務、歡迎信服務與管理金鑰守衛 */
     public SurveyController(SurveyResponseRepository repository,
-                            @Value("${app.admin-api-key}") String adminApiKey,
                             ObjectMapper objectMapper,
                             UnsubscribeTokenService tokenService,
-                            WelcomeMailService welcomeMailService) {
+                            WelcomeMailService welcomeMailService,
+                            AdminKeyGuard adminKeyGuard) {
         this.repository = repository;
-        this.adminApiKey = adminApiKey;
         this.objectMapper = objectMapper;
         this.tokenService = tokenService;
         this.welcomeMailService = welcomeMailService;
+        this.adminKeyGuard = adminKeyGuard;
     }
 
     /** 接收問卷；蜜罐有值則略過寫入（回 204），否則驗證後寫入（回 201） */
@@ -73,11 +69,8 @@ public class SurveyController {
     @GetMapping("/api/admin/survey")
     public ResponseEntity<?> list(@RequestHeader(value = "X-Admin-Key", required = false) String key,
                                   @RequestParam(value = "format", required = false) String format) {
-        // 用固定時間比對避免 timing attack
-        if (key == null || !MessageDigest.isEqual(
-                key.getBytes(StandardCharsets.UTF_8), adminApiKey.getBytes(StandardCharsets.UTF_8))) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid admin key");
-        }
+        // 委由 AdminKeyGuard 以固定時間比對，避免 timing attack；不符拋 401
+        adminKeyGuard.verify(key);
         List<SurveyResponse> all = repository.findAllByOrderByCreatedAtDesc();
         if ("csv".equalsIgnoreCase(format)) {
             return ResponseEntity.ok()
