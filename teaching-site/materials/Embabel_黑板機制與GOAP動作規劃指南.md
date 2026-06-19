@@ -1,6 +1,6 @@
 # Embabel 黑板機制與 GOAP 動作規劃指南
 
-> 本文件為選修附錄。Embabel 2.0 穩定後可升級為正式單元。
+> 本文件為選修附錄。Embabel 0.4.x 目前基於 Spring Boot 3.5.x，待發布相容 Spring AI 2.0 GA 的新版本後可升級為正式單元。
 
 ## 黑板架構 (Blackboard)
 

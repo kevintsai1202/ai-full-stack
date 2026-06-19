@@ -1,82 +1,88 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import playwright from "playwright";
-
-/** SVG 目錄與 viewport 設定 */
-const ASSETS_DIR = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
-  "..",
-  "assets",
-  "illustrations"
-);
-const VIEWBOX = { w: 1200, h: 675 };
-const SCALE = 2; // 2x 輸出，解析度 2400x1350
-
 /**
- * 將單一 SVG 檔案渲染為 PNG
+ * 將教學網站中行內 SVG 概念圖轉換為 PNG 檔案。
+ * 使用 Playwright 開啟頁面，逐一擷取每個 SVG 圖解並存為 PNG。
+ *
+ * 使用方式：node scripts/convert-svg-to-png.mjs [baseUrl]
+ * 預設 baseUrl 為 http://127.0.0.1:5500/teaching-site/index.html
  */
-async function convertSvgToPng(page, svgPath, pngPath) {
-  const svgContent = await fs.readFile(svgPath, "utf-8");
+import { chromium } from "playwright";
+import { fileURLToPath } from "url";
+import path from "path";
 
-  // 建立獨立 HTML 頁面嵌入 SVG，確保正確縮放
-  const html = `<!DOCTYPE html>
-<html><body style="margin:0;background:transparent;">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEWBOX.w} ${VIEWBOX.h}"
-     width="${VIEWBOX.w}" height="${VIEWBOX.h}">
-  ${svgContent.replace(/<svg[^>]*>|<\/svg>/gi, "")}
-</svg>
-</body></html>`;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ILLUSTRATIONS_DIR = path.resolve(__dirname, "..", "assets", "illustrations");
 
-  // 設定 body 內容並等待渲染
-  await page.setContent(html, { waitUntil: "networkidle" });
+/** SVG 概念標題 → PNG 檔名對應表 */
+const CONCEPT_MAP = [
+  { unit: "u1", heading: "環境準備重點", filename: "concept-environment-prep.png" },
+  { unit: "u2", heading: "Spring MVC 的核心：請求如何流動", filename: "concept-spring-mvc-flow.png" },
+  { unit: "u2", heading: "什麼是 REST API", filename: "concept-rest-api.png" },
+  { unit: "u3", heading: "JPA 解決了什麼問題", filename: "concept-jpa-mapping.png" },
+  { unit: "u3", heading: "Flyway 的角色", filename: "concept-flyway-strategy.png" },
+  { unit: "u4", heading: "AOP 概念圖解", filename: "concept-aop.png" },
+  { unit: "u4", heading: "後端安全設定範例 (SecurityConfig.java)", filename: "concept-security-chain.png" },
+  { unit: "u5", heading: "開發端代理與後端 API 串接 (Vite Proxy)", filename: "concept-vite-proxy.png" },
+  { unit: "u6", heading: "串流輸出為什麼重要", filename: "concept-sse-stream.png" },
+  { unit: "u8", heading: "Embabel 智慧 Agent、GOAP 演算法與 Blackboard 機制", filename: "concept-agent-goap.png" },
+];
 
-  // 定位 SVG 元素並截圖
-  const svgEl = page.locator("svg");
-  await svgEl.waitFor({ state: "visible" });
+const baseUrl = process.argv[2] || "http://127.0.0.1:5500/teaching-site/index.html";
 
-  // 截圖並儲存
-  await svgEl.screenshot({ path: pngPath });
-}
+(async () => {
+  console.log("🚀 開始轉換 SVG → PNG");
+  console.log(`📍 目標頁面: ${baseUrl}`);
+  console.log(`📂 輸出目錄: ${ILLUSTRATIONS_DIR}\n`);
 
-async function main() {
-  // 啟動 Playwright 瀏覽器
-  const browser = await playwright.chromium.launch({ headless: true });
-  const page = await browser.newPage({
-    viewport: { width: VIEWBOX.w, height: VIEWBOX.h },
-    deviceScaleFactor: SCALE,
-  });
-
-  // 取得所有 SVG 檔案
-  const files = await fs.readdir(ASSETS_DIR);
-  const svgFiles = files
-    .filter((f) => f.endsWith(".svg"))
-    .sort();
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await page.waitForTimeout(2000);
 
   let success = 0;
-  let fail = 0;
+  let skipped = 0;
 
-  for (const svgFile of svgFiles) {
-    const svgPath = path.join(ASSETS_DIR, svgFile);
-    const pngFile = svgFile.replace(/\.svg$/i, ".png");
-    const pngPath = path.join(ASSETS_DIR, pngFile);
+  for (const item of CONCEPT_MAP) {
+    console.log(`🔍 處理: ${item.heading} → ${item.filename}`);
 
     try {
-      await convertSvgToPng(page, svgPath, pngPath);
-      console.log(`OK: ${svgFile} → ${pngFile}`);
+      // 步驟 1：點選對應的觀念 Tab
+      const tabClicked = await page.evaluate((heading) => {
+        const tabs = Array.from(document.querySelectorAll('[data-action="concept-tab"]'));
+        const tab = tabs.find((t) => t.textContent.trim() === heading);
+        if (tab) {
+          tab.click();
+          return true;
+        }
+        return false;
+      }, item.heading);
+
+      if (!tabClicked) {
+        console.log(`  ⚠️ 找不到 Tab: "${item.heading}"，跳過`);
+        skipped++;
+        continue;
+      }
+
+      await page.waitForTimeout(500);
+
+      // 步驟 2：找到 SVG 元素並截圖
+      const svgElement = await page.$("svg.concept-svg-illustration");
+      if (!svgElement) {
+        console.log(`  ⚠️ 找不到 SVG 元素，跳過`);
+        skipped++;
+        continue;
+      }
+
+      const outputPath = path.join(ILLUSTRATIONS_DIR, item.filename);
+      await svgElement.screenshot({ path: outputPath, type: "png" });
+      console.log(`  ✅ 已儲存: ${item.filename}`);
       success++;
     } catch (err) {
-      console.error(`ERR: ${svgFile} → ${err.message}`);
-      fail++;
+      console.log(`  ❌ 錯誤: ${err.message}`);
+      skipped++;
     }
   }
 
   await browser.close();
-
-  console.log(`\n轉換完成：${success} 成功、${fail} 失敗`);
-  if (fail > 0) process.exitCode = 1;
-}
-
-main().catch((err) => {
-  console.error(err);
-  process.exitCode = 1;
-});
+  console.log(`\n🏁 完成！成功 ${success} 個，跳過 ${skipped} 個`);
+  console.log(`📂 PNG 檔案存放於: ${ILLUSTRATIONS_DIR}`);
+})();

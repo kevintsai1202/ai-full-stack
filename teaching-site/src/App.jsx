@@ -188,7 +188,12 @@ function parseMarkdown(mdText) {
 
     // 處理普通段落
     flushList(i);
-    elements.push(<p key={`p-${i}`} className="preview-paragraph"><InlineMarkdown text={line} /></p>);
+    // 檢查此行是否包含 HTML 標籤結構，若有則使用 dangerouslySetInnerHTML 以免轉義，直接渲染 HTML
+    if (/<[a-zA-Z\/][^>]*>/.test(line)) {
+      elements.push(<div key={`html-${i}`} dangerouslySetInnerHTML={{ __html: line }} />);
+    } else {
+      elements.push(<p key={`p-${i}`} className="preview-paragraph"><InlineMarkdown text={line} /></p>);
+    }
   }
 
   flushList("end");
@@ -1109,6 +1114,52 @@ function SvgEtlPipeline() {
 }
 
 /**
+ * 觀念標題與實體插圖檔名的映射表（與 app.js 保持一致）
+ */
+const conceptImageMap = {
+  "Spring MVC 的核心：請求如何流動": "concept-spring-mvc-flow.png",
+  "Spring MVC 核心架構": "concept-spring-mvc-flow.png",
+  "什麼是 REST API": "concept-rest-api.png",
+  "JPA 解決了什麼問題": "concept-jpa-mapping.png",
+  "JPA 核心概念與 Entity 設計": "concept-jpa-mapping.png",
+  "Flyway 的角色": "concept-flyway-strategy.png",
+  "AOP 概念圖解": "concept-aop.png",
+  "AOP 解決了什麼問題": "concept-aop.png",
+  "後端安全設定範例 (SecurityConfig.java)": "concept-security-chain.png",
+  "安全防護重點": "concept-security-chain.png",
+  "開發端代理與後端 API 串接 (Vite Proxy)": "concept-vite-proxy.png",
+  "串流輸出為什麼重要": "concept-sse-stream.png",
+  "為什麼選擇 SSE (Server-Sent Events)": "concept-sse-stream.png",
+  "GOAP規劃": "concept-agent-goap.png",
+  "Embabel 智慧 Agent、GOAP 演算法與 Blackboard 機制": "concept-agent-goap.png",
+  "RAG 的基本想法": "rag_flow.png",
+  "RAG 核心概念": "rag_flow.png",
+  "ETL 三步驟：文件到向量庫": "etl_pipeline.png",
+
+  /* ── AI CRM 情境圖 ── */
+  "為什麼選 CRM 作為實作題目": "crm-u1-why-crm.png",
+  "CRM Domain Model 設計思維": "crm-u2-domain-model.png",
+  "CRM 資料模型如何對應 JPA Entity": "crm-u3-data-model.png",
+  "CRM 角色與權限模型": "crm-u4-security.png",
+  "CRM 工作台 UI 設計思維": "crm-u5-frontend.png",
+  "AI CRM 助理的商業價值": "crm-u6-ai-value.png",
+  "CRM 知識庫設計：哪些文件該向量化": "crm-u7-knowledge.png",
+
+  /* ── 新增技術資訊圖表 ── */
+  "輸入驗證：為什麼不能信任前端傳來的資料": "concept-bean-validation.png",
+  "Controller / Service 怎麼分工": "concept-controller-service.png",
+  "為什麼資料庫要容器化": "concept-docker-postgres.png",
+  "@Transactional 核心規則": "concept-transactional.png",
+  "為什麼需要動態查詢": "concept-specification.png",
+  "為什麼需要 API 文件": "concept-openapi.png",
+  "統一錯誤回應設計": "concept-global-exception.png",
+  "ChatClient 核心概念": "concept-chatclient.png",
+  "工具呼叫核心概念": "concept-tool-calling.png",
+  "MCP 核心概念": "concept-mcp.png",
+  "為什麼需要對話歷史 RAG": "concept-conversation-memory.png",
+};
+
+/**
  * 依據概念標題動態匹配並渲染精美 inline SVG 圖解。
  * 
  * @param {object} props 元件屬性
@@ -1117,8 +1168,9 @@ function SvgEtlPipeline() {
  */
 function ConceptVisual({ heading }) {
   if (!heading) return null;
+  const trimmedHeading = heading.trim();
   
-  switch (heading.trim()) {
+  switch (trimmedHeading) {
     case "環境準備重點":
       return <SvgEnvironmentPrep />;
     case "Spring MVC 的核心：請求如何流動":
@@ -1141,11 +1193,14 @@ function ConceptVisual({ heading }) {
     case "Embabel 智慧 Agent、GOAP 演算法與 Blackboard 機制":
       return <SvgAgentGoap />;
     case "RAG 的基本想法":
-      return <img src="assets/illustrations/rag_flow.png" className="concept-svg-illustration" alt="RAG 的基本想法" />;
+      return <SvgRAGFlow />;
     case "ETL 三步驟：文件到向量庫":
-      return <img src="assets/illustrations/etl_pipeline.png" className="concept-svg-illustration" alt="ETL 三步驟：文件到向量庫" />;
-    default:
-      return null;
+      return <SvgEtlPipeline />;
+    default: {
+      const filename = conceptImageMap[trimmedHeading];
+      if (!filename) return null;
+      return <img src={`assets/illustrations/${filename}`} className="concept-svg-illustration" alt={heading} />;
+    }
   }
 }
 
