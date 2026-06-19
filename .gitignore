@@ -40,3 +40,26 @@ Thumbs.db
 # Antigravity artifacts / logs
 .gemini/
 .system_generated/
+
+# 暫存目錄與報告（瀏覽器驗證、爬蟲參考、暫存輸出）
+.tmp/
+_stage_report.txt
+
+# 課程資料備份／復原檔（非權威來源，勿納版控）
+teaching-site/course-data.backup.js
+teaching-site/course-data-recovered.js
+
+# 一次性 debug / 自動化腳本（Hahow 上稿、Zeabur 查詢、服務查詢等）
+check_deploy.py
+get_svc*.ps1
+hahow_*.js
+query_zeabur.ps1
+query_zeabur.py
+run_command*.ps1
+
+# 產生的宣傳影片（大檔，依需要本機保留即可）
+videos/
+
+# 驗證／宣傳過程截圖產物
+land-page/screenshots/promo-verify/
+teaching-site/data/render-verify/
