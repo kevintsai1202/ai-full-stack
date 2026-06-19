@@ -63,7 +63,11 @@ public class CampaignService {
         return mailSender.send(to, subject, html);
     }
 
-    /** 發送電子報：mode=now 用 batch、mode=schedule 用 schedule */
+    /**
+     * 發送電子報：mode=now 用 batch、mode=schedule 用 schedule。
+     * 刻意不加 @Transactional：迴圈中夾帶外部 ZSend 呼叫，且 provider 副作用無法回滾，
+     * 部分失敗時保留已寫入的 email_log 記錄比整批回滾更誠實。
+     */
     public SendResult send(String subject, String markdown, String role, String interest,
                            String mode, Instant scheduledAt) {
         // 取得收件人清單
@@ -148,10 +152,14 @@ public class CampaignService {
                 failed++;
             }
         }
-        campaignRepository.findById(campaignId).ifPresent(c -> {
-            c.setStatus("cancelled");
-            campaignRepository.save(c);
-        });
+        // 僅在確實有排程信被取消時才把 campaign 標為 cancelled；
+        // 對「已立即寄出」或無排程信的 campaign 呼叫取消則為 no-op，不誤改其狀態
+        if (cancelled > 0) {
+            campaignRepository.findById(campaignId).ifPresent(c -> {
+                c.setStatus("cancelled");
+                campaignRepository.save(c);
+            });
+        }
         return Map.of("cancelled", cancelled, "failed", failed);
     }
 
