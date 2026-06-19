@@ -20,16 +20,19 @@ public class WelcomeMailService {
     private final MailSender mailSender;
     private final UnsubscribeTokenService tokenService;
     private final EmailLogRepository emailLogRepository;
+    private final EmailTemplate emailTemplate; // 共用信件外框模板
     private final String publicBaseUrl; // 組退訂連結用的對外網址
 
-    /** 注入寄信、token 服務、寄送記錄與對外網址 */
+    /** 注入寄信、token 服務、寄送記錄、信件模板與對外網址 */
     public WelcomeMailService(MailSender mailSender,
                               UnsubscribeTokenService tokenService,
                               EmailLogRepository emailLogRepository,
+                              EmailTemplate emailTemplate,
                               @Value("${app.public-base-url}") String publicBaseUrl) {
         this.mailSender = mailSender;
         this.tokenService = tokenService;
         this.emailLogRepository = emailLogRepository;
+        this.emailTemplate = emailTemplate;
         this.publicBaseUrl = publicBaseUrl;
     }
 
@@ -62,19 +65,13 @@ public class WelcomeMailService {
         return publicBaseUrl + "/api/survey/unsubscribe?email=" + encoded + "&t=" + token;
     }
 
-    /** 組歡迎信 HTML，內含可用退訂連結 */
+    /** 組歡迎信 HTML：歡迎內文交給共用模板套外框與退訂頁腳 */
     private String buildHtml(String unsubscribeLink) {
-        return """
-            <div style="font-family:system-ui,'Microsoft JhengHei',sans-serif;line-height:1.7;max-width:560px;margin:0 auto;color:#1a1a2e">
-              <h2>歡迎你！🎉</h2>
-              <p>謝謝你填寫「AI 賦能全端開發」課程興趣調查。我們會在課程開放報名、釋出早鳥優惠時優先通知你。</p>
-              <p>在那之前，你可以先看看課程網站，了解整個實戰學習路徑。</p>
-              <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
-              <p style="color:#888;font-size:.85rem">
-                你會收到這封信，是因為你在課程網站填寫了興趣調查並同意接收課程資訊。<br>
-                若不想再收到，<a href="%s" style="color:#4f46e5">點此取消訂閱</a>。
-              </p>
-            </div>
-            """.formatted(unsubscribeLink);
+        String body = """
+            <h2>歡迎你！🎉</h2>
+            <p>謝謝你填寫「AI 賦能全端開發」課程興趣調查。我們會在課程開放報名、釋出早鳥優惠時優先通知你。</p>
+            <p>在那之前，你可以先看看課程網站，了解整個實戰學習路徑。</p>
+            """;
+        return emailTemplate.wrap(body, unsubscribeLink);
     }
 }

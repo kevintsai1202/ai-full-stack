@@ -15,8 +15,9 @@ class WelcomeMailServiceTest {
     private final MailSender mailSender = mock(MailSender.class);
     private final EmailLogRepository emailLogRepository = mock(EmailLogRepository.class);
     private final UnsubscribeTokenService tokenService = new UnsubscribeTokenService("secret");
+    private final EmailTemplate emailTemplate = new EmailTemplate(); // 使用真實模板，驗證外框套用正確
     private final WelcomeMailService svc =
-        new WelcomeMailService(mailSender, tokenService, emailLogRepository, "https://api.example.com");
+        new WelcomeMailService(mailSender, tokenService, emailLogRepository, emailTemplate, "https://api.example.com");
 
     /** 寄送成功應寫入 status=sent 並帶 provider id */
     @Test
