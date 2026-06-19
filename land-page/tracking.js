@@ -1,10 +1,15 @@
 /**
  * 行銷追蹤模組 — 統一管理 Google Ads / GA4 / Meta Pixel / LINE Tag
  *
- * 使用方式：
- * 1. 將下方三組 ID 替換為你從各平台取得的真實 ID
- * 2. 在 index.html 中以 <script src="tracking.js"></script> 載入
- * 3. 在 React 元件中呼叫 window.Tracking.event() 發送轉換事件
+ * 使用方式（純靜態網站，無框架）：
+ * 1. 將下方四組 ID 替換為你從各平台取得的真實 ID（留預設值的平台會自動略過，不載入）。
+ * 2. index.html 已以 <script src="tracking.js"></script> 載入本檔，無需額外設定。
+ * 3. 轉換事件已自動接上所有「立即報名」CTA：按鈕 onclick="enroll(...)" 會呼叫
+ *    window.Tracking.event('enroll_click', ...)。其他互動點要埋事件，
+ *    直接呼叫 window.Tracking.event('事件名', { 參數 }) 即可。
+ *
+ * ✅ 上線檢查：把下列四組 ID 換成真值並 push（Zeabur 會自動重建）即生效。
+ *    填好後開瀏覽器 Network 確認對應平台請求、點報名鈕確認 enroll_click 事件。
  */
 
 // ============================================================
