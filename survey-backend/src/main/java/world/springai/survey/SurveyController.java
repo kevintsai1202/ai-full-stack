@@ -29,14 +29,20 @@ public class SurveyController {
     private final SurveyResponseRepository repository;
     private final String adminApiKey;
     private final ObjectMapper objectMapper;
+    private final UnsubscribeTokenService tokenService;     // 退訂 token 驗證
+    private final WelcomeMailService welcomeMailService;    // 問卷送出後寄歡迎信
 
-    /** 注入資料層、管理金鑰與 JSON 序列化器（CSV 匯出 answers 用） */
+    /** 注入資料層、管理金鑰、JSON 序列化器、退訂 token 服務與歡迎信服務 */
     public SurveyController(SurveyResponseRepository repository,
                             @Value("${app.admin-api-key}") String adminApiKey,
-                            ObjectMapper objectMapper) {
+                            ObjectMapper objectMapper,
+                            UnsubscribeTokenService tokenService,
+                            WelcomeMailService welcomeMailService) {
         this.repository = repository;
         this.adminApiKey = adminApiKey;
         this.objectMapper = objectMapper;
+        this.tokenService = tokenService;
+        this.welcomeMailService = welcomeMailService;
     }
 
     /** 接收問卷；蜜罐有值則略過寫入（回 204），否則驗證後寫入（回 201） */
@@ -46,7 +52,8 @@ public class SurveyController {
             return ResponseEntity.noContent().build();
         }
         SurveyResponse entity = new SurveyResponse();
-        entity.setEmail(req.getEmail());
+        // 去除前後空白後寫入，確保與退訂端點的比對基準一致（退訂另以 lower() 處理大小寫）
+        entity.setEmail(req.getEmail().trim());
         entity.setName(req.getName());
         entity.setRole(req.getRole());
         entity.setExperience(req.getExperience());
@@ -57,6 +64,8 @@ public class SurveyController {
         entity.setUtm(req.getUtm());
         entity.setConsent(req.isConsent());
         repository.save(entity);
+        // 寫入成功後寄歡迎信；sendWelcome 內部已 try/catch，失敗不影響此回應
+        welcomeMailService.sendWelcome(entity.getEmail());
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
@@ -98,6 +107,53 @@ public class SurveyController {
         Stream<String> role = all.stream().map(SurveyResponse::getRole);
         return new SurveyStats(all.size(), buckets(interest, 99), buckets(status, 99), buckets(role, 6));
     }
+
+    /**
+     * 公開退訂端點：使用者從行銷信件點擊退訂連結（GET）後以瀏覽器開啟，故回 HTML。
+     * 連結形如 /api/survey/unsubscribe?email=<email>&t=<HMAC token>。
+     * 設計重點：
+     *  1. 防偽——僅當 t 為該 email 的合法 HMAC 簽章才執行退訂。
+     *  2. 冪等——已退訂者再點、或名單查無此 email，都回相同成功頁，不報錯。
+     *  3. 不洩漏名單——不論結果（含 token 不符）一律回相同訊息與 200。
+     *  4. 回應頁為固定字串、不回顯使用者輸入，避免 XSS。
+     */
+    @GetMapping(value = "/api/survey/unsubscribe", produces = "text/html; charset=UTF-8")
+    public ResponseEntity<String> unsubscribe(@RequestParam(value = "email", required = false) String email,
+                                              @RequestParam(value = "t", required = false) String token) {
+        // 僅在 email 有值且 token 通過驗證時才退訂；其餘情況靜默略過但仍回同一頁
+        if (StringUtils.hasText(email) && tokenService.verify(email, token)) {
+            repository.unsubscribeByEmail(email.trim());
+        }
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType("text/html; charset=UTF-8"))
+            .body(UNSUBSCRIBE_HTML);
+    }
+
+    /** 退訂成功頁（固定內容，不含使用者輸入）；中文提示，置中簡潔樣式 */
+    private static final String UNSUBSCRIBE_HTML = """
+            <!doctype html>
+            <html lang="zh-Hant">
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <title>已取消訂閱</title>
+              <style>
+                body { font-family: system-ui, "Microsoft JhengHei", sans-serif; background: #f7f8fa;
+                       display: flex; min-height: 100vh; margin: 0; align-items: center; justify-content: center; }
+                .card { background: #fff; padding: 2.5rem 2rem; border-radius: 12px; max-width: 420px;
+                        box-shadow: 0 8px 30px rgba(0,0,0,.08); text-align: center; }
+                h1 { font-size: 1.4rem; margin: 0 0 .75rem; color: #1a1a2e; }
+                p { color: #555; line-height: 1.6; margin: 0; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <h1>您已成功取消訂閱</h1>
+                <p>我們不會再寄送行銷訊息給您。<br>若這是誤點，重新填寫問卷即可再次訂閱。</p>
+              </div>
+            </body>
+            </html>
+            """;
 
     /** 將字串串流計數後，去除空白值，依數量由多到少排序並取前 limit 名 */
     private List<SurveyStats.Bucket> buckets(Stream<String> values, int limit) {
