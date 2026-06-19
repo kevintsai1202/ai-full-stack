@@ -18,6 +18,10 @@ import org.springframework.web.server.ResponseStatusException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /** 問卷收集與管理查詢端點 */
 @RestController
@@ -72,6 +76,39 @@ public class SurveyController {
                 .body(toCsv(all));
         }
         return ResponseEntity.ok(all);
+    }
+
+    /**
+     * 公開即時統計：回傳總填寫數與各題選項計數，供問卷頁右側圖表使用。
+     * 僅輸出聚合計數，不含任何個資，可安全公開（無需金鑰）。
+     */
+    @GetMapping("/api/survey/stats")
+    public SurveyStats stats() {
+        List<SurveyResponse> all = repository.findAllByOrderByCreatedAtDesc();
+        // 想學主題：interest 為複選陣列，攤平後計數（不限筆數）
+        Stream<String> interest = all.stream()
+            .filter(r -> r.getInterest() != null)
+            .flatMap(r -> r.getInterest().stream());
+        // 目前狀態：取 answers 內的 status 單選值
+        Stream<String> status = all.stream()
+            .map(r -> r.getAnswers() == null ? null : r.getAnswers().get("status"))
+            .filter(Objects::nonNull)
+            .map(String::valueOf);
+        // 身分職業：role 欄位，取前 6 名避免圖表過長
+        Stream<String> role = all.stream().map(SurveyResponse::getRole);
+        return new SurveyStats(all.size(), buckets(interest, 99), buckets(status, 99), buckets(role, 6));
+    }
+
+    /** 將字串串流計數後，去除空白值，依數量由多到少排序並取前 limit 名 */
+    private List<SurveyStats.Bucket> buckets(Stream<String> values, int limit) {
+        Map<String, Long> counts = values
+            .filter(v -> v != null && !v.isBlank() && !"null".equals(v))
+            .collect(Collectors.groupingBy(v -> v, Collectors.counting()));
+        return counts.entrySet().stream()
+            .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+            .limit(limit)
+            .map(e -> new SurveyStats.Bucket(e.getKey(), e.getValue()))
+            .toList();
     }
 
     /** 組成 CSV，前置 UTF-8 BOM 讓 Excel 正確判讀編碼 */

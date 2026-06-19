@@ -63,3 +63,7 @@ videos/
 # 驗證／宣傳過程截圖產物
 land-page/screenshots/promo-verify/
 teaching-site/data/render-verify/
+
+# survey 頁渲染驗證截圖輸出（可重跑產生，不納版控）
+survey-backend/data/survey-render/
+land-page/screenshots/hero-verify/

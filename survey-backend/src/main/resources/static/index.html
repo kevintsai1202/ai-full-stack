@@ -5,68 +5,139 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>課程興趣調查 · AI 賦能全端開發｜凱文大叔</title>
 <meta name="robots" content="noindex" />
-<link rel="icon" href="https://springai-landing.zeabur.app/assets/logo.png" type="image/png" />
+<link rel="icon" href="https://springai.world/assets/logo.png" type="image/png" />
 <!-- 行銷追蹤腳本由 survey-backend 動態提供（與 land-page 共用同一份、相同廣告 ID） -->
 <script src="tracking.js"></script>
 <style>
+  /* ── 設計系統 token：與 land-page (springai.world) 同一套，確保視覺一致 ── */
   :root {
-    --accent:#6366f1; --accent-2:#a855f7; --amber:#f59e0b;
-    --bg:#0a0f1f; --surface:rgba(255,255,255,.045); --fg:#eef1fa; --muted:#9aa6c4;
-    --border:rgba(255,255,255,.12); --ok:#34d399; --err:#f87171;
+    --font-main: "Inter", "Noto Sans TC", "Microsoft JhengHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --bg:#f7fafc; --fg:#102033; --muted:#5c6b7d; --muted-2:#8190a3;
+    --surface:#ffffff; --surface-2:#f1f6f9; --surface-3:#e6edf3;
+    --border:#dce5ee; --border-strong:#b9c7d7;
+    --accent:#0d9488; --accent-deep:#0f766e; --accent-soft:#d9f3ef;
+    --accent-2:#f59e0b; --accent-2-deep:#b45309; --accent-2-soft:#fff2cc;
+    --ok:#16a34a; --err:#dc2626;
+    --r-md:14px; --r-lg:22px; --r-pill:999px;
+    --shadow-sm:0 10px 28px rgb(15 23 42 / .08);
+    --shadow-md:0 18px 42px rgb(15 23 42 / .12);
+    --shadow-lift:0 16px 34px rgb(15 23 42 / .18);
   }
   * { box-sizing:border-box; }
-  body { margin:0; font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif; background:var(--bg); color:var(--fg); line-height:1.7; }
-  a { color:var(--accent-2); }
-  .wrap { max-width:680px; margin:0 auto; padding:0 18px 90px; }
+  html, body { max-width:100%; overflow-x:hidden; }
+  body {
+    margin:0; font-family:var(--font-main); color:var(--fg); line-height:1.75;
+    background:
+      radial-gradient(circle at 0% 0%, color-mix(in oklab, var(--accent-2) 9%, transparent), transparent 22%),
+      radial-gradient(circle at 100% 4%, color-mix(in oklab, var(--accent) 9%, transparent), transparent 24%),
+      var(--bg);
+  }
+  a { color:var(--accent-deep); }
+  img { max-width:100%; display:block; }
+  .wrap { max-width:1060px; margin:0 auto; padding:0 18px 90px; }
 
-  /* Hero */
+  /* ── Hero：沿用 land-page 深藍 navy 漸層色帶 ── */
   .hero { position:relative; overflow:hidden; border-radius:0 0 28px 28px; margin-bottom:26px;
-    background:linear-gradient(135deg,#4f46e5,#9333ea 60%,#c026d3); }
-  .hero-inner { max-width:680px; margin:0 auto; padding:30px 22px 34px; }
+    background:linear-gradient(120deg, oklch(18% 0.04 248 / 0.98) 0%, oklch(24% 0.05 242 / 0.94) 52%, oklch(34% 0.07 232 / 0.82) 100%); }
+  .hero::after { content:""; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(circle at 88% 0%, color-mix(in oklab, var(--accent-2) 26%, transparent), transparent 42%); }
+  .hero-inner { position:relative; z-index:1; max-width:1060px; margin:0 auto; padding:30px 22px 34px; color:#fff; }
+  .hero h1, .hero p { max-width:760px; }
   .brandline { display:flex; align-items:center; gap:9px; margin-bottom:16px; }
   .brandline img { width:30px; height:30px; border-radius:8px; }
   .brandline span { font-weight:800; letter-spacing:.04em; font-size:.86rem; opacity:.92; }
-  .hero h1 { font-size:1.62rem; line-height:1.32; margin:0 0 10px; }
-  .hero p { margin:0; color:rgba(255,255,255,.9); font-size:1rem; }
-  .badges { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
-  .badge { font-size:.78rem; font-weight:700; padding:5px 11px; border-radius:999px;
-    background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.22); }
-  .badge.amber { background:var(--amber); color:#3a2500; border-color:transparent; }
+  .hero h1 { font-size:1.68rem; line-height:1.34; margin:0 0 12px; font-weight:900; }
+  .hero h1 em { font-style:normal; color:var(--accent-2); }
+  .hero p { margin:0; color:oklch(94% 0.01 250 / 0.86); font-size:1rem; }
+  .badges { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+  .badge { font-size:.78rem; font-weight:800; padding:6px 12px; border-radius:var(--r-pill);
+    background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.22); }
+  .badge.amber { background:var(--accent-2); color:#3a2500; border-color:transparent; }
 
-  /* 行銷價值條 */
-  .value-strip { display:grid; gap:10px; margin-bottom:24px; }
-  .value-row { display:flex; gap:11px; align-items:flex-start; padding:13px 15px; border-radius:13px;
-    background:var(--surface); border:1px solid var(--border); }
-  .value-row .ic { font-size:1.15rem; line-height:1.5; }
-  .value-row strong { color:#fff; }
+  /* ── 區塊標題 ── */
+  .eyebrow { display:inline-block; font-size:.74rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase;
+    padding:5px 12px; border-radius:var(--r-pill); background:var(--accent-soft); color:var(--accent-deep); margin-bottom:12px; }
+  .block-title { font-size:1.18rem; font-weight:900; margin:0 0 4px; }
+  .block-sub { margin:0 0 16px; color:var(--muted); font-size:.95rem; }
+
+  /* ── 成果展示：你將親手打造的系統 ── */
+  .showcase { margin-bottom:28px; }
+  .shots { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .shot { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); overflow:hidden;
+    box-shadow:var(--shadow-sm); transition:transform .2s, box-shadow .2s; }
+  .shot:hover { transform:translateY(-3px); box-shadow:var(--shadow-md); }
+  .shot img { width:100%; aspect-ratio:16/10; object-fit:cover; background:var(--surface-2); }
+  .shot .cap { padding:9px 11px; font-size:.8rem; font-weight:700; color:var(--fg); }
+  .shot .cap small { display:block; font-weight:400; color:var(--muted); font-size:.74rem; margin-top:1px; }
+  @media (max-width:560px){ .shots { grid-template-columns:1fr; } .shot img { aspect-ratio:16/9; } }
+
+  /* ── 行銷價值條（含縮圖） ── */
+  .value-strip { display:grid; gap:12px; margin-bottom:28px; }
+  .value-row { display:flex; gap:14px; align-items:center; padding:14px 16px; border-radius:var(--r-md);
+    background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow-sm); }
+  .value-row .thumb { flex:0 0 92px; width:92px; height:62px; border-radius:10px; object-fit:cover; background:var(--surface-2); border:1px solid var(--border); }
+  .value-row .ic { font-size:1.5rem; flex:0 0 auto; }
+  .value-row strong { color:var(--fg); display:block; }
   .value-row small { color:var(--muted); display:block; margin-top:2px; }
+  @media (max-width:520px){ .value-row .thumb { flex-basis:72px; width:72px; height:52px; } }
 
-  /* 表單 */
-  .card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:22px; }
-  .sec-title { font-size:.8rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase;
-    color:var(--accent-2); margin:22px 0 4px; }
+  /* ── 表單卡片 ── */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px; box-shadow:var(--shadow-md); }
+  .sec-title { font-size:.78rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--accent-deep); margin:24px 0 4px; }
   .sec-title:first-child { margin-top:0; }
   label.q { display:block; font-weight:700; margin:16px 0 7px; }
   .hint { font-weight:400; color:var(--muted); font-size:.85rem; }
   input[type=text], input[type=email], select { width:100%; padding:11px 13px; border-radius:10px;
-    border:1px solid var(--border); background:rgba(255,255,255,.05); color:var(--fg); font-size:1rem; }
-  .opts { display:grid; gap:7px; margin-top:4px; }
+    border:1px solid var(--border-strong); background:#fff; color:var(--fg); font-size:1rem; }
+  input:focus, select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .opts { display:grid; gap:8px; margin-top:4px; }
   .opts.grid2 { grid-template-columns:1fr 1fr; }
   .opt { display:flex; align-items:center; gap:9px; padding:10px 12px; border-radius:10px;
-    border:1px solid var(--border); background:rgba(255,255,255,.03); cursor:pointer; font-weight:400; margin:0; }
-  .opt:hover { border-color:var(--accent); }
+    border:1px solid var(--border); background:var(--surface-2); cursor:pointer; font-weight:400; margin:0; transition:border-color .15s, background .15s; }
+  .opt:hover { border-color:var(--accent); background:var(--accent-soft); }
   .opt input { width:auto; accent-color:var(--accent); }
   .hp { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
-  .consent { display:flex; gap:9px; align-items:flex-start; margin-top:22px; font-size:.92rem; color:var(--muted); }
+  .consent { display:flex; gap:9px; align-items:flex-start; margin-top:24px; font-size:.92rem; color:var(--muted); }
   .consent input { width:auto; margin-top:4px; accent-color:var(--accent); }
   .btn { margin-top:22px; width:100%; padding:15px; border:none; border-radius:13px; color:#fff; font-size:1.08rem;
-    font-weight:800; cursor:pointer; background:linear-gradient(135deg,#4f46e5,#9333ea); }
-  .btn:disabled { opacity:.6; cursor:not-allowed; }
+    font-weight:800; cursor:pointer; background:linear-gradient(135deg, var(--accent), var(--accent-2)); transition:transform .15s, box-shadow .15s, filter .15s; }
+  .btn:hover { transform:translateY(-1px); box-shadow:var(--shadow-lift); filter:brightness(1.04); }
+  .btn:disabled { opacity:.6; cursor:not-allowed; transform:none; }
   .reassure { text-align:center; color:var(--muted); font-size:.8rem; margin-top:10px; }
   .msg { margin-top:16px; padding:14px; border-radius:11px; display:none; font-weight:600; }
-  .msg.ok { display:block; background:rgba(52,211,153,.14); color:var(--ok); }
-  .msg.err { display:block; background:rgba(248,113,113,.14); color:var(--err); }
+  .msg.ok { display:block; background:color-mix(in oklab, var(--ok) 14%, transparent); color:var(--ok); }
+  .msg.err { display:block; background:color-mix(in oklab, var(--err) 12%, transparent); color:var(--err); }
   @media (max-width:520px){ .opts.grid2 { grid-template-columns:1fr; } }
+
+  /* ── 表單 + 右側即時統計的兩欄版面 ── */
+  .layout { display:grid; grid-template-columns:minmax(0,1fr) 308px; gap:24px; align-items:start; }
+  @media (max-width:920px){ .layout { grid-template-columns:1fr; } }
+
+  /* ── 即時統計面板 ── */
+  .stats-panel { position:sticky; top:18px; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--r-lg); padding:20px; box-shadow:var(--shadow-md); }
+  @media (max-width:920px){ .stats-panel { position:static; } }
+  .live { display:inline-flex; align-items:center; gap:7px; font-size:.74rem; font-weight:800; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--accent-deep); }
+  .live .dot { width:8px; height:8px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 0 color-mix(in oklab, var(--ok) 60%, transparent);
+    animation:pulse 1.8s infinite; }
+  @keyframes pulse { 0%{ box-shadow:0 0 0 0 color-mix(in oklab, var(--ok) 55%, transparent); } 70%{ box-shadow:0 0 0 7px transparent; } 100%{ box-shadow:0 0 0 0 transparent; } }
+  .stat-total { font-size:2.6rem; font-weight:900; line-height:1.05; margin-top:10px;
+    background:linear-gradient(135deg, var(--accent), var(--accent-2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .stat-total-label { color:var(--muted); font-size:.85rem; margin-top:2px; }
+  .chart-block { margin-top:18px; }
+  .chart-title { font-size:.82rem; font-weight:800; color:var(--fg); margin-bottom:9px; padding-top:14px; border-top:1px solid var(--border); }
+  .chart { display:grid; gap:9px; }
+  .bar-row { display:grid; gap:4px; }
+  .bar-label { display:flex; justify-content:space-between; gap:8px; font-size:.78rem; align-items:baseline; }
+  .bar-label .nm { color:var(--fg); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar-label .ct { color:var(--accent-deep); font-weight:800; flex:0 0 auto; }
+  .bar-track { height:8px; border-radius:999px; background:var(--surface-3); overflow:hidden; }
+  .bar-fill { height:100%; border-radius:999px; background:var(--accent); width:0; transition:width .7s var(--ease-out, ease); }
+  .bar-fill.top { background:var(--accent-2); }
+  .chart-empty { color:var(--muted-2); font-size:.8rem; padding:6px 0; }
+  .stats-foot { margin-top:16px; text-align:center; color:var(--muted-2); font-size:.74rem; }
 </style>
 </head>
 <body>
@@ -74,25 +145,58 @@
 <div class="hero">
   <div class="hero-inner">
     <div class="brandline">
-      <img src="https://springai-landing.zeabur.app/assets/logo.png" alt="凱文大叔" />
+      <img src="https://springai.world/assets/logo.png" alt="凱文大叔" />
       <span>AI 賦能全端開發 · 凱文大叔</span>
     </div>
-    <h1>當別人已經用 AI 寫出可上線的系統，你還在只會「呼叫 LLM」嗎？</h1>
+    <h1>當別人已經用 AI 寫出<em>可上線的系統</em>，你還在只會「呼叫 LLM」嗎？</h1>
     <p>花 60 秒填這份問卷，告訴我們你的起點與目標——我們會用一套真實 AI CRM 專案，帶你把 Spring Boot、Spring AI 與 React 串成能上線的產品。</p>
     <div class="badges">
       <span class="badge amber">★ 填寫即進入早鳥優惠 & 專屬折扣名單</span>
-      <span class="badge">已有 300+ 位開發者搶先卡位</span>
+      <span class="badge" id="count-badge">搶先卡位早鳥優惠名單</span>
     </div>
   </div>
 </div>
 
 <div class="wrap">
+
+  <!-- 成果展示：把「你會做出什麼」視覺化，強化填寫動機 -->
+  <section class="showcase">
+    <span class="eyebrow">完課成果</span>
+    <h2 class="block-title">這，就是你即將親手打造的系統</h2>
+    <p class="block-sub">不是 Demo 玩具，而是一套能登入、能查客戶、能引用知識庫、能自動產生業務建議的企業級 AI CRM。</p>
+    <div class="shots">
+      <div class="shot">
+        <img src="https://springai.world/assets/ai-crm/hahow/ai-crm-dashboard.png" alt="AI CRM 儀表板" loading="lazy" />
+        <div class="cap">企業級 AI CRM 儀表板<small>真實可上線的後台</small></div>
+      </div>
+      <div class="shot">
+        <img src="https://springai.world/assets/ai-crm/hahow-style-vertical/04-rag-tool-calling.png" alt="RAG 知識庫與 Tool Calling" loading="lazy" />
+        <div class="cap">RAG × Tool Calling<small>讓 AI 真正讀懂你的資料</small></div>
+      </div>
+      <div class="shot">
+        <img src="https://springai.world/assets/ai-crm/hahow/ai-agent-flow.png" alt="AI Agent 工作流程" loading="lazy" />
+        <div class="cap">AI Agent 自動化流程<small>可追蹤每一步執行</small></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 行銷價值條：每條搭配 land-page 真實畫面縮圖 -->
   <div class="value-strip">
-    <div class="value-row"><span class="ic">🚀</span><div><strong>別讓同行先一步用 AI 拉開差距</strong><small>AI 工程師薪資溢價 25%↑，他們已經在學了——你也該在浪潮中卡到位置。</small></div></div>
-    <div class="value-row"><span class="ic">🧩</span><div><strong>學的不只是寫程式</strong><small>透過 AI Coding，你會連資料庫設計、系統架構、Docker 部署、資安與權限一次學會。</small></div></div>
-    <div class="value-row"><span class="ic">🎁</span><div><strong>填寫者專屬待遇</strong><small>優先收到開課通知與早鳥折扣，名額與優惠有限，填了不吃虧。</small></div></div>
+    <div class="value-row">
+      <img class="thumb" src="https://springai.world/assets/ai-crm/hahow/chart-drilldown.png" alt="" loading="lazy" />
+      <div><strong>別讓同行先一步用 AI 拉開差距</strong><small>AI 工程師薪資溢價 25%↑，他們已經在學了——你也該在浪潮中卡到位置。</small></div>
+    </div>
+    <div class="value-row">
+      <img class="thumb" src="https://springai.world/assets/ai-crm/hahow-style-vertical/05-ai-agent-workflow.png" alt="" loading="lazy" />
+      <div><strong>學的不只是寫程式</strong><small>透過 AI Coding，你會連資料庫設計、系統架構、Docker 部署、資安與權限一次學會。</small></div>
+    </div>
+    <div class="value-row">
+      <span class="ic">🎁</span>
+      <div><strong>填寫者專屬待遇</strong><small>優先收到開課通知與早鳥折扣，名額與優惠有限，填了不吃虧。</small></div>
+    </div>
   </div>
 
+  <div class="layout">
   <div class="card">
     <form id="survey-form">
 
@@ -196,6 +300,28 @@
       <div class="msg" id="msg"></div>
     </form>
   </div>
+
+  <!-- 右側即時統計：資料來自公開聚合端點 /api/survey/stats（僅計數、無個資） -->
+  <aside class="stats-panel">
+    <span class="live"><span class="dot"></span> 即時填寫狀況</span>
+    <div class="stat-total"><span id="stat-total-num">—</span></div>
+    <div class="stat-total-label">位開發者已填寫這份問卷</div>
+
+    <div class="chart-block">
+      <div class="chart-title">🔥 最多人想學的主題</div>
+      <div class="chart" id="chart-interest"><div class="chart-empty">載入中…</div></div>
+    </div>
+    <div class="chart-block">
+      <div class="chart-title">👥 填寫者目前狀態</div>
+      <div class="chart" id="chart-status"><div class="chart-empty">載入中…</div></div>
+    </div>
+    <div class="chart-block">
+      <div class="chart-title">💼 填寫者身分職業 Top 6</div>
+      <div class="chart" id="chart-role"><div class="chart-empty">載入中…</div></div>
+    </div>
+    <div class="stats-foot">每 20 秒自動更新 · 即時反映最新填寫</div>
+  </aside>
+  </div>
 </div>
 
 <script>
@@ -214,6 +340,57 @@
   function readUtm() {
     try { return JSON.parse(sessionStorage.getItem('utm') || '{}'); } catch (e) { return {}; }
   }
+
+  /* ── 即時統計：抓公開聚合端點，畫成右側長條圖 ── */
+
+  /** badge 文案：≥10 顯示實際人數，<10 換句話避免顯弱 */
+  function badgeText(n) {
+    return n >= 10 ? ('已有 ' + n + ' 位開發者搶先卡位') : '搶先成為前幾位卡位的開發者';
+  }
+  /** 建一個帶 class 的元素，可選填文字（用 textContent，天然防 XSS） */
+  function elc(tag, cls, text) {
+    var node = document.createElement(tag);
+    node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+  /** 將一組 {label,count} 畫成長條圖；第一名以 amber 強調，無資料顯示提示 */
+  function renderChart(elId, buckets) {
+    var el = document.getElementById(elId);
+    if (!el) return;
+    el.textContent = '';
+    if (!buckets || !buckets.length) { el.appendChild(elc('div', 'chart-empty', '還沒有資料，等你來填第一筆')); return; }
+    var max = buckets[0].count || 1;
+    buckets.forEach(function (b, i) {
+      var pct = Math.max(Math.round(b.count / max * 100), 6); // 最小寬度 6%，讓小值仍可見
+      var label = elc('div', 'bar-label');
+      label.appendChild(elc('span', 'nm', b.label));
+      label.appendChild(elc('span', 'ct', b.count));
+      var fill = elc('div', 'bar-fill' + (i === 0 ? ' top' : ''));
+      fill.style.width = pct + '%';
+      var track = elc('div', 'bar-track');
+      track.appendChild(fill);
+      var row = elc('div', 'bar-row');
+      row.appendChild(label);
+      row.appendChild(track);
+      el.appendChild(row);
+    });
+  }
+  /** 抓取並渲染即時統計；失敗時靜默維持現狀 */
+  async function loadStats() {
+    try {
+      var res = await fetch(API_BASE + '/api/survey/stats', { cache: 'no-store' });
+      if (!res.ok) return;
+      var s = await res.json();
+      document.getElementById('count-badge').textContent = badgeText(s.total);
+      document.getElementById('stat-total-num').textContent = s.total;
+      renderChart('chart-interest', s.interest);
+      renderChart('chart-status', s.status);
+      renderChart('chart-role', s.role);
+    } catch (e) { /* 靜默：載入失敗時保留預設文案與提示 */ }
+  }
+  loadStats();
+  setInterval(loadStats, 20000); // 每 20 秒輪詢，呈現即時填寫狀況
 
   form.addEventListener('submit', async function (e) {
     e.preventDefault();
@@ -251,6 +428,7 @@
         form.reset();
         // 觸發轉換事件：填過問卷者進入廣告受眾池，供再行銷與類似受眾擴展
         if (window.Tracking) window.Tracking.event('survey_submit');
+        loadStats(); // 立即刷新右側統計，讓使用者看到自己這筆已計入
       } else {
         msg.className = 'msg err'; msg.textContent = '送出失敗，請確認 Email 格式後再試一次。';
       }
