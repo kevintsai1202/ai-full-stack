@@ -17,12 +17,17 @@ public class SurveyRequest {
     private String role;
     @Size(max = 50)
     private String experience;
+    @Size(max = 50)
+    private String frontendExperience;
     /** 複選主題，限制數量避免濫用 */
     @Size(max = 20)
     private List<String> interest;
     @Size(max = 50)
     private String budget;
     private Map<String, String> utm;
+    /** 行銷導向問題答案（如 pain_points），限制鍵數避免濫用 */
+    @Size(max = 20)
+    private Map<String, Object> answers;
     /** 必須為 true 才算同意（PDPA） */
     @AssertTrue
     private boolean consent;
@@ -37,6 +42,10 @@ public class SurveyRequest {
     public void setRole(String role) { this.role = role; }
     public String getExperience() { return experience; }
     public void setExperience(String experience) { this.experience = experience; }
+    public String getFrontendExperience() { return frontendExperience; }
+    public void setFrontendExperience(String frontendExperience) { this.frontendExperience = frontendExperience; }
+    public Map<String, Object> getAnswers() { return answers; }
+    public void setAnswers(Map<String, Object> answers) { this.answers = answers; }
     public List<String> getInterest() { return interest; }
     public void setInterest(List<String> interest) { this.interest = interest; }
     public String getBudget() { return budget; }

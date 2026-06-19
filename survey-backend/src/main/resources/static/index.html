@@ -3,93 +3,213 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>課程興趣調查 · AI 賦能全端開發</title>
+<title>課程興趣調查 · AI 賦能全端開發｜凱文大叔</title>
 <meta name="robots" content="noindex" />
-<!-- 廣告/追蹤：請填入與 land-page 相同的 ID，讓問卷受眾與 land-page 併入同一受眾池（再行銷/類似受眾） -->
+<link rel="icon" href="https://springai-landing.zeabur.app/assets/logo.png" type="image/png" />
+<!-- 行銷追蹤腳本由 survey-backend 動態提供（與 land-page 共用同一份、相同廣告 ID） -->
 <script src="tracking.js"></script>
 <style>
-  :root { --accent:#4f46e5; --bg:#0b1020; --fg:#e7ebf5; --muted:#9aa6c4; --border:rgba(255,255,255,.14); }
+  :root {
+    --accent:#6366f1; --accent-2:#a855f7; --amber:#f59e0b;
+    --bg:#0a0f1f; --surface:rgba(255,255,255,.045); --fg:#eef1fa; --muted:#9aa6c4;
+    --border:rgba(255,255,255,.12); --ok:#34d399; --err:#f87171;
+  }
   * { box-sizing:border-box; }
   body { margin:0; font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif; background:var(--bg); color:var(--fg); line-height:1.7; }
-  .wrap { max-width:640px; margin:0 auto; padding:40px 20px 80px; }
-  h1 { font-size:1.6rem; margin:0 0 8px; }
-  p.lead { color:var(--muted); margin:0 0 28px; }
-  .card { background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:16px; padding:24px; }
-  label { display:block; font-weight:700; margin:18px 0 6px; }
-  input[type=text], input[type=email], select { width:100%; padding:11px 13px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,.06); color:var(--fg); font-size:1rem; }
-  .checks label, .radios label { font-weight:400; display:flex; align-items:center; gap:8px; margin:6px 0; }
-  .checks input, .radios input { width:auto; }
+  a { color:var(--accent-2); }
+  .wrap { max-width:680px; margin:0 auto; padding:0 18px 90px; }
+
+  /* Hero */
+  .hero { position:relative; overflow:hidden; border-radius:0 0 28px 28px; margin-bottom:26px;
+    background:linear-gradient(135deg,#4f46e5,#9333ea 60%,#c026d3); }
+  .hero-inner { max-width:680px; margin:0 auto; padding:30px 22px 34px; }
+  .brandline { display:flex; align-items:center; gap:9px; margin-bottom:16px; }
+  .brandline img { width:30px; height:30px; border-radius:8px; }
+  .brandline span { font-weight:800; letter-spacing:.04em; font-size:.86rem; opacity:.92; }
+  .hero h1 { font-size:1.62rem; line-height:1.32; margin:0 0 10px; }
+  .hero p { margin:0; color:rgba(255,255,255,.9); font-size:1rem; }
+  .badges { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+  .badge { font-size:.78rem; font-weight:700; padding:5px 11px; border-radius:999px;
+    background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.22); }
+  .badge.amber { background:var(--amber); color:#3a2500; border-color:transparent; }
+
+  /* 行銷價值條 */
+  .value-strip { display:grid; gap:10px; margin-bottom:24px; }
+  .value-row { display:flex; gap:11px; align-items:flex-start; padding:13px 15px; border-radius:13px;
+    background:var(--surface); border:1px solid var(--border); }
+  .value-row .ic { font-size:1.15rem; line-height:1.5; }
+  .value-row strong { color:#fff; }
+  .value-row small { color:var(--muted); display:block; margin-top:2px; }
+
+  /* 表單 */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:22px; }
+  .sec-title { font-size:.8rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--accent-2); margin:22px 0 4px; }
+  .sec-title:first-child { margin-top:0; }
+  label.q { display:block; font-weight:700; margin:16px 0 7px; }
+  .hint { font-weight:400; color:var(--muted); font-size:.85rem; }
+  input[type=text], input[type=email], select { width:100%; padding:11px 13px; border-radius:10px;
+    border:1px solid var(--border); background:rgba(255,255,255,.05); color:var(--fg); font-size:1rem; }
+  .opts { display:grid; gap:7px; margin-top:4px; }
+  .opts.grid2 { grid-template-columns:1fr 1fr; }
+  .opt { display:flex; align-items:center; gap:9px; padding:10px 12px; border-radius:10px;
+    border:1px solid var(--border); background:rgba(255,255,255,.03); cursor:pointer; font-weight:400; margin:0; }
+  .opt:hover { border-color:var(--accent); }
+  .opt input { width:auto; accent-color:var(--accent); }
   .hp { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
-  .btn { margin-top:24px; width:100%; padding:14px; border:none; border-radius:12px; background:var(--accent); color:#fff; font-size:1.05rem; font-weight:800; cursor:pointer; }
+  .consent { display:flex; gap:9px; align-items:flex-start; margin-top:22px; font-size:.92rem; color:var(--muted); }
+  .consent input { width:auto; margin-top:4px; accent-color:var(--accent); }
+  .btn { margin-top:22px; width:100%; padding:15px; border:none; border-radius:13px; color:#fff; font-size:1.08rem;
+    font-weight:800; cursor:pointer; background:linear-gradient(135deg,#4f46e5,#9333ea); }
   .btn:disabled { opacity:.6; cursor:not-allowed; }
-  .consent { display:flex; gap:8px; align-items:flex-start; margin-top:20px; font-size:.92rem; color:var(--muted); }
-  .msg { margin-top:18px; padding:14px; border-radius:10px; display:none; }
-  .msg.ok { display:block; background:rgba(34,197,94,.15); color:#86efac; }
-  .msg.err { display:block; background:rgba(239,68,68,.15); color:#fca5a5; }
+  .reassure { text-align:center; color:var(--muted); font-size:.8rem; margin-top:10px; }
+  .msg { margin-top:16px; padding:14px; border-radius:11px; display:none; font-weight:600; }
+  .msg.ok { display:block; background:rgba(52,211,153,.14); color:var(--ok); }
+  .msg.err { display:block; background:rgba(248,113,113,.14); color:var(--err); }
+  @media (max-width:520px){ .opts.grid2 { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
+
+<div class="hero">
+  <div class="hero-inner">
+    <div class="brandline">
+      <img src="https://springai-landing.zeabur.app/assets/logo.png" alt="凱文大叔" />
+      <span>AI 賦能全端開發 · 凱文大叔</span>
+    </div>
+    <h1>當別人已經用 AI 寫出可上線的系統，你還在只會「呼叫 LLM」嗎？</h1>
+    <p>花 60 秒填這份問卷，告訴我們你的起點與目標——我們會用一套真實 AI CRM 專案，帶你把 Spring Boot、Spring AI 與 React 串成能上線的產品。</p>
+    <div class="badges">
+      <span class="badge amber">★ 填寫即進入早鳥優惠 & 專屬折扣名單</span>
+      <span class="badge">已有 300+ 位開發者搶先卡位</span>
+    </div>
+  </div>
+</div>
+
 <div class="wrap">
-  <h1>課程興趣調查</h1>
-  <p class="lead">花 1 分鐘讓我們更了解你，未來課程資訊與早鳥優惠會優先通知你。</p>
+  <div class="value-strip">
+    <div class="value-row"><span class="ic">🚀</span><div><strong>別讓同行先一步用 AI 拉開差距</strong><small>AI 工程師薪資溢價 25%↑，他們已經在學了——你也該在浪潮中卡到位置。</small></div></div>
+    <div class="value-row"><span class="ic">🧩</span><div><strong>學的不只是寫程式</strong><small>透過 AI Coding，你會連資料庫設計、系統架構、Docker 部署、資安與權限一次學會。</small></div></div>
+    <div class="value-row"><span class="ic">🎁</span><div><strong>填寫者專屬待遇</strong><small>優先收到開課通知與早鳥折扣，名額與優惠有限，填了不吃虧。</small></div></div>
+  </div>
+
   <div class="card">
     <form id="survey-form">
-      <label for="email">Email（必填）</label>
+
+      <div class="sec-title">關於你</div>
+      <label class="q" for="email">Email（必填）<span class="hint">— 優惠與開課通知會寄到這</span></label>
       <input type="email" id="email" name="email" required placeholder="you@example.com" />
 
-      <label for="name">稱呼</label>
+      <label class="q" for="name">稱呼</label>
       <input type="text" id="name" name="name" placeholder="怎麼稱呼你" />
 
-      <label for="role">你的身分</label>
+      <label class="q" for="role">你的身分／職業</label>
       <select id="role" name="role">
-        <option value="">不指定</option>
-        <option>學生</option><option>後端工程師</option><option>前端工程師</option>
-        <option>全端工程師</option><option>其他</option>
+        <option value="">請選擇</option>
+        <option>學生</option>
+        <option>應屆畢業生</option>
+        <option>後端工程師</option>
+        <option>前端工程師</option>
+        <option>全端工程師</option>
+        <option>行動 App 開發</option>
+        <option>資料／AI 工程師</option>
+        <option>DevOps／SRE</option>
+        <option>軟體架構師</option>
+        <option>技術主管／PM</option>
+        <option>非本科轉職者</option>
+        <option>接案／自由工作者</option>
+        <option>創業者</option>
+        <option>企業內訓窗口</option>
+        <option>其他</option>
       </select>
 
-      <label for="experience">Java / Spring 經驗</label>
+      <label class="q" for="experience">Java / Spring 經驗</label>
       <select id="experience" name="experience">
-        <option value="">不指定</option>
+        <option value="">請選擇</option>
         <option>沒有經驗</option><option>半年內</option><option>1-3 年</option><option>3 年以上</option>
       </select>
 
-      <label>最想學的主題（可複選）</label>
-      <div class="checks" id="interest">
-        <label><input type="checkbox" value="RAG 知識庫" /> RAG 知識庫</label>
-        <label><input type="checkbox" value="Tool Calling" /> Tool Calling</label>
-        <label><input type="checkbox" value="MCP" /> MCP</label>
-        <label><input type="checkbox" value="Spring Security" /> Spring Security</label>
-        <label><input type="checkbox" value="部署上線" /> 部署上線</label>
-      </div>
+      <label class="q" for="frontendExperience">前端（HTML/CSS/JS/React）經驗</label>
+      <select id="frontendExperience" name="frontendExperience">
+        <option value="">請選擇</option>
+        <option>沒有經驗</option><option>半年內</option><option>1-3 年</option><option>3 年以上</option>
+      </select>
 
-      <label for="budget">可接受的價位帶</label>
+      <label class="q" for="budget">可接受的價位帶</label>
       <select id="budget" name="budget">
-        <option value="">不指定</option>
+        <option value="">請選擇</option>
         <option>2000 以下</option><option>2000-4000</option><option>4000-6000</option><option>6000 以上</option>
       </select>
+
+      <div class="sec-title">你最想學的主題（可複選）</div>
+      <div class="opts grid2" id="interest">
+        <label class="opt"><input type="checkbox" value="RAG 知識庫" /> RAG 知識庫</label>
+        <label class="opt"><input type="checkbox" value="Tool Calling" /> Tool Calling</label>
+        <label class="opt"><input type="checkbox" value="前端整合" /> 前端整合</label>
+        <label class="opt"><input type="checkbox" value="Spring 其他模組" /> Spring 其他模組</label>
+        <label class="opt"><input type="checkbox" value="AI 輔助程式開發" /> AI 輔助程式開發</label>
+        <label class="opt"><input type="checkbox" value="Spring Security" /> Spring Security</label>
+        <label class="opt"><input type="checkbox" value="資料庫" /> 資料庫</label>
+        <label class="opt"><input type="checkbox" value="Docker 部署" /> Docker 部署</label>
+      </div>
+
+      <div class="sec-title">關於你的目標</div>
+      <label class="q">你目前的狀態？（單選）</label>
+      <div class="opts" id="status">
+        <label class="opt"><input type="radio" name="status" value="在職工程師，想技能升級" /> 在職工程師，想技能升級</label>
+        <label class="opt"><input type="radio" name="status" value="想轉職全端／AI 工程師" /> 想轉職全端／AI 工程師</label>
+        <label class="opt"><input type="radio" name="status" value="在公司推動 AI 轉型" /> 在公司推動 AI 轉型</label>
+        <label class="opt"><input type="radio" name="status" value="應屆／畢業生求職中" /> 應屆／畢業生求職中</label>
+        <label class="opt"><input type="radio" name="status" value="學生" /> 學生</label>
+        <label class="opt"><input type="radio" name="status" value="熟練 AI 工具但沒有開發經驗" /> 熟練 AI 工具但沒有開發經驗</label>
+        <label class="opt"><input type="radio" name="status" value="其他" /> 其他</label>
+      </div>
+
+      <label class="q">你最想從這門課得到什麼？（可複選）</label>
+      <div class="opts" id="goals">
+        <label class="opt"><input type="checkbox" value="加薪・薪資溢價" /> 加薪・薪資溢價</label>
+        <label class="opt"><input type="checkbox" value="轉職進入 AI 領域" /> 轉職進入 AI 領域</label>
+        <label class="opt"><input type="checkbox" value="累積可展示的實戰作品集" /> 累積可展示的實戰作品集</label>
+        <label class="opt"><input type="checkbox" value="技能升級、不被 AI 取代" /> 技能升級、不被 AI 取代</label>
+        <label class="opt"><input type="checkbox" value="帶領團隊／公司導入 AI" /> 帶領團隊／公司導入 AI</label>
+      </div>
+
+      <label class="q">你最擔心的職涯議題？（可複選）</label>
+      <div class="opts" id="pain">
+        <label class="opt"><input type="checkbox" value="跟不上 AI 浪潮" /> 跟不上 AI 浪潮</label>
+        <label class="opt"><input type="checkbox" value="薪資成長停滯" /> 薪資成長停滯</label>
+        <label class="opt"><input type="checkbox" value="技能被 AI 取代" /> 技能被 AI 取代</label>
+        <label class="opt"><input type="checkbox" value="轉職卡關" /> 轉職卡關</label>
+        <label class="opt"><input type="checkbox" value="缺乏可展示的實戰專案" /> 缺乏可展示的實戰專案</label>
+      </div>
 
       <!-- 蜜罐欄位：一般使用者看不到，機器人才會填 -->
       <div class="hp"><label>Website</label><input type="text" id="website" name="website" tabindex="-1" autocomplete="off" /></div>
 
       <div class="consent">
         <input type="checkbox" id="consent" required />
-        <label for="consent" style="font-weight:400;margin:0;">我同意接收課程資訊與電子報，並了解可隨時退訂（依個資法保護我的資料）。</label>
+        <label for="consent" style="font-weight:400;margin:0;">我同意接收課程資訊與電子報，並了解可隨時退訂（依個人資料保護法保護我的資料）。</label>
       </div>
 
-      <button class="btn" type="submit" id="submit-btn">送出</button>
+      <button class="btn" type="submit" id="submit-btn">送出，鎖定我的早鳥優惠 →</button>
+      <div class="reassure">🔒 僅用於課程通知與優惠，不會提供給第三方</div>
       <div class="msg" id="msg"></div>
     </form>
   </div>
 </div>
 
 <script>
-  // 同源：問卷頁與 API 由同一個 survey-backend 服務提供，用相對路徑即可，免 CORS
+  // 同源：問卷頁與 API 由同一個 survey-backend 服務提供，相對路徑即可，免 CORS
   const API_BASE = '';
 
   const form = document.getElementById('survey-form');
   const btn = document.getElementById('submit-btn');
   const msg = document.getElementById('msg');
 
+  /** 取勾選的複選值 */
+  function checked(id) {
+    return Array.from(document.querySelectorAll('#' + id + ' input:checked')).map(i => i.value);
+  }
   /** 從 sessionStorage 取 tracking.js 解析好的 UTM 歸因 */
   function readUtm() {
     try { return JSON.parse(sessionStorage.getItem('utm') || '{}'); } catch (e) { return {}; }
@@ -101,25 +221,33 @@
     if (!document.getElementById('consent').checked) {
       msg.className = 'msg err'; msg.textContent = '請先勾選同意接收課程資訊。'; return;
     }
-    const interest = Array.from(document.querySelectorAll('#interest input:checked')).map(i => i.value);
-    const payload = {
+    var statusEl = document.querySelector('#status input:checked');
+    var payload = {
       email: document.getElementById('email').value.trim(),
       name: document.getElementById('name').value.trim() || null,
       role: document.getElementById('role').value || null,
       experience: document.getElementById('experience').value || null,
-      interest: interest,
+      frontendExperience: document.getElementById('frontendExperience').value || null,
+      interest: checked('interest'),
       budget: document.getElementById('budget').value || null,
+      // 行銷導向題（兼作廣告 TA 訊號）存進 answers
+      answers: {
+        status: statusEl ? statusEl.value : null,
+        goals: checked('goals'),
+        pain_points: checked('pain')
+      },
       utm: readUtm(),
       consent: true,
       website: document.getElementById('website').value // 蜜罐
     };
     btn.disabled = true; btn.textContent = '送出中…';
     try {
-      const res = await fetch(API_BASE + '/api/survey', {
+      var res = await fetch(API_BASE + '/api/survey', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
       if (res.ok) {
-        msg.className = 'msg ok'; msg.textContent = '已收到你的問卷，謝謝！未來會優先通知你課程資訊。';
+        msg.className = 'msg ok';
+        msg.textContent = '已收到！你已進入早鳥優惠名單，開課與折扣資訊會優先通知你 🎉';
         form.reset();
         // 觸發轉換事件：填過問卷者進入廣告受眾池，供再行銷與類似受眾擴展
         if (window.Tracking) window.Tracking.event('survey_submit');
@@ -129,7 +257,7 @@
     } catch (err) {
       msg.className = 'msg err'; msg.textContent = '網路錯誤，請稍後再試。';
     } finally {
-      btn.disabled = false; btn.textContent = '送出';
+      btn.disabled = false; btn.textContent = '送出，鎖定我的早鳥優惠 →';
     }
   });
 </script>

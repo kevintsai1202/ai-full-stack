@@ -1,5 +1,6 @@
 package world.springai.survey;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -23,12 +24,15 @@ import java.util.List;
 public class SurveyController {
     private final SurveyResponseRepository repository;
     private final String adminApiKey;
+    private final ObjectMapper objectMapper;
 
-    /** 注入資料層與管理金鑰 */
+    /** 注入資料層、管理金鑰與 JSON 序列化器（CSV 匯出 answers 用） */
     public SurveyController(SurveyResponseRepository repository,
-                            @Value("${app.admin-api-key}") String adminApiKey) {
+                            @Value("${app.admin-api-key}") String adminApiKey,
+                            ObjectMapper objectMapper) {
         this.repository = repository;
         this.adminApiKey = adminApiKey;
+        this.objectMapper = objectMapper;
     }
 
     /** 接收問卷；蜜罐有值則略過寫入（回 204），否則驗證後寫入（回 201） */
@@ -42,6 +46,8 @@ public class SurveyController {
         entity.setName(req.getName());
         entity.setRole(req.getRole());
         entity.setExperience(req.getExperience());
+        entity.setFrontendExperience(req.getFrontendExperience());
+        entity.setAnswers(req.getAnswers());
         entity.setInterest(req.getInterest());
         entity.setBudget(req.getBudget());
         entity.setUtm(req.getUtm());
@@ -71,20 +77,32 @@ public class SurveyController {
     /** 組成 CSV，前置 UTF-8 BOM 讓 Excel 正確判讀編碼 */
     private String toCsv(List<SurveyResponse> rows) {
         StringBuilder sb = new StringBuilder("﻿");
-        sb.append("id,email,name,role,experience,interest,budget,consent,unsubscribed,created_at\n");
+        sb.append("id,email,name,role,experience,frontend_experience,interest,budget,answers,consent,unsubscribed,created_at\n");
         for (SurveyResponse r : rows) {
             sb.append(r.getId()).append(',')
               .append(csv(r.getEmail())).append(',')
               .append(csv(r.getName())).append(',')
               .append(csv(r.getRole())).append(',')
               .append(csv(r.getExperience())).append(',')
+              .append(csv(r.getFrontendExperience())).append(',')
               .append(csv(r.getInterest() == null ? "" : String.join("|", r.getInterest()))).append(',')
               .append(csv(r.getBudget())).append(',')
+              .append(csv(toJson(r.getAnswers()))).append(',')
               .append(r.isConsent()).append(',')
               .append(r.isUnsubscribed()).append(',')
               .append(csv(r.getCreatedAt() == null ? "" : r.getCreatedAt().toString())).append('\n');
         }
         return sb.toString();
+    }
+
+    /** 把 answers map 轉成 JSON 字串供 CSV 欄位使用；失敗或為空回空字串 */
+    private String toJson(java.util.Map<String, Object> m) {
+        if (m == null || m.isEmpty()) return "";
+        try {
+            return objectMapper.writeValueAsString(m);
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     /** CSV 欄位跳脫：含逗號/引號/換行(CR/LF)時用雙引號包並把內部引號加倍（RFC 4180） */

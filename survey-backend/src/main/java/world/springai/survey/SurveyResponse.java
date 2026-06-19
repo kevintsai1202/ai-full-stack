@@ -24,6 +24,9 @@ public class SurveyResponse {
     private String name;
     private String role;
     private String experience;
+    /** 前端經驗區間 */
+    @Column(name = "frontend_experience")
+    private String frontendExperience;
     /** 複選主題，存成 jsonb 陣列 */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
@@ -33,6 +36,10 @@ public class SurveyResponse {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, String> utm;
+    /** 行銷導向問題答案（痛點/急迫度/想學的系統知識…），存成 jsonb */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private Map<String, Object> answers;
     @Column(nullable = false)
     private boolean consent;
     @Column(nullable = false)
@@ -50,6 +57,10 @@ public class SurveyResponse {
     public void setRole(String role) { this.role = role; }
     public String getExperience() { return experience; }
     public void setExperience(String experience) { this.experience = experience; }
+    public String getFrontendExperience() { return frontendExperience; }
+    public void setFrontendExperience(String frontendExperience) { this.frontendExperience = frontendExperience; }
+    public Map<String, Object> getAnswers() { return answers; }
+    public void setAnswers(Map<String, Object> answers) { this.answers = answers; }
     public List<String> getInterest() { return interest; }
     public void setInterest(List<String> interest) { this.interest = interest; }
     public String getBudget() { return budget; }
