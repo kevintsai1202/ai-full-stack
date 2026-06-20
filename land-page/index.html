@@ -91,7 +91,7 @@
   "@type": "FAQPage",
   "mainEntity": [
     {"@type":"Question","name":"這門課適合完全沒寫過 Java 的新手嗎？","acceptedAnswer":{"@type":"Answer","text":"有基本 Java 語法與 REST API 概念會更好上手。不過若你對 AI 工具（如 Claude Code、Codex）已經熟悉，也能用 AI 輔助補足技術能力——課程會帶你建立完整的前後端知識與 domain knowhow，這正是新手最需要、也最能長期受用的部分。"}},
-    {"@type":"Question","name":"課程用的是哪些技術版本？","acceptedAnswer":{"@type":"Answer","text":"後端：Java 21（LTS）、Spring Boot 4.0.x、Spring AI 2.0.x（GA）、Spring MVC、Spring Data JPA、Spring Security。資料庫：PostgreSQL + pgvector（向量檢索，支撐 RAG 知識庫）。前端：React + TypeScript + Vite，搭配 Ant Design UI 框架。AI 整合：Spring AI 的 Chat、Embedding、Tool Calling、RAG 與 ChatMemory。開發環境以 Windows + PowerShell 7+ 示範，macOS / Linux 也可比照操作。"}},
+    {"@type":"Question","name":"課程用的是哪些技術版本？","acceptedAnswer":{"@type":"Answer","text":"後端：Java 21（LTS）、Spring Boot 4.1.x、Spring AI 2.0.x（GA）、Spring MVC、Spring Data JPA、Spring Security（JWT 授權）、SpringDoc OpenAPI、Flyway。資料庫：PostgreSQL + pgvector（向量檢索，支撐 RAG 知識庫）。前端：React 19 + TypeScript 5 + Vite 7。AI 整合：Spring AI 的 Chat、Embedding、Tool Calling、RAG 與 ChatMemory。開發環境以 Windows + PowerShell 7+ 示範，macOS / Linux 也可比照操作。"}},
     {"@type":"Question","name":"這跟「Vibe Coding」有什麼不同？","acceptedAnswer":{"@type":"Answer","text":"Vibe Coding 能快速生出一個跑得動的雛形，但往往難以維護、難以擴充。本課程的重點是帶你用 AI 打造可維護、可上線的企業級系統——具備分層架構、資料庫、權限、RAG 與工具呼叫，而不只是一個 demo 雛形。"}},
     {"@type":"Question","name":"買了之後可以看多久？","acceptedAnswer":{"@type":"Answer","text":"購買後可不限次數、無限期觀看，課程更新也會免費同步給你。"}},
     {"@type":"Question","name":"完成課程後我會做出什麼？","acceptedAnswer":{"@type":"Answer","text":"一套可登入、可查客戶、可引用知識庫、可產生業務建議、可追蹤 AI 執行過程的企業級 AI CRM，並能在 Demo Day 完整跑通展示。"}}
@@ -605,7 +605,7 @@ details.accordion .acc-body {
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:30px;">
       <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid oklch(100% 0 0 / 0.2);background:oklch(100% 0 0 / 0.1);font-size:0.86rem;font-weight:700;">Java 21</span>
-      <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid oklch(100% 0 0 / 0.2);background:oklch(100% 0 0 / 0.1);font-size:0.86rem;font-weight:700;">Spring Boot 4.0</span>
+      <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid oklch(100% 0 0 / 0.2);background:oklch(100% 0 0 / 0.1);font-size:0.86rem;font-weight:700;">Spring Boot 4.1</span>
       <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid color-mix(in oklab, var(--accent-2) 60%, transparent);background:color-mix(in oklab, var(--accent-2) 22%, transparent);font-size:0.86rem;font-weight:800;">Spring AI 2.0</span>
       <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid oklch(100% 0 0 / 0.2);background:oklch(100% 0 0 / 0.1);font-size:0.86rem;font-weight:700;">Spring MVC</span>
       <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid oklch(100% 0 0 / 0.2);background:oklch(100% 0 0 / 0.1);font-size:0.86rem;font-weight:700;">Spring Data JPA</span>
@@ -1119,6 +1119,43 @@ details.accordion .acc-body {
       </figure>
     </section>
 
+    <!-- 課程內容最後補充：superpowers 技能 -->
+    <section>
+      <div class="section-title" id="superpowers">
+        <span class="eyebrow eyebrow-amber"><span aria-hidden="true">●</span> 課程內容最後補充</span>
+        <h2>真正開發時，靠 superpowers「規格先行」</h2>
+        <p class="lead">前面 8 個單元，是為了讓你真正理解「開發一套系統」從頭到尾的過程——有了這層 Domain Knowhow，你才有能力判斷 AI 產出的東西對不對。而實際動手時，我們會用 <strong>superpowers</strong> 這套 Claude Code 技能，先幫你把完整規格與計畫建構出來，再開始寫程式，而不是想到哪寫到哪。</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));gap:16px;">
+        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:10px;">
+          <span class="badge badge-accent" style="align-self:flex-start;">Step 1</span>
+          <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--accent);"><i data-lucide="lightbulb" style="width:20px;height:20px;"></i></span><strong>釐清需求與設計</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">用 brainstorming 技能，先把「到底要做什麼、為誰做、有哪些取捨」問清楚，而不是急著寫程式。</p>
+        </div>
+        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:10px;">
+          <span class="badge badge-accent" style="align-self:flex-start;">Step 2</span>
+          <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--accent);"><i data-lucide="file-text" style="width:20px;height:20px;"></i></span><strong>寫成完整規格與計畫</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">用 writing-plans 技能，把需求轉成一份可執行的實作計畫——拆成步驟、定義產出與驗收。</p>
+        </div>
+        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:10px;">
+          <span class="badge badge-accent" style="align-self:flex-start;">Step 3</span>
+          <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--accent);"><i data-lucide="code" style="width:20px;height:20px;"></i></span><strong>照計畫逐步開發</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">用 executing-plans 搭配 test-driven-development，讓 AI 照著計畫一步步實作，並用測試守住正確性。</p>
+        </div>
+        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:10px;">
+          <span class="badge badge-accent" style="align-self:flex-start;">Step 4</span>
+          <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--accent);"><i data-lucide="shield-check" style="width:20px;height:20px;"></i></span><strong>驗證與審查</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">用 verification-before-completion 與 code review 技能，在收工前確認真的做對、做完，而不是「看起來像對的」。</p>
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <div class="callout callout-accent">
+          <strong style="display:block;margin-bottom:8px;color:var(--fg);font-weight:800;">為什麼先教你手動走一遍？</strong>
+          因為「規格先行」的前提，是你得先懂系統長什麼樣、需求該怎麼拆。前 8 單元把這層基本功打穩，superpowers 才能真正幫你又快又穩地把系統做出來——這也是懂系統的人用 AI 開發，會比別人領先一大截的原因。
+        </div>
+      </div>
+    </section>
+
     <!-- 課程比較 -->
     <section>
       <div class="section-title">
@@ -1268,7 +1305,7 @@ details.accordion .acc-body {
       </div>
       <div style="display:grid;gap:12px;">
         <details class="accordion"><summary><span>這門課適合完全沒寫過 Java 的新手嗎？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">有基本 Java 語法與 REST API 概念會更好上手。不過若你對 AI 工具（如 Claude Code、Codex）已經熟悉，也能用 AI 輔助補足技術能力——課程會帶你建立完整的前後端知識與 domain knowhow，這正是新手最需要、也最能長期受用的部分。</div></details>
-        <details class="accordion"><summary><span>課程用的是哪些技術版本？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body"><strong>後端：</strong>Java 21（LTS）、Spring Boot 4.0.x、Spring AI 2.0.x（GA）、Spring MVC、Spring Data JPA、Spring Security。<br /><strong>資料庫：</strong>PostgreSQL + pgvector（向量檢索，支撐 RAG 知識庫）。<br /><strong>前端：</strong>React + TypeScript + Vite，搭配 Ant Design UI 框架。<br /><strong>AI 整合：</strong>Spring AI 的 Chat、Embedding、Tool Calling、RAG 與 ChatMemory。<br /><strong>開發環境：</strong>以 Windows + PowerShell 7+ 示範，macOS / Linux 也可比照操作。</div></details>
+        <details class="accordion"><summary><span>課程用的是哪些技術版本？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body"><strong>後端：</strong>Java 21（LTS）、Spring Boot 4.1.x、Spring AI 2.0.x（GA）、Spring MVC、Spring Data JPA、Spring Security（JWT 授權）、SpringDoc OpenAPI、Flyway。<br /><strong>資料庫：</strong>PostgreSQL + pgvector（向量檢索，支撐 RAG 知識庫）。<br /><strong>前端：</strong>React 19 + TypeScript 5 + Vite 7。<br /><strong>AI 整合：</strong>Spring AI 的 Chat、Embedding、Tool Calling、RAG 與 ChatMemory。<br /><strong>開發環境：</strong>以 Windows + PowerShell 7+ 示範，macOS / Linux 也可比照操作。</div></details>
         <details class="accordion"><summary><span>這跟「Vibe Coding」有什麼不同？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">Vibe Coding 能快速生出一個跑得動的雛形，但往往難以維護、難以擴充。本課程的重點是帶你用 AI 打造「<strong>可維護、可上線</strong>」的企業級系統——具備分層架構、資料庫、權限、RAG 與工具呼叫，而不只是一個 demo 雛形。</div></details>
         <details class="accordion"><summary><span>買了之後可以看多久？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">購買後可不限次數、無限期觀看，課程更新也會免費同步給你。</div></details>
         <details class="accordion"><summary><span>完成課程後我會做出什麼？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">一套可登入、可查客戶、可引用知識庫、可產生業務建議、可追蹤 AI 執行過程的企業級 AI CRM，並能在 Demo Day 完整跑通展示。</div></details>
