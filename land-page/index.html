@@ -3,6 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0d9488" />
+
+<!-- 預先連線第三方來源，縮短關鍵資源握手時間（改善 LCP / Core Web Vitals） -->
+<link rel="preconnect" href="https://springai-survey.zeabur.app" crossorigin />
+<link rel="preconnect" href="https://unpkg.com" crossorigin />
+<link rel="dns-prefetch" href="https://springai-survey.zeabur.app" />
+<link rel="dns-prefetch" href="https://unpkg.com" />
+
 <title>AI 賦能全端開發：從零打造企業級智慧應用 · 凱文大叔</title>
 <meta name="description" content="凱文大叔的《AI 賦能全端開發：從零打造企業級智慧應用》線上課程。使用 Spring Boot、Spring AI 與 React 實戰開發企業級 AI CRM，帶你掌握 RAG 知識庫、Tool Calling 與安全授權，將 AI Agent 真正落地於生產環境。" />
 <meta name="keywords" content="Spring AI, Spring Boot, React, AI 全端開發, AI CRM, RAG 知識庫, Tool Calling, 凱文大叔, Hahow, 企業級 AI 應用" />
@@ -16,13 +24,18 @@
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://springai.world/" />
 <meta property="og:image" content="https://springai.world/assets/cover.png" />
+<meta property="og:image:width" content="1806" />
+<meta property="og:image:height" content="871" />
+<meta property="og:image:alt" content="AI 賦能全端開發課程封面：Spring Boot + Spring AI + React 打造企業級 AI CRM" />
 <meta property="og:site_name" content="凱文大叔 AI 賦能全端開發" />
+<meta property="og:locale" content="zh_TW" />
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="AI 賦能全端開發：從零打造企業級智慧應用 · 凱文大叔" />
 <meta name="twitter:description" content="用一套 AI CRM 實戰專案，把 Spring Boot、Spring AI 與 React 串成可上線的企業級智慧應用。募資限定早鳥優惠中！" />
 <meta name="twitter:image" content="https://springai.world/assets/cover.png" />
+<meta name="twitter:image:alt" content="AI 賦能全端開發課程封面：Spring Boot + Spring AI + React 打造企業級 AI CRM" />
 
 <!-- JSON-LD Course 結構化資料 -->
 <script type="application/ld+json">
@@ -36,11 +49,34 @@
     "name": "凱文大叔",
     "sameAs": "https://springai.world/"
   },
+  "instructor": {
+    "@type": "Person",
+    "name": "凱文大叔",
+    "alternateName": "Uncle Kevin",
+    "description": "深耕 Java / Spring Boot 企業開發與 AI 落地教學的資深講師，《Spring AI》系列技術作者。",
+    "url": "https://springai.world/"
+  },
+  "hasCourseInstance": {
+    "@type": "CourseInstance",
+    "courseMode": "online",
+    "courseWorkload": "PT30H",
+    "inLanguage": "zh-Hant",
+    "offers": {
+      "@type": "Offer",
+      "price": "3680",
+      "priceCurrency": "TWD",
+      "category": "Paid",
+      "availability": "https://schema.org/PreOrder",
+      "url": "https://springai.world/"
+    }
+  },
   "offers": {
     "@type": "Offer",
     "price": "3680",
     "priceCurrency": "TWD",
-    "category": "Paid"
+    "category": "Paid",
+    "availability": "https://schema.org/PreOrder",
+    "url": "https://springai.world/"
   },
   "courseCode": "AI-FULL-STACK-01",
   "educationalLevel": "Intermediate",
@@ -63,9 +99,37 @@
 }
 </script>
 
+<!-- JSON-LD 講師評價結構化資料 — 真實彙總自 AmazingTalker 一對一教學（96 則、100% 五星） -->
+<!-- 評價歸屬於講師本人（Person），如實反映其教學評分，符合 Google 結構化資料政策 -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "name": "凱文大叔",
+  "alternateName": "Uncle Kevin",
+  "url": "https://springai.world/",
+  "jobTitle": "資深 Java / Spring AI 講師",
+  "description": "深耕 Java / Spring Boot 企業開發與 AI 落地教學的資深講師，《Spring AI》系列技術作者。",
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "5.0",
+    "bestRating": "5",
+    "worstRating": "1",
+    "ratingCount": "96",
+    "reviewCount": "96"
+  },
+  "review": [
+    {"@type":"Review","author":{"@type":"Person","name":"Pei"},"datePublished":"2023-11-22","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"今天體驗了 Java 程式語言課程，透過老師深入淺出的教學使初學者可以快速進入 Java 的世界。老師在業界非常資深並且教學沉穩、說明解析淺顯易懂，即使是第一次踏入程式設計領域的學生也能夠輕鬆上手，非常值得推薦給想要進修程式語言的學生！"},
+    {"@type":"Review","author":{"@type":"Person","name":"Jarren Huang"},"datePublished":"2024-01-27","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"上課講解得很清楚。今天原本根本不知道 API 是幹嘛的，到現在能使用 API 來擷取 server 內的內容並且使用在程式裡，在一堂課內教完。真的很讚！"},
+    {"@type":"Review","author":{"@type":"Person","name":"Evan"},"datePublished":"2024-05-12","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"A great teacher！我希望所有有需要的學生都能從這裡學到老師的經驗與技術，老師真的很熱情在分享！"},
+    {"@type":"Review","author":{"@type":"Person","name":"余旻嬨"},"datePublished":"2023-12-08","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"老師非常用心，還有自製教材，超級棒的老師！"}
+  ]
+}
+</script>
+
 <!-- 行銷追蹤碼 -->
 <!-- 行銷追蹤腳本由 survey-backend 動態提供（四組 ID 集中於 Zeabur 環境變數，與問卷頁共用同一份） -->
-<script src="https://springai-survey.zeabur.app/tracking.js"></script>
+<script src="https://springai-survey.zeabur.app/tracking.js" defer></script>
 
 <style>
 /* ── 設計系統 token fallback：讓銷售頁在純靜態部署時不依賴外部 _ds 目錄 ── */
@@ -118,7 +182,7 @@ body {
 html, body { max-width: 100%; overflow-x: hidden; }
 a { color: inherit; }
 h1, h2, h3, p, strong, span, a, button { overflow-wrap: anywhere; }
-img { max-width: 100%; }
+img { max-width: 100%; height: auto; }
 
 /* ── 元件 CSS classes（取代 React DS 元件） ── */
 
@@ -484,7 +548,7 @@ details.accordion .acc-body {
 <!-- ============================================================ -->
 <header style="position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:14px clamp(16px,4vw,56px);background:color-mix(in oklab, var(--surface) 88%, transparent);border-bottom:1px solid var(--border);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);">
   <div style="display:flex;align-items:center;gap:10px;font-weight:900;font-size:1.15rem;">
-    <img src="assets/logo.png" alt="凱文大叔" style="width:40px;height:40px;border-radius:var(--r-pill);flex:0 0 auto;" />
+    <img src="assets/logo.png" width="822" height="822" alt="凱文大叔" style="width:40px;height:40px;border-radius:var(--r-pill);flex:0 0 auto;" />
     <span style="color:var(--accent)">凱文</span>大叔
     <span style="font-size:0.72rem;font-weight:800;color:var(--muted-2);letter-spacing:0.16em;text-transform:uppercase;margin-left:4px">Uncle Kevin</span>
   </div>
@@ -497,6 +561,7 @@ details.accordion .acc-body {
     <a href="#instructor" class="nav-link">講師介紹</a>
     <a href="#faq" class="nav-link">常見問題</a>
     <a href="https://springai-survey.zeabur.app/" class="nav-link">課程調查</a>
+    <a href="https://ai-crm.springai.world" class="nav-link" target="_blank" rel="noopener" style="color:var(--accent-deep);font-weight:800;">🚀 線上體驗</a>
   </nav>
   <style>
     .nav-link { padding:8px 14px; border-radius:var(--r-pill); text-decoration:none; color:var(--muted); font-weight:700; font-size:0.94rem; transition: background var(--dur-fast), color var(--dur-fast); }
@@ -510,7 +575,7 @@ details.accordion .acc-body {
 <!-- ============================================================ -->
 <section style="position:relative;overflow:hidden;color:#fff;">
   <div style="position:absolute;inset:0;">
-    <img src="assets/promo/hero-ai-full-stack.png" alt="" style="width:100%;height:100%;object-fit:cover;opacity:0.34;mix-blend-mode:luminosity;" />
+    <img src="assets/promo/hero-ai-full-stack.png" width="1672" height="941" alt="" style="width:100%;height:100%;object-fit:cover;opacity:0.34;mix-blend-mode:luminosity;" />
   </div>
   <div style="position:absolute;inset:0;background:linear-gradient(120deg, oklch(18% 0.04 248 / 0.96) 0%, oklch(24% 0.05 242 / 0.9) 52%, oklch(34% 0.07 232 / 0.72) 100%);"></div>
   <div style="position:relative;max-width:1100px;margin:0 auto;padding:clamp(48px,7vw,88px) clamp(16px,4vw,56px);">
@@ -559,7 +624,7 @@ details.accordion .acc-body {
       <figure class="promo-visual section-visual is-mobile-art">
         <picture>
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/tech-stack-map-mobile.png" />
-          <img src="assets/promo/tech-stack-map.png" alt="企業級 AI 全端技術棧：React、Spring Boot、Security、JPA、PostgreSQL、Spring AI、RAG 與 Tool Calling 串成完整系統。" loading="lazy" />
+          <img src="assets/promo/tech-stack-map.png" width="1672" height="941" alt="企業級 AI 全端技術棧：React、Spring Boot、Security、JPA、PostgreSQL、Spring AI、RAG 與 Tool Calling 串成完整系統。" loading="lazy" />
         </picture>
       </figure>
       <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:16px;">
@@ -626,14 +691,14 @@ details.accordion .acc-body {
         <figure class="promo-visual is-mobile-art">
           <picture>
             <source media="(max-width: 560px)" srcset="assets/promo/mobile/feature-tool-calling-mobile.png" />
-            <img src="assets/promo/feature-tool-calling.png" alt="Tool Calling 概念圖：AI 透過 Java Service 讀取 CRM 真實資料，再產生可信任建議。" loading="lazy" />
+            <img src="assets/promo/feature-tool-calling.png" width="1672" height="941" alt="Tool Calling 概念圖：AI 透過 Java Service 讀取 CRM 真實資料，再產生可信任建議。" loading="lazy" />
           </picture>
           <figcaption class="visual-caption"><strong>讓 AI 有工程邊界</strong>金額、權限與狀態由系統計算，模型負責摘要與建議，避免 Demo 看起來炫但不能上線。</figcaption>
         </figure>
         <figure class="promo-visual is-mobile-art">
           <picture>
             <source media="(max-width: 560px)" srcset="assets/promo/mobile/feature-rag-knowledge-mobile.png" />
-            <img src="assets/promo/feature-rag-knowledge.png" alt="RAG 知識庫流程圖：文件切片、Embedding、pgvector 檢索、引用來源與可靠回答。" loading="lazy" />
+            <img src="assets/promo/feature-rag-knowledge.png" width="1672" height="941" alt="RAG 知識庫流程圖：文件切片、Embedding、pgvector 檢索、引用來源與可靠回答。" loading="lazy" />
           </picture>
           <figcaption class="visual-caption"><strong>讓回答能追溯來源</strong>用 pgvector 與 RAG 把產品文件、服務條款、銷售話術變成 AI 可引用的知識庫。</figcaption>
         </figure>
@@ -671,7 +736,7 @@ details.accordion .acc-body {
       <figure class="promo-visual section-visual is-mobile-art">
         <picture>
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/market-advantage-mobile.png" />
-          <img src="assets/promo/market-advantage.png" alt="AI 工程師市場優勢資訊圖：AI 應用落地、全端整合能力、企業級架構與從 Demo 到可上線。" loading="lazy" />
+          <img src="assets/promo/market-advantage.png" width="1672" height="941" alt="AI 工程師市場優勢資訊圖：AI 應用落地、全端整合能力、企業級架構與從 Demo 到可上線。" loading="lazy" />
         </picture>
       </figure>
     </section>
@@ -686,7 +751,7 @@ details.accordion .acc-body {
       <figure class="promo-visual promo-visual-dark section-visual is-mobile-art">
         <picture>
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/career-boost-mobile.png" />
-          <img src="assets/promo/career-boost.png" alt="後端工程師升級為 AI 全端工程師的職涯加速視覺，包含作品集、企業級 AI 專案與成長曲線。" loading="lazy" />
+          <img src="assets/promo/career-boost.png" width="1672" height="941" alt="後端工程師升級為 AI 全端工程師的職涯加速視覺，包含作品集、企業級 AI 專案與成長曲線。" loading="lazy" />
         </picture>
       </figure>
       <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:16px;">
@@ -749,7 +814,7 @@ details.accordion .acc-body {
       <figure class="promo-visual section-visual is-mobile-art">
         <picture>
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/audience-fit-mobile.png" />
-          <img src="assets/promo/audience-fit.png" alt="適合對象圖卡：Java 工程師、後端工程師、前端工程師與技術主管都能透過 AI CRM 專案補齊企業級 AI 全端能力。" loading="lazy" />
+          <img src="assets/promo/audience-fit.png" width="1672" height="941" alt="適合對象圖卡：Java 工程師、後端工程師、前端工程師與技術主管都能透過 AI CRM 專案補齊企業級 AI 全端能力。" loading="lazy" />
         </picture>
       </figure>
       <div style="display:grid;gap:12px;">
@@ -787,7 +852,7 @@ details.accordion .acc-body {
       </div>
       <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:22px;align-items:stretch;" class="hc-project">
         <div class="ai-crm-hero-shot">
-          <img src="assets/ai-crm/dashboard-full.png" alt="AI CRM 真實工作台畫面：Dashboard 報表、客戶列表、AI 助理與 Agent Trace 同頁呈現。" loading="lazy" />
+          <img src="assets/ai-crm/dashboard-full.png" width="1440" height="3095" alt="AI CRM 真實工作台畫面：Dashboard 報表、客戶列表、AI 助理與 Agent Trace 同頁呈現。" loading="lazy" />
           <div class="ai-crm-shot-caption">
             <div>
               <strong>這是課程實際會做出的 AI CRM 工作台</strong>
@@ -820,25 +885,25 @@ details.accordion .acc-body {
         </div>
         <div class="ai-crm-chart-grid">
           <figure class="ai-crm-chart-card">
-            <img src="assets/ai-crm/charts/pipeline-funnel.png" alt="AI CRM 銷售漏斗圖表截圖" loading="lazy" />
+            <img src="assets/ai-crm/charts/pipeline-funnel.png" width="525" height="319" alt="AI CRM 銷售漏斗圖表截圖" loading="lazy" />
             <figcaption class="visual-caption"><strong>銷售漏斗 Pipeline</strong>階段金額、筆數與下鑽入口，展示 CRM 報表不是只有數字卡。</figcaption>
           </figure>
           <figure class="ai-crm-chart-card">
-            <img src="assets/ai-crm/charts/monthly-forecast.png" alt="AI CRM 月度營收 Forecast 圖表截圖" loading="lazy" />
+            <img src="assets/ai-crm/charts/monthly-forecast.png" width="525" height="319" alt="AI CRM 月度營收 Forecast 圖表截圖" loading="lazy" />
             <figcaption class="visual-caption"><strong>月度營收 Forecast</strong>營收趨勢圖可點月份查看底層商機。</figcaption>
           </figure>
           <figure class="ai-crm-chart-card">
-            <img src="assets/ai-crm/charts/risk-breakdown.png" alt="AI CRM 客戶風險結構圖表截圖" loading="lazy" />
+            <img src="assets/ai-crm/charts/risk-breakdown.png" width="256" height="449" alt="AI CRM 客戶風險結構圖表截圖" loading="lazy" />
             <figcaption class="visual-caption"><strong>客戶風險結構</strong>高、中、低風險客戶分布可直接連到客戶明細。</figcaption>
           </figure>
         </div>
         <div class="ai-crm-interaction-grid">
           <figure class="promo-visual">
-            <img src="assets/ai-crm/interactions/chart-drilldown-open.png" alt="AI CRM 圖表下鑽互動截圖：點擊銷售漏斗後開啟底層商機明細。" loading="lazy" />
+            <img src="assets/ai-crm/interactions/chart-drilldown-open.png" width="760" height="564" alt="AI CRM 圖表下鑽互動截圖：點擊銷售漏斗後開啟底層商機明細。" loading="lazy" />
             <figcaption class="visual-caption"><strong>圖表互動下鑽</strong>點擊圖表段落後，直接展開底層客戶與商機，適合放進宣傳頁說明「能操作」。</figcaption>
           </figure>
           <figure class="promo-visual">
-            <img src="assets/ai-crm/interactions/ai-chat-response.png" alt="AI CRM AI 助理聊天互動截圖" loading="lazy" />
+            <img src="assets/ai-crm/interactions/ai-chat-response.png" width="420" height="600" alt="AI CRM AI 助理聊天互動截圖" loading="lazy" />
             <figcaption class="visual-caption"><strong>AI 助理對話</strong>浮動聊天視窗展示 RAG、Tool Calling 與客戶風險分析流程。</figcaption>
           </figure>
         </div>
@@ -856,12 +921,12 @@ details.accordion .acc-body {
           <figcaption class="visual-caption"><strong>AI CRM 實機操作影片</strong>直接展示 React CRM 工作台從報表、客戶資料到 AI 助理的操作流程，讓訪客不用只看截圖就能理解完課作品會如何運作。</figcaption>
         </figure>
         <div class="ai-crm-poster-grid" aria-label="Hahow 直式宣傳圖稿">
-          <img src="assets/ai-crm/hahow-style-vertical/01-ai-crm-system-map.png" alt="Hahow 直式文宣：AI CRM 貫穿全端開發作品主軸。" loading="lazy" />
-          <img src="assets/ai-crm/hahow-style-vertical/02-eight-unit-roadmap.png" alt="Hahow 直式文宣：8 大單元章章接到同一套專案。" loading="lazy" />
-          <img src="assets/ai-crm/hahow-style-vertical/03-interactive-dashboard.png" alt="Hahow 直式文宣：CRM 圖表可下鑽操作與互動展示。" loading="lazy" />
-          <img src="assets/ai-crm/hahow-style-vertical/04-rag-tool-calling.png" alt="Hahow 直式文宣：RAG 與 Tool Calling 讓 AI 回答接回真實資料。" loading="lazy" />
-          <img src="assets/ai-crm/hahow-style-vertical/05-ai-agent-workflow.png" alt="Hahow 直式文宣：AI 協作開發與工程驗收流程。" loading="lazy" />
-          <img src="assets/ai-crm/hahow-style-vertical/06-demo-day-outcome.png" alt="Hahow 直式文宣：Demo Day 結訓作品與端到端展示成果。" loading="lazy" />
+          <img src="assets/ai-crm/hahow-style-vertical/01-ai-crm-system-map.png" width="1000" height="1777" alt="Hahow 直式文宣：AI CRM 貫穿全端開發作品主軸。" loading="lazy" />
+          <img src="assets/ai-crm/hahow-style-vertical/02-eight-unit-roadmap.png" width="1000" height="1777" alt="Hahow 直式文宣：8 大單元章章接到同一套專案。" loading="lazy" />
+          <img src="assets/ai-crm/hahow-style-vertical/03-interactive-dashboard.png" width="1000" height="1777" alt="Hahow 直式文宣：CRM 圖表可下鑽操作與互動展示。" loading="lazy" />
+          <img src="assets/ai-crm/hahow-style-vertical/04-rag-tool-calling.png" width="1000" height="1777" alt="Hahow 直式文宣：RAG 與 Tool Calling 讓 AI 回答接回真實資料。" loading="lazy" />
+          <img src="assets/ai-crm/hahow-style-vertical/05-ai-agent-workflow.png" width="1000" height="1777" alt="Hahow 直式文宣：AI 協作開發與工程驗收流程。" loading="lazy" />
+          <img src="assets/ai-crm/hahow-style-vertical/06-demo-day-outcome.png" width="1000" height="1777" alt="Hahow 直式文宣：Demo Day 結訓作品與端到端展示成果。" loading="lazy" />
         </div>
       </div>
     </section>
@@ -876,7 +941,7 @@ details.accordion .acc-body {
       <figure class="promo-visual section-visual is-mobile-art">
         <picture>
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/curriculum-roadmap-mobile.png" />
-          <img src="assets/promo/curriculum-roadmap.png" alt="8 大單元課程路線圖：環境與骨架、REST API、JPA 與資料庫、Security + JWT、React CRM、Spring AI、RAG + MCP、Demo Day。" loading="lazy" />
+          <img src="assets/promo/curriculum-roadmap.png" width="1672" height="941" alt="8 大單元課程路線圖：環境與骨架、REST API、JPA 與資料庫、Security + JWT、React CRM、Spring AI、RAG + MCP、Demo Day。" loading="lazy" />
         </picture>
       </figure>
       <div style="display:grid;gap:12px;">
@@ -988,7 +1053,7 @@ details.accordion .acc-body {
       <figure class="promo-visual promo-visual-dark section-visual is-mobile-art">
         <picture>
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/demo-day-flow-mobile.png" />
-          <img src="assets/promo/demo-day-flow.png" alt="Demo Day 完整流程圖：登入、客戶、AI、RAG、Swagger，完整跑通 AI CRM 結訓專案。" loading="lazy" />
+          <img src="assets/promo/demo-day-flow.png" width="1672" height="941" alt="Demo Day 完整流程圖：登入、客戶、AI、RAG、Swagger，完整跑通 AI CRM 結訓專案。" loading="lazy" />
         </picture>
       </figure>
     </section>
@@ -1003,7 +1068,7 @@ details.accordion .acc-body {
       <figure class="promo-visual section-visual is-mobile-art">
         <picture>
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/course-comparison-mobile.png" />
-          <img src="assets/promo/course-comparison.png" alt="課程比較圖：一般 LLM API 課、一般 Spring Boot 課與本課程的完整 AI CRM、RAG + Tool Calling、React 工作台、Demo Day 作品差異。" loading="lazy" />
+          <img src="assets/promo/course-comparison.png" width="1672" height="941" alt="課程比較圖：一般 LLM API 課、一般 Spring Boot 課與本課程的完整 AI CRM、RAG + Tool Calling、React 工作台、Demo Day 作品差異。" loading="lazy" />
         </picture>
       </figure>
       <div class="card-solid" style="overflow:auto;box-shadow:var(--shadow-sm);padding:0;">
@@ -1031,37 +1096,77 @@ details.accordion .acc-body {
     <!-- 學員好評 -->
     <section>
       <div class="section-title" id="testimonials">
-        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 學員迴響</span>
-        <h2>他們學完之後，職涯這樣改變</h2>
-        <p class="lead">來自不同背景的學員，分享他們的真實學習體驗與職涯轉變。</p>
+        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 學員真實評價</span>
+        <h2>學員怎麼說凱文大叔的教學</h2>
+        <p class="lead">以下評價來自凱文大叔在 <strong>AmazingTalker</strong> 一對一程式設計教學的真實學員回饋。截至目前累積 <strong>96 則評價、滿意度 100%（全數五星）</strong>，原汁原味呈現。</p>
       </div>
-      <figure class="promo-visual section-visual is-mobile-art">
-        <picture>
-          <source media="(max-width: 560px)" srcset="assets/promo/mobile/learning-workspace-mobile.png" />
-          <img src="assets/promo/learning-workspace.png" alt="線上學習情境：桌面上同時顯示課程影片、Spring Boot 程式碼、React CRM 預覽與 PowerShell 指令筆記。" loading="lazy" />
-        </picture>
-      </figure>
+      <!-- 評分總覽：來自 AmazingTalker 的真實彙總數據 -->
+      <div class="card-solid" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px 28px;padding:18px 24px;margin-bottom:18px;box-shadow:var(--shadow-sm);text-align:center;">
+        <div style="display:flex;align-items:baseline;gap:8px;"><strong style="font-size:2.2rem;line-height:1;color:var(--accent-2-deep);">5.0</strong><span style="color:var(--warning);font-size:1.15rem;letter-spacing:2px;">★★★★★</span></div>
+        <div style="font-size:0.92rem;color:var(--muted);font-weight:700;">96 則真實評價 · 滿意度 100%</div>
+        <a href="https://tw.amazingtalker.com/teachers-and-tutors/kevin-tsai-f935b320-3fa1-4aa3-95cf-20d9c619b914?review_panel_visible=true" target="_blank" rel="noopener" style="font-size:0.86rem;color:var(--accent-deep);font-weight:800;text-decoration:underline;">在 AmazingTalker 查看全部評價 →</a>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));gap:16px;">
-        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
-          <div style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:48px;height:48px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.5rem;">🧑‍💻</span><div><strong style="font-size:1.02rem;">陳同學</strong><div style="font-size:0.82rem;color:var(--accent);font-weight:700;margin-top:2px;">後端工程師 → AI 全端工程師</div></div></div>
-          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「之前只會寫 REST API，學完這門課後成功在面試中展示自己的 AI CRM 專案，順利拿到年薪加 30% 的 offer。課程的 RAG 與 Tool Calling 實戰幫了大忙。」</p>
-          <div style="display:flex;gap:3px;color:var(--warning);">★★★★★</div>
-        </div>
-        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
-          <div style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:48px;height:48px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.5rem;">👨‍💼</span><div><strong style="font-size:1.02rem;">林同學</strong><div style="font-size:0.82rem;color:var(--accent);font-weight:700;margin-top:2px;">資深 Java 工程師</div></div></div>
-          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「公司正在導入 AI，但團隊不知道怎麼把 LLM 放進現有的 Spring Boot 系統。上完課後我直接帶著課程架構提案，成功推動部門的 AI 轉型專案。」</p>
-          <div style="display:flex;gap:3px;color:var(--warning);">★★★★★</div>
-        </div>
-        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
-          <div style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:48px;height:48px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.5rem;">👩‍🎓</span><div><strong style="font-size:1.02rem;">張同學</strong><div style="font-size:0.82rem;color:var(--accent);font-weight:700;margin-top:2px;">轉職者（非本科）</div></div></div>
-          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「有 Java 基礎但不知道怎麼串成完整產品。這門課從環境建置到 Demo Day 一條龍帶完，結訓作品讓我在求職時非常有底氣。」</p>
-          <div style="display:flex;gap:3px;color:var(--warning);">★★★★★</div>
-        </div>
-        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
-          <div style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:48px;height:48px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.5rem;">🧑‍🎨</span><div><strong style="font-size:1.02rem;">王同學</strong><div style="font-size:0.82rem;color:var(--accent);font-weight:700;margin-top:2px;">前端工程師</div></div></div>
-          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「一直想補強後端和 AI，但怕學太散。這門課用同一套專案把所有技術串起來，終於理解前後端整合和 AI 落地的全貌。」</p>
-          <div style="display:flex;gap:3px;color:var(--warning);">★★★★★</div>
-        </div>
+        <figure class="card-solid card-hover" style="margin:0;padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:3px;color:var(--warning);" aria-label="五星好評">★★★★★</div>
+          <blockquote style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「今天體驗了 Java 程式語言課程，透過老師深入淺出的教學使初學者可以快速進入 Java 的世界。老師在業界非常資深並且教學沉穩、說明解析淺顯易懂，即使是第一次踏入程式設計領域的學生也能夠輕鬆上手，非常值得推薦給想要進修程式語言的學生！」</blockquote>
+          <figcaption style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:42px;height:42px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.25rem;">🧑‍💻</span><div><strong style="font-size:0.98rem;">Pei</strong><div style="font-size:0.8rem;color:var(--accent);font-weight:700;margin-top:2px;">AmazingTalker 學員 · 2023.11</div></div></figcaption>
+        </figure>
+        <figure class="card-solid card-hover" style="margin:0;padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:3px;color:var(--warning);" aria-label="五星好評">★★★★★</div>
+          <blockquote style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「上課講解得很清楚。今天原本根本不知道 API 是幹嘛的，到現在能使用 API 來擷取 server 內的內容並且使用在程式裡，在一堂課內教完。真的很讚！」</blockquote>
+          <figcaption style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:42px;height:42px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.25rem;">👨‍💻</span><div><strong style="font-size:0.98rem;">Jarren Huang</strong><div style="font-size:0.8rem;color:var(--accent);font-weight:700;margin-top:2px;">AmazingTalker 學員 · 2024.01</div></div></figcaption>
+        </figure>
+        <figure class="card-solid card-hover" style="margin:0;padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:3px;color:var(--warning);" aria-label="五星好評">★★★★★</div>
+          <blockquote style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「A great teacher！我希望所有有需要的學生都能從這裡學到老師的經驗與技術，老師真的很熱情在分享！」</blockquote>
+          <figcaption style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:42px;height:42px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.25rem;">🧑‍🎓</span><div><strong style="font-size:0.98rem;">Evan</strong><div style="font-size:0.8rem;color:var(--accent);font-weight:700;margin-top:2px;">AmazingTalker 學員 · 2024.05</div></div></figcaption>
+        </figure>
+        <figure class="card-solid card-hover" style="margin:0;padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:3px;color:var(--warning);" aria-label="五星好評">★★★★★</div>
+          <blockquote style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「很謝謝 Kevin 老師很詳細地跟我講解 error handling 跟 exception 的部分，收穫很多。」</blockquote>
+          <figcaption style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:42px;height:42px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.25rem;">👩‍💻</span><div><strong style="font-size:0.98rem;">Tanya Lin</strong><div style="font-size:0.8rem;color:var(--accent);font-weight:700;margin-top:2px;">AmazingTalker 學員 · 2024.07</div></div></figcaption>
+        </figure>
+        <figure class="card-solid card-hover" style="margin:0;padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:3px;color:var(--warning);" aria-label="五星好評">★★★★★</div>
+          <blockquote style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「老師非常用心，還有自製教材，超級棒的老師！」</blockquote>
+          <figcaption style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:42px;height:42px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.25rem;">🧑‍🎓</span><div><strong style="font-size:0.98rem;">余旻嬨</strong><div style="font-size:0.8rem;color:var(--accent);font-weight:700;margin-top:2px;">AmazingTalker 學員 · 2023.12</div></div></figcaption>
+        </figure>
+        <figure class="card-solid card-hover" style="margin:0;padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:3px;color:var(--warning);" aria-label="五星好評">★★★★★</div>
+          <blockquote style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「很有經驗的業師，可以加強我工作上的 Java 技能，等我學會後可以回公司電老鳥了。」</blockquote>
+          <figcaption style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:42px;height:42px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.25rem;">👩‍💼</span><div><strong style="font-size:0.98rem;">Ivy</strong><div style="font-size:0.8rem;color:var(--accent);font-weight:700;margin-top:2px;">AmazingTalker 學員 · 2023.11</div></div></figcaption>
+        </figure>
+        <figure class="card-solid card-hover" style="margin:0;padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:3px;color:var(--warning);" aria-label="五星好評">★★★★★</div>
+          <blockquote style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「老師給了很多實用的建議！講的內容也非常完整，了解到很多新知識！」</blockquote>
+          <figcaption style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:42px;height:42px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.25rem;">🧑‍💻</span><div><strong style="font-size:0.98rem;">李昀恩</strong><div style="font-size:0.8rem;color:var(--accent);font-weight:700;margin-top:2px;">AmazingTalker 學員 · 2024.10</div></div></figcaption>
+        </figure>
+        <figure class="card-solid card-hover" style="margin:0;padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:3px;color:var(--warning);" aria-label="五星好評">★★★★★</div>
+          <blockquote style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「老師上課教學認真，且口條清楚，能給予正確的學習方向，並且安排規劃課程。期待接下來的課程內容！」</blockquote>
+          <figcaption style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:42px;height:42px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.25rem;">🧑‍🎓</span><div><strong style="font-size:0.98rem;">學員回饋</strong><div style="font-size:0.8rem;color:var(--accent);font-weight:700;margin-top:2px;">AmazingTalker 學員 · 2024.01</div></div></figcaption>
+        </figure>
+        <figure class="card-solid card-hover" style="margin:0;padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:3px;color:var(--warning);" aria-label="五星好評">★★★★★</div>
+          <blockquote style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「老師非常專業，給了很多實際且有用的建議。」</blockquote>
+          <figcaption style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:42px;height:42px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.25rem;">👨‍💻</span><div><strong style="font-size:0.98rem;">王采惟</strong><div style="font-size:0.8rem;color:var(--accent);font-weight:700;margin-top:2px;">AmazingTalker 學員 · 2024.06</div></div></figcaption>
+        </figure>
+        <figure class="card-solid card-hover" style="margin:0;padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:3px;color:var(--warning);" aria-label="五星好評">★★★★★</div>
+          <blockquote style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「老師會依需求建議學習方向，也會提供詳細的課程教材內容。」</blockquote>
+          <figcaption style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:42px;height:42px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.25rem;">🧑‍💻</span><div><strong style="font-size:0.98rem;">Jeffrey Lin</strong><div style="font-size:0.8rem;color:var(--accent);font-weight:700;margin-top:2px;">AmazingTalker 學員 · 2023.12</div></div></figcaption>
+        </figure>
+        <figure class="card-solid card-hover" style="margin:0;padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:3px;color:var(--warning);" aria-label="五星好評">★★★★★</div>
+          <blockquote style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「老師針對 JAVA 後端給予了很多建議，也介紹了框架！」</blockquote>
+          <figcaption style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:42px;height:42px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.25rem;">👨‍💻</span><div><strong style="font-size:0.98rem;">陳律安</strong><div style="font-size:0.8rem;color:var(--accent);font-weight:700;margin-top:2px;">AmazingTalker 學員 · 2024.11</div></div></figcaption>
+        </figure>
+        <figure class="card-solid card-hover" style="margin:0;padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;gap:3px;color:var(--warning);" aria-label="五星好評">★★★★★</div>
+          <blockquote style="margin:0;color:var(--muted);line-height:1.85;font-size:0.92rem;font-style:italic;flex:1;">「老師是業界講師，非常有經驗，非常值得推薦。」</blockquote>
+          <figcaption style="display:flex;align-items:center;gap:12px;"><span style="display:grid;place-items:center;width:42px;height:42px;border-radius:var(--r-pill);background:color-mix(in oklab, var(--accent-2) 15%, var(--surface));font-size:1.25rem;">🧑‍🎓</span><div><strong style="font-size:0.98rem;">學員回饋</strong><div style="font-size:0.8rem;color:var(--accent);font-weight:700;margin-top:2px;">AmazingTalker 學員 · 2023.12</div></div></figcaption>
+        </figure>
       </div>
     </section>
 
@@ -1073,7 +1178,7 @@ details.accordion .acc-body {
       </div>
       <div class="card-solid hc-instructor" style="overflow:hidden;padding:0;display:grid;grid-template-columns:300px 1fr;">
         <div style="background:linear-gradient(150deg, oklch(34% 0.07 232), oklch(22% 0.04 248));display:grid;place-items:center;padding:28px;">
-          <img src="assets/logo.png" alt="凱文大叔" style="width:156px;height:156px;border-radius:var(--r-pill);border:2px solid oklch(100% 0 0 / 0.3);background:oklch(100% 0 0 / 0.06);" />
+          <img src="assets/logo.png" width="822" height="822" alt="凱文大叔" style="width:156px;height:156px;border-radius:var(--r-pill);border:2px solid oklch(100% 0 0 / 0.3);background:oklch(100% 0 0 / 0.06);" />
         </div>
         <div style="padding:28px 30px;">
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -1110,7 +1215,7 @@ details.accordion .acc-body {
     <section>
       <div class="card-solid" style="overflow:hidden;position:relative;color:#fff;border:none;padding:0;border-radius:var(--r-lg);">
         <div style="position:absolute;inset:0;">
-          <img src="assets/promo/early-bird-cta.png" alt="" style="width:100%;height:100%;object-fit:cover;opacity:0.28;mix-blend-mode:luminosity;" loading="lazy" />
+          <img src="assets/promo/early-bird-cta.png" width="1672" height="941" alt="" style="width:100%;height:100%;object-fit:cover;opacity:0.28;mix-blend-mode:luminosity;" loading="lazy" />
         </div>
         <div style="position:absolute;inset:0;background:linear-gradient(120deg, oklch(24% 0.06 248 / 0.94), oklch(42% 0.1 240 / 0.82));"></div>
         <div style="position:relative;padding:clamp(32px,5vw,56px);text-align:center;">
@@ -1135,7 +1240,7 @@ details.accordion .acc-body {
   <aside class="hc-aside">
     <div class="card-solid purchase-card" style="overflow:hidden;padding:0;">
       <div style="position:relative;">
-        <img src="assets/promo/hero-ai-full-stack.png" alt="課程封面" style="width:100%;height:168px;object-fit:cover;" />
+        <img src="assets/promo/hero-ai-full-stack.png" width="1672" height="941" alt="課程封面" style="width:100%;height:168px;object-fit:cover;" />
         <button onclick="enroll('purchase_card_play')" aria-label="播放試看" style="position:absolute;inset:0;margin:auto;width:58px;height:58px;border-radius:var(--r-pill);border:none;cursor:pointer;background:color-mix(in oklab, var(--accent) 92%, black);color:#fff;display:grid;place-items:center;box-shadow:var(--shadow-lift);">
           <i data-lucide="play" style="width:24px;height:24px;margin-left:3px;"></i>
         </button>
