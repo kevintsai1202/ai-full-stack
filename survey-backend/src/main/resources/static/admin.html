@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>寄信後台 · AI 賦能全端開發</title>
+<style>
+  :root{ --bg:#f7fafc; --fg:#102033; --muted:#5c6b7d; --border:#dfe6ee; --surface:#fff; --surface-2:#eef3f8;
+         --accent:#0d9488; --accent-deep:#0f766e; --accent-soft:#d9f3ef; --amber:#f59e0b; --danger:#dc2626;
+         --r:12px; --font:system-ui,-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);color:var(--fg);background:var(--bg);line-height:1.7}
+  .wrap{max-width:860px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:1.5rem;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 24px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:20px}
+  .card h2{font-size:1.05rem;margin:0 0 14px}
+  label{display:block;font-weight:700;margin:12px 0 6px;font-size:.92rem}
+  input[type=text],input[type=email],input[type=datetime-local],select,textarea{
+    width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:.98rem;font-family:inherit;background:#fff;color:var(--fg)}
+  textarea{min-height:180px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .row>div{flex:1;min-width:160px}
+  .btn{padding:10px 18px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-weight:800;cursor:pointer;font-size:.96rem}
+  .btn:hover{background:var(--accent-deep)} .btn:disabled{opacity:.55;cursor:not-allowed}
+  .btn.ghost{background:var(--surface-2);color:var(--accent-deep)}
+  .btn.danger{background:var(--danger)}
+  .count{font-weight:800;color:var(--accent-deep);font-size:1.1rem}
+  iframe.preview{width:100%;height:360px;border:1px solid var(--border);border-radius:8px;background:#fff}
+  .msg{margin-top:12px;padding:10px 12px;border-radius:8px;display:none}
+  .msg.ok{display:block;background:var(--accent-soft);color:var(--accent-deep)}
+  .msg.err{display:block;background:#fde8e8;color:var(--danger)}
+  .gate{position:fixed;inset:0;background:rgba(16,32,51,.6);display:flex;align-items:center;justify-content:center;z-index:50}
+  .gate .box{background:#fff;border-radius:var(--r);padding:28px;max-width:380px;width:90%}
+  table{width:100%;border-collapse:collapse;font-size:.9rem}
+  th,td{text-align:left;padding:8px;border-bottom:1px solid var(--border)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.78rem;font-weight:700}
+  .pill.scheduled{background:var(--accent-soft);color:var(--accent-deep)}
+  .pill.sent{background:#dcfce7;color:#166534}
+  .pill.sending{background:#fff2cc;color:#92580a}
+  .pill.failed{background:#fde8e8;color:var(--danger)}
+  .pill.cancelled{background:var(--surface-2);color:var(--muted)}
+  .hint{color:var(--muted);font-size:.85rem}
+  .warn{color:var(--amber);font-weight:700}
+</style>
+</head>
+<body>
+<!-- 金鑰閘門：未驗證前覆蓋整頁 -->
+<div class="gate" id="gate">
+  <div class="box">
+    <h2 style="margin-top:0">輸入管理金鑰</h2>
+    <p class="hint">需 X-Admin-Key 才能進入寄信後台。金鑰只存於本分頁（sessionStorage）。</p>
+    <input type="text" id="gate-key" placeholder="X-Admin-Key" autocomplete="off">
+    <div class="msg err" id="gate-msg"></div>
+    <button class="btn" id="gate-btn" style="margin-top:14px;width:100%">進入</button>
+  </div>
+</div>
+
+<div class="wrap" id="app" hidden>
+  <h1>寄信後台</h1>
+  <p class="sub">撰寫並發送課程電子報。每封信會自動帶上該收件人的退訂連結。</p>
+
+  <div class="card">
+    <h2>① 撰寫</h2>
+    <label for="subject">主旨</label>
+    <input type="text" id="subject" placeholder="電子報主旨">
+    <label for="markdown">內文（Markdown）</label>
+    <textarea id="markdown" placeholder="# 標題&#10;&#10;支援 **粗體**、清單、[連結](https://...)"></textarea>
+    <button class="btn ghost" id="preview-btn" style="margin-top:12px">更新預覽</button>
+    <div class="msg err" id="compose-msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>② 預覽</h2>
+    <iframe class="preview" id="preview" title="預覽"></iframe>
+  </div>
+
+  <div class="card">
+    <h2>③ 發送對象</h2>
+    <div class="row">
+      <div>
+        <label for="role">身分（不限留空）</label>
+        <select id="role"><option value="">不限</option></select>
+      </div>
+      <div>
+        <label for="interest">想學主題（不限留空）</label>
+        <select id="interest"><option value="">不限</option></select>
+      </div>
+    </div>
+    <p style="margin:14px 0 0">將寄給 <span class="count" id="rcount">—</span> 人　<button class="btn ghost" id="rcount-btn">更新人數</button></p>
+    <p class="hint" id="rsample"></p>
+    <p class="warn" id="quota-warn" hidden>⚠️ 超過每日 100 封額度，超量部分會失敗。</p>
+  </div>
+
+  <div class="card">
+    <h2>④ 測試寄送（寄給自己）</h2>
+    <div class="row">
+      <div><input type="email" id="test-to" placeholder="your@email.com"></div>
+      <div style="flex:0"><button class="btn ghost" id="test-btn">寄測試信</button></div>
+    </div>
+    <div class="msg" id="test-msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>⑤ 發送</h2>
+    <div class="row" style="align-items:center">
+      <div style="flex:0">
+        <label style="display:inline;font-weight:400"><input type="radio" name="mode" value="now" checked> 立即發送</label>
+        <label style="display:inline;font-weight:400;margin-left:14px"><input type="radio" name="mode" value="schedule"> 排程</label>
+      </div>
+      <div><input type="datetime-local" id="sched" disabled></div>
+    </div>
+    <button class="btn" id="send-btn" style="margin-top:14px">發送</button>
+    <div class="msg" id="send-msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>⑥ 寄送歷史　<button class="btn ghost" id="hist-btn">重新整理</button></h2>
+    <table id="hist"><thead><tr><th>主旨</th><th>模式</th><th>狀態</th><th>成功/失敗</th><th></th></tr></thead><tbody></tbody></table>
+  </div>
+</div>
+
+<script>
+  // 金鑰存 sessionStorage；admin.html 與後端同源，API 用相對路徑
+  const KEY = 'survey_admin_key';
+  // 與問卷表單一致的選項
+  const ROLES = ["學生","應屆畢業生","後端工程師","前端工程師","全端工程師","行動 App 開發","資料／AI 工程師","DevOps／SRE","軟體架構師","技術主管／PM","非本科轉職者","接案／自由工作者","創業者","企業內訓窗口","其他"];
+  const INTERESTS = ["RAG 知識庫","Tool Calling","前端整合","Spring 其他模組","AI 輔助程式開發","Spring Security","資料庫","Docker 部署"];
+
+  const $ = s => document.querySelector(s);
+  /** 取得目前金鑰 */
+  function getKey(){ return sessionStorage.getItem(KEY) || ''; }
+
+  /** 統一 API 呼叫：帶金鑰與 JSON；401 清金鑰回閘門；非 2xx 拋錯 */
+  async function api(path, opts={}){
+    const res = await fetch(path, {...opts, headers:{'Content-Type':'application/json','X-Admin-Key':getKey(),...(opts.headers||{})}});
+    if (res.status === 401){ sessionStorage.removeItem(KEY); showGate('金鑰無效，請重新輸入'); throw new Error('401'); }
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    const ct = res.headers.get('content-type') || '';
+    return ct.includes('application/json') ? res.json() : res.text();
+  }
+
+  /** 顯示閘門（可附訊息） */
+  function showGate(msg){ $('#app').hidden=true; $('#gate').style.display='flex'; if(msg){ const m=$('#gate-msg'); m.className='msg err'; m.textContent=msg; } }
+  /** 顯示主畫面 */
+  function showApp(){ $('#gate').style.display='none'; $('#app').hidden=false; }
+
+  // 閘門按鈕：存金鑰 → 試打 recipients 驗證
+  $('#gate-btn').onclick = async () => {
+    sessionStorage.setItem(KEY, $('#gate-key').value.trim());
+    try { await api('/api/admin/recipients'); showApp(); init(); } catch(e){ /* 401 已處理 */ }
+  };
+
+  /** 把字串陣列填入 select */
+  function fillSelect(id, items){ const el=$(id); items.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; el.appendChild(o); }); }
+
+  let inited=false;
+  /** 初始化主畫面事件與資料（僅一次） */
+  function init(){
+    if(inited) return; inited=true;
+    fillSelect('#role', ROLES); fillSelect('#interest', INTERESTS);
+    $('#preview-btn').onclick = doPreview;
+    $('#rcount-btn').onclick = doCount;
+    $('#role').onchange = doCount; $('#interest').onchange = doCount;
+    $('#test-btn').onclick = doTest;
+    $('#send-btn').onclick = doSend;
+    $('#hist-btn').onclick = doHistory;
+    document.querySelectorAll('input[name=mode]').forEach(r=> r.onchange=()=>{ $('#sched').disabled = (mode()!=='schedule'); });
+    doCount(); doHistory();
+  }
+  /** 目前發送模式 */
+  function mode(){ return document.querySelector('input[name=mode]:checked').value; }
+
+  /** 預覽：呼叫後端渲染，塞進 iframe */
+  async function doPreview(){
+    const m=$('#compose-msg'); m.className='msg';
+    try{ const r=await api('/api/admin/campaign/preview',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value})});
+      $('#preview').srcdoc = r.html; }
+    catch(e){ if(e.message!=='401'){ m.className='msg err'; m.textContent='預覽失敗：'+e.message; } }
+  }
+
+  /** 更新收件人數與樣本；>100 顯示額度警告 */
+  async function doCount(){
+    try{ const q=new URLSearchParams(); if($('#role').value)q.set('role',$('#role').value); if($('#interest').value)q.set('interest',$('#interest').value);
+      const r=await api('/api/admin/recipients?'+q.toString());
+      $('#rcount').textContent=r.count; $('#rsample').textContent = r.sample.length ? '樣本：'+r.sample.join(', ') : '';
+      $('#quota-warn').hidden = r.count<=100; }
+    catch(e){ if(e.message!=='401') $('#rcount').textContent='?'; }
+  }
+
+  /** 寄測試信給指定信箱 */
+  async function doTest(){
+    const m=$('#test-msg'); m.className='msg';
+    const to=$('#test-to').value.trim(); if(!to){ m.className='msg err'; m.textContent='請填測試信箱'; return; }
+    try{ await api('/api/admin/campaign/test',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,to})});
+      m.className='msg ok'; m.textContent='測試信已寄給 '+to; }
+    catch(e){ if(e.message!=='401'){ m.className='msg err'; m.textContent='測試寄送失敗：'+e.message; } }
+  }
+
+  /** 發送：確認人數 → 立即或排程 */
+  async function doSend(){
+    const m=$('#send-msg'); m.className='msg';
+    if(!$('#subject').value.trim()){ m.className='msg err'; m.textContent='請填主旨'; return; }
+    const count=$('#rcount').textContent;
+    const isSched = mode()==='schedule';
+    let scheduledAt=null;
+    if(isSched){ const v=$('#sched').value; if(!v){ m.className='msg err'; m.textContent='請選排程時間'; return; } scheduledAt=new Date(v).toISOString(); }
+    if(!confirm(`確定要${isSched?'排程':'立即'}發送給 ${count} 人嗎？`)) return;
+    $('#send-btn').disabled=true;
+    try{ const body={subject:$('#subject').value,markdown:$('#markdown').value,filter:{role:$('#role').value||null,interest:$('#interest').value||null},mode:mode(),scheduledAt};
+      const r=await api('/api/admin/campaign/send',{method:'POST',body:JSON.stringify(body)});
+      m.className='msg ok'; m.textContent=`已${isSched?'排程':'送出'}：收件 ${r.recipientCount}、成功 ${r.accepted}、失敗 ${r.failed}`;
+      doHistory(); }
+    catch(e){ if(e.message!=='401'){ m.className='msg err'; m.textContent='發送失敗：'+e.message; } }
+    finally{ $('#send-btn').disabled=false; }
+  }
+
+  /** 載入寄送歷史；排程中的可取消 */
+  async function doHistory(){
+    try{ const rows=await api('/api/admin/campaigns'); const tb=$('#hist tbody'); tb.innerHTML='';
+      rows.forEach(c=>{ const tr=document.createElement('tr');
+        const cancelBtn = c.status==='scheduled' ? `<button class="btn danger" data-cancel="${c.id}">取消排程</button>` : '';
+        tr.innerHTML=`<td>${esc(c.subject)}</td><td>${esc(c.mode)}</td><td><span class="pill ${esc(c.status)}">${esc(c.status)}</span></td><td>${c.acceptedCount}/${c.failedCount}</td><td>${cancelBtn}</td>`;
+        tb.appendChild(tr); });
+      tb.querySelectorAll('[data-cancel]').forEach(b=> b.onclick=()=>doCancel(b.dataset.cancel)); }
+    catch(e){ /* 401 已處理；其餘忽略 */ }
+  }
+
+  /** 取消某 campaign 排程 */
+  async function doCancel(id){
+    if(!confirm('確定取消此排程？')) return;
+    try{ const r=await api('/api/admin/campaigns/'+id+'/schedule',{method:'DELETE'}); alert(`已取消 ${r.cancelled} 封，失敗 ${r.failed}`); doHistory(); }
+    catch(e){ if(e.message!=='401') alert('取消失敗：'+e.message); }
+  }
+
+  /** HTML 轉義，避免歷史欄位 XSS */
+  function esc(s){ const d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; }
+
+  // 啟動：有金鑰直接驗證進入，否則顯示閘門
+  (async ()=>{ if(getKey()){ try{ await api('/api/admin/recipients'); showApp(); init(); }catch(e){ /* 401 已處理 */ } } else { showGate(); } })();
+</script>
+</body>
+</html>
