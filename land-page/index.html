@@ -90,9 +90,9 @@
   "@context": "https://schema.org",
   "@type": "FAQPage",
   "mainEntity": [
-    {"@type":"Question","name":"這門課適合完全沒寫過 Java 的新手嗎？","acceptedAnswer":{"@type":"Answer","text":"建議先具備基本 Java 語法與 REST API 概念。課程著重在企業級分層、整合與 AI 落地，而不是從零教語法；若你寫過簡單的 API，就能順利跟上。"}},
-    {"@type":"Question","name":"課程用的是哪些技術版本？","acceptedAnswer":{"@type":"Answer","text":"Java 21、Spring Boot 4.0.x、Spring AI 2.0.x (GA)、PostgreSQL + pgvector、React + TypeScript + Vite。開發環境以 Windows + PowerShell 7+ 示範，macOS / Linux 也可比照操作。"}},
-    {"@type":"Question","name":"這跟坊間「呼叫 LLM API」的課有什麼不同？","acceptedAnswer":{"@type":"Answer","text":"我們不只教你呼叫 LLM，而是帶你把 AI 放進一套真正能上線的企業系統：資料庫、權限、前端、RAG、工具呼叫與端到端整合一次到位。"}},
+    {"@type":"Question","name":"這門課適合完全沒寫過 Java 的新手嗎？","acceptedAnswer":{"@type":"Answer","text":"有基本 Java 語法與 REST API 概念會更好上手。不過若你對 AI 工具（如 Claude Code、Codex）已經熟悉，也能用 AI 輔助補足技術能力——課程會帶你建立完整的前後端知識與 domain knowhow，這正是新手最需要、也最能長期受用的部分。"}},
+    {"@type":"Question","name":"課程用的是哪些技術版本？","acceptedAnswer":{"@type":"Answer","text":"後端：Java 21（LTS）、Spring Boot 4.0.x、Spring AI 2.0.x（GA）、Spring MVC、Spring Data JPA、Spring Security。資料庫：PostgreSQL + pgvector（向量檢索，支撐 RAG 知識庫）。前端：React + TypeScript + Vite，搭配 Ant Design UI 框架。AI 整合：Spring AI 的 Chat、Embedding、Tool Calling、RAG 與 ChatMemory。開發環境以 Windows + PowerShell 7+ 示範，macOS / Linux 也可比照操作。"}},
+    {"@type":"Question","name":"這跟「Vibe Coding」有什麼不同？","acceptedAnswer":{"@type":"Answer","text":"Vibe Coding 能快速生出一個跑得動的雛形，但往往難以維護、難以擴充。本課程的重點是帶你用 AI 打造可維護、可上線的企業級系統——具備分層架構、資料庫、權限、RAG 與工具呼叫，而不只是一個 demo 雛形。"}},
     {"@type":"Question","name":"買了之後可以看多久？","acceptedAnswer":{"@type":"Answer","text":"購買後可不限次數、無限期觀看，課程更新也會免費同步給你。"}},
     {"@type":"Question","name":"完成課程後我會做出什麼？","acceptedAnswer":{"@type":"Answer","text":"一套可登入、可查客戶、可引用知識庫、可產生業務建議、可追蹤 AI 執行過程的企業級 AI CRM，並能在 Demo Day 完整跑通展示。"}}
   ]
@@ -559,12 +559,12 @@ details.accordion .acc-body {
   </div>
   <nav style="display:flex;gap:4px;align-items:center;" class="hc-nav">
     <a href="#intro" class="nav-link">課程介紹</a>
+    <a href="#prepare" class="nav-link">上課準備</a>
     <a href="#career" class="nav-link">職涯加速</a>
     <a href="#curriculum" class="nav-link">課程大綱</a>
     <a href="#project" class="nav-link">實戰專案</a>
     <a href="#testimonials" class="nav-link">學員好評</a>
     <a href="#instructor" class="nav-link">講師介紹</a>
-    <a href="#prepare" class="nav-link">上課準備</a>
     <a href="#faq" class="nav-link">常見問題</a>
     <a href="https://springai-survey.zeabur.app/" class="nav-link">課程調查</a>
     <a href="https://ai-crm.springai.world" class="nav-link" target="_blank" rel="noopener" style="color:var(--accent-deep);font-weight:800;">🚀 線上體驗</a>
@@ -714,6 +714,35 @@ details.accordion .acc-body {
           </picture>
           <figcaption class="visual-caption"><strong>讓回答能追溯來源</strong>用 pgvector 與 RAG 把產品文件、服務條款、銷售話術變成 AI 可引用的知識庫。</figcaption>
         </figure>
+      </div>
+    </section>
+
+    <!-- 上課前的準備 -->
+    <section>
+      <div class="section-title" id="prepare">
+        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 上課前的準備</span>
+        <h2>開始之前，先準備好工具與心態</h2>
+        <p class="lead">課程的教學影片以 <strong>Claude Code</strong> 操作為主。工具只是載體——真正讓你受用一輩子的，是 AI 輔助開發的觀念與領域知識。</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;">
+        <!-- 主要工具：Claude Code -->
+        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;">
+          <div style="display:flex;align-items:center;gap:10px;"><span style="color:var(--accent);"><i data-lucide="terminal" style="width:22px;height:22px;"></i></span><strong style="font-size:1.05rem;">主要工具：Claude Code</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.93rem;flex:1;">教學影片皆以 Claude Code 示範。它需要訂閱 <strong>Claude Pro（每月 US$20 起）</strong> 方案才能操作，建議上課前先準備好帳號與訂閱。</p>
+          <span class="badge badge-accent" style="align-self:flex-start;">US$20 / 月起</span>
+        </div>
+        <!-- 替代方案：OpenAI Codex -->
+        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;">
+          <div style="display:flex;align-items:center;gap:10px;"><span style="color:var(--accent);"><i data-lucide="replace" style="width:22px;height:22px;"></i></span><strong style="font-size:1.05rem;">替代方案：OpenAI Codex</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.93rem;flex:1;">若你不方便訂閱 Claude，也可以改用 <strong>OpenAI Codex</strong> 跟著操作。課程教的觀念與流程不綁定單一工具，能直接遷移到其他 AI 輔助開發環境。</p>
+          <span class="badge" style="align-self:flex-start;background:var(--surface-3);color:var(--muted);">彈性選擇</span>
+        </div>
+        <!-- 最重要：觀念與 Domain knowhow -->
+        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;border:1px solid var(--accent);background:color-mix(in oklab, var(--accent) 5%, var(--surface));">
+          <div style="display:flex;align-items:center;gap:10px;"><span style="color:var(--accent-deep);"><i data-lucide="brain" style="width:22px;height:22px;"></i></span><strong style="font-size:1.05rem;">最關鍵：觀念與領域知識</strong></div>
+          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.93rem;flex:1;">工具會更迭，但 <strong>AI 輔助程式開發的觀念</strong> 與 <strong>Domain knowhow</strong> 才是決定成果的核心——這也是本課程會特別著重教授的重點。</p>
+          <span class="badge badge-amber-solid" style="align-self:flex-start;">課程核心</span>
+        </div>
       </div>
     </section>
 
@@ -1221,35 +1250,6 @@ details.accordion .acc-body {
       </div>
     </section>
 
-    <!-- 上課前的準備 -->
-    <section>
-      <div class="section-title" id="prepare">
-        <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> 上課前的準備</span>
-        <h2>開始之前，先準備好工具與心態</h2>
-        <p class="lead">課程的教學影片以 <strong>Claude Code</strong> 操作為主。工具只是載體——真正讓你受用一輩子的，是 AI 輔助開發的觀念與領域知識。</p>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;">
-        <!-- 主要工具：Claude Code -->
-        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;">
-          <div style="display:flex;align-items:center;gap:10px;"><span style="color:var(--accent);"><i data-lucide="terminal" style="width:22px;height:22px;"></i></span><strong style="font-size:1.05rem;">主要工具：Claude Code</strong></div>
-          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.93rem;flex:1;">教學影片皆以 Claude Code 示範。它需要訂閱 <strong>Claude Pro（每月 US$20 起）</strong> 方案才能操作，建議上課前先準備好帳號與訂閱。</p>
-          <span class="badge badge-accent" style="align-self:flex-start;">US$20 / 月起</span>
-        </div>
-        <!-- 替代方案：OpenAI Codex -->
-        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;">
-          <div style="display:flex;align-items:center;gap:10px;"><span style="color:var(--accent);"><i data-lucide="replace" style="width:22px;height:22px;"></i></span><strong style="font-size:1.05rem;">替代方案：OpenAI Codex</strong></div>
-          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.93rem;flex:1;">若你不方便訂閱 Claude，也可以改用 <strong>OpenAI Codex</strong> 跟著操作。課程教的觀念與流程不綁定單一工具，能直接遷移到其他 AI 輔助開發環境。</p>
-          <span class="badge" style="align-self:flex-start;background:var(--surface-3);color:var(--muted);">彈性選擇</span>
-        </div>
-        <!-- 最重要：觀念與 Domain knowhow -->
-        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;border:1px solid var(--accent);background:color-mix(in oklab, var(--accent) 5%, var(--surface));">
-          <div style="display:flex;align-items:center;gap:10px;"><span style="color:var(--accent-deep);"><i data-lucide="brain" style="width:22px;height:22px;"></i></span><strong style="font-size:1.05rem;">最關鍵：觀念與領域知識</strong></div>
-          <p style="margin:0;color:var(--muted);line-height:1.85;font-size:0.93rem;flex:1;">工具會更迭，但 <strong>AI 輔助程式開發的觀念</strong> 與 <strong>Domain knowhow</strong> 才是決定成果的核心——這也是本課程會特別著重教授的重點。</p>
-          <span class="badge badge-amber-solid" style="align-self:flex-start;">課程核心</span>
-        </div>
-      </div>
-    </section>
-
     <!-- 常見問題 -->
     <section>
       <div class="section-title" id="faq">
@@ -1257,10 +1257,9 @@ details.accordion .acc-body {
         <h2>報名前，先看這些</h2>
       </div>
       <div style="display:grid;gap:12px;">
-        <details class="accordion"><summary><span>這門課適合完全沒寫過 Java 的新手嗎？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">建議先具備基本 Java 語法與 REST API 概念。課程著重在企業級分層、整合與 AI 落地，而不是從零教語法；若你寫過簡單的 API，就能順利跟上。</div></details>
-        <details class="accordion"><summary><span>課程用的是哪些技術版本？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">Java 21、Spring Boot 4.0.x、Spring AI 2.0.x (GA)、PostgreSQL + pgvector、React + TypeScript + Vite。開發環境以 Windows + PowerShell 7+ 示範，macOS / Linux 也可比照操作。</div></details>
-        <details class="accordion"><summary><span>這跟坊間「呼叫 LLM API」的課有什麼不同？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">我們不只教你呼叫 LLM，而是帶你把 AI 放進一套真正能上線的企業系統：資料庫、權限、前端、RAG、工具呼叫與端到端整合一次到位。</div></details>
-        <details class="accordion"><summary><span>Embabel / AI Agent 框架會教嗎？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">本課程不會教 Embabel，僅在補充說明中簡介其 GOAP、Action、Goal、Blackboard 等概念，供有興趣的學員延伸參考。課程主軸聚焦於 Spring Boot 4 + Spring AI 2.0 的企業級 AI 應用實作。</div></details>
+        <details class="accordion"><summary><span>這門課適合完全沒寫過 Java 的新手嗎？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">有基本 Java 語法與 REST API 概念會更好上手。不過若你對 AI 工具（如 Claude Code、Codex）已經熟悉，也能用 AI 輔助補足技術能力——課程會帶你建立完整的前後端知識與 domain knowhow，這正是新手最需要、也最能長期受用的部分。</div></details>
+        <details class="accordion"><summary><span>課程用的是哪些技術版本？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body"><strong>後端：</strong>Java 21（LTS）、Spring Boot 4.0.x、Spring AI 2.0.x（GA）、Spring MVC、Spring Data JPA、Spring Security。<br /><strong>資料庫：</strong>PostgreSQL + pgvector（向量檢索，支撐 RAG 知識庫）。<br /><strong>前端：</strong>React + TypeScript + Vite，搭配 Ant Design UI 框架。<br /><strong>AI 整合：</strong>Spring AI 的 Chat、Embedding、Tool Calling、RAG 與 ChatMemory。<br /><strong>開發環境：</strong>以 Windows + PowerShell 7+ 示範，macOS / Linux 也可比照操作。</div></details>
+        <details class="accordion"><summary><span>這跟「Vibe Coding」有什麼不同？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">Vibe Coding 能快速生出一個跑得動的雛形，但往往難以維護、難以擴充。本課程的重點是帶你用 AI 打造「<strong>可維護、可上線</strong>」的企業級系統——具備分層架構、資料庫、權限、RAG 與工具呼叫，而不只是一個 demo 雛形。</div></details>
         <details class="accordion"><summary><span>買了之後可以看多久？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">購買後可不限次數、無限期觀看，課程更新也會免費同步給你。</div></details>
         <details class="accordion"><summary><span>完成課程後我會做出什麼？</span><span class="acc-plus" aria-hidden="true">+</span></summary><div class="acc-body">一套可登入、可查客戶、可引用知識庫、可產生業務建議、可追蹤 AI 執行過程的企業級 AI CRM，並能在 Demo Day 完整跑通展示。</div></details>
       </div>
@@ -1283,7 +1282,7 @@ details.accordion .acc-body {
           </div>
           <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
             <button class="btn btn-lg btn-light" onclick="enroll('bottom_cta')">立即報名 <i data-lucide="arrow-right" style="width:18px;height:18px;"></i></button>
-            <button class="btn btn-lg btn-ghost" onclick="enroll('bottom_cta_trial')" style="color:#fff;border:1px solid oklch(100% 0 0 / 0.32);">免費試看單元</button>
+            <a class="btn btn-lg btn-ghost" href="https://ai-crm.springai.world" target="_blank" rel="noopener" style="color:#fff;border:1px solid oklch(100% 0 0 / 0.32);">🚀 AI CRM 試用</a>
           </div>
         </div>
       </div>
@@ -1296,9 +1295,9 @@ details.accordion .acc-body {
     <div class="card-solid purchase-card" style="overflow:hidden;padding:0;">
       <div style="position:relative;">
         <picture><source srcset="assets/promo/hero-ai-full-stack.webp" type="image/webp" /><img src="assets/promo/hero-ai-full-stack.png" width="1672" height="941" alt="課程封面" style="width:100%;height:168px;object-fit:cover;" /></picture>
-        <button onclick="enroll('purchase_card_play')" aria-label="播放試看" style="position:absolute;inset:0;margin:auto;width:58px;height:58px;border-radius:var(--r-pill);border:none;cursor:pointer;background:color-mix(in oklab, var(--accent) 92%, black);color:#fff;display:grid;place-items:center;box-shadow:var(--shadow-lift);">
-          <i data-lucide="play" style="width:24px;height:24px;margin-left:3px;"></i>
-        </button>
+        <a href="https://ai-crm.springai.world" target="_blank" rel="noopener" aria-label="AI CRM 試用" style="position:absolute;inset:0;margin:auto;width:58px;height:58px;border-radius:var(--r-pill);border:none;cursor:pointer;background:color-mix(in oklab, var(--accent) 92%, black);color:#fff;display:grid;place-items:center;box-shadow:var(--shadow-lift);text-decoration:none;">
+          <i data-lucide="external-link" style="width:24px;height:24px;"></i>
+        </a>
         <span style="position:absolute;top:12px;left:12px;" class="badge badge-amber-solid">早鳥募資中</span>
       </div>
       <div style="padding:20px 22px 24px;">
@@ -1319,7 +1318,7 @@ details.accordion .acc-body {
         </div>
         <div style="display:grid;gap:10px;margin-top:20px;">
           <button class="btn btn-lg btn-primary btn-full" onclick="enroll('purchase_card')">立即報名 · 鎖定早鳥價</button>
-          <button class="btn btn-md btn-secondary btn-full" onclick="enroll('purchase_card_trial')"><i data-lucide="play" style="width:16px;height:16px;"></i> 免費試看單元</button>
+          <a class="btn btn-md btn-secondary btn-full" href="https://ai-crm.springai.world" target="_blank" rel="noopener"><i data-lucide="external-link" style="width:16px;height:16px;"></i> AI CRM 試用</a>
         </div>
         <div style="display:grid;gap:11px;margin-top:22px;">
           <div style="display:flex;align-items:center;gap:10px;color:var(--muted);font-size:0.92rem;font-weight:600;"><span style="color:var(--success);"><i data-lucide="clapperboard" style="width:18px;height:18px;"></i></span>8 大單元 · 40+ 實戰影片</div>
