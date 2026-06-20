@@ -600,6 +600,19 @@ function renderFeatureRoadmap(course) {
   return `<section class="section glass-card" id="feature-roadmap"><div class="section-header"><h3>AI CRM 功能藍圖</h3><p>八個章節像一條產品生產線，每一站都為同一套 AI CRM 補上一塊可運作的功能。點任一卡片即可跳到該章節。</p></div><div class="feature-roadmap-grid">${cards}</div></section>`;
 }
 
+/** 課程最後補充：superpowers 技能組，依階段分組列出每個技能的用途 */
+function renderSuperpowers(sp) {
+  if (!sp) return "";
+  // 將每個階段渲染成一個子區塊，內含該階段的技能卡片
+  const groups = (sp.groups || []).map((group) => {
+    const cards = (group.skills || []).map((skill) =>
+      `<article class="summary-card sp-skill-card"><code class="sp-skill-name">${esc(skill.name)}</code><strong>${esc(skill.zh)}</strong><p>${esc(skill.purpose)}</p></article>`
+    ).join("");
+    return `<div class="sp-group"><h4 class="sp-phase">${esc(group.phase)}</h4><div class="summary-grid">${cards}</div></div>`;
+  }).join("");
+  return `<section class="section glass-card" id="superpowers"><div class="section-header"><h3>${esc(sp.title)}</h3><p>${esc(sp.intro)}</p></div>${groups}</section>`;
+}
+
 /** 貫穿全程的 AI CRM 情境 */
 function renderSharedCase(sharedCase) {
   if (!sharedCase) return "";
@@ -928,6 +941,7 @@ function renderSidebar(course) {
       ${navGroups}
       <a class="nav-link" href="#materials-overview" data-target="materials-overview"><strong>素材總覽</strong><span>講義與附件</span></a>
       <a class="nav-link" href="#quiz" data-target="quiz"><strong>結訓測驗</strong><span>學習驗收</span></a>
+      <a class="nav-link" href="#superpowers" data-target="superpowers"><strong>superpowers 補充</strong><span>規格先行技能組</span></a>
     </nav>
     <div class="sidebar-tools">
       <div class="progress-box"><strong>全課學習進度</strong><p id="progressText">${done} / ${total} 任務已完成 (${percent}%)</p><div class="progress-track" aria-hidden="true"><div id="progressFill" class="progress-fill" style="width:${percent}%"></div></div></div>
@@ -992,6 +1006,7 @@ function renderApp() {
           ${course.meta.days.map((dayMeta) => renderDayBlock(course, dayMeta)).join("")}
           ${renderMaterialsOverview(course.materials)}
           ${renderQuiz(course.quiz, state.quiz || {})}
+          ${renderSuperpowers(course.superpowers)}
           <footer class="site-footer">教學網站採用純 HTML + JS + CSS 呈現，課程資料仍由 course-data.js 驅動。</footer>
         </div>
       </main>
