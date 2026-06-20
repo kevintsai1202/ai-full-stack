@@ -64,7 +64,8 @@ async function main() {
   await step("dashboard-viewport.png", () =>
     page.screenshot({ path: path.join(OUT, "dashboard-viewport.png"), fullPage: false }));
 
-  // ── 圖表局部：以標題定位該 widget 卡片 ──
+  // ── 圖表局部：以標題定位 widget 卡片，並「依實際內容裁切」去除尾端空白 ──
+  // （dashboard grid 給卡片固定高度，線圖等內容較矮時卡片下半會留白，單獨裁切會比例跑掉）
   const cards = [
     ["銷售漏斗", "pipeline-funnel.png"],
     ["月度營收", "monthly-forecast.png"],
@@ -75,7 +76,23 @@ async function main() {
       const card = page.locator("article.panel", { has: page.locator("h3", { hasText: title }) }).first();
       await card.scrollIntoViewIfNeeded();
       await page.waitForTimeout(400);
-      await card.screenshot({ path: path.join(OUT, file) });
+      // 計算卡片內「實際內容底部」：取所有葉節點 / svg / canvas 的最低可見底緣
+      const clip = await card.evaluate((el) => {
+        const cr = el.getBoundingClientRect();
+        let maxBottom = cr.top;
+        el.querySelectorAll("*").forEach((n) => {
+          const r = n.getBoundingClientRect();
+          const isLeaf = n.children.length === 0 || n.tagName === "svg" || n.tagName === "CANVAS";
+          if (isLeaf && r.width > 0 && r.height > 0 && r.bottom <= cr.bottom + 1 && r.bottom > maxBottom) {
+            maxBottom = r.bottom;
+          }
+        });
+        const pad = 18;
+        const height = Math.min(cr.height, Math.ceil(maxBottom - cr.top) + pad);
+        // clip 為整頁座標系，需加上捲動位移
+        return { x: Math.round(cr.left + window.scrollX), y: Math.round(cr.top + window.scrollY), width: Math.round(cr.width), height };
+      });
+      await page.screenshot({ path: path.join(OUT, file), clip });
     });
   }
 
