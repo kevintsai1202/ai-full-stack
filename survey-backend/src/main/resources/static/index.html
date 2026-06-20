@@ -94,9 +94,10 @@
   .sec-title:first-child { margin-top:0; }
   label.q { display:block; font-weight:700; margin:16px 0 7px; }
   .hint { font-weight:400; color:var(--muted); font-size:.85rem; }
-  input[type=text], input[type=email], select { width:100%; padding:11px 13px; border-radius:10px;
-    border:1px solid var(--border-strong); background:#fff; color:var(--fg); font-size:1rem; }
-  input:focus, select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  input[type=text], input[type=email], select, textarea { width:100%; padding:11px 13px; border-radius:10px;
+    border:1px solid var(--border-strong); background:#fff; color:var(--fg); font-size:1rem; font-family:inherit; }
+  textarea { resize:vertical; min-height:80px; line-height:1.6; }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
   .opts { display:grid; gap:8px; margin-top:4px; }
   .opts.grid2 { grid-template-columns:1fr 1fr; }
   .opt { display:flex; align-items:center; gap:9px; padding:10px 12px; border-radius:10px;
@@ -154,7 +155,7 @@
       <img src="https://springai.world/assets/logo.png" alt="凱文大叔" />
       <span>AI 賦能全端開發 · 凱文大叔</span>
     </div>
-    <h1>當別人已經用 AI 寫出<em>可上線的系統</em>，你還在只會「呼叫 LLM」嗎？</h1>
+    <h1>當別人已經用 AI 寫出<em>可上線的系統</em>，你還只會「Vibe Coding」嗎？</h1>
     <p>花 60 秒填這份問卷，告訴我們你的起點與目標——我們會用一套真實 AI CRM 專案，帶你把 Spring Boot、Spring AI 與 React 串成能上線的產品。</p>
     <div class="badges">
       <span class="badge amber">★ 填寫即進入早鳥優惠 & 專屬折扣名單</span>
@@ -303,6 +304,9 @@
         <label class="opt"><input type="checkbox" value="缺乏可展示的實戰專案" /> 缺乏可展示的實戰專案</label>
       </div>
 
+      <label class="q" for="suggestion">有什麼建議，或還想多學的技術？<span class="hint">— 自由填寫，讓我知道你最想學什麼</span></label>
+      <textarea id="suggestion" name="suggestion" rows="3" placeholder="例如：想多講 RAG 的進階調校、想學 Kafka 串接、Docker / K8s 部署，或任何建議都歡迎…"></textarea>
+
       <!-- 蜜罐欄位：一般使用者看不到，機器人才會填 -->
       <div class="hp"><label>Website</label><input type="text" id="website" name="website" tabindex="-1" autocomplete="off" /></div>
 
@@ -427,7 +431,9 @@
       answers: {
         status: statusEl ? statusEl.value : null,
         goals: checked('goals'),
-        pain_points: checked('pain')
+        pain_points: checked('pain'),
+        // 自由填寫：建議或還想學的技術
+        suggestion: document.getElementById('suggestion').value.trim() || null
       },
       utm: readUtm(),
       consent: true,
