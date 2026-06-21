@@ -37,7 +37,8 @@
 <meta name="twitter:image" content="https://springai.world/assets/cover.png" />
 <meta name="twitter:image:alt" content="AI 賦能全端開發課程封面：Spring Boot + Spring AI + React 打造企業級 AI CRM" />
 
-<!-- JSON-LD Course 結構化資料 -->
+<!-- JSON-LD Course 結構化資料（含評論摘錄：aggregateRating + review 掛於 Course，符合 Google 評論摘錄支援類型） -->
+<!-- 評價真實彙總自 AmazingTalker 一對一教學（96 則、100% 五星），如實反映課程講師之教學評分 -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -80,7 +81,21 @@
   },
   "courseCode": "AI-FULL-STACK-01",
   "educationalLevel": "Intermediate",
-  "about": ["Spring Boot","Spring AI","React","JPA","pgvector","RAG","Tool Calling"]
+  "about": ["Spring Boot","Spring AI","React","JPA","pgvector","RAG","Tool Calling"],
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "5.0",
+    "bestRating": "5",
+    "worstRating": "1",
+    "ratingCount": "96",
+    "reviewCount": "96"
+  },
+  "review": [
+    {"@type":"Review","author":{"@type":"Person","name":"Pei"},"datePublished":"2023-11-22","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"今天體驗了 Java 程式語言課程，透過老師深入淺出的教學使初學者可以快速進入 Java 的世界。老師在業界非常資深並且教學沉穩、說明解析淺顯易懂，即使是第一次踏入程式設計領域的學生也能夠輕鬆上手，非常值得推薦給想要進修程式語言的學生！"},
+    {"@type":"Review","author":{"@type":"Person","name":"Jarren Huang"},"datePublished":"2024-01-27","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"上課講解得很清楚。今天原本根本不知道 API 是幹嘛的，到現在能使用 API 來擷取 server 內的內容並且使用在程式裡，在一堂課內教完。真的很讚！"},
+    {"@type":"Review","author":{"@type":"Person","name":"Evan"},"datePublished":"2024-05-12","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"A great teacher！我希望所有有需要的學生都能從這裡學到老師的經驗與技術，老師真的很熱情在分享！"},
+    {"@type":"Review","author":{"@type":"Person","name":"余旻嬨"},"datePublished":"2023-12-08","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"老師非常用心，還有自製教材，超級棒的老師！"}
+  ]
 }
 </script>
 
@@ -99,8 +114,7 @@
 }
 </script>
 
-<!-- JSON-LD 講師評價結構化資料 — 真實彙總自 AmazingTalker 一對一教學（96 則、100% 五星） -->
-<!-- 評價歸屬於講師本人（Person），如實反映其教學評分，符合 Google 結構化資料政策 -->
+<!-- JSON-LD 講師身分結構化資料（Person）— 僅描述講師身分與社群連結，評論摘錄已移至上方 Course 區塊 -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -114,21 +128,7 @@
     "https://tw.amazingtalker.com/teachers-and-tutors/kevin-tsai-f935b320-3fa1-4aa3-95cf-20d9c619b914"
   ],
   "jobTitle": "資深 Java / Spring AI 講師",
-  "description": "深耕 Java / Spring Boot 企業開發與 AI 落地教學的資深講師，著有《使用 Spring AI 打造企業 RAG 知識庫》（深智數位），《Spring AI》系列技術作者。",
-  "aggregateRating": {
-    "@type": "AggregateRating",
-    "ratingValue": "5.0",
-    "bestRating": "5",
-    "worstRating": "1",
-    "ratingCount": "96",
-    "reviewCount": "96"
-  },
-  "review": [
-    {"@type":"Review","author":{"@type":"Person","name":"Pei"},"datePublished":"2023-11-22","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"今天體驗了 Java 程式語言課程，透過老師深入淺出的教學使初學者可以快速進入 Java 的世界。老師在業界非常資深並且教學沉穩、說明解析淺顯易懂，即使是第一次踏入程式設計領域的學生也能夠輕鬆上手，非常值得推薦給想要進修程式語言的學生！"},
-    {"@type":"Review","author":{"@type":"Person","name":"Jarren Huang"},"datePublished":"2024-01-27","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"上課講解得很清楚。今天原本根本不知道 API 是幹嘛的，到現在能使用 API 來擷取 server 內的內容並且使用在程式裡，在一堂課內教完。真的很讚！"},
-    {"@type":"Review","author":{"@type":"Person","name":"Evan"},"datePublished":"2024-05-12","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"A great teacher！我希望所有有需要的學生都能從這裡學到老師的經驗與技術，老師真的很熱情在分享！"},
-    {"@type":"Review","author":{"@type":"Person","name":"余旻嬨"},"datePublished":"2023-12-08","reviewRating":{"@type":"Rating","ratingValue":"5","bestRating":"5"},"reviewBody":"老師非常用心，還有自製教材，超級棒的老師！"}
-  ]
+  "description": "深耕 Java / Spring Boot 企業開發與 AI 落地教學的資深講師，著有《使用 Spring AI 打造企業 RAG 知識庫》（深智數位），《Spring AI》系列技術作者。"
 }
 </script>
 
@@ -585,7 +585,7 @@ details.accordion .acc-body {
 <!-- ============================================================ -->
 <section style="position:relative;overflow:hidden;color:#fff;">
   <div style="position:absolute;inset:0;">
-    <picture><source srcset="assets/promo/hero-ai-full-stack.webp" type="image/webp" /><img src="assets/promo/hero-ai-full-stack.png" width="1672" height="941" alt="" style="width:100%;height:100%;object-fit:cover;opacity:0.34;mix-blend-mode:luminosity;" / fetchpriority="high"></picture>
+    <picture><source srcset="assets/promo/hero-ai-full-stack.webp" type="image/webp" /><img src="assets/promo/hero-ai-full-stack.png" width="1672" height="941" alt="" style="width:100%;height:100%;object-fit:cover;opacity:0.34;mix-blend-mode:luminosity;" fetchpriority="high" /></picture>
   </div>
   <div style="position:absolute;inset:0;background:linear-gradient(120deg, oklch(18% 0.04 248 / 0.96) 0%, oklch(24% 0.05 242 / 0.9) 52%, oklch(34% 0.07 232 / 0.72) 100%);"></div>
   <div style="position:relative;max-width:1100px;margin:0 auto;padding:clamp(48px,7vw,88px) clamp(16px,4vw,56px);">
@@ -633,7 +633,7 @@ details.accordion .acc-body {
       </div>
       <figure class="promo-visual section-visual is-mobile-art">
         <picture>
-          <source media="(max-width: 560px)" srcset="assets/promo/mobile/tech-stack-map-mobile.webp" / type="image/webp" />
+          <source media="(max-width: 560px)" srcset="assets/promo/mobile/tech-stack-map-mobile.webp" type="image/webp" />
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/tech-stack-map-mobile.png" />
           <source srcset="assets/promo/tech-stack-map.webp" type="image/webp" />
           <img src="assets/promo/tech-stack-map.png" width="1672" height="941" alt="企業級 AI 全端技術棧：React、Spring Boot、Security、JPA、PostgreSQL、Spring AI、RAG 與 Tool Calling 串成完整系統。" loading="lazy" />
@@ -702,7 +702,7 @@ details.accordion .acc-body {
       <div class="visual-grid">
         <figure class="promo-visual is-mobile-art">
           <picture>
-            <source media="(max-width: 560px)" srcset="assets/promo/mobile/feature-tool-calling-mobile.webp" / type="image/webp" />
+            <source media="(max-width: 560px)" srcset="assets/promo/mobile/feature-tool-calling-mobile.webp" type="image/webp" />
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/feature-tool-calling-mobile.png" />
             <source srcset="assets/promo/feature-tool-calling.webp" type="image/webp" />
           <img src="assets/promo/feature-tool-calling.png" width="1672" height="941" alt="Tool Calling 概念圖：AI 透過 Java Service 讀取 CRM 真實資料，再產生可信任建議。" loading="lazy" />
@@ -711,7 +711,7 @@ details.accordion .acc-body {
         </figure>
         <figure class="promo-visual is-mobile-art">
           <picture>
-            <source media="(max-width: 560px)" srcset="assets/promo/mobile/feature-rag-knowledge-mobile.webp" / type="image/webp" />
+            <source media="(max-width: 560px)" srcset="assets/promo/mobile/feature-rag-knowledge-mobile.webp" type="image/webp" />
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/feature-rag-knowledge-mobile.png" />
             <source srcset="assets/promo/feature-rag-knowledge.webp" type="image/webp" />
           <img src="assets/promo/feature-rag-knowledge.png" width="1672" height="941" alt="RAG 知識庫流程圖：文件切片、Embedding、pgvector 檢索、引用來源與可靠回答。" loading="lazy" />
@@ -780,7 +780,7 @@ details.accordion .acc-body {
       </div>
       <figure class="promo-visual section-visual is-mobile-art">
         <picture>
-          <source media="(max-width: 560px)" srcset="assets/promo/mobile/market-advantage-mobile.webp" / type="image/webp" />
+          <source media="(max-width: 560px)" srcset="assets/promo/mobile/market-advantage-mobile.webp" type="image/webp" />
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/market-advantage-mobile.png" />
           <source srcset="assets/promo/market-advantage.webp" type="image/webp" />
           <img src="assets/promo/market-advantage.png" width="1672" height="941" alt="AI 工程師市場優勢資訊圖：AI 應用落地、全端整合能力、企業級架構與從 Demo 到可上線。" loading="lazy" />
@@ -797,7 +797,7 @@ details.accordion .acc-body {
       </div>
       <figure class="promo-visual promo-visual-dark section-visual is-mobile-art">
         <picture>
-          <source media="(max-width: 560px)" srcset="assets/promo/mobile/career-boost-mobile.webp" / type="image/webp" />
+          <source media="(max-width: 560px)" srcset="assets/promo/mobile/career-boost-mobile.webp" type="image/webp" />
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/career-boost-mobile.png" />
           <source srcset="assets/promo/career-boost.webp" type="image/webp" />
           <img src="assets/promo/career-boost.png" width="1672" height="941" alt="後端工程師升級為 AI 全端工程師的職涯加速視覺，包含作品集、企業級 AI 專案與成長曲線。" loading="lazy" />
@@ -862,7 +862,7 @@ details.accordion .acc-body {
       </div>
       <figure class="promo-visual section-visual is-mobile-art">
         <picture>
-          <source media="(max-width: 560px)" srcset="assets/promo/mobile/audience-fit-mobile.webp" / type="image/webp" />
+          <source media="(max-width: 560px)" srcset="assets/promo/mobile/audience-fit-mobile.webp" type="image/webp" />
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/audience-fit-mobile.png" />
           <source srcset="assets/promo/audience-fit.webp" type="image/webp" />
           <img src="assets/promo/audience-fit.png" width="1672" height="941" alt="適合對象圖卡：Java 工程師、後端工程師、前端工程師與技術主管都能透過 AI CRM 專案補齊企業級 AI 全端能力。" loading="lazy" />
@@ -909,7 +909,7 @@ details.accordion .acc-body {
       </div>
       <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:22px;align-items:stretch;" class="hc-project">
         <div class="ai-crm-hero-shot">
-          <picture><source srcset="assets/ai-crm/dashboard-full.webp" type="image/webp" /><img src="assets/ai-crm/dashboard-full.png" width="1440" height="3095" alt="AI CRM 真實工作台畫面：Dashboard 報表、客戶列表、AI 助理與 Agent Trace 同頁呈現。" loading="lazy" /></picture>
+          <picture><source srcset="assets/ai-crm/dashboard-full.webp" type="image/webp" /><img src="assets/ai-crm/dashboard-full.png" width="2880" height="3994" alt="AI CRM 真實工作台畫面：Dashboard 報表、客戶列表、AI 助理與 Agent Trace 同頁呈現。" loading="lazy" /></picture>
           <div class="ai-crm-shot-caption">
             <div>
               <strong>這是課程實際會做出的 AI CRM 工作台</strong>
@@ -942,25 +942,25 @@ details.accordion .acc-body {
         </div>
         <div class="ai-crm-chart-grid">
           <figure class="ai-crm-chart-card">
-            <picture><source srcset="assets/ai-crm/charts/pipeline-funnel.webp" type="image/webp" /><img src="assets/ai-crm/charts/pipeline-funnel.png" width="525" height="319" alt="AI CRM 銷售漏斗圖表截圖" loading="lazy" /></picture>
+            <picture><source srcset="assets/ai-crm/charts/pipeline-funnel.webp" type="image/webp" /><img src="assets/ai-crm/charts/pipeline-funnel.png" width="1022" height="506" alt="AI CRM 銷售漏斗圖表截圖" loading="lazy" /></picture>
             <figcaption class="visual-caption"><strong>銷售漏斗 Pipeline</strong>階段金額、筆數與下鑽入口，展示 CRM 報表不是只有數字卡。</figcaption>
           </figure>
           <figure class="ai-crm-chart-card">
-            <picture><source srcset="assets/ai-crm/charts/monthly-forecast.webp" type="image/webp" /><img src="assets/ai-crm/charts/monthly-forecast.png" width="525" height="319" alt="AI CRM 月度營收 Forecast 圖表截圖" loading="lazy" /></picture>
+            <picture><source srcset="assets/ai-crm/charts/monthly-forecast.webp" type="image/webp" /><img src="assets/ai-crm/charts/monthly-forecast.png" width="1022" height="540" alt="AI CRM 月度營收 Forecast 圖表截圖" loading="lazy" /></picture>
             <figcaption class="visual-caption"><strong>月度營收 Forecast</strong>營收趨勢圖可點月份查看底層商機。</figcaption>
           </figure>
           <figure class="ai-crm-chart-card">
-            <picture><source srcset="assets/ai-crm/charts/risk-breakdown.webp" type="image/webp" /><img src="assets/ai-crm/charts/risk-breakdown.png" width="256" height="449" alt="AI CRM 客戶風險結構圖表截圖" loading="lazy" /></picture>
+            <picture><source srcset="assets/ai-crm/charts/risk-breakdown.webp" type="image/webp" /><img src="assets/ai-crm/charts/risk-breakdown.png" width="496" height="450" alt="AI CRM 客戶風險結構圖表截圖" loading="lazy" /></picture>
             <figcaption class="visual-caption"><strong>客戶風險結構</strong>高、中、低風險客戶分布可直接連到客戶明細。</figcaption>
           </figure>
         </div>
         <div class="ai-crm-interaction-grid">
           <figure class="promo-visual">
-            <picture><source srcset="assets/ai-crm/interactions/chart-drilldown-open.webp" type="image/webp" /><img src="assets/ai-crm/interactions/chart-drilldown-open.png" width="760" height="564" alt="AI CRM 圖表下鑽互動截圖：點擊銷售漏斗後開啟底層商機明細。" loading="lazy" /></picture>
+            <picture><source srcset="assets/ai-crm/interactions/chart-drilldown-open.webp" type="image/webp" /><img src="assets/ai-crm/interactions/chart-drilldown-open.png" width="2880" height="1920" alt="AI CRM 圖表下鑽互動截圖：點擊銷售漏斗後開啟底層商機明細。" loading="lazy" /></picture>
             <figcaption class="visual-caption"><strong>圖表互動下鑽</strong>點擊圖表段落後，直接展開底層客戶與商機，適合放進宣傳頁說明「能操作」。</figcaption>
           </figure>
           <figure class="promo-visual">
-            <picture><source srcset="assets/ai-crm/interactions/ai-chat-response.webp" type="image/webp" /><img src="assets/ai-crm/interactions/ai-chat-response.png" width="420" height="600" alt="AI CRM AI 助理聊天互動截圖" loading="lazy" /></picture>
+            <picture><source srcset="assets/ai-crm/interactions/ai-chat-response.webp" type="image/webp" /><img src="assets/ai-crm/interactions/ai-chat-response.png" width="2880" height="1920" alt="AI CRM AI 助理聊天互動截圖" loading="lazy" /></picture>
             <figcaption class="visual-caption"><strong>AI 助理對話</strong>浮動聊天視窗展示 RAG、Tool Calling 與客戶風險分析流程。</figcaption>
           </figure>
         </div>
@@ -985,6 +985,17 @@ details.accordion .acc-body {
           <picture><source srcset="assets/ai-crm/hahow-style-vertical/05-ai-agent-workflow.webp" type="image/webp" /><img src="assets/ai-crm/hahow-style-vertical/05-ai-agent-workflow.png" width="1000" height="1777" alt="Hahow 直式文宣：AI 協作開發與工程驗收流程。" loading="lazy" /></picture>
           <picture><source srcset="assets/ai-crm/hahow-style-vertical/06-demo-day-outcome.webp" type="image/webp" /><img src="assets/ai-crm/hahow-style-vertical/06-demo-day-outcome.png" width="1000" height="1777" alt="Hahow 直式文宣：Demo Day 結訓作品與端到端展示成果。" loading="lazy" /></picture>
         </div>
+        <div class="section-title" style="margin:28px 0 0;">
+          <span class="eyebrow eyebrow-accent"><span aria-hidden="true">●</span> Image2 少字版直式圖</span>
+          <h3 style="margin:12px 0 0;font-size:clamp(1.45rem,2.3vw,1.95rem);">適合 Hahow 與社群宣傳的無字視覺素材</h3>
+          <p class="lead">這組圖以情境、圖示與產品感呈現課程價值，避免把關鍵文案壓進圖片造成錯字或行動版難讀。</p>
+        </div>
+        <div class="ai-crm-poster-grid" aria-label="Image2 少字版 Hahow 直式宣傳圖稿">
+          <picture><source srcset="assets/ai-crm/hahow-image2-vertical/01-ai-crm-product-hero.webp" type="image/webp" /><img src="assets/ai-crm/hahow-image2-vertical/01-ai-crm-product-hero.png" width="941" height="1672" alt="Image2 直式宣傳圖：AI CRM 完整產品與全端技術棧主視覺。" loading="lazy" /></picture>
+          <picture><source srcset="assets/ai-crm/hahow-image2-vertical/02-eight-unit-journey.webp" type="image/webp" /><img src="assets/ai-crm/hahow-image2-vertical/02-eight-unit-journey.png" width="941" height="1672" alt="Image2 直式宣傳圖：8 單元學習旅程，以圖示與數字節點呈現。" loading="lazy" /></picture>
+          <picture><source srcset="assets/ai-crm/hahow-image2-vertical/03-rag-tool-calling-visual.webp" type="image/webp" /><img src="assets/ai-crm/hahow-image2-vertical/03-rag-tool-calling-visual.png" width="941" height="1672" alt="Image2 直式宣傳圖：RAG、Tool Calling 與 CRM 資料接回 AI 的概念視覺。" loading="lazy" /></picture>
+          <picture><source srcset="assets/ai-crm/hahow-image2-vertical/04-demo-day-showcase.webp" type="image/webp" /><img src="assets/ai-crm/hahow-image2-vertical/04-demo-day-showcase.png" width="941" height="1672" alt="Image2 直式宣傳圖：Demo Day 結訓展示與作品集情境。" loading="lazy" /></picture>
+        </div>
       </div>
     </section>
 
@@ -997,7 +1008,7 @@ details.accordion .acc-body {
       </div>
       <figure class="promo-visual section-visual is-mobile-art">
         <picture>
-          <source media="(max-width: 560px)" srcset="assets/promo/mobile/curriculum-roadmap-mobile.webp" / type="image/webp" />
+          <source media="(max-width: 560px)" srcset="assets/promo/mobile/curriculum-roadmap-mobile.webp" type="image/webp" />
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/curriculum-roadmap-mobile.png" />
           <source srcset="assets/promo/curriculum-roadmap.webp" type="image/webp" />
           <img src="assets/promo/curriculum-roadmap.png" width="1672" height="941" alt="8 大單元課程路線圖：環境與骨架、REST API、JPA 與資料庫、Security + JWT、React CRM、Spring AI、RAG + MCP、Demo Day。" loading="lazy" />
@@ -1111,7 +1122,7 @@ details.accordion .acc-body {
       </div>
       <figure class="promo-visual promo-visual-dark section-visual is-mobile-art">
         <picture>
-          <source media="(max-width: 560px)" srcset="assets/promo/mobile/demo-day-flow-mobile.webp" / type="image/webp" />
+          <source media="(max-width: 560px)" srcset="assets/promo/mobile/demo-day-flow-mobile.webp" type="image/webp" />
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/demo-day-flow-mobile.png" />
           <source srcset="assets/promo/demo-day-flow.webp" type="image/webp" />
           <img src="assets/promo/demo-day-flow.png" width="1672" height="941" alt="Demo Day 完整流程圖：登入、客戶、AI、RAG、Swagger，完整跑通 AI CRM 結訓專案。" loading="lazy" />
@@ -1119,39 +1130,62 @@ details.accordion .acc-body {
       </figure>
     </section>
 
-    <!-- 課程內容最後補充：superpowers 技能 -->
+    <!-- 課程內容最後補充：3 套 Claude Code 技能介紹（superpowers / ui-ux-pro-max / 部署） -->
     <section>
-      <div class="section-title" id="superpowers">
+      <div class="section-title" id="skills">
         <span class="eyebrow eyebrow-amber"><span aria-hidden="true">●</span> 課程內容最後補充</span>
-        <h2>真正開發時，靠 superpowers「規格先行」</h2>
-        <p class="lead">前面 8 個單元，是為了讓你真正理解「開發一套系統」從頭到尾的過程——有了這層 Domain Knowhow，你才有能力判斷 AI 產出的東西對不對。而實際動手時，我們會用 <strong>superpowers</strong> 這套 Claude Code 技能，先幫你把完整規格與計畫建構出來，再開始寫程式，而不是想到哪寫到哪。</p>
+        <h2>實戰開發，靠這 3 套 Claude Code 技能</h2>
+        <p class="lead">前面 8 個單元，是為了讓你真正理解「開發一套系統」從頭到尾的過程——有了這層 Domain Knowhow，你才有能力判斷 AI 產出的東西對不對。真正動手時，我們會用這 3 套 Claude Code 技能，把「<strong>規格先行 → 介面升級 → 一鍵部署</strong>」整條路走順，又快又穩地把系統做出來、推上線。</p>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));gap:16px;">
-        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:10px;">
-          <span class="badge badge-accent" style="align-self:flex-start;">Step 1</span>
-          <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--accent);"><i data-lucide="lightbulb" style="width:20px;height:20px;"></i></span><strong>釐清需求與設計</strong></div>
-          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">用 brainstorming 技能，先把「到底要做什麼、為誰做、有哪些取捨」問清楚，而不是急著寫程式。</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));gap:16px;align-items:stretch;">
+
+        <!-- 技能 1：superpowers（規格先行、計畫驅動） -->
+        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;">
+          <span class="badge badge-accent" style="align-self:flex-start;">技能 1</span>
+          <div style="display:flex;align-items:center;gap:10px;"><span style="color:var(--accent);"><i data-lucide="workflow" style="width:24px;height:24px;"></i></span><strong style="font-size:1.12rem;">superpowers</strong></div>
+          <p style="margin:0;color:var(--fg);font-weight:700;font-size:0.96rem;">規格先行、計畫驅動</p>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">不想到哪寫到哪——先把需求、規格與實作計畫建好，再讓 AI 照計畫一步步開發、收工前自動驗證。</p>
+          <div style="display:grid;gap:8px;margin-top:2px;">
+            <div style="display:flex;gap:8px;align-items:flex-start;font-size:0.9rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>brainstorming 釐清需求與取捨</div>
+            <div style="display:flex;gap:8px;align-items:flex-start;font-size:0.9rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>writing-plans 寫成可執行計畫</div>
+            <div style="display:flex;gap:8px;align-items:flex-start;font-size:0.9rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>executing-plans 搭配 TDD 逐步實作</div>
+            <div style="display:flex;gap:8px;align-items:flex-start;font-size:0.9rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>verification 收工前確認真的做對</div>
+          </div>
         </div>
-        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:10px;">
-          <span class="badge badge-accent" style="align-self:flex-start;">Step 2</span>
-          <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--accent);"><i data-lucide="file-text" style="width:20px;height:20px;"></i></span><strong>寫成完整規格與計畫</strong></div>
-          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">用 writing-plans 技能，把需求轉成一份可執行的實作計畫——拆成步驟、定義產出與驗收。</p>
+
+        <!-- 技能 2：ui-ux-pro-max（介面升級） -->
+        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;">
+          <span class="badge badge-accent" style="align-self:flex-start;">技能 2</span>
+          <div style="display:flex;align-items:center;gap:10px;"><span style="color:var(--accent);"><i data-lucide="palette" style="width:24px;height:24px;"></i></span><strong style="font-size:1.12rem;">ui-ux-pro-max</strong></div>
+          <p style="margin:0;color:var(--fg);font-weight:700;font-size:0.96rem;">把陽春介面升級成專業設計系統</p>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">用純 CSS 設計系統升級 UI——不動框架、不打爛既有測試，一次把色彩、間距、深色模式與可及性補齊。</p>
+          <div style="display:grid;gap:8px;margin-top:2px;">
+            <div style="display:flex;gap:8px;align-items:flex-start;font-size:0.9rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>完整 design token（淺／深色雙軌）</div>
+            <div style="display:flex;gap:8px;align-items:flex-start;font-size:0.9rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>共用元件樣式：按鈕、卡片、badge</div>
+            <div style="display:flex;gap:8px;align-items:flex-start;font-size:0.9rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>保留測試契約與 a11y（focus、aria）</div>
+            <div style="display:flex;gap:8px;align-items:flex-start;font-size:0.9rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>emoji 換成語意化 Lucide 圖示</div>
+          </div>
         </div>
-        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:10px;">
-          <span class="badge badge-accent" style="align-self:flex-start;">Step 3</span>
-          <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--accent);"><i data-lucide="code" style="width:20px;height:20px;"></i></span><strong>照計畫逐步開發</strong></div>
-          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">用 executing-plans 搭配 test-driven-development，讓 AI 照著計畫一步步實作，並用測試守住正確性。</p>
+
+        <!-- 技能 3：部署（Zeabur / Cloudflare 擇一） -->
+        <div class="card-solid card-hover" style="padding:24px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;">
+          <span class="badge badge-accent" style="align-self:flex-start;">技能 3</span>
+          <div style="display:flex;align-items:center;gap:10px;"><span style="color:var(--accent);"><i data-lucide="rocket" style="width:24px;height:24px;"></i></span><strong style="font-size:1.12rem;">一鍵部署上線</strong></div>
+          <p style="margin:0;color:var(--fg);font-weight:700;font-size:0.96rem;">Zeabur 與 Cloudflare 都能跑全端</p>
+          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">做完不只是跑在本機——兩家都能部署前後端，看你看重哪種優勢，就用哪家的技能把成果推上雲端、拿到可分享的網址。</p>
+          <div style="display:grid;gap:8px;margin-top:2px;">
+            <div style="display:flex;gap:8px;align-items:flex-start;font-size:0.9rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>Zeabur：模板豐富、小白友善，加速部署</div>
+            <div style="display:flex;gap:8px;align-items:flex-start;font-size:0.9rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>服務＋資料庫一鍵帶起，本課線上體驗即跑於此</div>
+            <div style="display:flex;gap:8px;align-items:flex-start;font-size:0.9rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>Cloudflare：Workers／Pages 前後端皆可，全球邊緣加速</div>
+            <div style="display:flex;gap:8px;align-items:flex-start;font-size:0.9rem;color:var(--fg);"><span style="color:var(--accent);margin-top:1px;"><i data-lucide="check" style="width:16px;height:16px;"></i></span>環境變數、網域、部署日誌一條龍</div>
+          </div>
         </div>
-        <div class="card-solid card-hover" style="padding:22px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:10px;">
-          <span class="badge badge-accent" style="align-self:flex-start;">Step 4</span>
-          <div style="display:flex;align-items:center;gap:9px;"><span style="color:var(--accent);"><i data-lucide="shield-check" style="width:20px;height:20px;"></i></span><strong>驗證與審查</strong></div>
-          <p style="margin:0;color:var(--muted);line-height:1.8;font-size:0.92rem;">用 verification-before-completion 與 code review 技能，在收工前確認真的做對、做完，而不是「看起來像對的」。</p>
-        </div>
+
       </div>
       <div style="margin-top:16px;">
         <div class="callout callout-accent">
           <strong style="display:block;margin-bottom:8px;color:var(--fg);font-weight:800;">為什麼先教你手動走一遍？</strong>
-          因為「規格先行」的前提，是你得先懂系統長什麼樣、需求該怎麼拆。前 8 單元把這層基本功打穩，superpowers 才能真正幫你又快又穩地把系統做出來——這也是懂系統的人用 AI 開發，會比別人領先一大截的原因。
+          因為這 3 套技能能發揮威力的前提，是你得先懂系統長什麼樣、需求該怎麼拆。前 8 單元把這層基本功打穩，superpowers、ui-ux-pro-max 與部署技能才能真正幫你又快又穩地把系統做出來、推上線——這也是懂系統的人用 AI 開發，會比別人領先一大截的原因。
         </div>
       </div>
     </section>
@@ -1165,7 +1199,7 @@ details.accordion .acc-body {
       </div>
       <figure class="promo-visual section-visual is-mobile-art">
         <picture>
-          <source media="(max-width: 560px)" srcset="assets/promo/mobile/course-comparison-mobile.webp" / type="image/webp" />
+          <source media="(max-width: 560px)" srcset="assets/promo/mobile/course-comparison-mobile.webp" type="image/webp" />
           <source media="(max-width: 560px)" srcset="assets/promo/mobile/course-comparison-mobile.png" />
           <source srcset="assets/promo/course-comparison.webp" type="image/webp" />
           <img src="assets/promo/course-comparison.png" width="1672" height="941" alt="課程比較圖：一般 LLM API 課、一般 Spring Boot 課與本課程的完整 AI CRM、RAG + Tool Calling、React 工作台、Demo Day 作品差異。" loading="lazy" />
