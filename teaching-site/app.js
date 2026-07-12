@@ -85,6 +85,7 @@ function translatePlatformText(text, platform) {
     .replace(/PowerShell 7\+/g, "zsh / bash")
     .replace(/PowerShell 7/g, "zsh / bash")
     .replace(/PowerShell/g, "zsh")
+    .replace(/winget/g, "Homebrew（brew）")
     .replace(/Invoke-RestMethod/g, "curl")
     .replace(/test-crm-api\.ps1/g, "test-crm-api.sh")
     .replace(/verify-u3\.ps1/g, "verify-u3.sh")
