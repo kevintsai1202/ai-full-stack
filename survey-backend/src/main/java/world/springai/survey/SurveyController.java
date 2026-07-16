@@ -163,7 +163,7 @@ public class SurveyController {
     /** 組成 CSV，前置 UTF-8 BOM 讓 Excel 正確判讀編碼 */
     private String toCsv(List<SurveyResponse> rows) {
         StringBuilder sb = new StringBuilder("﻿");
-        sb.append("id,email,name,role,experience,frontend_experience,interest,budget,answers,consent,unsubscribed,created_at\n");
+        sb.append("id,email,name,role,experience,frontend_experience,interest,budget,answers,utm,consent,unsubscribed,created_at\n");
         for (SurveyResponse r : rows) {
             sb.append(r.getId()).append(',')
               .append(csv(r.getEmail())).append(',')
@@ -174,6 +174,7 @@ public class SurveyController {
               .append(csv(r.getInterest() == null ? "" : String.join("|", r.getInterest()))).append(',')
               .append(csv(r.getBudget())).append(',')
               .append(csv(toJson(r.getAnswers()))).append(',')
+              .append(csv(toJson(r.getUtm()))).append(',')
               .append(r.isConsent()).append(',')
               .append(r.isUnsubscribed()).append(',')
               .append(csv(r.getCreatedAt() == null ? "" : r.getCreatedAt().toString())).append('\n');
@@ -181,8 +182,8 @@ public class SurveyController {
         return sb.toString();
     }
 
-    /** 把 answers map 轉成 JSON 字串供 CSV 欄位使用；失敗或為空回空字串 */
-    private String toJson(java.util.Map<String, Object> m) {
+    /** 把 answers 或 UTM map 轉成 JSON 字串供 CSV 欄位使用；失敗或為空回空字串 */
+    private String toJson(java.util.Map<?, ?> m) {
         if (m == null || m.isEmpty()) return "";
         try {
             return objectMapper.writeValueAsString(m);

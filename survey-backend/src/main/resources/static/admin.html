@@ -3,242 +3,248 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
-<title>寄信後台 · AI 賦能全端開發</title>
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>管理後台 · AI 賦能全端開發</title>
 <style>
-  :root{ --bg:#f7fafc; --fg:#102033; --muted:#5c6b7d; --border:#dfe6ee; --surface:#fff; --surface-2:#eef3f8;
-         --accent:#0d9488; --accent-deep:#0f766e; --accent-soft:#d9f3ef; --amber:#f59e0b; --danger:#dc2626;
-         --r:12px; --font:system-ui,-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif; }
-  *{box-sizing:border-box}
-  body{margin:0;font-family:var(--font);color:var(--fg);background:var(--bg);line-height:1.7}
-  .wrap{max-width:860px;margin:0 auto;padding:32px 20px 80px}
-  h1{font-size:1.5rem;margin:0 0 4px}
-  .sub{color:var(--muted);margin:0 0 24px}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:20px}
-  .card h2{font-size:1.05rem;margin:0 0 14px}
+  :root{--bg:#f5f8fb;--fg:#102033;--muted:#5c6b7d;--border:#dfe6ee;--surface:#fff;--surface-2:#eef3f8;
+    --accent:#0d9488;--accent-deep:#0f766e;--accent-soft:#d9f3ef;--amber:#f59e0b;--danger:#dc2626;
+    --r:12px;--shadow:0 14px 38px rgba(15,35,50,.08);--font:system-ui,-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif}
+  *{box-sizing:border-box} body{margin:0;font-family:var(--font);color:var(--fg);background:var(--bg);line-height:1.65}
+  button,input,select,textarea{font:inherit}.wrap{max-width:1440px;margin:0 auto;padding:28px 22px 80px}
+  .page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  h1{font-size:1.6rem;margin:0 0 4px}.sub{color:var(--muted);margin:0}.hint{color:var(--muted);font-size:.85rem}.warn{color:var(--amber);font-weight:700}
+  .tabs{display:flex;gap:8px;margin:24px 0}.tab{border:1px solid var(--border);background:var(--surface);color:var(--muted);padding:9px 16px;border-radius:999px;font-weight:800;cursor:pointer}
+  .tab.active{background:var(--accent-deep);border-color:var(--accent-deep);color:#fff}.view[hidden]{display:none!important}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:20px;box-shadow:var(--shadow)}
+  .card h2{font-size:1.05rem;margin:0 0 14px}.section-head{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}
   label{display:block;font-weight:700;margin:12px 0 6px;font-size:.92rem}
-  input[type=text],input[type=email],input[type=datetime-local],select,textarea{
-    width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:.98rem;font-family:inherit;background:#fff;color:var(--fg)}
-  textarea{min-height:180px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-  .row{display:flex;gap:12px;flex-wrap:wrap}
-  .row>div{flex:1;min-width:160px}
-  .btn{padding:10px 18px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-weight:800;cursor:pointer;font-size:.96rem}
-  .btn:hover{background:var(--accent-deep)} .btn:disabled{opacity:.55;cursor:not-allowed}
-  .btn.ghost{background:var(--surface-2);color:var(--accent-deep)}
-  .btn.danger{background:var(--danger)}
-  .count{font-weight:800;color:var(--accent-deep);font-size:1.1rem}
-  iframe.preview{width:100%;height:360px;border:1px solid var(--border);border-radius:8px;background:#fff}
-  .msg{margin-top:12px;padding:10px 12px;border-radius:8px;display:none}
-  .msg.ok{display:block;background:var(--accent-soft);color:var(--accent-deep)}
-  .msg.err{display:block;background:#fde8e8;color:var(--danger)}
-  .gate{position:fixed;inset:0;background:rgba(16,32,51,.6);display:flex;align-items:center;justify-content:center;z-index:50}
-  .gate .box{background:#fff;border-radius:var(--r);padding:28px;max-width:380px;width:90%}
-  table{width:100%;border-collapse:collapse;font-size:.9rem}
-  th,td{text-align:left;padding:8px;border-bottom:1px solid var(--border)}
-  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.78rem;font-weight:700}
-  .pill.scheduled{background:var(--accent-soft);color:var(--accent-deep)}
-  .pill.sent{background:#dcfce7;color:#166534}
-  .pill.sending{background:#fff2cc;color:#92580a}
-  .pill.failed{background:#fde8e8;color:var(--danger)}
-  .pill.cancelled{background:var(--surface-2);color:var(--muted)}
-  .hint{color:var(--muted);font-size:.85rem}
-  .warn{color:var(--amber);font-weight:700}
+  input[type=text],input[type=email],input[type=password],input[type=datetime-local],input[type=search],select,textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:.95rem;background:#fff;color:var(--fg)}
+  textarea{min-height:180px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.row{display:flex;gap:12px;flex-wrap:wrap}.row>div{flex:1;min-width:160px}
+  .btn{padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:800;cursor:pointer;font-size:.92rem;white-space:nowrap}
+  .btn:hover{background:var(--accent-deep)}.btn:disabled{opacity:.55;cursor:not-allowed}.btn.ghost{background:var(--surface-2);color:var(--accent-deep)}.btn.danger{background:var(--danger)}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}.count{font-weight:800;color:var(--accent-deep);font-size:1.1rem}iframe.preview{width:100%;height:360px;border:1px solid var(--border);border-radius:8px;background:#fff}
+  .msg{margin-top:12px;padding:10px 12px;border-radius:8px;display:none}.msg.ok{display:block;background:var(--accent-soft);color:var(--accent-deep)}.msg.err{display:block;background:#fde8e8;color:var(--danger)}
+  .gate{position:fixed;inset:0;background:rgba(16,32,51,.66);display:flex;align-items:center;justify-content:center;z-index:50}.gate .box{background:#fff;border-radius:var(--r);padding:28px;max-width:400px;width:90%;box-shadow:0 24px 70px rgba(0,0,0,.22)}
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;box-shadow:var(--shadow)}
+  .kpi-label{font-size:.8rem;color:var(--muted);font-weight:800;letter-spacing:.05em}.kpi-value{font-size:1.8rem;font-weight:900;margin-top:4px}.kpi-note{font-size:.8rem;color:var(--muted)}
+  .chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.chart-grid .card{margin:0}.chart{display:grid;gap:10px}.bar-row{display:grid;grid-template-columns:minmax(110px,1.2fr) 3fr 54px;gap:10px;align-items:center;font-size:.88rem}.bar-label{overflow-wrap:anywhere}.bar-track{height:9px;border-radius:999px;background:var(--surface-2);overflow:hidden}.bar-fill{height:100%;background:linear-gradient(90deg,var(--accent-deep),#20bcae);border-radius:inherit}.bar-value{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+  .full{grid-column:1/-1}.filters{display:grid;grid-template-columns:minmax(240px,2fr) repeat(4,minmax(130px,1fr));gap:10px;margin:12px 0}.filters label{margin:0}.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px;max-height:680px}
+  table{width:100%;border-collapse:separate;border-spacing:0;font-size:.84rem}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;min-width:110px;max-width:300px;overflow-wrap:anywhere}
+  th{position:sticky;top:0;background:#edf5f4;z-index:2;white-space:nowrap}tbody tr:hover{background:#f4fbfa}.empty{color:var(--muted);padding:20px;text-align:center}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.76rem;font-weight:700}.pill.scheduled{background:var(--accent-soft);color:var(--accent-deep)}.pill.sent{background:#dcfce7;color:#166534}.pill.sending{background:#fff2cc;color:#92580a}.pill.failed{background:#fde8e8;color:var(--danger)}.pill.cancelled{background:var(--surface-2);color:var(--muted)}
+  .suggestions{display:grid;gap:10px}.suggestion{border-left:4px solid var(--accent);background:#f7fbfb;border-radius:0 8px 8px 0;padding:12px 14px}.suggestion p{margin:0;white-space:pre-wrap}.suggestion small{display:block;color:var(--muted);margin-top:5px}
+  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.chart-grid{grid-template-columns:1fr}.full{grid-column:auto}.filters{grid-template-columns:1fr 1fr}.wrap{padding-inline:14px}}
+  @media(max-width:520px){.kpis,.filters{grid-template-columns:1fr}.bar-row{grid-template-columns:minmax(95px,1.2fr) 2fr 44px}}
 </style>
 </head>
 <body>
-<!-- 金鑰閘門：未驗證前覆蓋整頁 -->
+<!-- 金鑰閘門：未驗證前遮蔽所有分析與個資內容 -->
 <div class="gate" id="gate">
   <div class="box">
     <h2 style="margin-top:0">輸入管理金鑰</h2>
-    <p class="hint">需 X-Admin-Key 才能進入寄信後台。金鑰只存於本分頁（sessionStorage）。</p>
-    <input type="text" id="gate-key" placeholder="X-Admin-Key" autocomplete="off">
+    <p class="hint">問卷分析含個人資料，僅授權管理者可存取。金鑰只存於本分頁（sessionStorage），不會放入網址。</p>
+    <input type="password" id="gate-key" placeholder="X-Admin-Key" autocomplete="current-password">
     <div class="msg err" id="gate-msg"></div>
-    <button class="btn" id="gate-btn" style="margin-top:14px;width:100%">進入</button>
+    <button class="btn" id="gate-btn" style="margin-top:14px;width:100%">進入管理後台</button>
   </div>
 </div>
 
-<div class="wrap" id="app" hidden>
-  <h1>寄信後台</h1>
-  <p class="sub">撰寫並發送課程電子報。每封信會自動帶上該收件人的退訂連結。</p>
+<main class="wrap" id="app" hidden>
+  <header class="page-head">
+    <div><h1>課程管理後台</h1><p class="sub">受保護的問卷分析、原始資料匯出與電子報工具。</p></div>
+    <button class="btn ghost" id="lock-btn">鎖定並登出</button>
+  </header>
+  <nav class="tabs" aria-label="管理功能">
+    <button class="tab active" id="tab-analytics" data-view="analytics">問卷分析</button>
+    <button class="tab" id="tab-campaign" data-view="campaign">電子報寄送</button>
+  </nav>
 
-  <div class="card">
-    <h2>① 撰寫</h2>
-    <label for="subject">主旨</label>
-    <input type="text" id="subject" placeholder="電子報主旨">
-    <label for="markdown">內文（Markdown）</label>
-    <textarea id="markdown" placeholder="# 標題&#10;&#10;支援 **粗體**、清單、[連結](https://...)"></textarea>
-    <button class="btn ghost" id="preview-btn" style="margin-top:12px">更新預覽</button>
-    <div class="msg err" id="compose-msg"></div>
-  </div>
-
-  <div class="card">
-    <h2>② 預覽</h2>
-    <iframe class="preview" id="preview" title="預覽"></iframe>
-  </div>
-
-  <div class="card">
-    <h2>③ 發送對象</h2>
-    <div class="row">
-      <div>
-        <label for="role">身分（不限留空）</label>
-        <select id="role"><option value="">不限</option></select>
-      </div>
-      <div>
-        <label for="interest">想學主題（不限留空）</label>
-        <select id="interest"><option value="">不限</option></select>
-      </div>
+  <section class="view" id="analytics-view">
+    <div class="card section-head">
+      <div><h2 style="margin-bottom:2px">問卷回應總覽</h2><span class="hint" id="analytics-updated">尚未載入</span></div>
+      <div class="actions"><button class="btn ghost" id="analytics-refresh">重新整理</button><button class="btn ghost" id="export-json">匯出 JSON</button><button class="btn" id="export-csv">匯出 CSV</button></div>
     </div>
-    <p style="margin:14px 0 0">將寄給 <span class="count" id="rcount">—</span> 人　<button class="btn ghost" id="rcount-btn">更新人數</button></p>
-    <p class="hint" id="rsample"></p>
-    <p class="warn" id="quota-warn" hidden>⚠️ 超過每日 100 封額度，超量部分會失敗。</p>
-  </div>
-
-  <div class="card">
-    <h2>④ 測試寄送（寄給自己）</h2>
-    <div class="row">
-      <div><input type="email" id="test-to" placeholder="your@email.com"></div>
-      <div style="flex:0"><button class="btn ghost" id="test-btn">寄測試信</button></div>
+    <div class="msg" id="analytics-msg"></div>
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-label">總回應數</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-note">資料庫全部紀錄</div></div>
+      <div class="kpi"><div class="kpi-label">可寄送名單</div><div class="kpi-value" id="kpi-contactable">—</div><div class="kpi-note">已同意且未退訂</div></div>
+      <div class="kpi"><div class="kpi-label">已退訂</div><div class="kpi-value" id="kpi-unsubscribed">—</div><div class="kpi-note">不納入後續寄送</div></div>
+      <div class="kpi"><div class="kpi-label">最新回應</div><div class="kpi-value" id="kpi-latest" style="font-size:1.25rem">—</div><div class="kpi-note" id="kpi-range">—</div></div>
     </div>
-    <div class="msg" id="test-msg"></div>
-  </div>
-
-  <div class="card">
-    <h2>⑤ 發送</h2>
-    <div class="row" style="align-items:center">
-      <div style="flex:0">
-        <label style="display:inline;font-weight:400"><input type="radio" name="mode" value="now" checked> 立即發送</label>
-        <label style="display:inline;font-weight:400;margin-left:14px"><input type="radio" name="mode" value="schedule"> 排程</label>
+    <div class="chart-grid">
+      <article class="card"><h2>身分類型</h2><div class="chart" id="chart-role"></div></article>
+      <article class="card"><h2>Java／後端經驗</h2><div class="chart" id="chart-experience"></div></article>
+      <article class="card"><h2>前端經驗</h2><div class="chart" id="chart-frontend"></div></article>
+      <article class="card"><h2>課程預算</h2><div class="chart" id="chart-budget"></div></article>
+      <article class="card"><h2>想學主題</h2><div class="chart" id="chart-interest"></div></article>
+      <article class="card"><h2>目前狀態</h2><div class="chart" id="chart-status"></div></article>
+      <article class="card"><h2>學習目標</h2><div class="chart" id="chart-goals"></div></article>
+      <article class="card"><h2>開發痛點</h2><div class="chart" id="chart-pain"></div></article>
+      <article class="card full"><h2>UTM 歸因</h2><div class="chart" id="chart-utm"></div></article>
+      <article class="card full"><h2>全部自由填寫建議</h2><div class="suggestions" id="suggestions"></div></article>
+    </div>
+    <div class="card" style="margin-top:20px">
+      <div class="section-head"><h2 style="margin:0">完整原始資料</h2><span class="hint" id="raw-count">0 筆</span></div>
+      <div class="filters">
+        <label><span class="hint">全文搜尋</span><input type="search" id="raw-search" placeholder="姓名、Email、答案或 UTM"></label>
+        <label><span class="hint">身分</span><select id="raw-role"><option value="">全部</option></select></label>
+        <label><span class="hint">預算</span><select id="raw-budget"><option value="">全部</option></select></label>
+        <label><span class="hint">訂閱狀態</span><select id="raw-subscription"><option value="">全部</option><option value="contactable">可寄送</option><option value="unsubscribed">已退訂</option><option value="no-consent">未同意</option></select></label>
+        <label><span class="hint">排序</span><select id="raw-sort"><option value="desc">新到舊</option><option value="asc">舊到新</option></select></label>
       </div>
-      <div><input type="datetime-local" id="sched" disabled></div>
+      <div class="table-wrap"><table id="raw-table"><thead><tr id="raw-head"></tr></thead><tbody></tbody></table></div>
     </div>
-    <button class="btn" id="send-btn" style="margin-top:14px">發送</button>
-    <div class="msg" id="send-msg"></div>
-  </div>
+  </section>
 
-  <div class="card">
-    <h2>⑥ 寄送歷史　<button class="btn ghost" id="hist-btn">重新整理</button></h2>
-    <table id="hist"><thead><tr><th>主旨</th><th>模式</th><th>狀態</th><th>成功/失敗</th><th></th></tr></thead><tbody></tbody></table>
-  </div>
-</div>
+  <section class="view" id="campaign-view" hidden>
+    <div class="card"><h2>① 撰寫</h2><label for="subject">主旨</label><input type="text" id="subject" placeholder="電子報主旨"><label for="markdown">內文（Markdown）</label><textarea id="markdown" placeholder="# 標題&#10;&#10;支援 **粗體**、清單、[連結](https://...)"></textarea><button class="btn ghost" id="preview-btn" style="margin-top:12px">更新預覽</button><div class="msg err" id="compose-msg"></div></div>
+    <div class="card"><h2>② 預覽</h2><iframe class="preview" id="preview" title="預覽"></iframe></div>
+    <div class="card"><h2>③ 發送對象</h2><div class="row"><div><label for="role">身分（不限留空）</label><select id="role"><option value="">不限</option></select></div><div><label for="interest">想學主題（不限留空）</label><select id="interest"><option value="">不限</option></select></div></div><p style="margin:14px 0 0">將寄給 <span class="count" id="rcount">—</span> 人　<button class="btn ghost" id="rcount-btn">更新人數</button></p><p class="hint" id="rsample"></p><p class="warn" id="quota-warn" hidden>⚠️ 超過每日 100 封額度，超量部分會失敗。</p></div>
+    <div class="card"><h2>④ 測試寄送（寄給自己）</h2><div class="row"><div><input type="email" id="test-to" placeholder="your@email.com"></div><div style="flex:0"><button class="btn ghost" id="test-btn">寄測試信</button></div></div><div class="msg" id="test-msg"></div></div>
+    <div class="card"><h2>⑤ 發送</h2><div class="row" style="align-items:center"><div style="flex:0"><label style="display:inline;font-weight:400"><input type="radio" name="mode" value="now" checked> 立即發送</label><label style="display:inline;font-weight:400;margin-left:14px"><input type="radio" name="mode" value="schedule"> 排程</label></div><div><input type="datetime-local" id="sched" disabled></div></div><button class="btn" id="send-btn" style="margin-top:14px">發送</button><div class="msg" id="send-msg"></div></div>
+    <div class="card"><h2>⑥ 寄送歷史　<button class="btn ghost" id="hist-btn">重新整理</button></h2><div class="table-wrap"><table id="hist"><thead><tr><th>主旨</th><th>模式</th><th>狀態</th><th>成功/失敗</th><th></th></tr></thead><tbody></tbody></table></div></div>
+  </section>
+</main>
 
 <script>
-  // 金鑰存 sessionStorage；admin.html 與後端同源，API 用相對路徑
-  const KEY = 'survey_admin_key';
-  // 與問卷表單一致的選項
-  const ROLES = ["學生","應屆畢業生","後端工程師","前端工程師","全端工程師","行動 App 開發","資料／AI 工程師","DevOps／SRE","軟體架構師","技術主管／PM","非本科轉職者","接案／自由工作者","創業者","企業內訓窗口","其他"];
-  const INTERESTS = ["RAG 知識庫","Tool Calling","前端整合","Spring 其他模組","AI 輔助程式開發","Spring Security","資料庫","Docker 部署"];
+  // 管理金鑰只存於目前分頁，關閉分頁後即失效。
+  const KEY='survey_admin_key';
+  // 寄送篩選沿用問卷頁的固定選項。
+  const ROLES=["學生","應屆畢業生","後端工程師","前端工程師","全端工程師","行動 App 開發","資料／AI 工程師","DevOps／SRE","軟體架構師","技術主管／PM","非本科轉職者","接案／自由工作者","創業者","企業內訓窗口","其他"];
+  const INTERESTS=["RAG 知識庫","Tool Calling","前端整合","Spring 其他模組","AI 輔助程式開發","Spring Security","資料庫","Docker 部署"];
+  // 原始資料表明確列出所有實體欄位與答案內容，並保留完整 JSON 以涵蓋未來新增題目。
+  const RAW_COLUMNS=[
+    ['ID',r=>r.id],['填寫時間',r=>formatDate(r.createdAt)],['Email',r=>r.email],['姓名',r=>r.name],['身分',r=>r.role],
+    ['Java／後端經驗',r=>r.experience],['前端經驗',r=>r.frontendExperience],['預算',r=>r.budget],['想學主題',r=>listText(r.interest)],
+    ['目前狀態',r=>answer(r,'status')],['學習目標',r=>listText(answer(r,'goals'))],['開發痛點',r=>listText(answer(r,'pain_points'))],
+    ['建議',r=>answer(r,'suggestion')],['完整 answers',r=>jsonText(r.answers)],['完整 UTM',r=>jsonText(r.utm)],
+    ['同意寄送',r=>r.consent?'是':'否'],['已退訂',r=>r.unsubscribed?'是':'否']
+  ];
+  const $=selector=>document.querySelector(selector);
+  let surveyRows=[];
+  let analyticsLoaded=false;
 
-  const $ = s => document.querySelector(s);
-  /** 取得目前金鑰 */
-  function getKey(){ return sessionStorage.getItem(KEY) || ''; }
+  /** 取得目前分頁保存的管理金鑰。 */
+  function getKey(){return sessionStorage.getItem(KEY)||'';}
 
-  /** 統一 API 呼叫：帶金鑰與 JSON；401 清金鑰回閘門；非 2xx 拋錯 */
-  async function api(path, opts={}){
-    const res = await fetch(path, {...opts, headers:{'Content-Type':'application/json','X-Admin-Key':getKey(),...(opts.headers||{})}});
-    if (res.status === 401){ sessionStorage.removeItem(KEY); showGate('金鑰無效，請重新輸入'); throw new Error('401'); }
-    if (!res.ok) throw new Error('HTTP '+res.status);
-    const ct = res.headers.get('content-type') || '';
-    return ct.includes('application/json') ? res.json() : res.text();
+  /** 統一呼叫受保護 API；401 時立即清除資料並回到金鑰閘門。 */
+  async function api(path,opts={}){
+    const res=await fetch(path,{...opts,headers:{'Content-Type':'application/json','X-Admin-Key':getKey(),...(opts.headers||{})}});
+    if(res.status===401){sessionStorage.removeItem(KEY);surveyRows=[];showGate('金鑰無效，請重新輸入');throw new Error('401');}
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const ct=res.headers.get('content-type')||'';
+    return ct.includes('application/json')?res.json():res.text();
   }
 
-  /** 顯示閘門（可附訊息） */
-  function showGate(msg){ $('#app').hidden=true; $('#gate').style.display='flex'; if(msg){ const m=$('#gate-msg'); m.className='msg err'; m.textContent=msg; } }
-  /** 顯示主畫面 */
-  function showApp(){ $('#gate').style.display='none'; $('#app').hidden=false; }
+  /** 顯示金鑰閘門並確保分析內容不可見。 */
+  function showGate(message=''){$('#app').hidden=true;$('#gate').style.display='flex';const msg=$('#gate-msg');msg.className=message?'msg err':'msg';msg.textContent=message;}
 
-  // 閘門按鈕：存金鑰 → 試打 recipients 驗證
-  $('#gate-btn').onclick = async () => {
-    sessionStorage.setItem(KEY, $('#gate-key').value.trim());
-    try { await api('/api/admin/recipients'); showApp(); init(); } catch(e){ /* 401 已處理 */ }
-  };
+  /** 通過授權後才顯示管理頁面。 */
+  function showApp(){$('#gate').style.display='none';$('#app').hidden=false;}
 
-  /** 把字串陣列填入 select */
-  function fillSelect(id, items){ const el=$(id); items.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; el.appendChild(o); }); }
+  /** 切換問卷分析與電子報頁籤。 */
+  function switchView(name){document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!==name+'-view');document.querySelectorAll('.tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.view===name));if(name==='analytics'&&!analyticsLoaded)loadAnalytics();}
 
-  let inited=false;
-  /** 初始化主畫面事件與資料（僅一次） */
+  /** 把固定選項填入下拉選單。 */
+  function fillSelect(selector,items){const el=$(selector);items.forEach(value=>{const option=document.createElement('option');option.value=value;option.textContent=value;el.appendChild(option);});}
+
+  /** 初始化管理頁事件與資料，確保只執行一次。 */
   function init(){
-    if(inited) return; inited=true;
-    fillSelect('#role', ROLES); fillSelect('#interest', INTERESTS);
-    $('#preview-btn').onclick = doPreview;
-    $('#rcount-btn').onclick = doCount;
-    $('#role').onchange = doCount; $('#interest').onchange = doCount;
-    $('#test-btn').onclick = doTest;
-    $('#send-btn').onclick = doSend;
-    $('#hist-btn').onclick = doHistory;
-    document.querySelectorAll('input[name=mode]').forEach(r=> r.onchange=()=>{ $('#sched').disabled = (mode()!=='schedule'); });
-    doCount(); doHistory();
-  }
-  /** 目前發送模式 */
-  function mode(){ return document.querySelector('input[name=mode]:checked').value; }
-
-  /** 預覽：呼叫後端渲染，塞進 iframe */
-  async function doPreview(){
-    const m=$('#compose-msg'); m.className='msg';
-    try{ const r=await api('/api/admin/campaign/preview',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value})});
-      $('#preview').srcdoc = r.html; }
-    catch(e){ if(e.message!=='401'){ m.className='msg err'; m.textContent='預覽失敗：'+e.message; } }
+    if(init.done)return;init.done=true;
+    fillSelect('#role',ROLES);fillSelect('#interest',INTERESTS);
+    document.querySelectorAll('.tab').forEach(tab=>tab.onclick=()=>switchView(tab.dataset.view));
+    $('#lock-btn').onclick=()=>{sessionStorage.removeItem(KEY);location.reload();};
+    $('#analytics-refresh').onclick=()=>loadAnalytics(true);$('#export-json').onclick=()=>downloadProtected('/api/admin/survey','survey-responses.json');$('#export-csv').onclick=()=>downloadProtected('/api/admin/survey?format=csv','survey-responses.csv');
+    ['#raw-search','#raw-role','#raw-budget','#raw-subscription','#raw-sort'].forEach(selector=>$(selector).addEventListener(selector==='#raw-search'?'input':'change',renderRawTable));
+    $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=doCount;$('#role').onchange=doCount;$('#interest').onchange=doCount;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#hist-btn').onclick=doHistory;
+    document.querySelectorAll('input[name=mode]').forEach(radio=>radio.onchange=()=>{$('#sched').disabled=mode()!=='schedule';});
+    buildRawHeader();doCount();doHistory();switchView('analytics');
   }
 
-  /** 更新收件人數與樣本；>100 顯示額度警告 */
-  async function doCount(){
-    try{ const q=new URLSearchParams(); if($('#role').value)q.set('role',$('#role').value); if($('#interest').value)q.set('interest',$('#interest').value);
-      const r=await api('/api/admin/recipients?'+q.toString());
-      $('#rcount').textContent=r.count; $('#rsample').textContent = r.sample.length ? '樣本：'+r.sample.join(', ') : '';
-      $('#quota-warn').hidden = r.count<=100; }
-    catch(e){ if(e.message!=='401') $('#rcount').textContent='?'; }
+  /** 載入全部受保護問卷資料並重繪所有分析區塊。 */
+  async function loadAnalytics(force=false){
+    if(analyticsLoaded&&!force)return;const msg=$('#analytics-msg');msg.className='msg';
+    try{surveyRows=await api('/api/admin/survey');analyticsLoaded=true;renderAnalytics();$('#analytics-updated').textContent='更新時間：'+new Date().toLocaleString('zh-TW');}
+    catch(error){if(error.message!=='401'){msg.className='msg err';msg.textContent='問卷資料載入失敗：'+error.message;}}
   }
 
-  /** 寄測試信給指定信箱 */
-  async function doTest(){
-    const m=$('#test-msg'); m.className='msg';
-    const to=$('#test-to').value.trim(); if(!to){ m.className='msg err'; m.textContent='請填測試信箱'; return; }
-    try{ await api('/api/admin/campaign/test',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,to})});
-      m.className='msg ok'; m.textContent='測試信已寄給 '+to; }
-    catch(e){ if(e.message!=='401'){ m.className='msg err'; m.textContent='測試寄送失敗：'+e.message; } }
+  /** 重繪 KPI、分布、自由文字與完整明細。 */
+  function renderAnalytics(){
+    const dates=surveyRows.map(row=>new Date(row.createdAt)).filter(date=>!Number.isNaN(date.getTime())).sort((a,b)=>a-b);
+    $('#kpi-total').textContent=surveyRows.length;$('#kpi-contactable').textContent=surveyRows.filter(row=>row.consent&&!row.unsubscribed).length;$('#kpi-unsubscribed').textContent=surveyRows.filter(row=>row.unsubscribed).length;
+    $('#kpi-latest').textContent=dates.length?dates.at(-1).toLocaleDateString('zh-TW'):'—';$('#kpi-range').textContent=dates.length?'起始 '+dates[0].toLocaleDateString('zh-TW'):'尚無資料';
+    renderBars('#chart-role',countValues(surveyRows,row=>row.role));renderBars('#chart-experience',countValues(surveyRows,row=>row.experience));renderBars('#chart-frontend',countValues(surveyRows,row=>row.frontendExperience));renderBars('#chart-budget',countValues(surveyRows,row=>row.budget));
+    renderBars('#chart-interest',countValues(surveyRows,row=>row.interest,true));renderBars('#chart-status',countValues(surveyRows,row=>answer(row,'status')));renderBars('#chart-goals',countValues(surveyRows,row=>answer(row,'goals'),true));renderBars('#chart-pain',countValues(surveyRows,row=>answer(row,'pain_points'),true));
+    renderBars('#chart-utm',countUtm(surveyRows));renderSuggestions();resetFilterOptions();renderRawTable();
   }
 
-  /** 發送：確認人數 → 立即或排程 */
-  async function doSend(){
-    const m=$('#send-msg'); m.className='msg';
-    if(!$('#subject').value.trim()){ m.className='msg err'; m.textContent='請填主旨'; return; }
-    const count=$('#rcount').textContent;
-    const isSched = mode()==='schedule';
-    let scheduledAt=null;
-    if(isSched){ const v=$('#sched').value; if(!v){ m.className='msg err'; m.textContent='請選排程時間'; return; } scheduledAt=new Date(v).toISOString(); }
-    if(!confirm(`確定要${isSched?'排程':'立即'}發送給 ${count} 人嗎？`)) return;
-    $('#send-btn').disabled=true;
-    try{ const body={subject:$('#subject').value,markdown:$('#markdown').value,filter:{role:$('#role').value||null,interest:$('#interest').value||null},mode:mode(),scheduledAt};
-      const r=await api('/api/admin/campaign/send',{method:'POST',body:JSON.stringify(body)});
-      m.className='msg ok'; m.textContent=`已${isSched?'排程':'送出'}：收件 ${r.recipientCount}、成功 ${r.accepted}、失敗 ${r.failed}`;
-      doHistory(); }
-    catch(e){ if(e.message!=='401'){ m.className='msg err'; m.textContent='發送失敗：'+e.message; } }
-    finally{ $('#send-btn').disabled=false; }
+  /** 統計單選或複選欄位的完整分布。 */
+  function countValues(rows,selector,multiple=false){const counts=new Map();rows.forEach(row=>{const raw=selector(row);const values=multiple?(Array.isArray(raw)?raw:(raw?[raw]:[])):[raw];const normalized=values.length?values:['未填寫'];normalized.forEach(value=>{const label=String(value||'未填寫').trim()||'未填寫';counts.set(label,(counts.get(label)||0)+1);});});return [...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'zh-Hant'));}
+
+  /** 將所有 UTM 欄位和值合併成可比較的歸因分布。 */
+  function countUtm(rows){const counts=new Map();let missing=0;rows.forEach(row=>{const entries=Object.entries(row.utm||{}).filter(([,value])=>value!=null&&String(value).trim());if(!entries.length){missing++;return;}entries.forEach(([key,value])=>{const label=key+'：'+value;counts.set(label,(counts.get(label)||0)+1);});});if(missing)counts.set('未帶入 UTM',missing);return [...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'zh-Hant'));}
+
+  /** 以無套件水平長條呈現全部分類，避免資料被截斷。 */
+  function renderBars(selector,entries){const root=$(selector);root.replaceChildren();if(!entries.length){root.append(emptyNode('尚無資料'));return;}const max=Math.max(...entries.map(([,count])=>count),1);entries.forEach(([label,count])=>{const row=document.createElement('div');row.className='bar-row';const name=document.createElement('span');name.className='bar-label';name.textContent=label;name.title=label;const track=document.createElement('div');track.className='bar-track';const fill=document.createElement('div');fill.className='bar-fill';fill.style.width=(count/max*100)+'%';track.append(fill);const value=document.createElement('span');value.className='bar-value';value.textContent=count;row.append(name,track,value);root.append(row);});}
+
+  /** 顯示全部非空白自由填寫建議，不省略原文。 */
+  function renderSuggestions(){const root=$('#suggestions');root.replaceChildren();const rows=surveyRows.filter(row=>String(answer(row,'suggestion')||'').trim());if(!rows.length){root.append(emptyNode('目前沒有自由填寫建議'));return;}rows.forEach(row=>{const item=document.createElement('article');item.className='suggestion';const text=document.createElement('p');text.textContent=answer(row,'suggestion');const meta=document.createElement('small');meta.textContent=[row.name||'未具名',row.role||'未填身分',formatDate(row.createdAt)].join(' · ');item.append(text,meta);root.append(item);});}
+
+  /** 依目前資料重建身分與預算篩選選項。 */
+  function resetFilterOptions(){setDynamicOptions('#raw-role',surveyRows.map(row=>row.role));setDynamicOptions('#raw-budget',surveyRows.map(row=>row.budget));}
+
+  /** 保留「全部」選項並填入去重排序後的動態值。 */
+  function setDynamicOptions(selector,values){const el=$(selector);const current=el.value;el.replaceChildren(new Option('全部',''));[...new Set(values.filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'zh-Hant')).forEach(value=>el.add(new Option(value,value)));el.value=[...el.options].some(option=>option.value===current)?current:'';}
+
+  /** 建立完整原始資料表表頭。 */
+  function buildRawHeader(){const head=$('#raw-head');RAW_COLUMNS.forEach(([label])=>{const th=document.createElement('th');th.textContent=label;head.append(th);});}
+
+  /** 套用搜尋、篩選與排序後顯示全部符合的原始資料。 */
+  function renderRawTable(){
+    const term=$('#raw-search').value.trim().toLowerCase(),role=$('#raw-role').value,budget=$('#raw-budget').value,subscription=$('#raw-subscription').value,sort=$('#raw-sort').value;
+    const filtered=surveyRows.filter(row=>{if(term&&!jsonText(row).toLowerCase().includes(term))return false;if(role&&row.role!==role)return false;if(budget&&row.budget!==budget)return false;if(subscription==='contactable'&&!(row.consent&&!row.unsubscribed))return false;if(subscription==='unsubscribed'&&!row.unsubscribed)return false;if(subscription==='no-consent'&&row.consent)return false;return true;}).sort((a,b)=>dateValue(a.createdAt)-dateValue(b.createdAt));if(sort==='desc')filtered.reverse();
+    const body=$('#raw-table tbody');body.replaceChildren();filtered.forEach(row=>{const tr=document.createElement('tr');RAW_COLUMNS.forEach(([,getter])=>{const td=document.createElement('td');const value=getter(row);td.textContent=value==null?'':String(value);td.title=td.textContent;tr.append(td);});body.append(tr);});if(!filtered.length){const tr=document.createElement('tr'),td=emptyNode('沒有符合條件的資料');td.colSpan=RAW_COLUMNS.length;tr.append(td);body.append(tr);}$('#raw-count').textContent=filtered.length+' / '+surveyRows.length+' 筆';
   }
 
-  /** 載入寄送歷史；排程中的可取消 */
-  async function doHistory(){
-    try{ const rows=await api('/api/admin/campaigns'); const tb=$('#hist tbody'); tb.innerHTML='';
-      rows.forEach(c=>{ const tr=document.createElement('tr');
-        const cancelBtn = c.status==='scheduled' ? `<button class="btn danger" data-cancel="${c.id}">取消排程</button>` : '';
-        tr.innerHTML=`<td>${esc(c.subject)}</td><td>${esc(c.mode)}</td><td><span class="pill ${esc(c.status)}">${esc(c.status)}</span></td><td>${c.acceptedCount}/${c.failedCount}</td><td>${cancelBtn}</td>`;
-        tb.appendChild(tr); });
-      tb.querySelectorAll('[data-cancel]').forEach(b=> b.onclick=()=>doCancel(b.dataset.cancel)); }
-    catch(e){ /* 401 已處理；其餘忽略 */ }
+  /** 透過受保護請求下載資料，不將管理金鑰放進 URL。 */
+  async function downloadProtected(path,filename){
+    const msg=$('#analytics-msg');msg.className='msg';
+    try{const res=await fetch(path,{headers:{'X-Admin-Key':getKey()}});if(res.status===401){sessionStorage.removeItem(KEY);showGate('金鑰無效，請重新輸入');return;}if(!res.ok)throw new Error('HTTP '+res.status);const blob=await res.blob();const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=filename;document.body.append(link);link.click();link.remove();URL.revokeObjectURL(url);msg.className='msg ok';msg.textContent='已匯出 '+filename;}
+    catch(error){msg.className='msg err';msg.textContent='匯出失敗：'+error.message;}
   }
 
-  /** 取消某 campaign 排程 */
-  async function doCancel(id){
-    if(!confirm('確定取消此排程？')) return;
-    try{ const r=await api('/api/admin/campaigns/'+id+'/schedule',{method:'DELETE'}); alert(`已取消 ${r.cancelled} 封，失敗 ${r.failed}`); doHistory(); }
-    catch(e){ if(e.message!=='401') alert('取消失敗：'+e.message); }
-  }
+  /** 取得 answers 中指定題目的值。 */
+  function answer(row,key){return row.answers?.[key]??'';}
+  /** 將陣列轉成易讀文字，其餘值維持原樣。 */
+  function listText(value){return Array.isArray(value)?value.join('、'):(value??'');}
+  /** 安全序列化物件，供搜尋與完整資料欄位顯示。 */
+  function jsonText(value){try{return value==null?'':JSON.stringify(value);}catch(error){return String(value);}}
+  /** 將日期轉為台灣使用者可讀格式。 */
+  function formatDate(value){const date=new Date(value);return Number.isNaN(date.getTime())?'':date.toLocaleString('zh-TW');}
+  /** 取得可排序的日期毫秒值。 */
+  function dateValue(value){const time=new Date(value).getTime();return Number.isNaN(time)?0:time;}
+  /** 建立統一的空資料提示節點。 */
+  function emptyNode(text){const node=document.createElement('div');node.className='empty';node.textContent=text;return node;}
+  /** 取得目前電子報發送模式。 */
+  function mode(){return document.querySelector('input[name=mode]:checked').value;}
+  /** 呼叫後端渲染電子報預覽。 */
+  async function doPreview(){const m=$('#compose-msg');m.className='msg';try{const r=await api('/api/admin/campaign/preview',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value})});$('#preview').srcdoc=r.html;}catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='預覽失敗：'+e.message;}}}
+  /** 更新電子報收件人數與樣本。 */
+  async function doCount(){try{const q=new URLSearchParams();if($('#role').value)q.set('role',$('#role').value);if($('#interest').value)q.set('interest',$('#interest').value);const r=await api('/api/admin/recipients?'+q);$('#rcount').textContent=r.count;$('#rsample').textContent=r.sample.length?'樣本：'+r.sample.join(', '):'';$('#quota-warn').hidden=r.count<=100;}catch(e){if(e.message!=='401')$('#rcount').textContent='?';}}
+  /** 寄送電子報測試信給指定信箱。 */
+  async function doTest(){const m=$('#test-msg');m.className='msg';const to=$('#test-to').value.trim();if(!to){m.className='msg err';m.textContent='請填測試信箱';return;}try{await api('/api/admin/campaign/test',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,to})});m.className='msg ok';m.textContent='測試信已寄給 '+to;}catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='測試寄送失敗：'+e.message;}}}
+  /** 確認後立即發送或排程電子報。 */
+  async function doSend(){const m=$('#send-msg');m.className='msg';if(!$('#subject').value.trim()){m.className='msg err';m.textContent='請填主旨';return;}const count=$('#rcount').textContent,isSched=mode()==='schedule';let scheduledAt=null;if(isSched){const value=$('#sched').value;if(!value){m.className='msg err';m.textContent='請選排程時間';return;}scheduledAt=new Date(value).toISOString();}if(!confirm(`確定要${isSched?'排程':'立即'}發送給 ${count} 人嗎？`))return;$('#send-btn').disabled=true;try{const body={subject:$('#subject').value,markdown:$('#markdown').value,filter:{role:$('#role').value||null,interest:$('#interest').value||null},mode:mode(),scheduledAt};const r=await api('/api/admin/campaign/send',{method:'POST',body:JSON.stringify(body)});m.className='msg ok';m.textContent=`已${isSched?'排程':'送出'}：收件 ${r.recipientCount}、成功 ${r.accepted}、失敗 ${r.failed}`;doHistory();}catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='發送失敗：'+e.message;}}finally{$('#send-btn').disabled=false;}}
+  /** 載入電子報寄送歷史，排程中的項目提供取消按鈕。 */
+  async function doHistory(){try{const rows=await api('/api/admin/campaigns'),body=$('#hist tbody');body.innerHTML='';rows.forEach(c=>{const tr=document.createElement('tr');const cancel=c.status==='scheduled'?`<button class="btn danger" data-cancel="${c.id}">取消排程</button>`:'';tr.innerHTML=`<td>${esc(c.subject)}</td><td>${esc(c.mode)}</td><td><span class="pill ${esc(c.status)}">${esc(c.status)}</span></td><td>${c.acceptedCount}/${c.failedCount}</td><td>${cancel}</td>`;body.append(tr);});body.querySelectorAll('[data-cancel]').forEach(button=>button.onclick=()=>doCancel(button.dataset.cancel));}catch(e){/* 401 已由 api 處理，其餘維持既有畫面。 */}}
+  /** 取消指定的電子報排程。 */
+  async function doCancel(id){if(!confirm('確定取消此排程？'))return;try{const r=await api('/api/admin/campaigns/'+id+'/schedule',{method:'DELETE'});alert(`已取消 ${r.cancelled} 封，失敗 ${r.failed}`);doHistory();}catch(e){if(e.message!=='401')alert('取消失敗：'+e.message);}}
+  /** 轉義電子報歷史欄位，避免插入 HTML。 */
+  function esc(value){const div=document.createElement('div');div.textContent=value==null?'':String(value);return div.innerHTML;}
 
-  /** HTML 轉義，避免歷史欄位 XSS */
-  function esc(s){ const d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; }
-
-  // 啟動：有金鑰直接驗證進入，否則顯示閘門
-  (async ()=>{ if(getKey()){ try{ await api('/api/admin/recipients'); showApp(); init(); }catch(e){ /* 401 已處理 */ } } else { showGate(); } })();
+  $('#gate-btn').onclick=async()=>{sessionStorage.setItem(KEY,$('#gate-key').value.trim());try{await api('/api/admin/survey');showApp();init();}catch(error){/* 401 已由 api 顯示閘門。 */}};
+  $('#gate-key').addEventListener('keydown',event=>{if(event.key==='Enter')$('#gate-btn').click();});
+  (async()=>{if(getKey()){try{await api('/api/admin/survey');showApp();init();}catch(error){/* 401 已由 api 顯示閘門。 */}}else showGate();})();
 </script>
 </body>
 </html>

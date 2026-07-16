@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Map;
+import java.time.OffsetDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -19,6 +20,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** SurveyController 行為測試：驗證、蜜罐、admin 金鑰、即時統計、退訂 token、歡迎信觸發 */
@@ -86,6 +88,36 @@ class SurveyControllerTest {
     @Test
     void adminWithKeyReturns200() throws Exception {
         mvc.perform(get("/api/admin/survey").header("X-Admin-Key", "test-key")).andExpect(status().isOk());
+    }
+
+    /** CSV 匯出必須涵蓋問卷的所有資料欄位，包含 UTM 與延伸答案 */
+    @Test
+    void adminCsvExportsAllSurveyFields() throws Exception {
+        SurveyResponse response = new SurveyResponse();
+        response.setId(7L);
+        response.setEmail("user@example.com");
+        response.setName("測試者");
+        response.setRole("全端工程師");
+        response.setExperience("3-5 年");
+        response.setFrontendExperience("1-3 年");
+        response.setInterest(List.of("RAG 知識庫", "前端整合"));
+        response.setBudget("NT$3,000-5,000");
+        response.setAnswers(Map.of("status", "在職", "suggestion", "希望增加實作"));
+        response.setUtm(Map.of("source", "newsletter", "campaign", "summer"));
+        response.setConsent(true);
+        response.setUnsubscribed(false);
+        response.setCreatedAt(OffsetDateTime.parse("2026-07-16T10:30:00+08:00"));
+        when(repository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(response));
+
+        mvc.perform(get("/api/admin/survey")
+                .param("format", "csv")
+                .header("X-Admin-Key", "test-key"))
+           .andExpect(status().isOk())
+           .andExpect(content().contentTypeCompatibleWith("text/csv"))
+           .andExpect(content().string(org.hamcrest.Matchers.containsString(
+               "id,email,name,role,experience,frontend_experience,interest,budget,answers,utm,consent,unsubscribed,created_at")))
+           .andExpect(content().string(org.hamcrest.Matchers.containsString("newsletter")))
+           .andExpect(content().string(org.hamcrest.Matchers.containsString("希望增加實作")));
     }
 
     @Test

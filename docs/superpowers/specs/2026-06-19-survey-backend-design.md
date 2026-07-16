@@ -7,7 +7,7 @@
 
 ## 範圍
 
-**包含**：問卷前端頁、後端儲存 API、資料庫、受保護的名單查詢/匯出 API、部署到 Zeabur、驗證腳本。
+**包含**：問卷前端頁、後端儲存 API、資料庫、受保護的問卷分析頁與完整資料查詢/匯出 API、部署到 Zeabur、驗證腳本。
 **不包含（留給 C）**：所有寄信、電子報、廣告信、退訂流程。B 只先備好 `consent` 與 `unsubscribed` 欄位。
 
 ## 決策（已與開發者確認）
@@ -17,7 +17,7 @@
 | 後端技術 | Spring Boot 3.5 / Java 21 + PostgreSQL（與課程／ai-crm 同棧） |
 | 部署 | 同一個 Zeabur 專案 `hahow-ai-full-stack`（`6a3483c107afd8c0435e56c0`）新增 git 服務，Root Directory=`survey-backend`；PostgreSQL 用 Zeabur 模板部署 |
 | 問卷頁 | land-page 新增獨立靜態頁 `survey.html`，POST 到後端 `/api/survey` |
-| 資料檢視 | 受保護的管理 API（`X-Admin-Key` 標頭），支援 JSON 與 CSV 匯出；不另做後台頁面 |
+| 資料檢視 | `admin.html` 問卷分析頁，沿用受保護的管理 API（`X-Admin-Key` 標頭），支援 JSON 與 CSV 完整匯出；未授權者只會看到金鑰閘門 |
 | email 唯一性 | 不設 unique，允許重複填寫，去重留給 C |
 | 寄信 | 全部留給 C；B 不寄任何信 |
 
@@ -64,7 +64,7 @@ JPA 設 `ddl-auto: validate`，schema 由 Flyway 管理。`interest`/`utm` 以 J
   - 成功寫入回 `201 Created`。
 - `GET /api/admin/survey`（受保護）
   - 需 `X-Admin-Key` 標頭，比對環境變數 `ADMIN_API_KEY`；不符回 401。
-  - 預設回 JSON 清單；`?format=csv` 回 CSV（UTF-8 BOM，方便 Excel 開）。
+  - 預設回完整 JSON 清單；`?format=csv` 回完整 CSV（含 `answers`、`utm` 與所有實體欄位，UTF-8 BOM，方便 Excel 開）。
 - `GET /api/health`：回 200 與簡單狀態。
 
 ## 安全與錯誤處理
@@ -72,6 +72,7 @@ JPA 設 `ddl-auto: validate`，schema 由 Flyway 管理。`interest`/`utm` 以 J
 - CORS：僅允許 `https://springai.world` + 後端自身 zeabur.app 網域 + `http://127.0.0.1:*`（dev）。
 - 統一錯誤回應：用 Spring 的 `ProblemDetail`（驗證失敗、缺 consent、admin key 錯誤）。
 - 機密（DB 連線、`ADMIN_API_KEY`）一律環境變數，不寫死。
+- `admin.html` 本身不內嵌問卷資料；通過金鑰驗證前遮蔽管理內容，前端只把金鑰放在 `sessionStorage`，API 仍由後端逐次驗證，金鑰不進入網址或匯出檔。
 - 基本濫用防護：蜜罐欄位 + 後端對 `email` 長度與 payload 大小設上限。
 - 程式碼需中文函式級註解。
 
@@ -84,6 +85,13 @@ JPA 設 `ddl-auto: validate`，schema 由 Flyway 管理。`interest`/`utm` 以 J
 - 三種 UI 狀態：送出中、成功（顯示感謝訊息）、失敗（顯示重試）。
 - 成功時呼叫 `window.Tracking.event('survey_submit')`（接上子專案 A 的轉換追蹤）。
 - 蜜罐欄位以 CSS 隱藏，一般使用者看不到。
+
+## 受保護問卷分析 admin.html
+
+- 與既有電子報工具共用管理金鑰閘門；預設進入「問卷分析」頁籤，未授權時不顯示 KPI、圖表、自由文字或原始資料。
+- 從 `GET /api/admin/survey` 即時取得全部回應，呈現總回應、可寄送、退訂、日期範圍，以及身分、後端／前端經驗、預算、興趣、狀態、學習目標、痛點與 UTM 分布。
+- 完整列出所有自由填寫建議；原始資料表保留 `answers` 與 `utm` 完整 JSON，並提供全文搜尋、身分／預算／訂閱狀態篩選與日期排序。
+- JSON 與 CSV 匯出皆透過帶 `X-Admin-Key` 的請求下載，匯出內容涵蓋資料庫所有問卷欄位；產出的含個資檔案不得提交至版本庫。
 
 ## 部署
 
@@ -105,9 +113,10 @@ JPA 設 `ddl-auto: validate`，schema 由 Flyway 管理。`interest`/`utm` 以 J
 4. UTM 歸因有隨問卷一起存入。
 5. 送出成功觸發 `survey_submit` 追蹤事件。
 6. 服務部署於 Zeabur 同專案，push main 自動重建。
+7. `admin.html` 未授權時只顯示金鑰閘門；授權後可查看全部問卷分析、自由文字、完整明細，並匯出含所有欄位的 JSON／CSV。
 
 ## 非目標（YAGNI）
 
 - 不做寄信／電子報／退訂（C）。
-- 不做問卷編輯後台 UI（只做受保護 API + CSV 匯出）。
+- 不做問卷題目編輯、多版本或公開分析頁；管理後台僅提供受保護的分析、檢索與匯出。
 - 不做使用者帳號系統、不做問卷多版本管理。
