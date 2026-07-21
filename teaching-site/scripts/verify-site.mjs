@@ -51,7 +51,8 @@ async function main() {
 
   // 畫面真正渲染來源：day1.units + day2.units
   const allUnits = [...(course.day1?.units || []), ...(course.day2?.units || [])];
-  if (allUnits.length !== 8) errors.push(`course must contain 8 units (got ${allUnits.length})`);
+  // 8 個核心單元 + 1 個上線實戰延伸單元（u9）
+  if (allUnits.length !== 9) errors.push(`course must contain 9 units (got ${allUnits.length})`);
 
   for (const unit of allUnits) {
     if (!unit.principle || unit.principle.length < 80) errors.push(`${unit.id} principle is too thin`);

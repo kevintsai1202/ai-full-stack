@@ -598,7 +598,7 @@ function renderFeatureRoadmap(course) {
       <ul class="roadmap-feature-list">${features}</ul>
     </a>`;
   }).join("");
-  return `<section class="section glass-card" id="feature-roadmap"><div class="section-header"><h3>AI CRM 功能藍圖</h3><p>八個章節像一條產品生產線，每一站都為同一套 AI CRM 補上一塊可運作的功能。點任一卡片即可跳到該章節。</p></div><div class="feature-roadmap-grid">${cards}</div></section>`;
+  return `<section class="section glass-card" id="feature-roadmap"><div class="section-header"><h3>AI CRM 功能藍圖</h3><p>每一站都為同一套 AI CRM 補上一塊可運作的功能，像一條完整的產品生產線。點任一卡片即可跳到該章節。</p></div><div class="feature-roadmap-grid">${cards}</div></section>`;
 }
 
 /** 課程最後補充：superpowers 技能組，依階段分組列出每個技能的用途 */

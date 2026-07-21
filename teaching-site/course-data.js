@@ -1352,6 +1352,119 @@ window.COURSE = {
             "spec": "E2E Testing / Checklist / Demo Day"
           }
         ]
+      },
+      {
+        "id": "u9",
+        "title": "Cloudflare Tunnel 上線實戰——把 AI CRM 從內網推向全世界",
+        "subtitle": "用 Docker Compose 把整套 AI CRM 打包在自己的內網機器上，透過 Cloudflare Tunnel 打洞對外服務：免公網 IP、免開防火牆 port、零月費。",
+        "time": "延伸單元 · 上線實戰",
+        "features": [
+          "把結訓專案真正推上網：外網手機 4G 直接打開你內網機器上的 AI CRM，完成登入與 AI 對話。"
+        ],
+        "goals": [
+          "用 Docker Compose 把前端、後端、資料庫打包成一鍵啟動的部署組合",
+          "理解 Cloudflare Tunnel 反向打洞的網路模型與安全優勢",
+          "用 Quick Tunnel 免網域取得公開網址，讓外部實際連入內網系統",
+          "能判斷何時需要自備網域走 Named Tunnel 取得固定網址",
+          "完成 CORS、secret 與管理介面的上線安全收尾"
+        ],
+        "principle": "上線的本質是把「只有你的電腦看得到的系統」變成「全世界都連得到的服務」，而風險控制的關鍵在於連線方向。Cloudflare Tunnel 讓內網機器只主動向外建立連線，不在防火牆上開任何入站孔洞；系統打包則交給 Docker Compose，把四個服務的啟動順序、資料持久化與環境變數固定成一份可重複執行的檔案，讓「在我電腦上可以跑」變成「在任何一台機器上都可以跑」。",
+        "concepts": [
+          {
+            "heading": "部署選項全景：雲平台、Cloudflare Containers、自架 + Tunnel",
+            "group": "從 Demo Day 到真正上線",
+            "body": "把系統推上網有三條主要路線，各有適用場景：\n\n**1. 雲平台 PaaS（如 Zeabur、Render）**\n最省事，push 程式碼就自動建置部署，但服務與資料庫都在別人機器上，長期執行有月費。\n\n**2. Cloudflare Containers**\nCloudflare 的容器服務已正式 GA，可以用 wrangler 部署 Docker 映像到全球邊緣節點，但需要 Workers Paid 方案（US$5/月），且容器是「用完即睡」的無狀態運算——**不適合跑 PostgreSQL 這種有狀態資料庫**（Cloudflare 自家的 D1 是 SQLite，沒有 pgvector）。\n\n**3. 自架內網 + Cloudflare Tunnel（本單元主軸）**\n整套系統跑在你自己的機器上（家用電腦、公司閒置主機、NAS 都行），Cloudflare 只負責把外部流量安全地送進來。零月費、資料完全在自己手上，而且不需要公網 IP。\n\n本單元選擇路線 3：它最能延續課程「所有元件都自己掌控」的精神，pgvector 資料庫照常運作，也是自架服務（self-hosting）社群最主流的上線方式。",
+            "note": "三條路線不是互斥的：很多團隊用 Tunnel 驗證產品，流量成長後再搬到雲平台。判斷準則是資料主權、月費預算與維運人力。"
+          },
+          {
+            "heading": "Dockerfile 多階段建置",
+            "group": "打包整套系統",
+            "body": "部署的第一步是把前後端各自打包成映像檔。多階段建置（multi-stage build）讓建置工具留在建置階段，最終映像只帶執行需要的東西：\n\n**後端（Spring Boot）**\n- 第一階段用 Maven 映像執行 `mvn package`，產出 fat jar\n- 第二階段只用精簡 JRE 映像（如 `eclipse-temurin:21-jre`）承載 jar，映像體積從 800MB+ 降到 300MB 以下\n\n**前端（React + Vite）**\n- 第一階段用 Node 映像執行 `npm run build`，產出靜態檔\n- 第二階段用 nginx 映像服務 `dist/` 靜態檔，並反向代理 `/api` 到後端容器\n\n```dockerfile\n# 後端多階段建置示意\nFROM maven:3.9-eclipse-temurin-21 AS build\nWORKDIR /app\nCOPY pom.xml .\nRUN mvn dependency:go-offline\nCOPY src ./src\nRUN mvn package -DskipTests\n\nFROM eclipse-temurin:21-jre\nCOPY --from=build /app/target/*.jar app.jar\nENTRYPOINT [\"java\", \"-jar\", \"/app.jar\"]\n```\n\nnginx 反向代理讓前端和後端對瀏覽器來說是同一個網址來源（same origin），CORS 問題自然消失，這也是為什麼 Tunnel 只需要開一個入口。",
+            "note": "COPY pom.xml 與 COPY src 分成兩層是刻意的：依賴沒變時 Docker 會直接用快取層，重建速度差十倍以上。"
+          },
+          {
+            "heading": "docker-compose.yml 四服務編排",
+            "group": "打包整套系統",
+            "body": "Docker Compose 把四個服務的啟動順序、網路與資料持久化寫成一份宣告式檔案：\n\n| 服務 | 映像 | 職責 |\n|---|---|---|\n| frontend | 自建 nginx 映像 | 服務靜態檔 + 反代 /api |\n| backend | 自建 Spring Boot 映像 | REST API + AI 整合 |\n| postgres | pgvector/pgvector:pg16 | 資料庫 + 向量檢索 |\n| cloudflared | cloudflare/cloudflared | 對外打洞 |\n\n三個關鍵設定：\n\n**1. volume 持久化**：postgres 的資料目錄一定要掛 named volume，否則容器重建資料就消失。\n\n**2. healthcheck 與 depends_on**：backend 要等 postgres 健康檢查通過才啟動，避免開機時連線失敗；cloudflared 等 frontend 就緒。\n\n**3. 環境變數與 secret**：資料庫密碼、JWT secret、OpenAI API key 統一放 `.env` 檔（記得加入 `.gitignore`），compose 檔用 `${VAR}` 引用，不把任何密碼寫死在檔案裡。\n\n容器之間用服務名稱互相連線（如 `jdbc:postgresql://postgres:5432/crm`），Docker 內建的 DNS 會解析，完全不需要知道容器 IP。",
+            "note": "驗收標準之一：docker compose down 再 up 之後，客戶資料與向量索引都還在——這就是 volume 有沒有掛對的直接證據。"
+          },
+          {
+            "heading": "Tunnel 反向連線原理：為什麼不用開 port",
+            "group": "Cloudflare Tunnel 打洞",
+            "body": "傳統把內網服務公開的做法是 port forwarding：在路由器上開一個入站孔洞，把公網 IP 的某個 port 轉到內網機器。問題很多——需要固定公網 IP（或 DDNS）、防火牆上有永久開放的攻擊面、住宅網路常常拿不到真實公網 IP（CGNAT）。\n\nCloudflare Tunnel 把方向反過來：\n\n1. 內網機器上的 `cloudflared` 程式**主動向外**連到 Cloudflare 邊緣節點，建立加密的持久連線\n2. 外部使用者造訪你的公開網址時，流量進到 Cloudflare 邊緣\n3. Cloudflare 沿著這條「已經打好的洞」把請求反向送回你的內網機器\n\n因為連線是由內往外建立的（跟你打開瀏覽器上網是同一個方向），所以：\n- **不需要公網 IP**——CGNAT、4G 分享、宿舍網路都能用\n- **防火牆一個 port 都不用開**——沒有入站規則就沒有入站攻擊面\n- **來源 IP 被隱藏**——外界只看得到 Cloudflare，看不到你家的 IP",
+            "note": "這個模式的學名是 reverse tunnel（反向隧道）。同類服務還有 ngrok、Tailscale Funnel，原理相同；Cloudflare Tunnel 的優勢是免費額度大方且與 DNS、Access 整合最深。"
+          },
+          {
+            "heading": "Quick Tunnel 實作：五分鐘取得公開網址",
+            "group": "Cloudflare Tunnel 打洞",
+            "body": "Quick Tunnel（TryCloudflare）是最快的入門方式：**不用註冊帳號、不用網域、不用任何設定**，一行指令就取得公開網址：\n\n```powershell\n# 直接用 Docker 跑 cloudflared，把 frontend 服務打洞出去\ndocker run --rm --network ai-crm_default cloudflare/cloudflared:latest tunnel --url http://frontend:80\n```\n\n執行後畫面會顯示一個隨機網址（形如 `https://xxxx-yyyy.trycloudflare.com`），把它傳到手機上用 4G 開啟——你內網機器上的 AI CRM 就這樣上線了。\n\n寫進 docker-compose.yml 則是：\n\n```yaml\n  cloudflared:\n    image: cloudflare/cloudflared:latest\n    command: tunnel --url http://frontend:80\n    depends_on:\n      - frontend\n```\n\nQuick Tunnel 的限制要心裡有數：\n- 網址是**隨機的**，每次重啟都會換\n- 官方不保證可用性，**只適合 demo 與測試**\n- 不能綁自己的網域、不能搭配 Cloudflare Access 做存取控制\n\n要固定網址與正式經營，就要進入下一節的 Named Tunnel。",
+            "note": "打洞對象是 frontend 而不是 backend：nginx 已經把 /api 反代到後端，整套系統只需要一個對外入口，攻擊面最小。"
+          },
+          {
+            "heading": "需要自備網域嗎？Named Tunnel 與固定網址（選做）",
+            "group": "固定網址與安全",
+            "body": "「要不要買網域」是這個部署路線最常見的問題，答案取決於用途：\n\n| 情境 | 需要網域嗎 | 做法 |\n|---|---|---|\n| 課堂 demo、給朋友看 | 不需要 | Quick Tunnel 隨機網址 |\n| 作品集、長期經營、正式服務 | **需要** | Named Tunnel + 自有網域 |\n\nNamed Tunnel 的前置條件是**網域必須掛在 Cloudflare DNS**（Cloudflare 免費方案即可）。網域本身一年約 US$10，可以直接在 Cloudflare Registrar 購買（成本價、免轉入設定），也可以在其他註冊商買了再把 DNS 指到 Cloudflare。\n\n設定流程（選做實作）：\n1. Cloudflare Zero Trust 後台建立 Tunnel，取得 token\n2. cloudflared 改用 `tunnel run --token <TOKEN>` 啟動\n3. 在 Tunnel 的 Public Hostname 設定 `crm.你的網域.com` 指向 `http://frontend:80`\n4. DNS 紀錄自動建立，固定網址即刻生效，HTTPS 憑證由 Cloudflare 自動簽發\n\n完成後你的 AI CRM 就有一個可以印在履歷上的正式網址，而伺服器還是你家裡那台機器。",
+            "note": "課程不代學員購買網域；單元提供判斷準則與完整流程，學員依自己的需求決定是否投資這 US$10。"
+          },
+          {
+            "heading": "上線安全收尾",
+            "group": "固定網址與安全",
+            "body": "系統一旦公開，安全設定就從「作業要求」變成「真實防線」。上線前逐項確認：\n\n**1. 管理介面不該全世界看得到**\n用了 Named Tunnel 後，可以在 Cloudflare Access 免費設定存取政策：例如 `/admin` 路徑或 Swagger UI 只允許特定 Email 登入後存取，等於在你的系統前面多了一道 Cloudflare 的登入牆。\n\n**2. CORS 白名單收斂**\n開發時常設 `allowedOrigins(\"*\")`，上線前必須收斂成正式網址；如果前端由 nginx 同源反代，甚至可以完全關閉跨來源存取。\n\n**3. secret 全面體檢**\n- JWT secret 換成生產專用的隨機長字串\n- 資料庫密碼不用預設值\n- 所有 secret 只存在 `.env`（已加入 .gitignore），確認 git 歷史沒有洩漏\n\n**4. 最小暴露原則**\npostgres 的 5432 不需要對外，compose 裡不要寫 `ports:` 對映——容器網路內部互通即可。Tunnel 只指向 frontend 一個入口。",
+            "note": "Cloudflare 免費方案就附基本的 DDoS 防護與 WAF——這是自架 + Tunnel 相對於裸開 port forwarding 的隱藏紅利。"
+          }
+        ],
+        "prompt": "本章是課程的上線實戰單元：把 Unit 8 驗收完的 AI CRM 真正推上網。先把前後端與資料庫打包成 Docker Compose，在自己的內網機器一鍵啟動，再用 Cloudflare Tunnel 打洞取得公開網址，最後用手機 4G 實際連入驗收。理解原理後，依序使用下方提示詞請 AI 協助完成。",
+        "promptMac": "本章是課程的上線實戰單元：把 Unit 8 驗收完的 AI CRM 真正推上網。先把前後端與資料庫打包成 Docker Compose，在自己的內網機器一鍵啟動，再用 Cloudflare Tunnel 打洞取得公開網址，最後用手機 4G 實際連入驗收。理解原理後，依序使用下方提示詞請 AI 協助完成。",
+        "prompts": [
+          { "title": "① 把整套系統打包成 Docker Compose", "kind": "build", "note": "前端、後端、資料庫三合一，一鍵啟動", "text": "請幫我把這個專案打包成可以一鍵啟動的部署組合：網頁前端做成一個容器（用 nginx 服務靜態檔，並把 API 請求轉給後端）、後端做成一個容器（用多階段建置讓映像越小越好）、資料庫用支援向量檢索的 PostgreSQL 映像。資料庫的資料要放在持久化空間，容器重建後資料不能消失；所有密碼和金鑰都放在獨立的環境變數檔案，不要寫死在設定裡。完成後教我用一個指令啟動全部服務，並確認彼此連得通。請加中文註解。" },
+          { "title": "② 用 Cloudflare Tunnel 打洞上線", "kind": "build", "note": "免公網 IP、免開防火牆 port 取得公開網址", "text": "我的系統跑在內網機器上，沒有公網 IP，也不想在防火牆開任何 port。請幫我在剛才的部署組合中加入 Cloudflare 的打洞服務（cloudflared），用免費的快速通道模式把網頁前端公開出去，讓我拿到一個外部可以連的網址。請解釋這個連線是往哪個方向建立的、為什麼這樣比開 port 安全，以及這個隨機網址有什麼限制。" },
+          { "title": "③ 選做 — 綁定自己的網域取得固定網址", "kind": "build", "note": "有自備網域者：Named Tunnel + 固定子網域", "text": "我有一個自己的網域，已經把 DNS 掛到 Cloudflare 上。請一步一步教我把剛才的快速通道升級成正式通道：在 Cloudflare 後台建立通道、把啟動方式改成用 token、設定一個固定子網域指向我的網頁前端，並確認 HTTPS 憑證自動生效。最後幫我用 Cloudflare Access 把管理介面保護起來，只允許我的 Email 登入後存取。" },
+          { "title": "✅ 驗證 — 手機 4G 完整走一次系統", "kind": "verify", "note": "非同一內網連入才算真正上線", "text": "請陪我完成上線驗收：先確認一個指令能啟動全部服務，再把公開網址傳到手機上，關掉 WiFi 改用行動網路開啟網頁，完成登入、瀏覽客戶、跟 AI 對話並確認知識庫問答正常。最後測試把容器全部停掉重新啟動，確認資料都還在。全部通過才算真正上線成功。" },
+          { "title": "🔧 排錯 — 容器互連或打洞失敗", "kind": "fix", "note": "常見：後端連不上資料庫、通道網址打不開", "text": "我照步驟做但遇到問題（我會把錯誤訊息貼給你）。常見狀況有：後端容器啟動時連不上資料庫、前端打得開但 API 都失敗、打洞服務啟動了但外部網址打不開。請依我貼的訊息判斷是啟動順序、容器網路名稱、反向代理設定還是通道設定的問題，並直接幫我修正。" }
+        ],
+        "tasks": [
+          {
+            "id": "u9-t1",
+            "label": "為前端與後端撰寫多階段 Dockerfile 並建置成功"
+          },
+          {
+            "id": "u9-t2",
+            "label": "撰寫 docker-compose.yml 一鍵啟動四服務，確認資料持久化"
+          },
+          {
+            "id": "u9-t3",
+            "label": "用 cloudflared Quick Tunnel 取得公開網址"
+          },
+          {
+            "id": "u9-t4",
+            "label": "手機 4G 連入完成登入與 AI 對話驗收"
+          },
+          {
+            "id": "u9-t5",
+            "label": "（選做）自備網域設定 Named Tunnel 固定網址與 Access 保護"
+          }
+        ],
+        "materials": [],
+        "illustrations": [
+          {
+            "name": "u9-1.svg",
+            "kind": "hero",
+            "alt": "Cloudflare Tunnel 上線實戰",
+            "spec": "內網 Docker Compose + Cloudflare Tunnel 對外服務"
+          },
+          {
+            "name": "u9-2.svg",
+            "kind": "diagram",
+            "alt": "Tunnel 反向連線流程",
+            "spec": "流程圖：內網機器 -> cloudflared 出站連線 -> Cloudflare 邊緣 -> 外部使用者"
+          },
+          {
+            "name": "u9-3-term.svg",
+            "kind": "term",
+            "alt": "Cloudflare Tunnel 上線實戰 專業術語解釋",
+            "spec": "Reverse Tunnel / Quick Tunnel / Named Tunnel / Multi-stage Build"
+          }
+        ]
       }
     ]
   },

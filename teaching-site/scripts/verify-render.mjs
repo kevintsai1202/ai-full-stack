@@ -88,9 +88,9 @@ async function verifyProfile(browser, profile) {
   const title = await page.locator("#courseTitle").innerText();
   assert.match(title, /AI 賦能全端開發/, `${profile.id}: 課程標題未正確渲染`);
 
-  // 2. 驗證單元數量是否為 8 個
+  // 2. 驗證單元數量：8 個核心單元 + 1 個上線實戰延伸單元（u9）
   const unitCount = await page.locator(".unit").count();
-  assert.equal(unitCount, 8, `${profile.id}: 渲染的單元數量錯誤 (預期為 8)`);
+  assert.equal(unitCount, 9, `${profile.id}: 渲染的單元數量錯誤 (預期為 9)`);
 
   // 3. 驗證所有頁面上的圖片皆加載成功 (寬度大於 0 且載入完成)
   const images = await page.locator("img");

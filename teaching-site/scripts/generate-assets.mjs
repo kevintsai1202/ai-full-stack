@@ -127,6 +127,21 @@ const unitSpecs = [
     ],
     flow: ["Snapshot", "Risk Review", "Draft Action", "Trace Panel"],
     colors: [palette.violet, palette.rose, palette.amber, palette.green]
+  },
+  {
+    // 募資達 100 人解鎖的加碼單元：Cloudflare Tunnel 上線實戰
+    id: "u9",
+    heroTitle: "Cloudflare Tunnel 上線實戰",
+    heroSubtitle: "內網 Docker Compose + Cloudflare Tunnel 對外服務",
+    diagramTitle: "Tunnel 反向連線流程",
+    terms: [
+      ["Reverse Tunnel", "連線由內網主動向外建立，外部流量反向送回，免開任何入站 port。"],
+      ["Quick Tunnel", "免帳號免網域取得 trycloudflare.com 隨機網址，適合 demo。"],
+      ["Named Tunnel", "綁定自有網域的固定網址正式通道，網域需掛在 Cloudflare DNS。"],
+      ["Multi-stage Build", "建置工具留在建置階段，最終映像只帶執行環境，體積大幅縮小。"]
+    ],
+    flow: ["Compose 打包", "Tunnel 打洞", "外網驗收", "安全收尾"],
+    colors: [palette.blue, palette.amber, palette.green, palette.violet]
   }
 ];
 
