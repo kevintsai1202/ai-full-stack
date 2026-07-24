@@ -10,4 +10,7 @@ public interface EmailLogRepository extends JpaRepository<EmailLog, Long> {
     List<EmailLog> findByCampaignId(Long campaignId);
     /** 某 campaign 中特定狀態的寄送記錄（取消排程用） */
     List<EmailLog> findByCampaignIdAndStatus(Long campaignId, String status);
+
+    /** 特定類型與狀態的所有寄送記錄（邀請信跳過已寄過者用） */
+    List<EmailLog> findByTypeAndStatus(String type, String status);
 }

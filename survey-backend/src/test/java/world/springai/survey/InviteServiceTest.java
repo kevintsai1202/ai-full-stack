@@ -51,7 +51,7 @@ class InviteServiceTest {
             .thenReturn(List.of(pending("a@example.com"), pending("b@example.com")));
         when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
 
-        InviteService.InviteResult result = service.sendInvites("exam");
+        InviteService.InviteResult result = service.sendInvites("exam", null);
 
         assertEquals(2, result.recipientCount());
         assertEquals(2, result.accepted());
@@ -62,6 +62,39 @@ class InviteServiceTest {
             contains("/api/survey/confirm?email=a%40example.com&t=" + expectedToken));
     }
 
+    /** 已寄過邀請（email_log type=invite status=sent）的人應跳過，不重複寄 */
+    @Test
+    void skipsAlreadyInvitedRecipients() {
+        when(repository.findBySourceAndConsentFalseAndUnsubscribedFalse("exam"))
+            .thenReturn(List.of(pending("a@example.com"), pending("b@example.com")));
+        when(emailLogRepository.findByTypeAndStatus("invite", "sent"))
+            .thenReturn(List.of(new EmailLog("A@example.com", "主旨", "invite", "msg-0", "sent", null)));
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        InviteService.InviteResult result = service.sendInvites("exam", null);
+
+        assertEquals(1, result.recipientCount());
+        assertEquals(1, result.accepted());
+        assertEquals(1, result.alreadyInvited());
+        verify(mailSender, org.mockito.Mockito.never()).send(eq("a@example.com"), anyString(), anyString());
+        verify(mailSender).send(eq("b@example.com"), anyString(), anyString());
+    }
+
+    /** limit 應限制單次寄送數量，其餘計入 remaining 供分天寄送 */
+    @Test
+    void limitCapsSendCountAndReportsRemaining() {
+        when(repository.findBySourceAndConsentFalseAndUnsubscribedFalse("exam"))
+            .thenReturn(List.of(pending("a@example.com"), pending("b@example.com"), pending("c@example.com")));
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        InviteService.InviteResult result = service.sendInvites("exam", 2);
+
+        assertEquals(2, result.recipientCount());
+        assertEquals(2, result.accepted());
+        assertEquals(1, result.remaining());
+        verify(mailSender, org.mockito.Mockito.times(2)).send(anyString(), anyString(), anyString());
+    }
+
     /** 每封信成功寄出後應寫入 type=invite、status=sent 的寄送記錄 */
     @Test
     void logsSentInvite() {
@@ -69,7 +102,7 @@ class InviteServiceTest {
             .thenReturn(List.of(pending("a@example.com")));
         when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-9");
 
-        service.sendInvites("exam");
+        service.sendInvites("exam", null);
 
         ArgumentCaptor<EmailLog> captor = ArgumentCaptor.forClass(EmailLog.class);
         verify(emailLogRepository).save(captor.capture());
@@ -87,7 +120,7 @@ class InviteServiceTest {
             .thenThrow(new RuntimeException("boom"));
         when(mailSender.send(eq("ok@example.com"), anyString(), anyString())).thenReturn("msg-2");
 
-        InviteService.InviteResult result = service.sendInvites("exam");
+        InviteService.InviteResult result = service.sendInvites("exam", null);
 
         assertEquals(2, result.recipientCount());
         assertEquals(1, result.accepted());
@@ -104,7 +137,7 @@ class InviteServiceTest {
             .thenReturn(List.of(pending("a@example.com")));
         when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
 
-        service.sendInvites("exam");
+        service.sendInvites("exam", null);
 
         verify(mailSender).send(anyString(), anyString(), contains("深入的技術討論"));
     }

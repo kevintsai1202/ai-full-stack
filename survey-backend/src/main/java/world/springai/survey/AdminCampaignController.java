@@ -110,8 +110,8 @@ public class AdminCampaignController {
         return campaignService.send(req.subject(), req.markdown(), role, interest, req.mode(), scheduledAt);
     }
 
-    /** 邀請確認信請求：待確認名單的來源標記（如 exam） */
-    public record InviteRequest(String source) {}
+    /** 邀請確認信請求：待確認名單的來源標記（如 exam）與單次寄送上限（配合每日額度） */
+    public record InviteRequest(String source, Integer limit) {}
 
     /** 對指定來源的待確認名單寄二次確認邀請信，需提供有效金鑰 */
     @PostMapping("/api/admin/campaign/invite")
@@ -122,7 +122,7 @@ public class AdminCampaignController {
         if (req.source() == null || req.source().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "source 為必填");
         }
-        return inviteService.sendInvites(req.source());
+        return inviteService.sendInvites(req.source(), req.limit());
     }
 
     /** 取得歷史 campaign 列表（依建立時間降冪），需提供有效金鑰 */

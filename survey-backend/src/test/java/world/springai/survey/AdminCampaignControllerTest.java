@@ -39,18 +39,20 @@ class AdminCampaignControllerTest {
            .andExpect(status().isUnauthorized());
     }
 
-    /** 邀請確認信：有金鑰時委派 InviteService 並回寄送摘要 */
+    /** 邀請確認信：有金鑰時委派 InviteService（含 limit）並回寄送摘要 */
     @Test
     void inviteWithKeyDelegatesAndReturnsSummary() throws Exception {
-        when(inviteService.sendInvites("exam"))
-            .thenReturn(new InviteService.InviteResult(3, 2, 1));
+        when(inviteService.sendInvites("exam", 100))
+            .thenReturn(new InviteService.InviteResult(3, 2, 1, 5, 10));
         mvc.perform(post("/api/admin/campaign/invite").header("X-Admin-Key", "test-key")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"source\":\"exam\"}"))
+                .content("{\"source\":\"exam\",\"limit\":100}"))
            .andExpect(status().isOk())
            .andExpect(jsonPath("$.recipientCount").value(3))
            .andExpect(jsonPath("$.accepted").value(2))
-           .andExpect(jsonPath("$.failed").value(1));
+           .andExpect(jsonPath("$.failed").value(1))
+           .andExpect(jsonPath("$.alreadyInvited").value(5))
+           .andExpect(jsonPath("$.remaining").value(10));
     }
 
     /** 邀請確認信：缺 source 回 400 */

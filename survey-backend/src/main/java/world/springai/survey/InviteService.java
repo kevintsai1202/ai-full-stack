@@ -40,15 +40,36 @@ public class InviteService {
         this.publicBaseUrl = publicBaseUrl;
     }
 
-    /** 邀請寄送結果摘要 */
-    public record InviteResult(int recipientCount, int accepted, int failed) {}
+    /**
+     * 邀請寄送結果摘要：
+     * recipientCount=本次實際嘗試數、alreadyInvited=已寄過而跳過數、remaining=因 limit 未寄的剩餘數
+     */
+    public record InviteResult(int recipientCount, int accepted, int failed,
+                               int alreadyInvited, int remaining) {}
 
-    /** 對指定來源的待確認名單逐封寄邀請信；單封失敗不中斷整批 */
-    public InviteResult sendInvites(String source) {
+    /**
+     * 對指定來源的待確認名單逐封寄邀請信；單封失敗不中斷整批。
+     * 已寄過邀請者（email_log type=invite status=sent）自動跳過，避免重跑時重複騷擾；
+     * limit 有值時單次最多寄 limit 封（配合寄信額度分天寄送），其餘回報於 remaining。
+     */
+    public InviteResult sendInvites(String source, Integer limit) {
         List<SurveyResponse> pending = repository.findBySourceAndConsentFalseAndUnsubscribedFalse(source);
+        // 已寄過邀請的 email 集合（正規化為小寫比對）
+        java.util.Set<String> invited = emailLogRepository.findByTypeAndStatus("invite", "sent").stream()
+            .map(l -> l.getRecipient().trim().toLowerCase())
+            .collect(java.util.stream.Collectors.toSet());
+        List<SurveyResponse> eligible = pending.stream()
+            .filter(r -> !invited.contains(r.getEmail().trim().toLowerCase()))
+            .toList();
+        int alreadyInvited = pending.size() - eligible.size();
+        // 套用單次寄送上限；剩餘數留給下次呼叫
+        List<SurveyResponse> targets = (limit != null && limit > 0 && limit < eligible.size())
+            ? eligible.subList(0, limit) : eligible;
+        int remaining = eligible.size() - targets.size();
+
         int accepted = 0;
         int failed = 0;
-        for (SurveyResponse r : pending) {
+        for (SurveyResponse r : targets) {
             try {
                 String id = mailSender.send(r.getEmail(), SUBJECT, buildHtml(r.getEmail()));
                 emailLogRepository.save(new EmailLog(r.getEmail(), SUBJECT, "invite", id, "sent", null));
@@ -59,7 +80,7 @@ public class InviteService {
                 failed++;
             }
         }
-        return new InviteResult(pending.size(), accepted, failed);
+        return new InviteResult(targets.size(), accepted, failed, alreadyInvited, remaining);
     }
 
     /** 組確認連結：/api/survey/confirm?email=<urlencoded>&t=<HMAC token> */
