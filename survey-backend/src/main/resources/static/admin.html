@@ -110,7 +110,9 @@
         <div><label for="invite-source">名單來源</label><select id="invite-source"><option value="exam">線上測驗</option><option value="survey_form">問卷填寫</option></select></div>
         <div><label for="invite-limit">單次上限（每日額度 100 封）</label><input type="number" id="invite-limit" value="50" min="1" max="100"></div>
         <div style="flex:0"><button class="btn" id="invite-send-btn">寄送邀請信</button></div>
+        <div style="flex:0"><button class="btn ghost" id="invite-remind-btn">補送提醒</button></div>
       </div>
+      <p class="hint" style="margin-top:6px">補送提醒：寄給「已邀請滿 3 天仍未確認」者，每人最多補送一次。</p>
       <div class="msg" id="invite-msg"></div>
       <details id="invite-tpl" style="margin-top:14px">
         <summary style="cursor:pointer;font-weight:700">編輯邀請信範本</summary>
@@ -124,7 +126,7 @@
         </div>
       </details>
       <p style="margin:14px 0 8px" id="invite-stats" class="hint">統計載入中…</p>
-      <div class="table-wrap"><table id="invite-log"><thead><tr><th>Email</th><th>狀態</th><th>時間</th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap"><table id="invite-log"><thead><tr><th>Email</th><th>類型</th><th>狀態</th><th>時間</th></tr></thead><tbody></tbody></table></div>
     </div>
   </section>
 </main>
@@ -185,7 +187,7 @@
     $('#analytics-refresh').onclick=()=>loadAnalytics(true);$('#export-json').onclick=()=>downloadProtected('/api/admin/survey','survey-responses.json');$('#export-csv').onclick=()=>downloadProtected('/api/admin/survey?format=csv','survey-responses.csv');$('#export-pdf').onclick=exportPdf;
     ['#raw-search','#raw-source','#raw-role','#raw-budget','#raw-subscription','#raw-sort'].forEach(selector=>$(selector).addEventListener(selector==='#raw-search'?'input':'change',renderRawTable));
     $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=doCount;$('#role').onchange=doCount;$('#interest').onchange=doCount;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#hist-btn').onclick=doHistory;
-    $('#invite-refresh').onclick=doInviteOverview;$('#invite-source').onchange=doInviteOverview;$('#invite-send-btn').onclick=doSendInvites;
+    $('#invite-refresh').onclick=doInviteOverview;$('#invite-source').onchange=doInviteOverview;$('#invite-send-btn').onclick=doSendInvites;$('#invite-remind-btn').onclick=doSendReminders;
     $('#invite-tpl').addEventListener('toggle',()=>{if($('#invite-tpl').open)loadInviteTemplate();});$('#tpl-preview-btn').onclick=previewInviteTemplate;$('#tpl-save-btn').onclick=saveInviteTemplate;
     document.querySelectorAll('input[name=mode]').forEach(radio=>radio.onchange=()=>{$('#sched').disabled=mode()!=='schedule';});
     buildRawHeader();doCount();doHistory();doInviteOverview();switchView('analytics');
@@ -365,14 +367,24 @@
   function exitEditMode(){editingCampaignId=null;$('#send-btn').textContent='發送';}
   /** 載入邀請記錄與成效統計（invitedCount 已寄、confirmedCount 已確認、pendingCount 待邀請）。 */
   async function doInviteOverview(){try{const source=$('#invite-source').value,o=await api('/api/admin/invites?source='+encodeURIComponent(source));
-      $('#invite-stats').textContent=`已寄邀請 ${o.invitedCount} 人 ・ 已確認訂閱 ${o.confirmedCount} 人 ・ 待邀請 ${o.pendingCount} 人（來源：${sourceLabel(source)}）`;
+      $('#invite-stats').textContent=`已寄邀請 ${o.invitedCount} 人 ・ 已補送提醒 ${o.remindedCount} 人 ・ 已確認訂閱 ${o.confirmedCount} 人 ・ 待邀請 ${o.pendingCount} 人（來源：${sourceLabel(source)}）`;
       const body=$('#invite-log tbody');body.textContent='';
-      if(!o.logs.length){const tr=document.createElement('tr'),td=cell('尚無邀請記錄');td.colSpan=3;tr.append(td);body.append(tr);return;}
-      o.logs.forEach(l=>{const tr=document.createElement('tr');tr.append(cell(l.recipient));
+      if(!o.logs.length){const tr=document.createElement('tr'),td=cell('尚無邀請記錄');td.colSpan=4;tr.append(td);body.append(tr);return;}
+      o.logs.forEach(l=>{const tr=document.createElement('tr');tr.append(cell(l.recipient),cell(l.type==='invite_reminder'?'提醒':'邀請'));
         const st=document.createElement('td'),pill=document.createElement('span');pill.className='pill '+l.status;pill.textContent=l.status;st.append(pill);
         if(l.error){const err=document.createElement('small');err.style.cssText='display:block;color:#b91c1c';err.textContent=l.error;st.append(err);}
         tr.append(st,cell(formatDate(l.createdAt)));body.append(tr);});
     }catch(e){if(e.message!=='401')$('#invite-stats').textContent='邀請記錄載入失敗：'+e.message;}}
+  /** 確認後補送提醒信給「已邀請滿 3 天仍未確認」者（每人最多一次）。 */
+  async function doSendReminders(){const m=$('#invite-msg');m.className='msg';const source=$('#invite-source').value,limit=parseInt($('#invite-limit').value,10);
+    if(!limit||limit<1){m.className='msg err';m.textContent='請填有效的單次上限';return;}
+    if(!confirm(`確定對「${sourceLabel(source)}」補送提醒信（僅寄給已邀請滿 3 天仍未確認者，每人最多一次，單次最多 ${limit} 封）？`))return;
+    $('#invite-remind-btn').disabled=true;
+    try{const r=await api('/api/admin/campaign/invite/remind',{method:'POST',body:JSON.stringify({source,limit})});
+      m.className='msg ok';m.textContent=`提醒 ${r.recipientCount} 封：成功 ${r.accepted}、失敗 ${r.failed}；已提醒跳過 ${r.alreadyReminded}、未滿 3 天跳過 ${r.tooRecent}、剩餘 ${r.remaining} 人待補送。`;
+      doInviteOverview();
+    }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='提醒寄送失敗：'+e.message;}}
+    finally{$('#invite-remind-btn').disabled=false;}}
   /** 首次展開時載入邀請信範本到編輯區。 */
   async function loadInviteTemplate(){if(loadInviteTemplate.done)return;try{const t=await api('/api/admin/templates/invite');$('#tpl-subject').value=t.subject;$('#tpl-body').value=t.bodyHtml;loadInviteTemplate.done=true;}catch(e){if(e.message!=='401'){const m=$('#tpl-msg');m.className='msg err';m.textContent='範本載入失敗：'+e.message;}}}
   /** 以示意連結預覽目前編輯中的範本內容。 */

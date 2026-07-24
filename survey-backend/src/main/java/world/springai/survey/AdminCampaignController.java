@@ -125,6 +125,18 @@ public class AdminCampaignController {
         return inviteService.sendInvites(req.source(), req.limit());
     }
 
+    /** 對「已邀請滿 3 天仍未確認」者補送提醒信（每人最多一次），需提供有效金鑰 */
+    @PostMapping("/api/admin/campaign/invite/remind")
+    public InviteService.ReminderResult remind(
+            @RequestHeader(value = KEY_HEADER, required = false) String key,
+            @RequestBody InviteRequest req) {
+        guard.verify(key);
+        if (req.source() == null || req.source().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "source 為必填");
+        }
+        return inviteService.sendReminders(req.source(), req.limit());
+    }
+
     /** 取得邀請信範本（主旨與 HTML 內文，內文以 {{confirmLink}} 佔位確認連結），需提供有效金鑰 */
     @GetMapping("/api/admin/templates/invite")
     public MailTemplate inviteTemplate(

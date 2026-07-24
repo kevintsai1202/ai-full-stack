@@ -203,6 +203,60 @@ class InviteServiceTest {
         assertTrue(html.getValue().contains("電子報"), "應說明正在準備電子報");
     }
 
+    /** 建立一筆指定時間的邀請寄送記錄（createdAt 由 DB 產生，測試用反射補值） */
+    private EmailLog inviteLog(String email, String type, java.time.OffsetDateTime at) {
+        EmailLog l = new EmailLog(email, "主旨", type, "m", "sent", null);
+        org.springframework.test.util.ReflectionTestUtils.setField(l, "createdAt", at);
+        return l;
+    }
+
+    /** 補送提醒：只寄給「已邀請滿 3 天且未確認、未被提醒過」者，記錄 type=invite_reminder */
+    @Test
+    void remindersTargetInvitedUnconfirmedAfterInterval() {
+        java.time.OffsetDateTime old = java.time.OffsetDateTime.now().minusDays(4);
+        java.time.OffsetDateTime fresh = java.time.OffsetDateTime.now().minusDays(1);
+        // 待確認名單：a（滿3天）、b（未滿3天）、c（已提醒過）、d（從未邀請過）
+        when(repository.findBySourceAndConsentFalseAndUnsubscribedFalse("exam"))
+            .thenReturn(List.of(pending("a@x.com"), pending("b@x.com"), pending("c@x.com"), pending("d@x.com")));
+        when(emailLogRepository.findByTypeAndStatus("invite", "sent")).thenReturn(List.of(
+            inviteLog("a@x.com", "invite", old),
+            inviteLog("b@x.com", "invite", fresh),
+            inviteLog("c@x.com", "invite", old)));
+        when(emailLogRepository.findByTypeAndStatus("invite_reminder", "sent")).thenReturn(List.of(
+            inviteLog("c@x.com", "invite_reminder", old)));
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        InviteService.ReminderResult r = service.sendReminders("exam", null);
+
+        assertEquals(1, r.recipientCount());   // 只有 a 符合
+        assertEquals(1, r.accepted());
+        assertEquals(1, r.tooRecent());        // b 未滿 3 天
+        assertEquals(1, r.alreadyReminded());  // c 已提醒過（最多 1 次）
+        verify(mailSender).send(eq("a@x.com"), anyString(), anyString());
+        // 記錄為 invite_reminder，不影響首次邀請的跳過邏輯
+        ArgumentCaptor<EmailLog> captor = ArgumentCaptor.forClass(EmailLog.class);
+        verify(emailLogRepository).save(captor.capture());
+        assertEquals("invite_reminder", captor.getValue().getType());
+    }
+
+    /** 補送提醒：limit 限制單次封數，其餘回報於 remaining */
+    @Test
+    void remindersRespectLimit() {
+        java.time.OffsetDateTime old = java.time.OffsetDateTime.now().minusDays(5);
+        when(repository.findBySourceAndConsentFalseAndUnsubscribedFalse("exam"))
+            .thenReturn(List.of(pending("a@x.com"), pending("b@x.com"), pending("c@x.com")));
+        when(emailLogRepository.findByTypeAndStatus("invite", "sent")).thenReturn(List.of(
+            inviteLog("a@x.com", "invite", old), inviteLog("b@x.com", "invite", old), inviteLog("c@x.com", "invite", old)));
+        when(emailLogRepository.findByTypeAndStatus("invite_reminder", "sent")).thenReturn(List.of());
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        InviteService.ReminderResult r = service.sendReminders("exam", 2);
+
+        assertEquals(2, r.recipientCount());
+        assertEquals(2, r.accepted());
+        assertEquals(1, r.remaining());
+    }
+
     /** 總覽統計：已寄邀請去重計數、剩餘待邀請扣掉已寄者、已確認取自 repository 計數 */
     @Test
     void overviewSummarizesInviteProgress() {
@@ -216,12 +270,17 @@ class InviteServiceTest {
             .thenReturn(List.of(pending("a@example.com"), pending("c@example.com")));
         when(repository.countBySourceAndConsentTrueAndUnsubscribedFalse("exam")).thenReturn(5L);
 
+        // 補送提醒記錄：a 被提醒過一次 → remindedCount=1，記錄併入列表
+        when(emailLogRepository.findByTypeOrderByCreatedAtDesc("invite_reminder")).thenReturn(List.of(
+            new EmailLog("a@example.com", "主旨", "invite_reminder", "m3", "sent", null)));
+
         InviteService.InviteOverview o = service.overview("exam");
 
         assertEquals(1, o.invitedCount());   // a 去重（大小寫不敏感），b 失敗不計
+        assertEquals(1, o.remindedCount());  // a 補送過一次
         assertEquals(1, o.pendingCount());   // 只剩 c
         assertEquals(5, o.confirmedCount());
-        assertEquals(3, o.logs().size());    // 記錄原樣全列
+        assertEquals(4, o.logs().size());    // 邀請 3 筆 + 提醒 1 筆合併列出
     }
 
     /** 邀請信不以課程宣傳為主軸：內文不得出現課程名稱推銷 */

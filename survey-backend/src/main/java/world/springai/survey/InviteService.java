@@ -94,6 +94,83 @@ public class InviteService {
         return new InviteResult(targets.size(), accepted, failed, alreadyInvited, remaining);
     }
 
+    /** 補送提醒的最小間隔天數：距上次邀請未滿此天數不寄，避免騷擾 */
+    static final int REMINDER_MIN_INTERVAL_DAYS = 3;
+    /** 提醒信的 email_log 類型（與首次邀請 invite 區分，用於「每人最多補送一次」） */
+    static final String REMINDER_TYPE = "invite_reminder";
+
+    /**
+     * 補送提醒結果：
+     * recipientCount=本次實際嘗試數、alreadyReminded=已提醒過而跳過數（每人最多 1 次）、
+     * tooRecent=距上次邀請未滿間隔天數而跳過數、remaining=因 limit 未寄的剩餘數
+     */
+    public record ReminderResult(int recipientCount, int accepted, int failed,
+                                 int alreadyReminded, int tooRecent, int remaining) {}
+
+    /**
+     * 對「已邀請但尚未確認」者補送提醒信（沿用邀請信範本）。防騷擾規則：
+     * 距最近一次邀請需滿 {@link #REMINDER_MIN_INTERVAL_DAYS} 天、每人最多補送一次；
+     * 已確認（consent=true）與已退訂者天然不在待確認名單中，不會被提醒。
+     */
+    public ReminderResult sendReminders(String source, Integer limit) {
+        List<SurveyResponse> pending = repository.findBySourceAndConsentFalseAndUnsubscribedFalse(source);
+        // 每人最近一次成功邀請的時間（小寫 email → createdAt；createdAt 為 null 視為夠久遠）
+        java.util.Map<String, java.time.OffsetDateTime> invitedAt = new java.util.HashMap<>();
+        for (EmailLog l : emailLogRepository.findByTypeAndStatus("invite", "sent")) {
+            String k = l.getRecipient().trim().toLowerCase();
+            java.time.OffsetDateTime t = l.getCreatedAt();
+            if (!invitedAt.containsKey(k) || (t != null && invitedAt.get(k) != null && t.isAfter(invitedAt.get(k)))) {
+                invitedAt.put(k, t);
+            }
+        }
+        // 已提醒過的 email 集合（每人最多補送一次）
+        java.util.Set<String> reminded = emailLogRepository.findByTypeAndStatus(REMINDER_TYPE, "sent").stream()
+            .map(l -> l.getRecipient().trim().toLowerCase())
+            .collect(java.util.stream.Collectors.toSet());
+
+        java.time.OffsetDateTime threshold = java.time.OffsetDateTime.now().minusDays(REMINDER_MIN_INTERVAL_DAYS);
+        int alreadyReminded = 0;
+        int tooRecent = 0;
+        List<SurveyResponse> eligible = new java.util.ArrayList<>();
+        for (SurveyResponse r : pending) {
+            String k = r.getEmail().trim().toLowerCase();
+            if (!invitedAt.containsKey(k)) {
+                continue; // 從未邀請過的人走首次邀請流程，不在補送範圍
+            }
+            if (reminded.contains(k)) {
+                alreadyReminded++;
+                continue;
+            }
+            java.time.OffsetDateTime last = invitedAt.get(k);
+            if (last != null && last.isAfter(threshold)) {
+                tooRecent++;
+                continue;
+            }
+            eligible.add(r);
+        }
+        // 套用單次寄送上限；剩餘數留給下次呼叫
+        List<SurveyResponse> targets = (limit != null && limit > 0 && limit < eligible.size())
+            ? eligible.subList(0, limit) : eligible;
+        int remaining = eligible.size() - targets.size();
+
+        MailTemplate template = getTemplate();
+        int accepted = 0;
+        int failed = 0;
+        for (SurveyResponse r : targets) {
+            try {
+                String html = template.getBodyHtml().replace(CONFIRM_LINK_PLACEHOLDER, buildConfirmLink(r.getEmail()));
+                String id = mailSender.send(r.getEmail(), template.getSubject(), html);
+                emailLogRepository.save(new EmailLog(r.getEmail(), template.getSubject(), REMINDER_TYPE, id, "sent", null));
+                accepted++;
+            } catch (Exception e) {
+                log.warn("提醒信寄送失敗 to={}：{}", r.getEmail(), e.getMessage());
+                emailLogRepository.save(new EmailLog(r.getEmail(), template.getSubject(), REMINDER_TYPE, null, "failed", e.getMessage()));
+                failed++;
+            }
+        }
+        return new ReminderResult(targets.size(), accepted, failed, alreadyReminded, tooRecent, remaining);
+    }
+
     /** 取得邀請信範本：優先用資料庫版本，無資料時退回內建預設（不落庫） */
     public MailTemplate getTemplate() {
         return templateRepository.findByTemplateKey(TEMPLATE_KEY)
@@ -128,26 +205,35 @@ public class InviteService {
 
     /**
      * 後台邀請記錄總覽：
-     * invitedCount=已成功寄出邀請的不重複人數、confirmedCount=該來源已確認訂閱人數、
-     * pendingCount=該來源尚未邀請的待確認人數、logs=全部邀請寄送記錄（新到舊）
+     * invitedCount=已成功寄出邀請的不重複人數、remindedCount=已補送提醒的不重複人數、
+     * confirmedCount=該來源已確認訂閱人數、pendingCount=該來源尚未邀請的待確認人數、
+     * logs=全部邀請與提醒寄送記錄（新到舊）
      */
-    public record InviteOverview(long invitedCount, long confirmedCount, long pendingCount,
-                                 List<EmailLog> logs) {}
+    public record InviteOverview(long invitedCount, long remindedCount, long confirmedCount,
+                                 long pendingCount, List<EmailLog> logs) {}
 
     /** 彙整指定來源的邀請寄送記錄與成效統計，供後台「邀請記錄」顯示 */
     public InviteOverview overview(String source) {
-        List<EmailLog> logs = emailLogRepository.findByTypeOrderByCreatedAtDesc("invite");
-        // 已成功寄出邀請的 email 集合（小寫去重）
+        // 記錄列表同時包含首次邀請與補送提醒，合併後依時間新到舊
+        List<EmailLog> logs = new java.util.ArrayList<>(emailLogRepository.findByTypeOrderByCreatedAtDesc("invite"));
+        logs.addAll(emailLogRepository.findByTypeOrderByCreatedAtDesc(REMINDER_TYPE));
+        logs.sort(java.util.Comparator.comparing(EmailLog::getCreatedAt,
+            java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
+        // 已成功寄出邀請／提醒的 email 集合（小寫去重）
         java.util.Set<String> invited = logs.stream()
-            .filter(l -> "sent".equals(l.getStatus()))
+            .filter(l -> "invite".equals(l.getType()) && "sent".equals(l.getStatus()))
             .map(l -> l.getRecipient().trim().toLowerCase())
             .collect(java.util.stream.Collectors.toSet());
+        long remindedCount = logs.stream()
+            .filter(l -> REMINDER_TYPE.equals(l.getType()) && "sent".equals(l.getStatus()))
+            .map(l -> l.getRecipient().trim().toLowerCase())
+            .distinct().count();
         // 該來源尚未邀請的待確認人數
         long pending = repository.findBySourceAndConsentFalseAndUnsubscribedFalse(source).stream()
             .filter(r -> !invited.contains(r.getEmail().trim().toLowerCase()))
             .count();
         long confirmed = repository.countBySourceAndConsentTrueAndUnsubscribedFalse(source);
-        return new InviteOverview(invited.size(), confirmed, pending, logs);
+        return new InviteOverview(invited.size(), remindedCount, confirmed, pending, logs);
     }
 
     /** 組確認連結：/api/survey/confirm?email=<urlencoded>&t=<HMAC token> */
