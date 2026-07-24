@@ -68,7 +68,7 @@
       "priceCurrency": "TWD",
       "category": "Paid",
       "availability": "https://schema.org/PreOrder",
-      "url": "https://springai.world/"
+      "url": "https://hahow.in/cr/ai-full-stack"
     }
   },
   "offers": {
@@ -77,7 +77,7 @@
     "priceCurrency": "TWD",
     "category": "Paid",
     "availability": "https://schema.org/PreOrder",
-    "url": "https://springai.world/"
+    "url": "https://hahow.in/cr/ai-full-stack"
   },
   "courseCode": "AI-FULL-STACK-01",
   "educationalLevel": "Intermediate",
@@ -1434,16 +1434,13 @@ details.accordion .acc-body {
 /** 初始化 Lucide 圖標 — 將所有 <i data-lucide="name"> 替換為 SVG */
 lucide.createIcons();
 
-/** 報名按鈕點擊 — 顯示 Toast 並發送追蹤事件 */
-var __toastTimer;
+/** 報名按鈕點擊 — 發送追蹤事件後，於新分頁開啟 Hahow 購買頁 */
+var HAHOW_COURSE_URL = 'https://hahow.in/cr/ai-full-stack';
 function enroll(source) {
-  var toast = document.getElementById('toast');
-  toast.classList.add('show');
-  clearTimeout(__toastTimer);
-  __toastTimer = setTimeout(function() { toast.classList.remove('show'); }, 2600);
   if (window.Tracking) {
     window.Tracking.event('enroll_click', { source: source || 'unknown', value: 4980 });
   }
+  window.open(HAHOW_COURSE_URL, '_blank', 'noopener');
 }
 
 /** 串接 Hahow API — 即時更新贊助人數、募資進度、價格、優惠倒數與課程時數
