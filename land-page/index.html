@@ -60,11 +60,11 @@
   "hasCourseInstance": {
     "@type": "CourseInstance",
     "courseMode": "online",
-    "courseWorkload": "PT30H",
+    "courseWorkload": "PT7H",
     "inLanguage": "zh-Hant",
     "offers": {
       "@type": "Offer",
-      "price": "3680",
+      "price": "4980",
       "priceCurrency": "TWD",
       "category": "Paid",
       "availability": "https://schema.org/PreOrder",
@@ -73,7 +73,7 @@
   },
   "offers": {
     "@type": "Offer",
-    "price": "3680",
+    "price": "4980",
     "priceCurrency": "TWD",
     "category": "Paid",
     "availability": "https://schema.org/PreOrder",
@@ -595,13 +595,13 @@ details.accordion .acc-body {
     <div style="display:flex;flex-wrap:wrap;gap:22px;margin-top:30px;align-items:center;">
       <div><div style="font-size:1.9rem;font-weight:900;line-height:1;color:var(--accent-2)">8</div><div style="font-size:0.84rem;color:oklch(94% 0.01 250 / 0.78);margin-top:5px;font-weight:700">實戰單元</div></div>
       <div style="width:1px;height:34px;background:oklch(100% 0 0 / 0.18)"></div>
-      <div><div style="font-size:1.9rem;font-weight:900;line-height:1;color:var(--accent-2)">32hr</div><div style="font-size:0.84rem;color:oklch(94% 0.01 250 / 0.78);margin-top:5px;font-weight:700">紮實課程時數</div></div>
+      <div><div style="font-size:1.9rem;font-weight:900;line-height:1;color:var(--accent-2)" id="hero-hours">7hr</div><div style="font-size:0.84rem;color:oklch(94% 0.01 250 / 0.78);margin-top:5px;font-weight:700">紮實課程時數</div></div>
       <div style="width:1px;height:34px;background:oklch(100% 0 0 / 0.18)"></div>
       <div><div style="font-size:1.9rem;font-weight:900;line-height:1;color:var(--accent-2)">1</div><div style="font-size:0.84rem;color:oklch(94% 0.01 250 / 0.78);margin-top:5px;font-weight:700">完整 AI CRM 專案</div></div>
       <div style="width:1px;height:34px;background:oklch(100% 0 0 / 0.18)"></div>
       <div><div style="font-size:1.9rem;font-weight:900;line-height:1;color:var(--accent-2)">11+</div><div style="font-size:0.84rem;color:oklch(94% 0.01 250 / 0.78);margin-top:5px;font-weight:700">技術棧整合</div></div>
       <div style="width:1px;height:34px;background:oklch(100% 0 0 / 0.18)"></div>
-      <div><div style="font-size:1.9rem;font-weight:900;line-height:1;color:var(--accent-2)" id="hero-backers">0</div><div style="font-size:0.84rem;color:oklch(94% 0.01 250 / 0.78);margin-top:5px;font-weight:700">已報名學員</div></div>
+      <div><div style="font-size:1.9rem;font-weight:900;line-height:1;color:var(--accent-2)" id="hero-backers">16</div><div style="font-size:0.84rem;color:oklch(94% 0.01 250 / 0.78);margin-top:5px;font-weight:700">已報名學員</div></div>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:30px;">
       <span style="padding:7px 13px;border-radius:var(--r-pill);border:1px solid oklch(100% 0 0 / 0.2);background:oklch(100% 0 0 / 0.1);font-size:0.86rem;font-weight:700;">Java 21</span>
@@ -1358,8 +1358,8 @@ details.accordion .acc-body {
           <h2 style="margin:18px 0 10px;font-size:clamp(1.7rem,3.5vw,2.6rem);font-weight:900;">現在報名，鎖定最低早鳥價</h2>
           <p style="margin:0 auto 22px;max-width:560px;line-height:1.85;color:oklch(96% 0.01 250 / 0.9);">完課後你會擁有一套可登入、可查資料、可引用知識庫、可產生業務建議的企業級 AI CRM。</p>
           <div style="display:flex;align-items:baseline;justify-content:center;gap:12px;margin-bottom:22px;">
-            <span style="font-size:2.6rem;font-weight:900;color:var(--accent-2);">NT$ 3,680</span>
-            <span style="text-decoration:line-through;opacity:0.7;font-weight:700;">NT$ 5,200</span>
+            <span style="font-size:2.6rem;font-weight:900;color:var(--accent-2);" id="cta-price">NT$ 4,980</span>
+            <span style="text-decoration:line-through;opacity:0.7;font-weight:700;" id="cta-original">NT$ 12,800</span>
           </div>
           <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
             <button class="btn btn-lg btn-light" onclick="enroll('bottom_cta')">立即報名 <i data-lucide="arrow-right" style="width:18px;height:18px;"></i></button>
@@ -1383,18 +1383,18 @@ details.accordion .acc-body {
       </div>
       <div style="padding:20px 22px 24px;">
         <div style="display:flex;align-items:baseline;gap:10px;">
-          <span style="font-size:1.9rem;font-weight:900;color:var(--accent-deep);">NT$ 3,680</span>
-          <span style="color:var(--muted-2);text-decoration:line-through;font-weight:700;">NT$ 5,200</span>
+          <span style="font-size:1.9rem;font-weight:900;color:var(--accent-deep);" id="card-price">NT$ 4,980</span>
+          <span style="color:var(--muted-2);text-decoration:line-through;font-weight:700;" id="card-original">NT$ 12,800</span>
         </div>
         <div style="margin-top:16px;">
           <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:0.9rem;font-weight:800;color:var(--fg);">
             <span>募資目標達成率</span>
-            <span style="color:var(--accent-deep);" id="card-goal-pct">0%</span>
+            <span style="color:var(--accent-deep);" id="card-goal-pct">160%</span>
           </div>
-          <div class="progress-track"><div class="progress-fill" id="card-progress" style="width:0%;"></div></div>
+          <div class="progress-track"><div class="progress-fill" id="card-progress" style="width:100%;"></div></div>
           <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:0.86rem;color:var(--muted);font-weight:700;">
-            <span><b style="color:var(--fg);" id="card-backers">0</b> 人贊助</span>
-            <span>倒數 <b style="color:var(--accent-2-deep);">18</b> 天</span>
+            <span><b style="color:var(--fg);" id="card-backers">16</b> 人贊助</span>
+            <span id="card-countdown">優惠倒數 <b style="color:var(--accent-2-deep);">4</b> 天</span>
           </div>
         </div>
         <div style="display:grid;gap:10px;margin-top:20px;">
@@ -1442,24 +1442,99 @@ function enroll(source) {
   clearTimeout(__toastTimer);
   __toastTimer = setTimeout(function() { toast.classList.remove('show'); }, 2600);
   if (window.Tracking) {
-    window.Tracking.event('enroll_click', { source: source || 'unknown', value: 3680 });
+    window.Tracking.event('enroll_click', { source: source || 'unknown', value: 4980 });
   }
 }
 
-/** 串接 Hahow API — 即時更新贊助人數與募資進度 */
+/** 串接 Hahow API — 即時更新贊助人數、募資進度、價格、優惠倒數與課程時數
+ *  資料來源（皆為公開 API，無需驗證，slug 可直接查詢）：
+ *  1. /api/courses/{slug}          → numSoldTickets（購買數）、successCriteria（目標）、
+ *                                    estimatedCourseVideoLengthInMins（授課時數）、proposalDueTime（募資截止）
+ *  2. /api/courses/{id}/purchasePlans → 目前販售方案：price（現售價）、originalPrice（原價）、
+ *                                    expiredAt（限時優惠截止，用於優惠倒數）
+ *  頁面上的靜態數字僅作為 API 失敗時的後備快照。 */
 (function() {
-  var courseId = '';
-  if (!courseId) return;
-  fetch('https://api.hahow.in/api/courses/' + courseId)
+  var courseSlug = 'ai-full-stack';
+  var apiBase = 'https://api.hahow.in/api/courses/';
+
+  /** 工具：安全設定元素文字（元素不存在時靜默略過） */
+  function setText(id, text) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  /** 工具：格式化為 NT$ 千分位字串 */
+  function ntd(n) { return 'NT$ ' + Number(n).toLocaleString('en-US'); }
+
+  /** 工具：建立倒數用的強調數字 <b> 元素（用 DOM API 組裝，避免 innerHTML） */
+  function boldNum(n) {
+    var b = document.createElement('b');
+    b.style.color = 'var(--accent-2-deep)';
+    b.textContent = String(n);
+    return b;
+  }
+
+  // ── 1. 課程主資料：購買數 / 達成率 / 授課時數 ──
+  fetch(apiBase + courseSlug)
     .then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); })
     .then(function(data) {
       var backers = data.numSoldTickets || 0;
       var target = (data.successCriteria && data.successCriteria.numSoldTickets) || 10;
       var pct = Math.round((backers / target) * 100);
-      document.getElementById('hero-backers').textContent = backers.toLocaleString();
-      document.getElementById('card-backers').textContent = backers.toLocaleString();
-      document.getElementById('card-goal-pct').textContent = pct + '%';
-      document.getElementById('card-progress').style.width = Math.min(pct, 100) + '%';
+      setText('hero-backers', backers.toLocaleString());
+      setText('card-backers', backers.toLocaleString());
+      setText('card-goal-pct', pct + '%');
+      var bar = document.getElementById('card-progress');
+      if (bar) bar.style.width = Math.min(pct, 100) + '%';
+      // 授課時數：分鐘 → 小時（捨去到整數小時，未滿 1 小時以分鐘顯示）
+      var mins = data.estimatedCourseVideoLengthInMins || 0;
+      if (mins > 0) setText('hero-hours', mins >= 60 ? Math.floor(mins / 60) + 'hr' : mins + 'min');
+
+      // ── 2. 販售方案：現售價 / 原價 / 優惠倒數 ──
+      return fetch(apiBase + data._id + '/purchasePlans');
+    })
+    .then(function(res) { if (!res.ok) throw new Error(res.status); return res.json(); })
+    .then(function(plans) {
+      var now = Date.now();
+      // 取「未下架、已開賣、未過期」的方案中價格最低者（即當前優惠價方案）
+      var active = (plans || []).filter(function(p) {
+        return !p.deprecated &&
+          (!p.startAt || Date.parse(p.startAt) <= now) &&
+          (!p.expiredAt || Date.parse(p.expiredAt) > now);
+      }).sort(function(a, b) { return a.price - b.price; })[0];
+      if (!active) return;
+      setText('cta-price', ntd(active.price));
+      setText('card-price', ntd(active.price));
+      // 原價劃線：與現售價相同時隱藏劃線價，避免出現「NT$X 劃掉 NT$X」
+      ['cta-original', 'card-original'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        if (active.originalPrice && active.originalPrice > active.price) {
+          el.textContent = ntd(active.originalPrice);
+          el.style.display = '';
+        } else {
+          el.style.display = 'none';
+        }
+      });
+      // 優惠倒數：限時方案以 expiredAt 起算；剩不到 1 天只顯示小時，讓急迫感更精確
+      var cd = document.getElementById('card-countdown');
+      if (cd && active.isLimitedTimeOffer && active.expiredAt) {
+        var msLeft = Date.parse(active.expiredAt) - now;
+        cd.textContent = '';
+        if (msLeft > 0) {
+          var days = Math.floor(msLeft / 86400000);
+          var hoursLeft = Math.floor((msLeft % 86400000) / 3600000);
+          cd.appendChild(document.createTextNode('優惠倒數 '));
+          if (days > 0) {
+            cd.appendChild(boldNum(days));
+            cd.appendChild(document.createTextNode(' 天 '));
+          }
+          cd.appendChild(boldNum(hoursLeft));
+          cd.appendChild(document.createTextNode(' 時'));
+        } else {
+          cd.textContent = '限時優惠已結束';
+        }
+      }
     })
     .catch(function(err) { console.warn('無法取得 Hahow 課程資料:', err); });
 })();
