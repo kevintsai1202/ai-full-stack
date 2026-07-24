@@ -13,4 +13,7 @@ public interface EmailLogRepository extends JpaRepository<EmailLog, Long> {
 
     /** 特定類型與狀態的所有寄送記錄（邀請信跳過已寄過者用） */
     List<EmailLog> findByTypeAndStatus(String type, String status);
+
+    /** 特定類型的所有寄送記錄，依時間新到舊（後台邀請記錄列表用） */
+    List<EmailLog> findByTypeOrderByCreatedAtDesc(String type);
 }

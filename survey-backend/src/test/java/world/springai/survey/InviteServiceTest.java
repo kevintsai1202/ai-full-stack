@@ -22,6 +22,7 @@ class InviteServiceTest {
     private SurveyResponseRepository repository;
     private MailSender mailSender;
     private EmailLogRepository emailLogRepository;
+    private MailTemplateRepository templateRepository;
     private UnsubscribeTokenService tokenService;
     private InviteService service;
 
@@ -30,9 +31,12 @@ class InviteServiceTest {
         repository = mock(SurveyResponseRepository.class);
         mailSender = mock(MailSender.class);
         emailLogRepository = mock(EmailLogRepository.class);
+        templateRepository = mock(MailTemplateRepository.class);
+        // 預設資料庫無範本 → 走內建預設內文
+        when(templateRepository.findByTemplateKey("invite")).thenReturn(java.util.Optional.empty());
         tokenService = new UnsubscribeTokenService("test-secret");
         service = new InviteService(repository, mailSender, emailLogRepository,
-            tokenService, "https://survey.example.com");
+            templateRepository, tokenService, "https://survey.example.com");
     }
 
     /** 建立一筆待確認名單資料 */
@@ -144,6 +148,80 @@ class InviteServiceTest {
         assertTrue(html.getValue().contains("深入的技術討論"), "應提到技術討論");
         assertTrue(html.getValue().contains("AI 新知"), "應提到 AI 新知與新技術");
         assertTrue(html.getValue().contains("優惠"), "應提到好康優惠");
+    }
+
+    /** 資料庫有範本時：主旨與內文採用範本，{{confirmLink}} 佔位符替換成個人化確認連結 */
+    @Test
+    void usesDbTemplateWhenPresent() {
+        when(templateRepository.findByTemplateKey("invite")).thenReturn(java.util.Optional.of(
+            new MailTemplate("invite", "自訂主旨", "<p>自訂內文 <a href=\"{{confirmLink}}\">確認</a></p>")));
+        when(repository.findBySourceAndConsentFalseAndUnsubscribedFalse("exam"))
+            .thenReturn(List.of(pending("a@example.com")));
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        service.sendInvites("exam", null);
+
+        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+        verify(mailSender).send(eq("a@example.com"), eq("自訂主旨"), html.capture());
+        assertTrue(html.getValue().contains("自訂內文"), "應使用資料庫範本內文");
+        assertTrue(html.getValue().contains(tokenService.sign("a@example.com")), "佔位符應替換為個人化確認連結");
+        assertTrue(!html.getValue().contains("{{confirmLink}}"), "佔位符不得殘留");
+    }
+
+    /** 更新範本：合法內容存入資料庫；缺佔位符或空白內容應拒絕（400） */
+    @Test
+    void updateTemplateValidatesAndSaves() {
+        when(templateRepository.save(any(MailTemplate.class))).thenAnswer(i -> i.getArgument(0));
+
+        MailTemplate saved = service.updateTemplate("新主旨", "<p>hi {{confirmLink}}</p>");
+        assertEquals("新主旨", saved.getSubject());
+
+        // 缺 {{confirmLink}} 佔位符 → 拒絕
+        org.junit.jupiter.api.Assertions.assertThrows(
+            org.springframework.web.server.ResponseStatusException.class,
+            () -> service.updateTemplate("主旨", "<p>沒有連結</p>"));
+        // 空白主旨 → 拒絕
+        org.junit.jupiter.api.Assertions.assertThrows(
+            org.springframework.web.server.ResponseStatusException.class,
+            () -> service.updateTemplate(" ", "<p>{{confirmLink}}</p>"));
+    }
+
+    /** 邀請信須讓收件人認得寄件人：自我介紹（凱文大叔）、提及基礎課程與線上測驗、說明正在準備電子報 */
+    @Test
+    void inviteBodyIntroducesSenderAndContext() {
+        when(repository.findBySourceAndConsentFalseAndUnsubscribedFalse("exam"))
+            .thenReturn(List.of(pending("a@example.com")));
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        service.sendInvites("exam", null);
+
+        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+        verify(mailSender).send(anyString(), anyString(), html.capture());
+        assertTrue(html.getValue().contains("凱文大叔"), "應自我介紹是凱文大叔");
+        assertTrue(html.getValue().contains("基礎課程"), "應提及上過基礎課程");
+        assertTrue(html.getValue().contains("線上測驗"), "應提及參加過線上測驗");
+        assertTrue(html.getValue().contains("電子報"), "應說明正在準備電子報");
+    }
+
+    /** 總覽統計：已寄邀請去重計數、剩餘待邀請扣掉已寄者、已確認取自 repository 計數 */
+    @Test
+    void overviewSummarizesInviteProgress() {
+        // 邀請記錄：a 成功兩次（重跑）、b 失敗一次 → invitedCount 應去重為 1
+        when(emailLogRepository.findByTypeOrderByCreatedAtDesc("invite")).thenReturn(List.of(
+            new EmailLog("a@example.com", "主旨", "invite", "m1", "sent", null),
+            new EmailLog("A@example.com", "主旨", "invite", "m2", "sent", null),
+            new EmailLog("b@example.com", "主旨", "invite", null, "failed", "429")));
+        // 待確認名單：a 已邀請過應排除、c 未邀請 → pendingCount=1
+        when(repository.findBySourceAndConsentFalseAndUnsubscribedFalse("exam"))
+            .thenReturn(List.of(pending("a@example.com"), pending("c@example.com")));
+        when(repository.countBySourceAndConsentTrueAndUnsubscribedFalse("exam")).thenReturn(5L);
+
+        InviteService.InviteOverview o = service.overview("exam");
+
+        assertEquals(1, o.invitedCount());   // a 去重（大小寫不敏感），b 失敗不計
+        assertEquals(1, o.pendingCount());   // 只剩 c
+        assertEquals(5, o.confirmedCount());
+        assertEquals(3, o.logs().size());    // 記錄原樣全列
     }
 
     /** 邀請信不以課程宣傳為主軸：內文不得出現課程名稱推銷 */

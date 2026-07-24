@@ -13,6 +13,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -68,6 +69,42 @@ class CampaignServiceTest {
         assertEquals(1, r.accepted());
         verify(mailSender).schedule(any(), eq(at));
         verify(mailSender, never()).sendBatch(anyList());
+    }
+
+    /** 修改排程：取消舊排程信、以新內容與新時間重排，並就地更新同一筆 campaign */
+    @Test
+    void rescheduleCancelsOldAndReschedulesInPlace() {
+        Instant newAt = Instant.parse("2030-06-01T10:00:00Z");
+        Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
+            null, 1, "scheduled");
+        when(campaignRepository.findById(7L)).thenReturn(java.util.Optional.of(existing));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(emailLogRepository.findByCampaignIdAndStatus(7L, "scheduled"))
+            .thenReturn(List.of(new EmailLog("old@x.com", "舊主旨", "campaign", "old-1", "scheduled", null, 7L)));
+        when(mailSender.cancelScheduled("old-1")).thenReturn(true);
+        when(recipientService.recipients("學生", null)).thenReturn(List.of("a@x.com", "b@x.com"));
+        when(mailSender.schedule(any(), eq(newAt))).thenReturn("sched-2");
+
+        CampaignService.SendResult r = svc.reschedule(7L, "新主旨", "# 新內文", "學生", null, newAt);
+
+        assertEquals(2, r.recipientCount());
+        assertEquals(2, r.accepted());
+        verify(mailSender).cancelScheduled("old-1");         // 舊排程被取消
+        verify(mailSender, times(2)).schedule(any(), eq(newAt)); // 兩位新收件人重排
+        assertEquals("新主旨", existing.getSubject());        // 就地更新內容
+        assertEquals("scheduled", existing.getStatus());
+    }
+
+    /** 修改排程：對非 scheduled 狀態的 campaign 應拒絕（不呼叫 provider） */
+    @Test
+    void rescheduleRejectsNonScheduledCampaign() {
+        Campaign sent = new Campaign("主旨", "內文", "<p>x</p>", null, null, "now", null, 1, "sent");
+        when(campaignRepository.findById(9L)).thenReturn(java.util.Optional.of(sent));
+
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+            () -> svc.reschedule(9L, "新主旨", "內文", null, null, Instant.parse("2030-01-01T00:00:00Z")));
+        verify(mailSender, never()).schedule(any(), any());
+        verify(mailSender, never()).cancelScheduled(any());
     }
 
     /** 批量丟例外：整批記 failed、不中斷 */

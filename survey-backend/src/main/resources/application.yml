@@ -24,5 +24,6 @@ app:
   # 寄信設定：api-key 空白時自動 fallback 成 NoopMailSender（不真寄）
   mail:
     api-key: ${SEND_MAIL_API:}
-    from: ${MAIL_FROM:AI 全端課程 <noreply@springai.world>}
+    # 寄件人顯示名稱：本系統為個人電子報系統（非課程專用），統一以個人名義寄出
+    from: ${MAIL_FROM:凱文大叔 <noreply@springai.world>}
     reply-to: ${MAIL_REPLY_TO:}

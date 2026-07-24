@@ -125,6 +125,35 @@ public class AdminCampaignController {
         return inviteService.sendInvites(req.source(), req.limit());
     }
 
+    /** 取得邀請信範本（主旨與 HTML 內文，內文以 {{confirmLink}} 佔位確認連結），需提供有效金鑰 */
+    @GetMapping("/api/admin/templates/invite")
+    public MailTemplate inviteTemplate(
+            @RequestHeader(value = KEY_HEADER, required = false) String key) {
+        guard.verify(key);
+        return inviteService.getTemplate();
+    }
+
+    /** 範本更新請求：主旨與 HTML 內文 */
+    public record TemplateRequest(String subject, String bodyHtml) {}
+
+    /** 更新邀請信範本並存入資料庫（內文必須含 {{confirmLink}}），需提供有效金鑰 */
+    @org.springframework.web.bind.annotation.PutMapping("/api/admin/templates/invite")
+    public MailTemplate updateInviteTemplate(
+            @RequestHeader(value = KEY_HEADER, required = false) String key,
+            @RequestBody TemplateRequest req) {
+        guard.verify(key);
+        return inviteService.updateTemplate(req.subject(), req.bodyHtml());
+    }
+
+    /** 取得邀請記錄與成效統計（記錄含全部來源；統計以 source 為準，預設 exam），需提供有效金鑰 */
+    @GetMapping("/api/admin/invites")
+    public InviteService.InviteOverview invites(
+            @RequestHeader(value = KEY_HEADER, required = false) String key,
+            @RequestParam(defaultValue = "exam") String source) {
+        guard.verify(key);
+        return inviteService.overview(source);
+    }
+
     /** 取得歷史 campaign 列表（依建立時間降冪），需提供有效金鑰 */
     @GetMapping("/api/admin/campaigns")
     public List<Campaign> campaigns(
@@ -140,5 +169,32 @@ public class AdminCampaignController {
             @PathVariable Long id) {
         guard.verify(key);
         return campaignService.cancelSchedule(id);
+    }
+
+    /** 修改排程請求：新的主旨、markdown 內文、篩選條件與排程時間（ISO-8601） */
+    public record RescheduleRequest(String subject, String markdown, Filter filter, String scheduledAt) {}
+
+    /**
+     * 修改指定 campaign 的未寄出排程（取消舊排程信後以新內容與新時間重排），需提供有效金鑰。
+     * scheduledAt 必填且須為未來時間。
+     */
+    @org.springframework.web.bind.annotation.PutMapping("/api/admin/campaigns/{id}/schedule")
+    public CampaignService.SendResult reschedule(
+            @RequestHeader(value = KEY_HEADER, required = false) String key,
+            @PathVariable Long id,
+            @RequestBody RescheduleRequest req) {
+        guard.verify(key);
+        // scheduledAt 必填且須為未來時間
+        if (req.scheduledAt() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "排程模式需要 scheduledAt");
+        }
+        Instant scheduledAt = Instant.parse(req.scheduledAt());
+        if (!scheduledAt.isAfter(Instant.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "排程時間需為未來");
+        }
+        // 從篩選條件取出 role / interest（允許 filter 為 null）
+        String role = req.filter() == null ? null : req.filter().role();
+        String interest = req.filter() == null ? null : req.filter().interest();
+        return campaignService.reschedule(id, req.subject(), req.markdown(), role, interest, scheduledAt);
     }
 }

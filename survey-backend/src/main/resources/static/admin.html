@@ -104,6 +104,28 @@
     <div class="card"><h2>④ 測試寄送（寄給自己）</h2><div class="row"><div><input type="email" id="test-to" placeholder="your@email.com"></div><div style="flex:0"><button class="btn ghost" id="test-btn">寄測試信</button></div></div><div class="msg" id="test-msg"></div></div>
     <div class="card"><h2>⑤ 發送</h2><div class="row" style="align-items:center"><div style="flex:0"><label style="display:inline;font-weight:400"><input type="radio" name="mode" value="now" checked> 立即發送</label><label style="display:inline;font-weight:400;margin-left:14px"><input type="radio" name="mode" value="schedule"> 排程</label></div><div><input type="datetime-local" id="sched" disabled></div></div><button class="btn" id="send-btn" style="margin-top:14px">發送</button><div class="msg" id="send-msg"></div></div>
     <div class="card"><h2>⑥ 寄送歷史　<button class="btn ghost" id="hist-btn">重新整理</button></h2><div class="table-wrap"><table id="hist"><thead><tr><th>主旨</th><th>模式</th><th>時間</th><th>狀態</th><th>成功/失敗</th><th></th></tr></thead><tbody></tbody></table></div></div>
+    <div class="card"><h2>⑦ 邀請信（二次確認）　<button class="btn ghost" id="invite-refresh">重新整理</button></h2>
+      <p class="hint">對匯入的待確認名單寄「訂閱確認」邀請信；已寄過的人會自動跳過，點確認連結後才進入可寄送名單。</p>
+      <div class="row" style="align-items:flex-end">
+        <div><label for="invite-source">名單來源</label><select id="invite-source"><option value="exam">線上測驗</option><option value="survey_form">問卷填寫</option></select></div>
+        <div><label for="invite-limit">單次上限（每日額度 100 封）</label><input type="number" id="invite-limit" value="50" min="1" max="100"></div>
+        <div style="flex:0"><button class="btn" id="invite-send-btn">寄送邀請信</button></div>
+      </div>
+      <div class="msg" id="invite-msg"></div>
+      <details id="invite-tpl" style="margin-top:14px">
+        <summary style="cursor:pointer;font-weight:700">編輯邀請信範本</summary>
+        <div style="margin-top:12px">
+          <label for="tpl-subject">主旨</label><input type="text" id="tpl-subject">
+          <label for="tpl-body">內文（HTML，確認按鈕連結請保留佔位符 <code>{{confirmLink}}</code>）</label>
+          <textarea id="tpl-body" rows="14" style="font-family:ui-monospace,Consolas,monospace;font-size:.85rem"></textarea>
+          <div class="row" style="margin-top:10px"><div style="flex:0"><button class="btn ghost" id="tpl-preview-btn">預覽</button></div><div style="flex:0"><button class="btn" id="tpl-save-btn">儲存範本</button></div></div>
+          <div class="msg" id="tpl-msg"></div>
+          <iframe class="preview" id="tpl-preview" title="範本預覽" hidden style="margin-top:10px"></iframe>
+        </div>
+      </details>
+      <p style="margin:14px 0 8px" id="invite-stats" class="hint">統計載入中…</p>
+      <div class="table-wrap"><table id="invite-log"><thead><tr><th>Email</th><th>狀態</th><th>時間</th></tr></thead><tbody></tbody></table></div>
+    </div>
   </section>
 </main>
 
@@ -127,6 +149,8 @@
   const $=selector=>document.querySelector(selector);
   let surveyRows=[];
   let analyticsLoaded=false;
+  // 「修改排程」模式：記住正在編輯的 campaign id，null 表示一般發送模式。
+  let editingCampaignId=null;
 
   /** 取得目前分頁保存的管理金鑰。 */
   function getKey(){return sessionStorage.getItem(KEY)||'';}
@@ -161,8 +185,10 @@
     $('#analytics-refresh').onclick=()=>loadAnalytics(true);$('#export-json').onclick=()=>downloadProtected('/api/admin/survey','survey-responses.json');$('#export-csv').onclick=()=>downloadProtected('/api/admin/survey?format=csv','survey-responses.csv');$('#export-pdf').onclick=exportPdf;
     ['#raw-search','#raw-source','#raw-role','#raw-budget','#raw-subscription','#raw-sort'].forEach(selector=>$(selector).addEventListener(selector==='#raw-search'?'input':'change',renderRawTable));
     $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=doCount;$('#role').onchange=doCount;$('#interest').onchange=doCount;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#hist-btn').onclick=doHistory;
+    $('#invite-refresh').onclick=doInviteOverview;$('#invite-source').onchange=doInviteOverview;$('#invite-send-btn').onclick=doSendInvites;
+    $('#invite-tpl').addEventListener('toggle',()=>{if($('#invite-tpl').open)loadInviteTemplate();});$('#tpl-preview-btn').onclick=previewInviteTemplate;$('#tpl-save-btn').onclick=saveInviteTemplate;
     document.querySelectorAll('input[name=mode]').forEach(radio=>radio.onchange=()=>{$('#sched').disabled=mode()!=='schedule';});
-    buildRawHeader();doCount();doHistory();switchView('analytics');
+    buildRawHeader();doCount();doHistory();doInviteOverview();switchView('analytics');
   }
 
   /** 載入全部受保護問卷資料並重繪所有分析區塊。 */
@@ -303,17 +329,73 @@
   async function doCount(){try{const q=new URLSearchParams();if($('#role').value)q.set('role',$('#role').value);if($('#interest').value)q.set('interest',$('#interest').value);const r=await api('/api/admin/recipients?'+q);$('#rcount').textContent=r.count;$('#rsample').textContent=r.sample.length?'樣本：'+r.sample.join(', '):'';$('#quota-warn').hidden=r.count<=100;}catch(e){if(e.message!=='401')$('#rcount').textContent='?';}}
   /** 寄送電子報測試信給指定信箱。 */
   async function doTest(){const m=$('#test-msg');m.className='msg';const to=$('#test-to').value.trim();if(!to){m.className='msg err';m.textContent='請填測試信箱';return;}try{await api('/api/admin/campaign/test',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,to})});m.className='msg ok';m.textContent='測試信已寄給 '+to;}catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='測試寄送失敗：'+e.message;}}}
-  /** 確認後立即發送或排程電子報。 */
-  async function doSend(){const m=$('#send-msg');m.className='msg';if(!$('#subject').value.trim()){m.className='msg err';m.textContent='請填主旨';return;}const count=$('#rcount').textContent,isSched=mode()==='schedule';let scheduledAt=null;if(isSched){const value=$('#sched').value;if(!value){m.className='msg err';m.textContent='請選排程時間';return;}scheduledAt=new Date(value).toISOString();}if(!confirm(`確定要${isSched?'排程':'立即'}發送給 ${count} 人嗎？`))return;$('#send-btn').disabled=true;try{const body={subject:$('#subject').value,markdown:$('#markdown').value,filter:{role:$('#role').value||null,interest:$('#interest').value||null},mode:mode(),scheduledAt};const r=await api('/api/admin/campaign/send',{method:'POST',body:JSON.stringify(body)});m.className='msg ok';m.textContent=`已${isSched?'排程':'送出'}：收件 ${r.recipientCount}、成功 ${r.accepted}、失敗 ${r.failed}`;doHistory();}catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='發送失敗：'+e.message;}}finally{$('#send-btn').disabled=false;}}
+  /** 確認後立即發送、排程電子報，或在修改模式下更新既有排程。 */
+  async function doSend(){const m=$('#send-msg');m.className='msg';if(!$('#subject').value.trim()){m.className='msg err';m.textContent='請填主旨';return;}const count=$('#rcount').textContent,editing=editingCampaignId!=null,isSched=editing||mode()==='schedule';let scheduledAt=null;if(isSched){const value=$('#sched').value;if(!value){m.className='msg err';m.textContent='請選排程時間';return;}scheduledAt=new Date(value).toISOString();}
+    if(!confirm(editing?`確定更新批次 #${editingCampaignId} 的排程（取消舊排程信並以新內容重排給 ${count} 人）？`:`確定要${isSched?'排程':'立即'}發送給 ${count} 人嗎？`))return;
+    $('#send-btn').disabled=true;
+    try{
+      const filter={role:$('#role').value||null,interest:$('#interest').value||null};
+      let r;
+      if(editing){
+        // 修改模式：呼叫 reschedule 端點（後端會先取消舊排程信再重排）
+        r=await api('/api/admin/campaigns/'+editingCampaignId+'/schedule',{method:'PUT',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,filter,scheduledAt})});
+        m.className='msg ok';m.textContent=`排程已更新：收件 ${r.recipientCount}、成功 ${r.accepted}、失敗 ${r.failed}`;
+        exitEditMode();
+      }else{
+        r=await api('/api/admin/campaign/send',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,filter,mode:mode(),scheduledAt})});
+        m.className='msg ok';m.textContent=`已${isSched?'排程':'送出'}：收件 ${r.recipientCount}、成功 ${r.accepted}、失敗 ${r.failed}`;
+      }
+      doHistory();
+    }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent=(editing?'更新排程失敗：':'發送失敗：')+e.message;}}
+    finally{$('#send-btn').disabled=false;}}
   /** 建立單一表格儲存格，內容一律以 textContent 寫入避免 XSS。 */
   function cell(text){const td=document.createElement('td');td.textContent=text==null?'':String(text);return td;}
   /** 載入電子報寄送歷史，排程中的項目提供取消按鈕；時間欄排程顯示排程時間、其餘顯示建立時間。 */
   async function doHistory(){try{const rows=await api('/api/admin/campaigns'),body=$('#hist tbody');body.textContent='';rows.forEach(c=>{const tr=document.createElement('tr');tr.append(cell(c.subject),cell(c.mode));// 時間欄：排程批次顯示預定寄出時間，其餘顯示建立時間
       tr.append(cell(c.scheduledAt?'排程 '+formatDate(c.scheduledAt):formatDate(c.createdAt)));
       const statusTd=document.createElement('td'),pill=document.createElement('span');pill.className='pill '+c.status;pill.textContent=c.status;statusTd.append(pill);tr.append(statusTd,cell(c.acceptedCount+'/'+c.failedCount));
-      const actionTd=document.createElement('td');if(c.status==='scheduled'){const btn=document.createElement('button');btn.className='btn danger';btn.textContent='取消排程';btn.onclick=()=>doCancel(c.id);actionTd.append(btn);}tr.append(actionTd);body.append(tr);});}catch(e){/* 401 已由 api 處理，其餘維持既有畫面。 */}}
+      const actionTd=document.createElement('td');if(c.status==='scheduled'){const editBtn=document.createElement('button');editBtn.className='btn ghost';editBtn.textContent='修改';editBtn.onclick=()=>doEditSchedule(c);const btn=document.createElement('button');btn.className='btn danger';btn.style.marginLeft='8px';btn.textContent='取消排程';btn.onclick=()=>doCancel(c.id);actionTd.append(editBtn,btn);}tr.append(actionTd);body.append(tr);});}catch(e){/* 401 已由 api 處理，其餘維持既有畫面。 */}}
   /** 取消指定的電子報排程。 */
-  async function doCancel(id){if(!confirm('確定取消此排程？'))return;try{const r=await api('/api/admin/campaigns/'+id+'/schedule',{method:'DELETE'});alert(`已取消 ${r.cancelled} 封，失敗 ${r.failed}`);doHistory();}catch(e){if(e.message!=='401')alert('取消失敗：'+e.message);}}
+  async function doCancel(id){if(!confirm('確定取消此排程？'))return;try{const r=await api('/api/admin/campaigns/'+id+'/schedule',{method:'DELETE'});alert(`已取消 ${r.cancelled} 封，失敗 ${r.failed}`);if(editingCampaignId===id)exitEditMode();doHistory();}catch(e){if(e.message!=='401')alert('取消失敗：'+e.message);}}
+  /** 把 UTC ISO 時間轉為 datetime-local 需要的本地「YYYY-MM-DDTHH:mm」格式。 */
+  function toLocalInput(iso){const d=new Date(iso);if(Number.isNaN(d.getTime()))return '';const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;}
+  /** 把指定排程批次的內容回填到發送編輯區，進入「修改排程」模式。 */
+  function doEditSchedule(c){switchView('campaign');$('#subject').value=c.subject||'';$('#markdown').value=c.markdown||'';$('#role').value=c.filterRole||'';$('#interest').value=c.filterInterest||'';const scheduleRadio=document.querySelector('input[name=mode][value=schedule]');scheduleRadio.checked=true;$('#sched').disabled=false;$('#sched').value=toLocalInput(c.scheduledAt);editingCampaignId=c.id;$('#send-btn').textContent='更新排程';const m=$('#send-msg');m.className='msg';m.textContent=`修改中：批次 #${c.id}，改好時間或內容後按「更新排程」。`;doCount();doPreview();$('#send-btn').scrollIntoView({behavior:'smooth',block:'center'});}
+  /** 離開「修改排程」模式，還原發送按鈕與狀態。 */
+  function exitEditMode(){editingCampaignId=null;$('#send-btn').textContent='發送';}
+  /** 載入邀請記錄與成效統計（invitedCount 已寄、confirmedCount 已確認、pendingCount 待邀請）。 */
+  async function doInviteOverview(){try{const source=$('#invite-source').value,o=await api('/api/admin/invites?source='+encodeURIComponent(source));
+      $('#invite-stats').textContent=`已寄邀請 ${o.invitedCount} 人 ・ 已確認訂閱 ${o.confirmedCount} 人 ・ 待邀請 ${o.pendingCount} 人（來源：${sourceLabel(source)}）`;
+      const body=$('#invite-log tbody');body.textContent='';
+      if(!o.logs.length){const tr=document.createElement('tr'),td=cell('尚無邀請記錄');td.colSpan=3;tr.append(td);body.append(tr);return;}
+      o.logs.forEach(l=>{const tr=document.createElement('tr');tr.append(cell(l.recipient));
+        const st=document.createElement('td'),pill=document.createElement('span');pill.className='pill '+l.status;pill.textContent=l.status;st.append(pill);
+        if(l.error){const err=document.createElement('small');err.style.cssText='display:block;color:#b91c1c';err.textContent=l.error;st.append(err);}
+        tr.append(st,cell(formatDate(l.createdAt)));body.append(tr);});
+    }catch(e){if(e.message!=='401')$('#invite-stats').textContent='邀請記錄載入失敗：'+e.message;}}
+  /** 首次展開時載入邀請信範本到編輯區。 */
+  async function loadInviteTemplate(){if(loadInviteTemplate.done)return;try{const t=await api('/api/admin/templates/invite');$('#tpl-subject').value=t.subject;$('#tpl-body').value=t.bodyHtml;loadInviteTemplate.done=true;}catch(e){if(e.message!=='401'){const m=$('#tpl-msg');m.className='msg err';m.textContent='範本載入失敗：'+e.message;}}}
+  /** 以示意連結預覽目前編輯中的範本內容。 */
+  function previewInviteTemplate(){const frame=$('#tpl-preview');frame.hidden=false;frame.srcdoc=$('#tpl-body').value.replaceAll('{{confirmLink}}','#預覽示意連結');}
+  /** 儲存邀請信範本到資料庫（後端驗證佔位符必須存在）。 */
+  async function saveInviteTemplate(){const m=$('#tpl-msg');m.className='msg';
+    if(!$('#tpl-body').value.includes('{{confirmLink}}')){m.className='msg err';m.textContent='內文必須包含 {{confirmLink}} 佔位符，否則收件人無法確認訂閱。';return;}
+    if(!confirm('確定儲存範本？之後寄出的邀請信都會使用新內容。'))return;
+    $('#tpl-save-btn').disabled=true;
+    try{const t=await api('/api/admin/templates/invite',{method:'PUT',body:JSON.stringify({subject:$('#tpl-subject').value,bodyHtml:$('#tpl-body').value})});
+      m.className='msg ok';m.textContent='範本已儲存（'+formatDate(t.updatedAt||Date.now())+'）。';}
+    catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='範本儲存失敗：'+e.message;}}
+    finally{$('#tpl-save-btn').disabled=false;}}
+  /** 確認後對選定來源寄送邀請信（後端自動跳過已寄過者）。 */
+  async function doSendInvites(){const m=$('#invite-msg');m.className='msg';const source=$('#invite-source').value,limit=parseInt($('#invite-limit').value,10);
+    if(!limit||limit<1){m.className='msg err';m.textContent='請填有效的單次上限';return;}
+    if(!confirm(`確定對「${sourceLabel(source)}」待確認名單寄出邀請信（單次最多 ${limit} 封）？`))return;
+    $('#invite-send-btn').disabled=true;
+    try{const r=await api('/api/admin/campaign/invite',{method:'POST',body:JSON.stringify({source,limit})});
+      m.className='msg ok';m.textContent=`本批 ${r.recipientCount} 封：成功 ${r.accepted}、失敗 ${r.failed}；已邀請跳過 ${r.alreadyInvited}、剩餘 ${r.remaining} 人待邀請。`;
+      doInviteOverview();
+    }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='邀請寄送失敗：'+e.message;}}
+    finally{$('#invite-send-btn').disabled=false;}}
   /** 轉義電子報歷史欄位，避免插入 HTML。 */
   function esc(value){const div=document.createElement('div');div.textContent=value==null?'':String(value);return div.innerHTML;}
 

@@ -20,6 +20,9 @@ public interface SurveyResponseRepository extends JpaRepository<SurveyResponse, 
     /** 指定來源的待確認名單（尚未同意且未退訂），邀請確認信寄送對象 */
     List<SurveyResponse> findBySourceAndConsentFalseAndUnsubscribedFalse(String source);
 
+    /** 指定來源已確認訂閱（同意且未退訂）的人數，邀請成效統計用 */
+    long countBySourceAndConsentTrueAndUnsubscribedFalse(String source);
+
     /** 將指定 email（大小寫不敏感）標記為已退訂；回傳受影響筆數 */
     @Modifying
     @Transactional

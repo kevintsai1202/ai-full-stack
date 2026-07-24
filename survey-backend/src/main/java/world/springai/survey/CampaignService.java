@@ -3,7 +3,9 @@ package world.springai.survey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -87,19 +89,10 @@ public class CampaignService {
         int failed = 0;
 
         if (scheduled) {
-            // 排程模式：每封個別呼叫 schedule API
-            for (String email : recipients) {
-                try {
-                    String id = mailSender.schedule(
-                        new MailSender.Email(email, subject, renderFor(bodyHtml, email)), scheduledAt);
-                    emailLogRepository.save(new EmailLog(email, subject, "campaign", id, "scheduled", null, campaignId));
-                    accepted++;
-                } catch (Exception e) {
-                    log.warn("排程寄信失敗 to={}：{}", email, e.getMessage());
-                    emailLogRepository.save(new EmailLog(email, subject, "campaign", null, "failed", e.getMessage(), campaignId));
-                    failed++;
-                }
-            }
+            // 排程模式：每封個別呼叫 schedule API（邏輯抽到 scheduleAll 供 reschedule 共用）
+            int[] rc = scheduleAll(campaignId, subject, bodyHtml, recipients, scheduledAt);
+            accepted = rc[0];
+            failed = rc[1];
         } else {
             // 立即模式：每批 ≤100 封呼叫 sendBatch，整批共用一個 job id
             for (int i = 0; i < recipients.size(); i += BATCH_SIZE) {
@@ -135,6 +128,85 @@ public class CampaignService {
 
     /** 取消某 campaign 的所有排程信 */
     public Map<String, Integer> cancelSchedule(Long campaignId) {
+        int[] rc = cancelProviderScheduled(campaignId);
+        int cancelled = rc[0];
+        int failed = rc[1];
+        // 僅在確實有排程信被取消時才把 campaign 標為 cancelled；
+        // 對「已立即寄出」或無排程信的 campaign 呼叫取消則為 no-op，不誤改其狀態
+        if (cancelled > 0) {
+            campaignRepository.findById(campaignId).ifPresent(c -> {
+                c.setStatus("cancelled");
+                campaignRepository.save(c);
+            });
+        }
+        return Map.of("cancelled", cancelled, "failed", failed);
+    }
+
+    /**
+     * 修改未寄出的排程：先取消該 campaign 現有的 provider 排程信，再以新內容、新時間與（依新篩選）
+     * 當下重查的名單重排，並就地更新同一筆 campaign（不另開新紀錄）。
+     * 只允許狀態為 scheduled 的 campaign；否則拋 409。
+     */
+    public SendResult reschedule(Long campaignId, String subject, String markdown,
+                                 String role, String interest, Instant scheduledAt) {
+        Campaign campaign = campaignRepository.findById(campaignId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到此電子報批次"));
+        if (!"scheduled".equals(campaign.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "只能修改尚未寄出的排程");
+        }
+
+        // 1. 取消舊的 provider 排程信（把舊 email_log 標 cancelled）
+        cancelProviderScheduled(campaignId);
+
+        // 2. 以新篩選當下重查名單、渲染新內文並重排
+        List<String> recipients = recipientService.recipients(role, interest);
+        String bodyHtml = markdownRenderer.toHtml(markdown);
+        int[] rc = scheduleAll(campaignId, subject, bodyHtml, recipients, scheduledAt);
+
+        // 3. 就地更新同一筆 campaign 的內容、篩選、時間與統計
+        campaign.setSubject(subject);
+        campaign.setMarkdown(markdown);
+        campaign.setBodyHtml(bodyHtml);
+        campaign.setFilterRole(role);
+        campaign.setFilterInterest(interest);
+        campaign.setScheduledAt(OffsetDateTime.ofInstant(scheduledAt, ZoneOffset.UTC));
+        campaign.setRecipientCount(recipients.size());
+        campaign.setAcceptedCount(rc[0]);
+        campaign.setFailedCount(rc[1]);
+        campaign.setStatus(finalStatus(true, rc[0], rc[1]));
+        campaignRepository.save(campaign);
+
+        return new SendResult(campaignId, recipients.size(), rc[0], rc[1]);
+    }
+
+    /**
+     * 對名單逐封呼叫 schedule 並寫入 email_log；回傳 [accepted, failed]。
+     * 供立即發送的排程分支與 reschedule 共用。
+     */
+    private int[] scheduleAll(Long campaignId, String subject, String bodyHtml,
+                              List<String> recipients, Instant scheduledAt) {
+        int accepted = 0;
+        int failed = 0;
+        for (String email : recipients) {
+            try {
+                String id = mailSender.schedule(
+                    new MailSender.Email(email, subject, renderFor(bodyHtml, email)), scheduledAt);
+                emailLogRepository.save(new EmailLog(email, subject, "campaign", id, "scheduled", null, campaignId));
+                accepted++;
+            } catch (Exception e) {
+                log.warn("排程寄信失敗 to={}：{}", email, e.getMessage());
+                emailLogRepository.save(new EmailLog(email, subject, "campaign", null, "failed", e.getMessage(), campaignId));
+                failed++;
+            }
+        }
+        return new int[]{accepted, failed};
+    }
+
+    /**
+     * 取消某 campaign 現有的 provider 排程信，並把對應 email_log 標為 cancelled；
+     * 回傳 [cancelled, failed]。不改動 campaign 本身狀態（由呼叫端決定）。
+     */
+    private int[] cancelProviderScheduled(Long campaignId) {
         List<EmailLog> rows = emailLogRepository.findByCampaignIdAndStatus(campaignId, "scheduled");
         int cancelled = 0;
         int failed = 0;
@@ -152,15 +224,7 @@ public class CampaignService {
                 failed++;
             }
         }
-        // 僅在確實有排程信被取消時才把 campaign 標為 cancelled；
-        // 對「已立即寄出」或無排程信的 campaign 呼叫取消則為 no-op，不誤改其狀態
-        if (cancelled > 0) {
-            campaignRepository.findById(campaignId).ifPresent(c -> {
-                c.setStatus("cancelled");
-                campaignRepository.save(c);
-            });
-        }
-        return Map.of("cancelled", cancelled, "failed", failed);
+        return new int[]{cancelled, failed};
     }
 
     /** 歷史列表（依建立時間降冪） */

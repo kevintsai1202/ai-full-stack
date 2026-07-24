@@ -18,24 +18,32 @@ public class InviteService {
 
     private static final Logger log = LoggerFactory.getLogger(InviteService.class);
 
-    /** 邀請信主旨 */
+    /** 範本識別鍵 */
+    static final String TEMPLATE_KEY = "invite";
+    /** 內文中的確認連結佔位符（儲存範本時強制必須存在） */
+    static final String CONFIRM_LINK_PLACEHOLDER = "{{confirmLink}}";
+
+    /** 邀請信預設主旨（資料庫無範本時的退路） */
     private static final String SUBJECT = "你上過我的課——要不要一起繼續深入？";
 
     private final SurveyResponseRepository repository;
     private final MailSender mailSender;
     private final EmailLogRepository emailLogRepository;
+    private final MailTemplateRepository templateRepository; // 邀請信範本（後台可編輯）
     private final UnsubscribeTokenService tokenService; // 確認連結重用同一 HMAC 簽章
     private final String publicBaseUrl;                 // 組確認連結用的對外網址
 
-    /** 注入資料層、寄信、寄送記錄、token 服務與對外網址 */
+    /** 注入資料層、寄信、寄送記錄、範本、token 服務與對外網址 */
     public InviteService(SurveyResponseRepository repository,
                          MailSender mailSender,
                          EmailLogRepository emailLogRepository,
+                         MailTemplateRepository templateRepository,
                          UnsubscribeTokenService tokenService,
                          @Value("${app.public-base-url}") String publicBaseUrl) {
         this.repository = repository;
         this.mailSender = mailSender;
         this.emailLogRepository = emailLogRepository;
+        this.templateRepository = templateRepository;
         this.tokenService = tokenService;
         this.publicBaseUrl = publicBaseUrl;
     }
@@ -67,20 +75,79 @@ public class InviteService {
             ? eligible.subList(0, limit) : eligible;
         int remaining = eligible.size() - targets.size();
 
+        // 整批共用同一份範本（資料庫可編輯，無資料時退回內建預設）
+        MailTemplate template = getTemplate();
         int accepted = 0;
         int failed = 0;
         for (SurveyResponse r : targets) {
             try {
-                String id = mailSender.send(r.getEmail(), SUBJECT, buildHtml(r.getEmail()));
-                emailLogRepository.save(new EmailLog(r.getEmail(), SUBJECT, "invite", id, "sent", null));
+                String html = template.getBodyHtml().replace(CONFIRM_LINK_PLACEHOLDER, buildConfirmLink(r.getEmail()));
+                String id = mailSender.send(r.getEmail(), template.getSubject(), html);
+                emailLogRepository.save(new EmailLog(r.getEmail(), template.getSubject(), "invite", id, "sent", null));
                 accepted++;
             } catch (Exception e) {
                 log.warn("邀請信寄送失敗 to={}：{}", r.getEmail(), e.getMessage());
-                emailLogRepository.save(new EmailLog(r.getEmail(), SUBJECT, "invite", null, "failed", e.getMessage()));
+                emailLogRepository.save(new EmailLog(r.getEmail(), template.getSubject(), "invite", null, "failed", e.getMessage()));
                 failed++;
             }
         }
         return new InviteResult(targets.size(), accepted, failed, alreadyInvited, remaining);
+    }
+
+    /** 取得邀請信範本：優先用資料庫版本，無資料時退回內建預設（不落庫） */
+    public MailTemplate getTemplate() {
+        return templateRepository.findByTemplateKey(TEMPLATE_KEY)
+            .orElseGet(() -> new MailTemplate(TEMPLATE_KEY, SUBJECT, defaultBody()));
+    }
+
+    /**
+     * 更新邀請信範本並存入資料庫：
+     * 主旨與內文不得空白，內文必須含 {{confirmLink}} 佔位符（否則收件人無法確認訂閱）。
+     */
+    public MailTemplate updateTemplate(String subject, String bodyHtml) {
+        if (subject == null || subject.isBlank()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST, "主旨不得空白");
+        }
+        if (bodyHtml == null || bodyHtml.isBlank()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST, "內文不得空白");
+        }
+        if (!bodyHtml.contains(CONFIRM_LINK_PLACEHOLDER)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                "內文必須包含確認連結佔位符 " + CONFIRM_LINK_PLACEHOLDER);
+        }
+        // 已有範本則就地更新，否則建立新紀錄（首次部署 migration 已種入，一般走更新路徑）
+        MailTemplate template = templateRepository.findByTemplateKey(TEMPLATE_KEY)
+            .orElseGet(() -> new MailTemplate(TEMPLATE_KEY, subject, bodyHtml));
+        template.setSubject(subject);
+        template.setBodyHtml(bodyHtml);
+        return templateRepository.save(template);
+    }
+
+    /**
+     * 後台邀請記錄總覽：
+     * invitedCount=已成功寄出邀請的不重複人數、confirmedCount=該來源已確認訂閱人數、
+     * pendingCount=該來源尚未邀請的待確認人數、logs=全部邀請寄送記錄（新到舊）
+     */
+    public record InviteOverview(long invitedCount, long confirmedCount, long pendingCount,
+                                 List<EmailLog> logs) {}
+
+    /** 彙整指定來源的邀請寄送記錄與成效統計，供後台「邀請記錄」顯示 */
+    public InviteOverview overview(String source) {
+        List<EmailLog> logs = emailLogRepository.findByTypeOrderByCreatedAtDesc("invite");
+        // 已成功寄出邀請的 email 集合（小寫去重）
+        java.util.Set<String> invited = logs.stream()
+            .filter(l -> "sent".equals(l.getStatus()))
+            .map(l -> l.getRecipient().trim().toLowerCase())
+            .collect(java.util.stream.Collectors.toSet());
+        // 該來源尚未邀請的待確認人數
+        long pending = repository.findBySourceAndConsentFalseAndUnsubscribedFalse(source).stream()
+            .filter(r -> !invited.contains(r.getEmail().trim().toLowerCase()))
+            .count();
+        long confirmed = repository.countBySourceAndConsentTrueAndUnsubscribedFalse(source);
+        return new InviteOverview(invited.size(), confirmed, pending, logs);
     }
 
     /** 組確認連結：/api/survey/confirm?email=<urlencoded>&t=<HMAC token> */
@@ -90,32 +157,32 @@ public class InviteService {
     }
 
     /**
-     * 邀請信 HTML：說明來意與訂閱好處，附確認按鈕。
+     * 邀請信預設 HTML（資料庫無範本時的退路，與 V6 migration 種子內容一致）：
+     * 說明來意與訂閱好處，附確認按鈕（{{confirmLink}} 佔位）。
      * 不套 EmailTemplate（其頁腳的「已同意接收」敘述不適用於尚未同意者）；
      * 未點確認者不會再收到信，故頁腳明示「略過即不再打擾」。
      */
-    private String buildHtml(String email) {
-        String link = buildConfirmLink(email);
+    private String defaultBody() {
         return """
             <div style="font-family:system-ui,'Microsoft JhengHei',sans-serif;line-height:1.7;max-width:560px;margin:0 auto;color:#1a1a2e">
-              <h2>嗨，好久不見！</h2>
-              <p>感謝你先前上過我的基礎課程、參加線上測驗。</p>
-              <p>我現在經營一份電子報，把平常研究和實戰的東西整理起來分享。訂閱之後你會固定收到：</p>
+              <h2>嗨，好久不見，我是凱文大叔！</h2>
+              <p>你會收到這封信，是因為你之前上過我的<strong>基礎課程</strong>，也參加過課後的<strong>線上測驗</strong>——先謝謝你當時的參與。</p>
+              <p>最近我正在準備一份<strong>電子報</strong>，想把平常研究和實戰的東西整理起來，固定分享給老同學。訂閱之後你會收到：</p>
               <ul>
                 <li><strong>深入的技術討論</strong>：RAG、AI Agent、全端實戰的實作細節與踩雷筆記</li>
                 <li><strong>AI 新知與新技術</strong>：新模型、新工具與趨勢的第一手觀察整理</li>
-                <li><strong>各種好康優惠</strong>：包含我自己線上、線下課程的專屬優惠與活動</li>
+                <li><strong>各種好康優惠</strong>：除了 AI 產品的優惠活動外，還包含我自己線上、線下課程的專屬優惠</li>
               </ul>
               <p>如果你願意收到，點下面確認一下就好：</p>
               <p style="text-align:center;margin:28px 0">
-                <a href="%s" style="background:#0d9488;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700">是的，我要訂閱</a>
+                <a href="{{confirmLink}}" style="background:#0d9488;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700">是的，我要訂閱</a>
               </p>
               <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
               <p style="color:#888;font-size:.85rem">
-                你會收到這封信，是因為你曾參加我的課程線上測驗。<br>
+                寄件人：凱文大叔（你曾參加過我的基礎課程與線上測驗）。<br>
                 若不想收到，直接略過這封信即可——未確認前我們不會再寄信給你。
               </p>
             </div>
-            """.formatted(link);
+            """;
     }
 }

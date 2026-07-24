@@ -91,4 +91,13 @@ public class Campaign {
     public void setAcceptedCount(int acceptedCount) { this.acceptedCount = acceptedCount; }
     public void setFailedCount(int failedCount) { this.failedCount = failedCount; }
     public void setStatus(String status) { this.status = status; }
+
+    // 以下 setter 供「修改未寄出的排程」就地更新使用（reschedule）
+    public void setSubject(String subject) { this.subject = subject; }
+    public void setMarkdown(String markdown) { this.markdown = markdown; }
+    public void setBodyHtml(String bodyHtml) { this.bodyHtml = bodyHtml; }
+    public void setFilterRole(String filterRole) { this.filterRole = filterRole; }
+    public void setFilterInterest(String filterInterest) { this.filterInterest = filterInterest; }
+    public void setScheduledAt(OffsetDateTime scheduledAt) { this.scheduledAt = scheduledAt; }
+    public void setRecipientCount(int recipientCount) { this.recipientCount = recipientCount; }
 }
