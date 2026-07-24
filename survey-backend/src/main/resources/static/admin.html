@@ -28,7 +28,7 @@
   .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px;box-shadow:var(--shadow)}
   .kpi-label{font-size:.8rem;color:var(--muted);font-weight:800;letter-spacing:.05em}.kpi-value{font-size:1.8rem;font-weight:900;margin-top:4px}.kpi-note{font-size:.8rem;color:var(--muted)}
   .chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.chart-grid .card{margin:0}.chart{display:grid;gap:10px}.bar-row{display:grid;grid-template-columns:minmax(110px,1.2fr) 3fr 54px;gap:10px;align-items:center;font-size:.88rem}.bar-label{overflow-wrap:anywhere}.bar-track{height:9px;border-radius:999px;background:var(--surface-2);overflow:hidden}.bar-fill{height:100%;background:linear-gradient(90deg,var(--accent-deep),#20bcae);border-radius:inherit}.bar-value{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
-  .full{grid-column:1/-1}.filters{display:grid;grid-template-columns:minmax(240px,2fr) repeat(4,minmax(130px,1fr));gap:10px;margin:12px 0}.filters label{margin:0}.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px;max-height:680px}
+  .full{grid-column:1/-1}.filters{display:grid;grid-template-columns:minmax(240px,2fr) repeat(5,minmax(120px,1fr));gap:10px;margin:12px 0}.filters label{margin:0}.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px;max-height:680px}
   table{width:100%;border-collapse:separate;border-spacing:0;font-size:.84rem}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;min-width:110px;max-width:300px;overflow-wrap:anywhere}
   th{position:sticky;top:0;background:#edf5f4;z-index:2;white-space:nowrap}tbody tr:hover{background:#f4fbfa}.empty{color:var(--muted);padding:20px;text-align:center}
   .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.76rem;font-weight:700}.pill.scheduled{background:var(--accent-soft);color:var(--accent-deep)}.pill.sent{background:#dcfce7;color:#166534}.pill.sending{background:#fff2cc;color:#92580a}.pill.failed{background:#fde8e8;color:var(--danger)}.pill.cancelled{background:var(--surface-2);color:var(--muted)}
@@ -62,7 +62,7 @@
   <section class="view" id="analytics-view">
     <div class="card section-head">
       <div><h2 style="margin-bottom:2px">問卷回應總覽</h2><span class="hint" id="analytics-updated">尚未載入</span></div>
-      <div class="actions"><button class="btn ghost" id="analytics-refresh">重新整理</button><button class="btn ghost" id="export-json">匯出 JSON</button><button class="btn" id="export-csv">匯出 CSV</button></div>
+      <div class="actions"><button class="btn ghost" id="analytics-refresh">重新整理</button><button class="btn ghost" id="export-json">匯出 JSON</button><button class="btn ghost" id="export-csv">匯出 CSV</button><button class="btn" id="export-pdf">匯出 PDF</button></div>
     </div>
     <div class="msg" id="analytics-msg"></div>
     <div class="kpis">
@@ -87,6 +87,7 @@
       <div class="section-head"><h2 style="margin:0">完整原始資料</h2><span class="hint" id="raw-count">0 筆</span></div>
       <div class="filters">
         <label><span class="hint">全文搜尋</span><input type="search" id="raw-search" placeholder="姓名、Email、答案或 UTM"></label>
+        <label><span class="hint">來源</span><select id="raw-source"><option value="">全部</option><option value="survey_form">問卷填寫</option><option value="exam">線上測驗</option></select></label>
         <label><span class="hint">身分</span><select id="raw-role"><option value="">全部</option></select></label>
         <label><span class="hint">預算</span><select id="raw-budget"><option value="">全部</option></select></label>
         <label><span class="hint">訂閱狀態</span><select id="raw-subscription"><option value="">全部</option><option value="contactable">可寄送</option><option value="unsubscribed">已退訂</option><option value="no-consent">未同意</option></select></label>
@@ -118,8 +119,11 @@
     ['Java／後端經驗',r=>r.experience],['前端經驗',r=>r.frontendExperience],['預算',r=>r.budget],['想學主題',r=>listText(r.interest)],
     ['目前狀態',r=>answer(r,'status')],['學習目標',r=>listText(answer(r,'goals'))],['開發痛點',r=>listText(answer(r,'pain_points'))],
     ['建議',r=>answer(r,'suggestion')],['完整 answers',r=>jsonText(r.answers)],['完整 UTM',r=>jsonText(r.utm)],
-    ['同意寄送',r=>r.consent?'是':'否'],['已退訂',r=>r.unsubscribed?'是':'否']
+    ['來源',r=>sourceLabel(r.source)],['同意寄送',r=>r.consent?'是':'否'],['已退訂',r=>r.unsubscribed?'是':'否']
   ];
+  /** 名單來源代碼轉中文標籤，未知代碼原樣顯示 */
+  const SOURCE_LABELS={survey_form:'問卷填寫',exam:'線上測驗'};
+  function sourceLabel(code){return SOURCE_LABELS[code]||code||'';}
   const $=selector=>document.querySelector(selector);
   let surveyRows=[];
   let analyticsLoaded=false;
@@ -154,8 +158,8 @@
     fillSelect('#role',ROLES);fillSelect('#interest',INTERESTS);
     document.querySelectorAll('.tab').forEach(tab=>tab.onclick=()=>switchView(tab.dataset.view));
     $('#lock-btn').onclick=()=>{sessionStorage.removeItem(KEY);location.reload();};
-    $('#analytics-refresh').onclick=()=>loadAnalytics(true);$('#export-json').onclick=()=>downloadProtected('/api/admin/survey','survey-responses.json');$('#export-csv').onclick=()=>downloadProtected('/api/admin/survey?format=csv','survey-responses.csv');
-    ['#raw-search','#raw-role','#raw-budget','#raw-subscription','#raw-sort'].forEach(selector=>$(selector).addEventListener(selector==='#raw-search'?'input':'change',renderRawTable));
+    $('#analytics-refresh').onclick=()=>loadAnalytics(true);$('#export-json').onclick=()=>downloadProtected('/api/admin/survey','survey-responses.json');$('#export-csv').onclick=()=>downloadProtected('/api/admin/survey?format=csv','survey-responses.csv');$('#export-pdf').onclick=exportPdf;
+    ['#raw-search','#raw-source','#raw-role','#raw-budget','#raw-subscription','#raw-sort'].forEach(selector=>$(selector).addEventListener(selector==='#raw-search'?'input':'change',renderRawTable));
     $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=doCount;$('#role').onchange=doCount;$('#interest').onchange=doCount;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#hist-btn').onclick=doHistory;
     document.querySelectorAll('input[name=mode]').forEach(radio=>radio.onchange=()=>{$('#sched').disabled=mode()!=='schedule';});
     buildRawHeader();doCount();doHistory();switchView('analytics');
@@ -201,8 +205,8 @@
 
   /** 套用搜尋、篩選與排序後顯示全部符合的原始資料。 */
   function renderRawTable(){
-    const term=$('#raw-search').value.trim().toLowerCase(),role=$('#raw-role').value,budget=$('#raw-budget').value,subscription=$('#raw-subscription').value,sort=$('#raw-sort').value;
-    const filtered=surveyRows.filter(row=>{if(term&&!jsonText(row).toLowerCase().includes(term))return false;if(role&&row.role!==role)return false;if(budget&&row.budget!==budget)return false;if(subscription==='contactable'&&!(row.consent&&!row.unsubscribed))return false;if(subscription==='unsubscribed'&&!row.unsubscribed)return false;if(subscription==='no-consent'&&row.consent)return false;return true;}).sort((a,b)=>dateValue(a.createdAt)-dateValue(b.createdAt));if(sort==='desc')filtered.reverse();
+    const term=$('#raw-search').value.trim().toLowerCase(),source=$('#raw-source').value,role=$('#raw-role').value,budget=$('#raw-budget').value,subscription=$('#raw-subscription').value,sort=$('#raw-sort').value;
+    const filtered=surveyRows.filter(row=>{if(term&&!jsonText(row).toLowerCase().includes(term))return false;if(source&&row.source!==source)return false;if(role&&row.role!==role)return false;if(budget&&row.budget!==budget)return false;if(subscription==='contactable'&&!(row.consent&&!row.unsubscribed))return false;if(subscription==='unsubscribed'&&!row.unsubscribed)return false;if(subscription==='no-consent'&&row.consent)return false;return true;}).sort((a,b)=>dateValue(a.createdAt)-dateValue(b.createdAt));if(sort==='desc')filtered.reverse();
     const body=$('#raw-table tbody');body.replaceChildren();filtered.forEach(row=>{const tr=document.createElement('tr');RAW_COLUMNS.forEach(([,getter])=>{const td=document.createElement('td');const value=getter(row);td.textContent=value==null?'':String(value);td.title=td.textContent;tr.append(td);});body.append(tr);});if(!filtered.length){const tr=document.createElement('tr'),td=emptyNode('沒有符合條件的資料');td.colSpan=RAW_COLUMNS.length;tr.append(td);body.append(tr);}$('#raw-count').textContent=filtered.length+' / '+surveyRows.length+' 筆';
   }
 
@@ -211,6 +215,72 @@
     const msg=$('#analytics-msg');msg.className='msg';
     try{const res=await fetch(path,{headers:{'X-Admin-Key':getKey()}});if(res.status===401){sessionStorage.removeItem(KEY);showGate('金鑰無效，請重新輸入');return;}if(!res.ok)throw new Error('HTTP '+res.status);const blob=await res.blob();const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=filename;document.body.append(link);link.click();link.remove();URL.revokeObjectURL(url);msg.className='msg ok';msg.textContent='已匯出 '+filename;}
     catch(error){msg.className='msg err';msg.textContent='匯出失敗：'+error.message;}
+  }
+
+  /** 由問卷資料組出 A4 直式統計報表 HTML（自含單檔），供列印轉 PDF 與自動化腳本共用同一模板。 */
+  function buildReportHtml(rows=surveyRows){
+    const dates=rows.map(row=>new Date(row.createdAt)).filter(date=>!Number.isNaN(date.getTime())).sort((a,b)=>a-b);
+    const range=dates.length?formatDate(dates[0])+' ～ '+formatDate(dates.at(-1)):'尚無資料';
+    // KPI 與畫面同一計算基準，確保報表數字與後台一致
+    const kpis=[['總回應數',rows.length],['可寄送名單',rows.filter(row=>row.consent&&!row.unsubscribed).length],['已退訂',rows.filter(row=>row.unsubscribed).length],['資料期間',range]];
+    // 統計區塊沿用 countValues / countUtm，避免報表與畫面各算各的
+    const sections=[
+      ['身分類型',countValues(rows,row=>row.role)],['Java／後端經驗',countValues(rows,row=>row.experience)],
+      ['前端經驗',countValues(rows,row=>row.frontendExperience)],['課程預算',countValues(rows,row=>row.budget)],
+      ['想學主題',countValues(rows,row=>row.interest,true)],['目前狀態',countValues(rows,row=>answer(row,'status'))],
+      ['學習目標',countValues(rows,row=>answer(row,'goals'),true)],['開發痛點',countValues(rows,row=>answer(row,'pain_points'),true)],
+      ['UTM 歸因',countUtm(rows)]
+    ];
+    // 單列長條：名稱＋比例條＋數量（百分比以總回應數為分母；複選題各項百分比可合計超過 100%）
+    const bar=(label,count,max)=>`<div class="r"><span class="l">${esc(label)}</span><span class="t"><i style="width:${(count/max*100).toFixed(1)}%"></i></span><span class="v">${count}（${rows.length?Math.round(count/rows.length*100):0}%）</span></div>`;
+    const sectionHtml=sections.map(([title,entries])=>{
+      if(!entries.length)return `<section class="sec"><h2>${esc(title)}</h2><p class="empty">尚無資料</p></section>`;
+      const max=Math.max(...entries.map(([,count])=>count),1);
+      return `<section class="sec"><h2>${esc(title)}</h2>${entries.map(([label,count])=>bar(label,count,max)).join('')}</section>`;
+    }).join('');
+    const suggestionRows=rows.filter(row=>String(answer(row,'suggestion')||'').trim());
+    const suggestionHtml=suggestionRows.length
+      ?suggestionRows.map(row=>`<div class="sug"><p>${esc(answer(row,'suggestion'))}</p><small>${esc([row.name||'未具名',row.role||'未填身分',formatDate(row.createdAt)].join(' · '))}</small></div>`).join('')
+      :'<p class="empty">目前沒有自由填寫建議</p>';
+    return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>問卷統計報告 · AI 賦能全端開發</title><style>
+      @page{size:A4;margin:14mm}
+      *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      body{margin:0;font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;color:#102033;font-size:12px;line-height:1.6;background:#fff}
+      header{border-bottom:3px solid #0f766e;padding-bottom:10px}
+      h1{font-size:20px;margin:0}.meta{color:#5c6b7d;font-size:11px;margin-top:4px}
+      .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
+      .kpi{border:1px solid #dfe6ee;border-radius:8px;padding:8px 10px;break-inside:avoid}
+      .kpi b{display:block;font-size:16px}.kpi span{color:#5c6b7d;font-size:10px;font-weight:700;letter-spacing:.05em}
+      .sec{border:1px solid #dfe6ee;border-radius:8px;padding:10px 12px;margin-bottom:10px;break-inside:avoid}
+      .sec h2{font-size:13px;margin:0 0 8px;color:#0f766e}
+      .r{display:grid;grid-template-columns:minmax(120px,1.3fr) 3fr 84px;gap:8px;align-items:center;margin:3px 0}
+      .l{overflow-wrap:anywhere}.t{height:8px;background:#eef3f8;border-radius:99px;overflow:hidden;display:block}
+      .t i{display:block;height:100%;background:#0f766e;border-radius:inherit}
+      .v{text-align:right;color:#5c6b7d;font-variant-numeric:tabular-nums}
+      .sug{border-left:3px solid #0d9488;background:#f7fbfb;padding:8px 10px;margin:6px 0;break-inside:avoid}
+      .sug p{margin:0;white-space:pre-wrap}.sug small{color:#5c6b7d}
+      .empty{color:#5c6b7d}footer{margin-top:14px;color:#8a97a5;font-size:10px;text-align:center}
+    </style></head><body>
+      <header><h1>問卷統計報告 · AI 賦能全端開發</h1><div class="meta">產生時間：${esc(new Date().toLocaleString('zh-TW'))}　·　資料期間：${esc(range)}</div></header>
+      <div class="kpis">${kpis.map(([label,value])=>`<div class="kpi"><span>${esc(label)}</span><b>${esc(String(value))}</b></div>`).join('')}</div>
+      ${sectionHtml}
+      <section class="sec"><h2>全部自由填寫建議（${suggestionRows.length} 則）</h2>${suggestionHtml}</section>
+      <footer>本報告由課程管理後台產生，僅供內部使用，請勿對外散布。</footer>
+    </body></html>`;
+  }
+
+  /** 匯出 PDF：以 Blob URL 開啟報表視窗並觸發列印，使用者於對話框選「另存為 PDF」。 */
+  function exportPdf(){
+    const msg=$('#analytics-msg');msg.className='msg';
+    if(!surveyRows.length){msg.className='msg err';msg.textContent='尚無資料可匯出，請先重新整理問卷分析';return;}
+    const url=URL.createObjectURL(new Blob([buildReportHtml()],{type:'text/html'}));
+    const win=window.open(url,'_blank');
+    if(!win){URL.revokeObjectURL(url);msg.className='msg err';msg.textContent='瀏覽器阻擋了報表視窗，請允許彈出視窗後重試';return;}
+    // 報表載入完成後稍候讓中文字型渲染完，再觸發列印（Blob URL 與本頁同源，可直接呼叫 print）
+    win.addEventListener('load',()=>setTimeout(()=>{win.focus();win.print();},250));
+    // 延後釋放 Blob URL，避免視窗尚未讀完內容
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    msg.className='msg ok';msg.textContent='已開啟報表視窗，請在列印對話框選擇「另存為 PDF」';
   }
 
   /** 取得 answers 中指定題目的值。 */

@@ -1,0 +1,100 @@
+package world.springai.survey;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+
+/**
+ * 二次確認（re-permission）邀請信：對「匯入的待確認名單」（consent=false 且未退訂）
+ * 逐封寄送含個人化 HMAC 確認連結的邀請信；點擊確認後才轉為可寄送名單。
+ */
+@Service
+public class InviteService {
+
+    private static final Logger log = LoggerFactory.getLogger(InviteService.class);
+
+    /** 邀請信主旨 */
+    private static final String SUBJECT = "你上過我的課——要不要一起繼續深入？";
+
+    private final SurveyResponseRepository repository;
+    private final MailSender mailSender;
+    private final EmailLogRepository emailLogRepository;
+    private final UnsubscribeTokenService tokenService; // 確認連結重用同一 HMAC 簽章
+    private final String publicBaseUrl;                 // 組確認連結用的對外網址
+
+    /** 注入資料層、寄信、寄送記錄、token 服務與對外網址 */
+    public InviteService(SurveyResponseRepository repository,
+                         MailSender mailSender,
+                         EmailLogRepository emailLogRepository,
+                         UnsubscribeTokenService tokenService,
+                         @Value("${app.public-base-url}") String publicBaseUrl) {
+        this.repository = repository;
+        this.mailSender = mailSender;
+        this.emailLogRepository = emailLogRepository;
+        this.tokenService = tokenService;
+        this.publicBaseUrl = publicBaseUrl;
+    }
+
+    /** 邀請寄送結果摘要 */
+    public record InviteResult(int recipientCount, int accepted, int failed) {}
+
+    /** 對指定來源的待確認名單逐封寄邀請信；單封失敗不中斷整批 */
+    public InviteResult sendInvites(String source) {
+        List<SurveyResponse> pending = repository.findBySourceAndConsentFalseAndUnsubscribedFalse(source);
+        int accepted = 0;
+        int failed = 0;
+        for (SurveyResponse r : pending) {
+            try {
+                String id = mailSender.send(r.getEmail(), SUBJECT, buildHtml(r.getEmail()));
+                emailLogRepository.save(new EmailLog(r.getEmail(), SUBJECT, "invite", id, "sent", null));
+                accepted++;
+            } catch (Exception e) {
+                log.warn("邀請信寄送失敗 to={}：{}", r.getEmail(), e.getMessage());
+                emailLogRepository.save(new EmailLog(r.getEmail(), SUBJECT, "invite", null, "failed", e.getMessage()));
+                failed++;
+            }
+        }
+        return new InviteResult(pending.size(), accepted, failed);
+    }
+
+    /** 組確認連結：/api/survey/confirm?email=<urlencoded>&t=<HMAC token> */
+    private String buildConfirmLink(String email) {
+        return publicBaseUrl + "/api/survey/confirm?email="
+            + URLEncoder.encode(email, StandardCharsets.UTF_8) + "&t=" + tokenService.sign(email);
+    }
+
+    /**
+     * 邀請信 HTML：說明來意與訂閱好處，附確認按鈕。
+     * 不套 EmailTemplate（其頁腳的「已同意接收」敘述不適用於尚未同意者）；
+     * 未點確認者不會再收到信，故頁腳明示「略過即不再打擾」。
+     */
+    private String buildHtml(String email) {
+        String link = buildConfirmLink(email);
+        return """
+            <div style="font-family:system-ui,'Microsoft JhengHei',sans-serif;line-height:1.7;max-width:560px;margin:0 auto;color:#1a1a2e">
+              <h2>嗨，好久不見！</h2>
+              <p>感謝你先前上過我的基礎課程、參加線上測驗。</p>
+              <p>我開了新的「AI 賦能全端開發」課程，也經營一份給學員的電子報。訂閱之後你會固定收到：</p>
+              <ul>
+                <li><strong>深入的技術討論</strong>：RAG、AI Agent、Spring Boot 全端實戰的實作細節與踩雷筆記</li>
+                <li><strong>新課程與單元</strong>的第一手消息</li>
+                <li><strong>學員專屬</strong>的優惠與活動</li>
+              </ul>
+              <p>如果你願意收到，點下面確認一下就好：</p>
+              <p style="text-align:center;margin:28px 0">
+                <a href="%s" style="background:#0d9488;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700">是的，我要訂閱</a>
+              </p>
+              <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+              <p style="color:#888;font-size:.85rem">
+                你會收到這封信，是因為你曾參加我的課程線上測驗。<br>
+                若不想收到，直接略過這封信即可——未確認前我們不會再寄信給你。
+              </p>
+            </div>
+            """.formatted(link);
+    }
+}

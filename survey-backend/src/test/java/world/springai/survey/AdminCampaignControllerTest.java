@@ -28,6 +28,39 @@ class AdminCampaignControllerTest {
     @Autowired MockMvc mvc;
     @MockBean CampaignService campaignService;
     @MockBean RecipientService recipientService;
+    @MockBean InviteService inviteService;
+
+    /** 邀請確認信：無金鑰回 401 */
+    @Test
+    void inviteWithoutKeyReturns401() throws Exception {
+        mvc.perform(post("/api/admin/campaign/invite")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"source\":\"exam\"}"))
+           .andExpect(status().isUnauthorized());
+    }
+
+    /** 邀請確認信：有金鑰時委派 InviteService 並回寄送摘要 */
+    @Test
+    void inviteWithKeyDelegatesAndReturnsSummary() throws Exception {
+        when(inviteService.sendInvites("exam"))
+            .thenReturn(new InviteService.InviteResult(3, 2, 1));
+        mvc.perform(post("/api/admin/campaign/invite").header("X-Admin-Key", "test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"source\":\"exam\"}"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.recipientCount").value(3))
+           .andExpect(jsonPath("$.accepted").value(2))
+           .andExpect(jsonPath("$.failed").value(1));
+    }
+
+    /** 邀請確認信：缺 source 回 400 */
+    @Test
+    void inviteWithoutSourceReturns400() throws Exception {
+        mvc.perform(post("/api/admin/campaign/invite").header("X-Admin-Key", "test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+           .andExpect(status().isBadRequest());
+    }
 
     /** 無金鑰一律 401 */
     @Test

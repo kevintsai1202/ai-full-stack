@@ -115,7 +115,7 @@ class SurveyControllerTest {
            .andExpect(status().isOk())
            .andExpect(content().contentTypeCompatibleWith("text/csv"))
            .andExpect(content().string(org.hamcrest.Matchers.containsString(
-               "id,email,name,role,experience,frontend_experience,interest,budget,answers,utm,consent,unsubscribed,created_at")))
+               "id,email,name,role,experience,frontend_experience,interest,budget,answers,utm,consent,unsubscribed,source,created_at")))
            .andExpect(content().string(org.hamcrest.Matchers.containsString("newsletter")))
            .andExpect(content().string(org.hamcrest.Matchers.containsString("希望增加實作")));
     }
@@ -139,6 +139,21 @@ class SurveyControllerTest {
            .andExpect(jsonPath("$.interest[0].count").value(2))
            .andExpect(jsonPath("$.role[0].label").value("後端工程師"))
            .andExpect(jsonPath("$.role[0].count").value(2));
+    }
+
+    /** 公開統計只計問卷填寫（survey_form），匯入名單（如 exam）不得灌水 */
+    @Test
+    void publicStatsExcludesImportedRows() throws Exception {
+        SurveyResponse filled = new SurveyResponse();
+        filled.setRole("後端工程師");
+        filled.setSource("survey_form");
+        SurveyResponse imported = new SurveyResponse();
+        imported.setSource("exam");
+        when(repository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(filled, imported));
+
+        mvc.perform(get("/api/survey/stats"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.total").value(1));
     }
 
     /** 退訂：合法 token 應更新該 email 並回 200 HTML */
@@ -165,5 +180,62 @@ class SurveyControllerTest {
         mvc.perform(get("/api/survey/unsubscribe").param("email", "user@example.com"))
            .andExpect(status().isOk());
         verify(repository, never()).unsubscribeByEmail(any());
+    }
+
+    /** 確認訂閱：合法 token 應把該 email 轉為已同意並回 200 HTML */
+    @Test
+    void confirmWithValidTokenUpdatesConsent() throws Exception {
+        String email = "student@example.com";
+        String token = tokenService.sign(email);
+        mvc.perform(get("/api/survey/confirm").param("email", email).param("t", token))
+           .andExpect(status().isOk())
+           .andExpect(content().contentTypeCompatibleWith("text/html"));
+        verify(repository).confirmByEmail(email);
+    }
+
+    /** 確認訂閱：token 錯誤不更新，但仍回 200 同頁（不洩漏名單） */
+    @Test
+    void confirmWithBadTokenDoesNotUpdate() throws Exception {
+        mvc.perform(get("/api/survey/confirm").param("email", "student@example.com").param("t", "bad"))
+           .andExpect(status().isOk());
+        verify(repository, never()).confirmByEmail(any());
+    }
+
+    /** 確認訂閱：缺 token 不更新，仍回 200 */
+    @Test
+    void confirmWithoutTokenDoesNotUpdate() throws Exception {
+        mvc.perform(get("/api/survey/confirm").param("email", "student@example.com"))
+           .andExpect(status().isOk());
+        verify(repository, never()).confirmByEmail(any());
+    }
+
+    /** 問卷送出的資料來源應標記為 survey_form */
+    @Test
+    void submitMarksSourceAsSurveyForm() throws Exception {
+        String body = "{\"email\":\"a@b.com\",\"consent\":true}";
+        mvc.perform(post("/api/survey").contentType(MediaType.APPLICATION_JSON).content(body))
+           .andExpect(status().isCreated());
+        org.mockito.ArgumentCaptor<SurveyResponse> captor =
+            org.mockito.ArgumentCaptor.forClass(SurveyResponse.class);
+        verify(repository).save(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("survey_form", captor.getValue().getSource());
+    }
+
+    /** CSV 匯出須包含來源欄位，可分辨 survey_form 與 exam */
+    @Test
+    void adminCsvIncludesSourceColumn() throws Exception {
+        SurveyResponse response = new SurveyResponse();
+        response.setId(9L);
+        response.setEmail("exam-student@example.com");
+        response.setSource("exam");
+        response.setConsent(false);
+        when(repository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(response));
+
+        mvc.perform(get("/api/admin/survey")
+                .param("format", "csv")
+                .header("X-Admin-Key", "test-key"))
+           .andExpect(status().isOk())
+           .andExpect(content().string(org.hamcrest.Matchers.containsString("source")))
+           .andExpect(content().string(org.hamcrest.Matchers.containsString("exam")));
     }
 }

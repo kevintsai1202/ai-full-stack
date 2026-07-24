@@ -28,14 +28,18 @@ public class AdminCampaignController {
     private final CampaignService campaignService;
     /** 收件人服務 */
     private final RecipientService recipientService;
+    /** 二次確認邀請信服務 */
+    private final InviteService inviteService;
 
     /** 注入依賴 */
     public AdminCampaignController(AdminKeyGuard guard,
                                    CampaignService campaignService,
-                                   RecipientService recipientService) {
+                                   RecipientService recipientService,
+                                   InviteService inviteService) {
         this.guard = guard;
         this.campaignService = campaignService;
         this.recipientService = recipientService;
+        this.inviteService = inviteService;
     }
 
     /** 預覽用請求：主旨與 markdown 內文 */
@@ -104,6 +108,21 @@ public class AdminCampaignController {
             }
         }
         return campaignService.send(req.subject(), req.markdown(), role, interest, req.mode(), scheduledAt);
+    }
+
+    /** 邀請確認信請求：待確認名單的來源標記（如 exam） */
+    public record InviteRequest(String source) {}
+
+    /** 對指定來源的待確認名單寄二次確認邀請信，需提供有效金鑰 */
+    @PostMapping("/api/admin/campaign/invite")
+    public InviteService.InviteResult invite(
+            @RequestHeader(value = KEY_HEADER, required = false) String key,
+            @RequestBody InviteRequest req) {
+        guard.verify(key);
+        if (req.source() == null || req.source().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "source 為必填");
+        }
+        return inviteService.sendInvites(req.source());
     }
 
     /** 取得歷史 campaign 列表（依建立時間降冪），需提供有效金鑰 */

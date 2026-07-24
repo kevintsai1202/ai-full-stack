@@ -86,7 +86,10 @@ public class SurveyController {
      */
     @GetMapping("/api/survey/stats")
     public SurveyStats stats() {
-        List<SurveyResponse> all = repository.findAllByOrderByCreatedAtDesc();
+        // 只統計問卷填寫來源；外部匯入名單（如線上測驗）不得灌水公開數字
+        List<SurveyResponse> all = repository.findAllByOrderByCreatedAtDesc().stream()
+            .filter(r -> "survey_form".equals(r.getSource()))
+            .toList();
         // 想學主題：interest 為複選陣列，攤平後計數（不限筆數）
         Stream<String> interest = all.stream()
             .filter(r -> r.getInterest() != null)
@@ -121,6 +124,49 @@ public class SurveyController {
             .contentType(MediaType.parseMediaType("text/html; charset=UTF-8"))
             .body(UNSUBSCRIBE_HTML);
     }
+
+    /**
+     * 公開確認訂閱端點：使用者從邀請信點擊確認連結（GET）後以瀏覽器開啟，故回 HTML。
+     * 連結形如 /api/survey/confirm?email=<email>&t=<HMAC token>。
+     * 設計與退訂端點一致：防偽（HMAC）、冪等、不洩漏名單、固定回應頁。
+     */
+    @GetMapping(value = "/api/survey/confirm", produces = "text/html; charset=UTF-8")
+    public ResponseEntity<String> confirm(@RequestParam(value = "email", required = false) String email,
+                                          @RequestParam(value = "t", required = false) String token) {
+        // 僅在 email 有值且 token 通過驗證時才轉為已同意；其餘情況靜默略過但仍回同一頁
+        if (StringUtils.hasText(email) && tokenService.verify(email, token)) {
+            repository.confirmByEmail(email.trim());
+        }
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType("text/html; charset=UTF-8"))
+            .body(CONFIRM_HTML);
+    }
+
+    /** 確認訂閱成功頁（固定內容，不含使用者輸入）；中文提示，置中簡潔樣式 */
+    private static final String CONFIRM_HTML = """
+            <!doctype html>
+            <html lang="zh-Hant">
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <title>訂閱確認成功</title>
+              <style>
+                body { font-family: system-ui, "Microsoft JhengHei", sans-serif; background: #f7f8fa;
+                       display: flex; min-height: 100vh; margin: 0; align-items: center; justify-content: center; }
+                .card { background: #fff; padding: 2.5rem 2rem; border-radius: 12px; max-width: 420px;
+                        box-shadow: 0 8px 30px rgba(0,0,0,.08); text-align: center; }
+                h1 { font-size: 1.4rem; margin: 0 0 .75rem; color: #1a1a2e; }
+                p { color: #555; line-height: 1.6; margin: 0; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <h1>✅ 訂閱確認成功</h1>
+                <p>謝謝你！之後的深入技術內容、新課程與學員專屬消息會寄到你的信箱。<br>若改變心意，每封信都有一鍵退訂。</p>
+              </div>
+            </body>
+            </html>
+            """;
 
     /** 退訂成功頁（固定內容，不含使用者輸入）；中文提示，置中簡潔樣式 */
     private static final String UNSUBSCRIBE_HTML = """
@@ -163,7 +209,7 @@ public class SurveyController {
     /** 組成 CSV，前置 UTF-8 BOM 讓 Excel 正確判讀編碼 */
     private String toCsv(List<SurveyResponse> rows) {
         StringBuilder sb = new StringBuilder("﻿");
-        sb.append("id,email,name,role,experience,frontend_experience,interest,budget,answers,utm,consent,unsubscribed,created_at\n");
+        sb.append("id,email,name,role,experience,frontend_experience,interest,budget,answers,utm,consent,unsubscribed,source,created_at\n");
         for (SurveyResponse r : rows) {
             sb.append(r.getId()).append(',')
               .append(csv(r.getEmail())).append(',')
@@ -177,6 +223,7 @@ public class SurveyController {
               .append(csv(toJson(r.getUtm()))).append(',')
               .append(r.isConsent()).append(',')
               .append(r.isUnsubscribed()).append(',')
+              .append(csv(r.getSource())).append(',')
               .append(csv(r.getCreatedAt() == null ? "" : r.getCreatedAt().toString())).append('\n');
         }
         return sb.toString();

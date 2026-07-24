@@ -44,6 +44,9 @@ public class SurveyResponse {
     private boolean consent;
     @Column(nullable = false)
     private boolean unsubscribed = false;
+    /** 名單來源：survey_form（問卷填寫）或 exam（線上測驗匯入）等 */
+    @Column(nullable = false)
+    private String source = "survey_form";
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -71,6 +74,8 @@ public class SurveyResponse {
     public void setConsent(boolean consent) { this.consent = consent; }
     public boolean isUnsubscribed() { return unsubscribed; }
     public void setUnsubscribed(boolean unsubscribed) { this.unsubscribed = unsubscribed; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
 }

@@ -14,11 +14,23 @@ public interface SurveyResponseRepository extends JpaRepository<SurveyResponse, 
     /** 依建立時間新到舊回傳全部回應（管理 API 用） */
     List<SurveyResponse> findAllByOrderByCreatedAtDesc();
 
+    /** 檢查 email 是否已存在（不分大小寫），匯入時用於略過重複 */
+    boolean existsByEmailIgnoreCase(String email);
+
+    /** 指定來源的待確認名單（尚未同意且未退訂），邀請確認信寄送對象 */
+    List<SurveyResponse> findBySourceAndConsentFalseAndUnsubscribedFalse(String source);
+
     /** 將指定 email（大小寫不敏感）標記為已退訂；回傳受影響筆數 */
     @Modifying
     @Transactional
     @Query("update SurveyResponse s set s.unsubscribed = true where lower(s.email) = lower(:email)")
     int unsubscribeByEmail(@Param("email") String email);
+
+    /** 確認訂閱：將指定 email（大小寫不敏感）轉為已同意；回傳受影響筆數 */
+    @Modifying
+    @Transactional
+    @Query("update SurveyResponse s set s.consent = true where lower(s.email) = lower(:email)")
+    int confirmByEmail(@Param("email") String email);
 
     /** 可寄送名單：同意且未退訂的去重 email（小寫），供未來批量發送使用 */
     @Query("select distinct lower(s.email) from SurveyResponse s where s.consent = true and s.unsubscribed = false")
