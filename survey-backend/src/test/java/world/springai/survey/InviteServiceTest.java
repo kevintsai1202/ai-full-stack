@@ -130,7 +130,7 @@ class InviteServiceTest {
         assertTrue(captor.getAllValues().stream().anyMatch(l -> "failed".equals(l.getStatus())));
     }
 
-    /** 邀請信內文應包含訂閱好處（深入技術討論），且不誤用行銷退訂語句 */
+    /** 邀請信內文以電子報為核心：技術討論、AI 新知、好康優惠三大好處都要提到 */
     @Test
     void inviteBodyMentionsBenefits() {
         when(repository.findBySourceAndConsentFalseAndUnsubscribedFalse("exam"))
@@ -139,6 +139,24 @@ class InviteServiceTest {
 
         service.sendInvites("exam", null);
 
-        verify(mailSender).send(anyString(), anyString(), contains("深入的技術討論"));
+        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+        verify(mailSender).send(anyString(), anyString(), html.capture());
+        assertTrue(html.getValue().contains("深入的技術討論"), "應提到技術討論");
+        assertTrue(html.getValue().contains("AI 新知"), "應提到 AI 新知與新技術");
+        assertTrue(html.getValue().contains("優惠"), "應提到好康優惠");
+    }
+
+    /** 邀請信不以課程宣傳為主軸：內文不得出現課程名稱推銷 */
+    @Test
+    void inviteBodyDoesNotPromoteCourse() {
+        when(repository.findBySourceAndConsentFalseAndUnsubscribedFalse("exam"))
+            .thenReturn(List.of(pending("a@example.com")));
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        service.sendInvites("exam", null);
+
+        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+        verify(mailSender).send(anyString(), anyString(), html.capture());
+        assertTrue(!html.getValue().contains("AI 賦能全端開發"), "不應以新課程宣傳為主軸");
     }
 }

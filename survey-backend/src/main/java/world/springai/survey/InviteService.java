@@ -100,11 +100,11 @@ public class InviteService {
             <div style="font-family:system-ui,'Microsoft JhengHei',sans-serif;line-height:1.7;max-width:560px;margin:0 auto;color:#1a1a2e">
               <h2>嗨，好久不見！</h2>
               <p>感謝你先前上過我的基礎課程、參加線上測驗。</p>
-              <p>我開了新的「AI 賦能全端開發」課程，也經營一份給學員的電子報。訂閱之後你會固定收到：</p>
+              <p>我現在經營一份電子報，把平常研究和實戰的東西整理起來分享。訂閱之後你會固定收到：</p>
               <ul>
-                <li><strong>深入的技術討論</strong>：RAG、AI Agent、Spring Boot 全端實戰的實作細節與踩雷筆記</li>
-                <li><strong>新課程與單元</strong>的第一手消息</li>
-                <li><strong>學員專屬</strong>的優惠與活動</li>
+                <li><strong>深入的技術討論</strong>：RAG、AI Agent、全端實戰的實作細節與踩雷筆記</li>
+                <li><strong>AI 新知與新技術</strong>：新模型、新工具與趨勢的第一手觀察整理</li>
+                <li><strong>各種好康優惠</strong>：包含我自己線上、線下課程的專屬優惠與活動</li>
               </ul>
               <p>如果你願意收到，點下面確認一下就好：</p>
               <p style="text-align:center;margin:28px 0">
