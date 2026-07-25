@@ -84,6 +84,15 @@ reader ──▶ audience, mail, newsletter(唯讀 campaign)
 - `reader` 讀取 `newsletter` 的 `Campaign` 作為「文章」，但不呼叫發送邏輯。
 - 這層 package 邊界即為日後真要拆服務時的拆解線。
 
+**已知的執行期隱形回邊**（階段 A 全分支審查發現，靜態 import 單向但執行期仍糾纏，階段 B 應處理）：
+
+1. **三個 package 寫死了 `form` 擁有的路由**。`/api/survey/unsubscribe` 與 `/api/survey/confirm` 的端點由 `form/SurveyController` 提供，但 `audience/WelcomeMailService`、`newsletter/CampaignService`、`newsletter/InviteService` 都以**字串**形式組出這兩個網址。`audience → form` 是本節明確禁止的方向，只因為是字串而非 import 才逃過 `PackageDependencyTest`。真要拆服務時，退訂連結會指向被拆走的 form 服務。
+2. **`consent` 生命週期由 `form` 的端點驅動**。`SurveyController` 直接呼叫 `unsubscribeByEmail()` 與 `confirmByEmail()`——`survey_response` 的同意狀態變更（本專案最敏感的資料）發生在 `form` 而非 `audience`，而觸發連結的信件由 `newsletter/InviteService` 寄出，形成 `newsletter →(URL)→ form →(write)→ audience` 的隱形環路。
+
+**階段 B 的處置**：把這兩個端點搬進 `audience`（它們本質是名單同意管理，不是問卷表單功能），並把連結組裝集中成 `audience` 的單一 builder，讓三處字串收斂到一個擁有者。做完之後這條拆解線才真的可拆。
+
+**`form` 與 `newsletter` 之間不授權任何方向的依賴**。目前實際上也沒有這條 import；`PackageDependencyTest` 尚未涵蓋上層之間的檢查（該測試的 Javadoc 已載明此盲區），階段 B 新增 `reader` 時需特別留意——`reader → newsletter` 是唯讀 `Campaign`，是本節唯一授權的上層間依賴。
+
 **共用元件**（`AdminKeyGuard`、`ApiExceptionHandler`、`WebConfig`、`SurveyApplication`、`TrackingController`）留在根 package，並新增 `AppSettingService`（可調參數讀寫，見 §9.1）——它跨越多個領域（點數參數給 `reader`、參與度門檻給 `audience`），不屬於任何單一 package。
 
 `TrackingController` 是廣告追蹤腳本產生器（GA4／Meta Pixel／LINE Tag，供 land-page 與問卷頁共用），**與 §5.7 的開信追蹤無關**，不屬任何單一領域故留在根 package。
