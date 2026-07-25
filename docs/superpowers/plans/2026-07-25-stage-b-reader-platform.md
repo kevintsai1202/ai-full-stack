@@ -782,19 +782,33 @@ class AppSettingServiceTest {
         verify(repository, times(1)).findById("credit.premium_cost");
     }
 
-    /** 寫入後必須立即生效：儲存會清掉該 key 的快取（後台改完立即生效的硬要求） */
+    /**
+     * 寫入後必須立即生效：儲存會清掉該 key 的快取（後台改完立即生效的硬要求）。
+     *
+     * <p><b>注意 verify 次數斷言是必要的，不是裝飾</b>：只斷言「set() 後讀到新值」
+     * 無法區分三種情況——快取被主動清除（正確）、快取根本沒生效、快取剛好過期。
+     * set() 前的 verify(times(1)) 證明快取真的有生效（兩次讀取只打一次 DB），
+     * set() 後的 verify(times(3)) 證明快取真的被清掉（1 次初讀 + set() 內部查詢
+     * + 清除後重讀）。少了這兩行，這個測試證明不了自己的名字。</p>
+     */
     @Test
     void setInvalidatesCacheSoChangeTakesEffectImmediately() {
         when(repository.findById("credit.premium_cost"))
             .thenReturn(Optional.of(new AppSetting("credit.premium_cost", "10")));
         when(repository.save(any(AppSetting.class))).thenAnswer(i -> i.getArgument(0));
+
+        // set() 之前連續讀兩次：只有第一次會打 DB，第二次應命中快取
         assertEquals(10, service.getInt(AppSettingService.CREDIT_PREMIUM_COST, 10));
+        assertEquals(10, service.getInt(AppSettingService.CREDIT_PREMIUM_COST, 10));
+        verify(repository, times(1)).findById("credit.premium_cost");
 
         service.set(AppSettingService.CREDIT_PREMIUM_COST, "50");
         when(repository.findById("credit.premium_cost"))
             .thenReturn(Optional.of(new AppSetting("credit.premium_cost", "50")));
 
+        // set() 之後再讀一次：若快取真的被清除，這裡必須重新打一次 DB，累計變成 3 次
         assertEquals(50, service.getInt(AppSettingService.CREDIT_PREMIUM_COST, 10));
+        verify(repository, times(3)).findById("credit.premium_cost");
     }
 }
 ```
