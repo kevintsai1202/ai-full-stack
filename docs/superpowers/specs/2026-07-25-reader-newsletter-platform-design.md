@@ -678,6 +678,22 @@ migration 相關測試（`MigrationSafetyTest`）需要真實的 PostgreSQL—�
 | **既有資料保全** | Testcontainers 起真實 PostgreSQL → 只套用 V1–V6 → 塞入代表性既有資料（已確認訂閱者／未確認匯入者／已退訂者）→ 套用 V7/V8 → 斷言 `survey_response` 筆數不變、`consent` / `unsubscribed` / `email` 逐列不變 |
 | **backfill 正確性** | 同一容器，斷言已確認訂閱者的 `last_engaged_at` 非 NULL；未確認匯入者維持 NULL（刻意不回填）；`campaign` 既有列的 `tier` 皆取得 `BASIC` 預設值 |
 
+### 12.1 測試容器前提與 Zeabur 建置的關係（已查核，無需處理）
+
+`MigrationSafetyTest` 連不到 DB 就失敗，所以若 Zeabur 建置時執行 `mvn test`，建置容器內沒有 `survey-test-db`，V7/V8 的部署會被擋住。已查核三項證據確認**不會發生**：
+
+| 證據 | 結果 |
+|---|---|
+| 使用者確認 | Zeabur 建置不跑 `mvn test` |
+| `service.customBuildCommand` | `null` → 走 zbpack 自動偵測的 Java builder，其預設為 `mvn -DskipTests clean package` |
+| 建置日誌 | 無 surefire 痕跡；Maven 步驟 27 秒 vs 本機含測試 38 秒 |
+
+因此**不新增 `zbpack.json`**，也不設 `MIGRATION_TEST_DB_HOST`——沒有問題就不加設定（YAGNI）。
+
+> **但這是建立在「預設行為」上的結論，不是建立在明示設定上的。** `customBuildCommand` 為 `null` 意味著我們依賴 zbpack 的預設值；若日後有人填了自訂建置指令、或 Zeabur 改了預設，這道環境前提就會擋住部署。
+>
+> 這個失敗方向是**安全的**（建置紅燈、擋下部署，不會動到資料），且錯誤訊息本身就寫明了修法（設 `MIGRATION_TEST_DB_HOST` 或改建置指令加 `-DskipTests`）。記錄在此的目的是讓下一個遇到它的人不必重新查一遍，而不是要現在就防它。
+
 ## 13. 未決事項與已接受風險
 
 1. **開信率是下限**：受信箱封鎖遠端圖片影響，僅供趨勢參考，已明確不作為補寄依據。
