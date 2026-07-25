@@ -14,6 +14,11 @@ import java.time.OffsetDateTime;
 @Table(name = "campaign")
 public class Campaign {
 
+    /** 基本內容：已確認訂閱者即可閱讀 */
+    public static final String TIER_BASIC = "BASIC";
+    /** 進階內容：需點數解鎖或 VIP 身分 */
+    public static final String TIER_PREMIUM = "PREMIUM";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -50,6 +55,29 @@ public class Campaign {
 
     @Column(nullable = false)
     private String status;
+
+    /** 內容分級：BASIC 或 PREMIUM */
+    @Column(nullable = false)
+    private String tier = TIER_BASIC;
+
+    /** PREMIUM 解鎖所需點數；BASIC 為 0。資料庫層有 CHECK 約束禁止 PREMIUM 卻為 0 */
+    @Column(name = "credit_cost", nullable = false)
+    private int creditCost = 0;
+
+    /** 網頁網址片段，供 /r/news/{slug} 使用；NULL 表示不在 archive 中露出 */
+    private String slug;
+
+    /** 發布時間；非 NULL 才會出現在 archive */
+    @Column(name = "published_at")
+    private OffsetDateTime publishedAt;
+
+    /** VIP 是否在信件中直接收到全文（階段 D 才會使用；第一版一律折疊） */
+    @Column(name = "vip_full_in_mail", nullable = false)
+    private boolean vipFullInMail = false;
+
+    /** 本次寄送的參與度級別，逗號分隔（階段 F 才會使用），供補寄重建相同對象 */
+    @Column(name = "filter_levels", nullable = false)
+    private String filterLevels = "active";
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -100,4 +128,27 @@ public class Campaign {
     public void setFilterInterest(String filterInterest) { this.filterInterest = filterInterest; }
     public void setScheduledAt(OffsetDateTime scheduledAt) { this.scheduledAt = scheduledAt; }
     public void setRecipientCount(int recipientCount) { this.recipientCount = recipientCount; }
+
+    public String getTier() { return tier; }
+    public void setTier(String tier) { this.tier = tier; }
+    public int getCreditCost() { return creditCost; }
+    public void setCreditCost(int creditCost) { this.creditCost = creditCost; }
+    public String getSlug() { return slug; }
+    public void setSlug(String slug) { this.slug = slug; }
+    public OffsetDateTime getPublishedAt() { return publishedAt; }
+    public void setPublishedAt(OffsetDateTime publishedAt) { this.publishedAt = publishedAt; }
+    public boolean isVipFullInMail() { return vipFullInMail; }
+    public void setVipFullInMail(boolean vipFullInMail) { this.vipFullInMail = vipFullInMail; }
+    public String getFilterLevels() { return filterLevels; }
+    public void setFilterLevels(String filterLevels) { this.filterLevels = filterLevels; }
+
+    /** 是否為進階內容（需點數或 VIP） */
+    public boolean isPremium() {
+        return TIER_PREMIUM.equals(tier);
+    }
+
+    /** 是否已發布（未發布者不出現在 archive） */
+    public boolean isPublished() {
+        return publishedAt != null;
+    }
 }
