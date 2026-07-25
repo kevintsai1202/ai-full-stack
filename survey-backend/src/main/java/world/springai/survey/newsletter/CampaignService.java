@@ -100,6 +100,15 @@ public class CampaignService {
         String normalizedTier = validateTier(tier);
         int normalizedCreditCost = validateCreditCost(normalizedTier, creditCost);
         String normalizedSlug = validateSlug(slug);
+        // 與「設了 slug 未設 publishedAt 自動發布」對稱的反向檢查：
+        // 設了 publishedAt 卻沒設 slug 同樣是使用者最可能沒預期到的失敗——
+        // publishedAt 非 NULL 就會讓 archive 查詢把這篇文章列出來，但沒有 slug
+        // 就沒有 /r/news/{slug} 網址可點，讀者會點到一個永遠 404 的空連結。
+        // 因此兩種矛盾組合都必須在寫入 campaign 前擋下，而非各自只顧單一方向。
+        if (publishedAt != null && normalizedSlug == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "指定 publishedAt 時必須同時指定 slug，否則文章會出現在列表卻無法開啟");
+        }
         OffsetDateTime normalizedPublishedAt = resolvePublishedAt(normalizedSlug, publishedAt);
 
         // 守門：階段 D（依 tier 產生折疊版內文 foldedHtml）完成前，PREMIUM 內容一旦寄出，

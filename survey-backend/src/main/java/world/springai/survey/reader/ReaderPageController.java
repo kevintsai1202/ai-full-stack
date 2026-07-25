@@ -74,7 +74,7 @@ public class ReaderPageController {
     public ResponseEntity<String> archive(
             @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
         Optional<ReaderContext.Current> current = readerContext.resolve(sessionCookie);
-        List<Campaign> articles = campaignRepository.findByPublishedAtIsNotNullOrderByPublishedAtDesc();
+        List<Campaign> articles = campaignRepository.findBySlugIsNotNullAndPublishedAtIsNotNullOrderByPublishedAtDesc();
 
         // 登入者的已解鎖清單，用於在列表上標示；未登入則為空集合
         Set<Long> unlocked = current

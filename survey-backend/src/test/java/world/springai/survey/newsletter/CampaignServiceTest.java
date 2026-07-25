@@ -199,6 +199,25 @@ class CampaignServiceTest {
         assertEquals("hello-world", saved.getSlug());
     }
 
+    /**
+     * 反向的矛盾輸入：設了 publishedAt 卻沒設 slug → 回 400，且不建立 campaign。
+     *
+     * <p>與「設了 slug 未設 publishedAt 自動發布」對稱——這裡沒有自動補值的空間，
+     * 因為 slug 是網址片段，服務端無法安全地替使用者「猜」一個；若放行，
+     * archive 會列出一篇 publishedAt 非 NULL 但 slug 為 null 的文章，讀者點下去
+     * 命中 /r/news/（空 path variable）而 404。</p>
+     */
+    @Test
+    void sendWithPublishedAtButNoSlugRejected() {
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.send("主旨", "內文", null, null, "now", null,
+                null, null, null, Instant.parse("2026-07-25T04:00:00Z")));
+
+        assertEquals(400, ex.getStatusCode().value());
+        verify(campaignRepository, never()).save(any(Campaign.class));
+        verify(mailSender, never()).sendBatch(anyList());
+    }
+
     /** 正常發布 BASIC：campaign 建立且 tier/creditCost/slug/publishedAt 欄位正確落地 */
     @Test
     void sendBasicWithPublishFieldsCreatesCampaignCorrectly() {
