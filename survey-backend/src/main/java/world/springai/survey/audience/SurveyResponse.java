@@ -47,6 +47,9 @@ public class SurveyResponse {
     /** 名單來源：survey_form（問卷填寫）或 exam（線上測驗匯入）等 */
     @Column(nullable = false)
     private String source = "survey_form";
+    /** 最後互動時間（確認訂閱／開信／登入／解鎖／改資料），供階段 F 的參與度分級使用 */
+    @Column(name = "last_engaged_at")
+    private OffsetDateTime lastEngagedAt;
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -76,6 +79,8 @@ public class SurveyResponse {
     public void setUnsubscribed(boolean unsubscribed) { this.unsubscribed = unsubscribed; }
     public String getSource() { return source; }
     public void setSource(String source) { this.source = source; }
+    public OffsetDateTime getLastEngagedAt() { return lastEngagedAt; }
+    public void setLastEngagedAt(OffsetDateTime lastEngagedAt) { this.lastEngagedAt = lastEngagedAt; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
 }
