@@ -23,9 +23,14 @@
 ### 對 spec 的兩處實作細化
 
 1. **migration 檔案切分**：spec §4.1 把所有新表寫在 V7。本階段只建立階段 B 用得到的 5 張表（`app_setting`、`reader`、`credit_txn`、`article_access`、`login_token`），`email_open` 與 `media_asset` 留給階段 E／D 的 V9／V10。`campaign` 的六個新欄位與 `survey_response.last_engaged_at` 一次在 V8 加完（含 `vip_full_in_mail`、`filter_levels` 這兩個後續階段才用的欄位），避免同一張表被反覆 ALTER。
-2. **migration 驗證改用 Testcontainers**（spec §12 已於階段 A 結束後更新）。原設計因「無新測試依賴」而採手動腳本，但環境檢查確認本機 Docker 與 Testcontainers 皆可用，且「既有訂閱名單不可清除」是硬約束（spec §4.0）——這道防線不該靠人記得跑腳本。因此改為 JUnit 測試 `MigrationSafetyTest`，每次 `mvn test` 都會驗證。
+2. **migration 驗證改為自動化 JUnit 測試，但不使用 Testcontainers**（spec §12 已更新）。原設計採手動腳本；改為自動化是因為「既有訂閱名單不可清除」是硬約束（spec §4.0），這道防線不該靠人記得跑腳本。
 
-   **本機環境事實**（實作時直接用，不必自行探索）：本機**沒有安裝 psql 執行檔**；已備好專用測試容器 `survey-test-db`（port **5433**，image `pgvector/pgvector:pg18`，帳密 `postgres` / `password`），供需要手動連線時使用。Testcontainers 測試會自行起容器，不使用這個。5432 埠是別的專案的容器，**不得動用**。
+   **本機環境事實**（實作時直接用，不必自行探索、不必嘗試修 Docker）：
+
+   - **沒有安裝 psql 執行檔。** 需要 SQL 互動時用 `docker exec survey-test-db psql -U postgres ...`。
+   - **已備好專用測試容器 `survey-test-db`**：port **5433**，image `pgvector/pgvector:pg18`，帳密 `postgres` / `password`。`MigrationSafetyTest` 連的就是它。
+   - **5432 埠是別的專案的容器，不得動用。**
+   - **Testcontainers 在本機不可用**：Docker Desktop 29.6.1（API 1.55）與 docker-java 的 npipe 客戶端不相容，已實測 testcontainers 1.21.0／2.0.5 與指定 `DOCKER_HOST` 皆無效。**不要再嘗試修這件事**，也不要改 Docker Desktop 設定（重啟會影響本機其他專案的容器）。
 
 ---
 
@@ -117,7 +122,7 @@
 
 ---
 
-## Task 1: 新增 jjwt 與 Testcontainers 依賴、讀者端部署設定
+## Task 1: 新增 jjwt 依賴與讀者端部署設定
 
 **Files:**
 - Modify: `survey-backend/pom.xml`
@@ -125,7 +130,7 @@
 
 **Interfaces:**
 - Consumes: 無
-- Produces: `io.jsonwebtoken.Jwts` 可用；`org.testcontainers.containers.PostgreSQLContainer` 可用（test scope）；設定鍵 `app.reader.jwt-secret`、`app.reader.jwt-ttl-days`、`app.reader.login-token-ttl-minutes`、`app.reader.login-throttle-count`、`app.reader.login-throttle-minutes`、`app.mail.transactional-reserve`
+- Produces: `io.jsonwebtoken.Jwts` 可用；設定鍵 `app.reader.jwt-secret`、`app.reader.jwt-ttl-days`、`app.reader.login-token-ttl-minutes`、`app.reader.login-throttle-count`、`app.reader.login-throttle-minutes`、`app.mail.transactional-reserve`
 
 - [ ] **Step 1: 加入 jjwt 依賴**
 
@@ -149,21 +154,18 @@
       <version>0.12.6</version>
       <scope>runtime</scope>
     </dependency>
-    <!-- Testcontainers：僅供 migration 安全性測試使用（需要真實 PostgreSQL 的 jsonb 與 @> 支援）。
-         版本由 spring-boot-dependencies 的 BOM 管理，故不指定 version。 -->
-    <dependency>
-      <groupId>org.testcontainers</groupId>
-      <artifactId>postgresql</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.testcontainers</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <scope>test</scope>
-    </dependency>
+    <!-- migration 安全性測試需要真實的 PostgreSQL（本專案用到 jsonb 與 @> 運算子，
+         H2 不支援），但**不引入 Testcontainers**：本機 Docker Desktop 29.6.1（API 1.55）
+         與 docker-java 的 npipe 客戶端不相容，會誤報「Could not find a valid Docker
+         environment」——即使 docker CLI 與 named pipe 手動 HTTP 都正常。已實測
+         testcontainers 1.21.0 與 2.0.5、以及明確指定 DOCKER_HOST 皆無效。
+
+         改為由 MigrationSafetyTest 直接連本機專用測試容器（survey-test-db，port 5433），
+         每次重建乾淨的 survey_migration_test 資料庫。既維持自動化（每次 mvn test 都驗證），
+         也不新增任何測試依賴。 -->
 ```
 
-**不要為 Testcontainers 指定 `<version>`**——Spring Boot 3.5.0 的 parent POM 已透過 dependency management 管理 `testcontainers.version`。自行指定版本可能與 BOM 衝突。
+**本任務不新增任何測試依賴。** 上面那段只是註解，說明 migration 測試為何不走 Testcontainers——這個決定是實地測試後的結果，不是偷懶。
 
 - [ ] **Step 2: 確認依賴可下載（需要網路）**
 
@@ -376,10 +378,6 @@ import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -390,32 +388,38 @@ import java.sql.Statement;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * V7／V8 migration 的既有資料保全與 backfill 正確性測試。
  *
- * <p>為什麼需要真實 PostgreSQL：本專案用到 jsonb 與 @&gt; 運算子，H2 不支援；
- * 而「既有訂閱名單不可清除」是硬約束（spec §4.0）——訂閱者的同意是他們親自
- * 點確認信給出的，清掉就只能重新徵求。這道防線不該靠人記得跑腳本，
- * 因此以 Testcontainers 起真實資料庫，每次 mvn test 都驗證。</p>
+ * <p><b>為什麼需要真實 PostgreSQL</b>：本專案用到 jsonb 與 @&gt; 運算子，H2 不支援。
+ * 而「既有訂閱名單不可清除」是硬約束（spec §4.0）——訂閱者的同意是他們親自點確認信
+ * 給出的，清掉就只能重新徵求。這道防線不該靠人記得跑腳本，所以做成每次 mvn test
+ * 都會執行的自動化測試。</p>
  *
- * <p>流程：只套用 V1–V6（模擬正式庫現況）→ 塞入代表性既有資料 →
- * 套用 V7／V8 → 斷言既有資料逐列未變且 backfill 正確。</p>
+ * <p><b>為什麼不用 Testcontainers</b>：本機 Docker Desktop 29.6.1（API 1.55）與
+ * docker-java 的 npipe 客戶端不相容，會誤報「Could not find a valid Docker
+ * environment」，即使 docker CLI 與 named pipe 的手動 HTTP 請求都正常。已實測
+ * testcontainers 1.21.0、2.0.5 與明確指定 DOCKER_HOST 皆無效。改為直接連本機
+ * 專用測試容器。</p>
+ *
+ * <p><b>環境前提</b>：容器 survey-test-db 必須在執行中（見下方連線失敗時的指引）。
+ * 連不上時本測試會明確失敗而非靜默跳過——寧可紅燈也不要假綠燈。</p>
+ *
+ * <p>流程：重建乾淨的測試資料庫 → 只套用 V1–V6（模擬正式庫現況）→ 塞入代表性
+ * 既有資料 → 套用 V7／V8 → 斷言既有資料逐列未變且 backfill 正確。</p>
  */
-@Testcontainers
 class MigrationSafetyTest {
 
-    /**
-     * 用本機已有的 pgvector image 避免額外下載；它就是 PostgreSQL 18。
-     * Testcontainers 對非官方 image 需明確宣告可替代 postgres，否則會拒絕啟動。
-     */
-    private static final DockerImageName IMAGE = DockerImageName
-        .parse("pgvector/pgvector:pg18")
-        .asCompatibleSubstituteFor("postgres");
-
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(IMAGE)
-        .withDatabaseName("survey_migration_test");
+    /** 專用測試容器的維護資料庫連線（用於重建測試資料庫） */
+    private static final String ADMIN_URL = "jdbc:postgresql://127.0.0.1:5433/postgres";
+    /** 測試資料庫名稱；每次執行都會重建，只有本測試使用 */
+    private static final String TEST_DB = "survey_migration_test";
+    /** 測試資料庫連線 */
+    private static final String TEST_URL = "jdbc:postgresql://127.0.0.1:5433/" + TEST_DB;
+    private static final String USER = "postgres";
+    private static final String PASS = "password";
 
     /** 既有資料的指紋：email 與同意狀態的組合，用於證明這些欄位逐列未被改寫 */
     private static final String CHECKSUM_SQL = """
@@ -428,12 +432,15 @@ class MigrationSafetyTest {
     /** migration 前的既有資料指紋 */
     private static String beforeChecksum;
 
-    /** 套用 V1–V6 → 塞既有資料 → 記錄狀態 → 套用 V7／V8 */
+    /** 重建測試資料庫 → 套用 V1–V6 → 塞既有資料 → 記錄狀態 → 套用 V7／V8 */
     @BeforeAll
     static void applyMigrations() throws SQLException {
+        requireTestDatabase();
+        recreateTestDatabase();
+
         // 只套用到 V6，模擬正式資料庫目前的狀態
         Flyway.configure()
-            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+            .dataSource(TEST_URL, USER, PASS)
             .target(MigrationVersion.fromVersion("6"))
             .load()
             .migrate();
@@ -458,7 +465,7 @@ class MigrationSafetyTest {
 
         // 套用 V7／V8
         Flyway.configure()
-            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+            .dataSource(TEST_URL, USER, PASS)
             .load()
             .migrate();
     }
@@ -540,10 +547,51 @@ class MigrationSafetyTest {
         }, "tier=PREMIUM 且 credit_cost=0 應被 CHECK 約束拒絕");
     }
 
-    /** 取得測試容器的連線 */
+    /**
+     * 確認本機測試容器可用；連不上時以明確指引失敗。
+     *
+     * <p>刻意不用 assumeTrue 跳過：這個測試守的是「既有訂閱名單不可清除」，
+     * 靜默跳過等於讓防線失效卻顯示綠燈。</p>
+     */
+    private static void requireTestDatabase() {
+        try (Connection c = DriverManager.getConnection(ADMIN_URL, USER, PASS)) {
+            // 能連上即可
+        } catch (SQLException e) {
+            fail("""
+                連不上本機測試資料庫（%s）。
+
+                本測試驗證 migration 不會破壞既有訂閱名單（spec §4.0 的硬約束），
+                不能靜默跳過。請先啟動專用測試容器：
+
+                  docker start survey-test-db
+
+                容器不存在時建立它（不要用 5432，那是別的專案的容器）：
+
+                  docker run -d --name survey-test-db -e POSTGRES_PASSWORD=password ^
+                    -p 5433:5432 pgvector/pgvector:pg18
+
+                原始錯誤：%s""".formatted(ADMIN_URL, e.getMessage()));
+        }
+    }
+
+    /**
+     * 重建乾淨的測試資料庫。
+     *
+     * <p>WITH (FORCE) 會斷開既有連線（PostgreSQL 13+），避免前次執行殘留的連線
+     * 導致 DROP 失敗。此處 DROP 的是本測試專屬的資料庫，與 spec §4.0 禁止
+     * 對正式資料執行 DROP 並不衝突。</p>
+     */
+    private static void recreateTestDatabase() throws SQLException {
+        try (Connection c = DriverManager.getConnection(ADMIN_URL, USER, PASS);
+             Statement st = c.createStatement()) {
+            st.execute("DROP DATABASE IF EXISTS " + TEST_DB + " WITH (FORCE)");
+            st.execute("CREATE DATABASE " + TEST_DB);
+        }
+    }
+
+    /** 取得測試資料庫連線 */
     private static Connection connect() throws SQLException {
-        return DriverManager.getConnection(
-            postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+        return DriverManager.getConnection(TEST_URL, USER, PASS);
     }
 
     /** 執行單值整數查詢 */
@@ -563,6 +611,14 @@ class MigrationSafetyTest {
     }
 }
 ```
+
+**執行前確認測試容器在跑**：
+
+```powershell
+docker ps --filter name=survey-test-db --format "{{.Names}} {{.Status}}"
+```
+
+沒有輸出就先 `docker start survey-test-db`。
 
 - [ ] **Step 4: 跑測試確認通過**
 

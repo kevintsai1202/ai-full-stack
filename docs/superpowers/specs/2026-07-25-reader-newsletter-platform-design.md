@@ -607,9 +607,13 @@ MinIO 服務與上傳、後台插圖 UI、發送依 tier 分組、`vip_full_in_m
 
 ## 12. 測試策略
 
-以既有 `spring-boot-starter-test` 為主。**唯一允許的新測試依賴是 Testcontainers**（`org.testcontainers:postgresql` + `junit-jupiter`，版本由 Spring Boot 的 dependency management 管理），僅用於下表的 migration 相關測試。
+沿用既有 `spring-boot-starter-test`，**不新增任何測試依賴**。
 
-理由：「既有資料保全」與「backfill 正確性」需要一個真實的 PostgreSQL——H2 不支援本專案用到的 `jsonb` 與 `@>` 運算子，而手動腳本依賴人工執行。「既有訂閱名單不可清除」是本專案的硬約束（§4.0），這道防線不該靠人記得跑腳本。
+migration 相關測試（`MigrationSafetyTest`）需要真實的 PostgreSQL——H2 不支援本專案用到的 `jsonb` 與 `@>` 運算子。做法是**直接連本機專用測試容器**（`survey-test-db`，port 5433），每次重建一個乾淨的 `survey_migration_test` 資料庫。
+
+> **為什麼不用 Testcontainers**：本機 Docker Desktop 29.6.1（API 1.55）與 `docker-java` 的 npipe 客戶端不相容，會誤報 `Could not find a valid Docker environment`，即使 `docker` CLI 與 named pipe 的手動 HTTP 請求都正常。已實測 testcontainers 1.21.0、2.0.5，以及明確指定 `DOCKER_HOST` 皆無效。唯一的已知修法是開啟 Docker Desktop 的 TCP daemon（需重啟 Docker Desktop，會影響本機其他專案的容器），不值得為此付出。
+>
+> 代價是測試有環境前提：`survey-test-db` 容器必須在執行中。測試在連不上時會以明確的中文訊息失敗並附上啟動指令，而不是靜默跳過——這道防線守的是「既有訂閱名單不可清除」（§4.0），寧可紅燈也不要假綠燈。
 
 其餘測試（授權判斷、內容切分、token、session）一律不連資料庫，維持純單元測試。架構守衛 `PackageDependencyTest` 也不改用 ArchUnit——自製的 import 掃描已足夠，且已補上真空偵測。
 

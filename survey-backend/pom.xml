@@ -47,18 +47,15 @@
       <version>0.12.6</version>
       <scope>runtime</scope>
     </dependency>
-    <!-- Testcontainers：僅供 migration 安全性測試使用（需要真實 PostgreSQL 的 jsonb 與 @> 支援）。
-         版本由 spring-boot-dependencies 的 BOM 管理，故不指定 version。 -->
-    <dependency>
-      <groupId>org.testcontainers</groupId>
-      <artifactId>postgresql</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.testcontainers</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <scope>test</scope>
-    </dependency>
+    <!-- migration 安全性測試需要真實的 PostgreSQL（本專案用到 jsonb 與 @> 運算子，
+         H2 不支援），但**不引入 Testcontainers**：本機 Docker Desktop 29.6.1（API 1.55）
+         與 docker-java 的 npipe 客戶端不相容，會誤報「Could not find a valid Docker
+         environment」——即使 docker CLI 與 named pipe 手動 HTTP 都正常。已實測
+         testcontainers 1.21.0 與 2.0.5、以及明確指定 DOCKER_HOST 皆無效。
+
+         改為由 MigrationSafetyTest 直接連本機專用測試容器（survey-test-db，port 5433），
+         每次重建乾淨的 survey_migration_test 資料庫。既維持自動化（每次 mvn test 都驗證），
+         也不新增任何測試依賴。 -->
   </dependencies>
   <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
 </project>
