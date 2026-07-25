@@ -28,6 +28,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** SurveyController 行為測試：驗證、蜜罐、admin 金鑰、即時統計、退訂 token、歡迎信觸發 */
 @WebMvcTest(SurveyController.class)
@@ -40,6 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SurveyControllerTest {
     @Autowired MockMvc mvc;
     @Autowired UnsubscribeTokenService tokenService;
+    @Autowired SurveyController controller; // 供直接呼叫 stats() 的測試使用（@WebMvcTest 下 controller 本身是真實 bean）
     @MockBean SurveyResponseRepository repository;
     @MockBean WelcomeMailService welcomeMailService;
 
@@ -286,5 +290,94 @@ class SurveyControllerTest {
            .andExpect(status().isOk())
            .andExpect(content().string(org.hamcrest.Matchers.containsString("source")))
            .andExpect(content().string(org.hamcrest.Matchers.containsString("exam")));
+    }
+
+    /** 帶 ref 的訂閱請求應把推薦碼寫進 answers 的 _ref 鍵 */
+    @Test
+    void refIsStoredIntoAnswersUnderscoreRef() throws Exception {
+        mvc.perform(post("/api/survey")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"invitee@example.com","consent":true,"source":"newsletter","ref":"ABCD2345"}
+                    """))
+           .andExpect(status().isCreated());
+
+        org.mockito.ArgumentCaptor<SurveyResponse> captor = org.mockito.ArgumentCaptor.forClass(SurveyResponse.class);
+        verify(repository).save(captor.capture());
+        assertEquals("ABCD2345", captor.getValue().getAnswers().get("_ref"));
+    }
+
+    /**
+     * answers 原本為 null 時也要能放進 _ref。
+     *
+     * <p>這是實際會走到的路徑：/r/ 訂閱表單只送 email、consent、source、ref，
+     * 完全沒有問卷答案，所以 answers 是 null。若實作直接對 null 呼叫 put()
+     * 會 NPE，而這條路徑正是邀請功能的主線。</p>
+     */
+    @Test
+    void refIsStoredEvenWhenAnswersAbsent() throws Exception {
+        mvc.perform(post("/api/survey")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"invitee2@example.com","consent":true,"source":"newsletter","ref":"WXYZ6789"}
+                    """))
+           .andExpect(status().isCreated());
+
+        org.mockito.ArgumentCaptor<SurveyResponse> captor = org.mockito.ArgumentCaptor.forClass(SurveyResponse.class);
+        verify(repository).save(captor.capture());
+        assertNotNull(captor.getValue().getAnswers());
+        assertEquals("WXYZ6789", captor.getValue().getAnswers().get("_ref"));
+    }
+
+    /** 沒有 ref 時不可留下空的 _ref 鍵，否則後續「有沒有推薦人」的判斷要多處理空字串 */
+    @Test
+    void absentRefLeavesNoUnderscoreRefKey() throws Exception {
+        mvc.perform(post("/api/survey")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"plain@example.com","consent":true,"source":"newsletter"}
+                    """))
+           .andExpect(status().isCreated());
+
+        org.mockito.ArgumentCaptor<SurveyResponse> captor = org.mockito.ArgumentCaptor.forClass(SurveyResponse.class);
+        verify(repository).save(captor.capture());
+        Map<String, Object> answers = captor.getValue().getAnswers();
+        assertTrue(answers == null || !answers.containsKey("_ref"));
+    }
+
+    /** 空白字串的 ref 視同沒有 ref */
+    @Test
+    void blankRefIsIgnored() throws Exception {
+        mvc.perform(post("/api/survey")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"blank@example.com","consent":true,"source":"newsletter","ref":"   "}
+                    """))
+           .andExpect(status().isCreated());
+
+        org.mockito.ArgumentCaptor<SurveyResponse> captor = org.mockito.ArgumentCaptor.forClass(SurveyResponse.class);
+        verify(repository).save(captor.capture());
+        Map<String, Object> answers = captor.getValue().getAnswers();
+        assertTrue(answers == null || !answers.containsKey("_ref"));
+    }
+
+    /**
+     * 公開統計必須排除底線開頭的系統鍵。
+     *
+     * <p>沒有這道過濾，`_ref` 會被當成一道問卷答案出現在 /api/survey/stats
+     * 對外公開的圖表裡——那不只是難看，而是把讀者的邀請碼關係公開了。</p>
+     */
+    @Test
+    void statsExcludeUnderscorePrefixedSystemKeys() {
+        SurveyResponse withRef = new SurveyResponse();
+        withRef.setSource("survey_form");
+        withRef.setAnswers(Map.of("status", "在職", "_ref", "ABCD2345"));
+        when(repository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(withRef));
+
+        SurveyStats stats = controller.stats();
+
+        // status 應被統計；_ref 不得出現在任何一組 bucket 的標籤中
+        assertTrue(stats.status().stream().anyMatch(b -> "在職".equals(b.label())));
+        assertTrue(stats.status().stream().noneMatch(b -> b.label().startsWith("_")));
     }
 }

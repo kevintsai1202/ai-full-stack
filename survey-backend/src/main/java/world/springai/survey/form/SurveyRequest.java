@@ -39,6 +39,14 @@ public class SurveyRequest {
      * 汙染或偽造對外公開的問卷統計。
      */
     private String source;
+    /**
+     * 推薦碼（邀請連結的 ?ref= 值）。
+     *
+     * <p>不做格式驗證：推薦碼是否存在由 confirm 時查 reader 表決定，
+     * 這裡收到亂碼只會導致查不到推薦人而不發獎，沒有安全影響。
+     * 在此加 @Pattern 反而會讓亂改連結的人收到 400，訂閱直接失敗。</p>
+     */
+    private String ref;
 
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
@@ -64,4 +72,6 @@ public class SurveyRequest {
     public void setWebsite(String website) { this.website = website; }
     public String getSource() { return source; }
     public void setSource(String source) { this.source = source; }
+    public String getRef() { return ref; }
+    public void setRef(String ref) { this.ref = ref; }
 }

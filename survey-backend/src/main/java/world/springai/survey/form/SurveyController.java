@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -30,6 +31,13 @@ import world.springai.survey.audience.WelcomeMailService;
 public class SurveyController {
     /** /api/survey 的 source 白名單：目前唯一接受的非預設值，供 /r/ 電子報訂閱頁使用 */
     private static final String SOURCE_NEWSLETTER = "newsletter";
+    /**
+     * 邀請歸因在 answers 內的鍵名。
+     *
+     * <p>底線前綴用於區別「系統欄位」與問卷答案——{@link #stats()} 會排除
+     * 所有底線開頭的鍵，否則推薦碼會出現在對外公開的統計圖表裡。</p>
+     */
+    static final String REF_KEY = "_ref";
 
     private final SurveyResponseRepository repository;
     private final ObjectMapper objectMapper;
@@ -64,6 +72,19 @@ public class SurveyController {
         entity.setExperience(req.getExperience());
         entity.setFrontendExperience(req.getFrontendExperience());
         entity.setAnswers(req.getAnswers());
+        // 邀請歸因：把推薦碼放進 answers 的系統鍵 _ref。
+        // 為什麼存在名單中心而不是 reader 表：confirm 發生時被邀者可能還沒有
+        // reader 列（reader 只在首次登入才建立），歸因必須先存得下來。
+        if (StringUtils.hasText(req.getRef())) {
+            // answers 對「只訂閱不填問卷」與匯入名單皆為 null，必須先初始化。
+            // 用可變 Map：req.getAnswers() 來自 Jackson 反序列化，雖然通常可變，
+            // 但不該依賴這點——複製一份最安全。
+            Map<String, Object> answers = entity.getAnswers() == null
+                ? new HashMap<>()
+                : new HashMap<>(entity.getAnswers());
+            answers.put(REF_KEY, req.getRef().trim());
+            entity.setAnswers(answers);
+        }
         entity.setInterest(req.getInterest());
         entity.setBudget(req.getBudget());
         entity.setUtm(req.getUtm());
@@ -111,7 +132,7 @@ public class SurveyController {
             .flatMap(r -> r.getInterest().stream());
         // 目前狀態：取 answers 內的 status 單選值
         Stream<String> status = all.stream()
-            .map(r -> r.getAnswers() == null ? null : r.getAnswers().get("status"))
+            .map(r -> answerOf(r, "status"))
             .filter(Objects::nonNull)
             .map(String::valueOf);
         // 身分職業：role 欄位，取前 6 名避免圖表過長
@@ -208,6 +229,20 @@ public class SurveyController {
             </body>
             </html>
             """;
+
+    /**
+     * 取出某一題的答案值；底線開頭的系統鍵一律視為不存在。
+     *
+     * <p>統計是對外公開、無需金鑰的端點，而 answers 內混有系統欄位
+     * （目前是邀請歸因 {@link #REF_KEY}）。集中在這個方法過濾，讓日後
+     * 新增統計題目不必各自記得排除——忘記一次就是把讀者的邀請關係公開。</p>
+     */
+    private static Object answerOf(SurveyResponse r, String key) {
+        if (key.startsWith("_") || r.getAnswers() == null) {
+            return null;
+        }
+        return r.getAnswers().get(key);
+    }
 
     /** 將字串串流計數後，去除空白值，依數量由多到少排序並取前 limit 名 */
     private List<SurveyStats.Bucket> buckets(Stream<String> values, int limit) {

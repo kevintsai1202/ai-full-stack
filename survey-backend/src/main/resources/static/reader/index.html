@@ -43,7 +43,8 @@
 
 <script>
   // 訂閱表單：沿用既有 /api/survey 端點（consent=true 表示同意接收）
-  // 邀請碼 ?ref= 先讀進來備用；歸因寫入是階段 C 的工作
+  // 邀請碼 ?ref= 隨訂閱一起送出，後端寫入 answers._ref；
+  // 獎勵在被邀者點確認信後才發（見 /r/rules）
   const params = new URLSearchParams(location.search);
   const ref = params.get('ref');
 
