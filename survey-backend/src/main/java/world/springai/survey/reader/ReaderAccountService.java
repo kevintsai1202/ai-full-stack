@@ -76,8 +76,19 @@ public class ReaderAccountService {
 
     /** 建立新帳戶並發放初始贈點；餘額與帳本在同一交易內同步 */
     private Reader createWithSignupGrant(String email, OffsetDateTime now) {
-        Reader reader = new Reader(email, generateUniqueReferralCode());
-        reader = readerRepository.save(reader);
+        Reader newReader = new Reader(email, generateUniqueReferralCode());
+
+        // 把名單中心的推薦歸因搬到讀者帳戶（spec §5.4）。
+        // 這是「誰邀請了我」的長期紀錄；獎勵發放不看這個欄位，而是看
+        // credit_txn 的冪等鍵——兩者職責不同，不要合併。
+        surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc(email)
+            .flatMap(ReferralService::referralCodeOf)
+            .flatMap(readerRepository::findByReferralCode)
+            // 自我邀請不記錄，與 ReferralService 的判定保持一致
+            .filter(referrer -> !referrer.getEmail().equalsIgnoreCase(email))
+            .ifPresent(referrer -> newReader.setReferredBy(referrer.getId()));
+
+        Reader reader = readerRepository.save(newReader);
 
         int grant = creditPolicy.signupGrant();
         // 後台可把贈點調成 0（關閉贈點）；此時不寫帳本，避免留下 delta=0 的無意義紀錄

@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /** 問卷回應資料存取層 */
 public interface SurveyResponseRepository extends JpaRepository<SurveyResponse, Long> {
@@ -20,6 +21,16 @@ public interface SurveyResponseRepository extends JpaRepository<SurveyResponse, 
 
     /** 指定來源的待確認名單（尚未同意且未退訂），邀請確認信寄送對象 */
     List<SurveyResponse> findBySourceAndConsentFalseAndUnsubscribedFalse(String source);
+
+    /**
+     * 依 email 取最新一筆名單資料（不分大小寫）。
+     *
+     * <p>刻意用 findFirst + OrderBy 而非 findByEmail：同一個 email 可能有多筆
+     * （已在正式資料中實測到有人相隔一個月填了兩次問卷）。若寫成回傳
+     * Optional 的 findByEmailIgnoreCase，遇到多筆時 Spring Data 會拋
+     * IncorrectResultSizeDataAccessException，讓確認訂閱整個失敗。</p>
+     */
+    Optional<SurveyResponse> findFirstByEmailIgnoreCaseOrderByCreatedAtDesc(String email);
 
     /** 指定來源已確認訂閱（同意且未退訂）的人數，邀請成效統計用 */
     long countBySourceAndConsentTrueAndUnsubscribedFalse(String source);

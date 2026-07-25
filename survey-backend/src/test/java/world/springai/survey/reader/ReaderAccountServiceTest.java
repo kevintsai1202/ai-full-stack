@@ -171,4 +171,67 @@ class ReaderAccountServiceTest {
 
         assertEquals(NOW, reader.getLastLoginAt());
     }
+
+    /** 首次登入時應把名單中心的推薦碼轉成 reader.referred_by */
+    @Test
+    void firstLoginRecordsReferrer() {
+        when(readerRepository.findByEmailIgnoreCase("newbie@example.com")).thenReturn(Optional.empty());
+
+        // 名單中心有這筆訂閱，且帶著推薦碼
+        world.springai.survey.audience.SurveyResponse row =
+            new world.springai.survey.audience.SurveyResponse();
+        row.setEmail("newbie@example.com");
+        row.setAnswers(java.util.Map.of("_ref", "HOSTCODE"));
+        when(surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc("newbie@example.com"))
+            .thenReturn(Optional.of(row));
+
+        // 推薦碼對應的推薦人
+        Reader referrer = new Reader("host@example.com", "HOSTCODE");
+        referrer.setId(7L);
+        when(readerRepository.findByReferralCode("HOSTCODE")).thenReturn(Optional.of(referrer));
+
+        service.findOrCreate("newbie@example.com", NOW);
+
+        ArgumentCaptor<Reader> saved = ArgumentCaptor.forClass(Reader.class);
+        verify(readerRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        assertEquals(7L, saved.getValue().getReferredBy());
+    }
+
+    /**
+     * 沒有推薦碼時 referred_by 必須為 null。
+     *
+     * <p>絕大多數訂閱者走這條路徑。寫入 0 或空值會讓「有沒有推薦人」的判斷
+     * 在日後每個使用點都要多處理一種情況。</p>
+     */
+    @Test
+    void firstLoginWithoutReferrerLeavesReferredByNull() {
+        when(readerRepository.findByEmailIgnoreCase("plain@example.com")).thenReturn(Optional.empty());
+        when(surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc(anyString()))
+            .thenReturn(Optional.empty());
+
+        Reader reader = service.findOrCreate("plain@example.com", NOW);
+
+        org.junit.jupiter.api.Assertions.assertNull(reader.getReferredBy());
+    }
+
+    /** 自我邀請不記錄 referred_by（與 ReferralService 的判定保持一致） */
+    @Test
+    void selfReferralIsNotRecorded() {
+        when(readerRepository.findByEmailIgnoreCase("host@example.com")).thenReturn(Optional.empty());
+
+        world.springai.survey.audience.SurveyResponse row =
+            new world.springai.survey.audience.SurveyResponse();
+        row.setEmail("host@example.com");
+        row.setAnswers(java.util.Map.of("_ref", "HOSTCODE"));
+        when(surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc(anyString()))
+            .thenReturn(Optional.of(row));
+
+        Reader self = new Reader("host@example.com", "HOSTCODE");
+        self.setId(7L);
+        when(readerRepository.findByReferralCode("HOSTCODE")).thenReturn(Optional.of(self));
+
+        Reader reader = service.findOrCreate("host@example.com", NOW);
+
+        org.junit.jupiter.api.Assertions.assertNull(reader.getReferredBy());
+    }
 }

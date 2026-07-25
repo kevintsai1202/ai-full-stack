@@ -378,6 +378,18 @@ credits >= campaign.credit_cost           → FULL + 扣點
 - confirm 成功時讀出 `_ref` → 查推薦人 → 發 `REFERRAL` 獎勵；同時把值搬到 `reader.referred_by`（該讀者首次登入建帳戶時）。
 - 冪等：`credit_txn` 以 `(reason='REFERRAL', note=被邀者 email)` 檢查是否已發過，重複 confirm 不重複發獎。
 
+> **實作偏離本節「同一交易內」的描述，原因與取捨如下**：
+>
+> 1. 實作用普通的 `@EventListener` + `@Transactional(REQUIRES_NEW)`，**不是**「同一交易內」發放獎勵。
+> 2. **為什麼不能用 `@TransactionalEventListener(AFTER_COMMIT)`**（本計畫第一版寫錯，已修）：發布端 `SubscriptionController.confirm` **沒有交易**——它呼叫的 `confirmByEmail` 與 `touchEngagement` 是 repository 上各自帶 `@Transactional` 的方法，各自立即提交。`publishEvent` 被呼叫時沒有進行中的交易，而 `@TransactionalEventListener` 在無交易時**預設完全不觸發也不報錯**。結果會是「獎勵永遠不發放、日誌乾淨、測試因監聽器被 mock 而全綠」——最惡劣的靜默失效。
+> 3. 不需要同交易也已保住優先順序：確認訂閱在 publish 之前就已提交，所以發獎失敗時同意紀錄已落地。這正是要的方向——確認訂閱是不可重建的同意紀錄，推薦獎勵可由後台手動加點補救；spec 原本寫的「同一交易」會讓可補救的失敗回滾掉不可補救的資產。
+> 4. `REQUIRES_NEW` 的作用是讓獎勵的兩個寫入（加餘額、寫帳本）成為一個原子單位，**不是**為了與確認訂閱隔離（本來就已隔離）。
+> 5. 例外在監聽器與發布端**雙重**吞掉：`publishEvent` 同步且例外會往上拋，若變成 500，「不論結果一律回相同的 200」這條安全性質就破了，公開端點會變成「這個 email 有沒有推薦關係」的探測器。防護不依賴任一端記得。
+> 6. 代價與補救：發獎失敗會靜默損失一次獎勵，以 ERROR 記錄，後台手動加點。
+> 7. 依賴方向：事件是為了不讓 `audience` 依賴 `reader`（spec §3）。
+>
+> **另一項必須寫進 spec 的發現**：`confirmByEmail` 的 JPQL 是 `update ... set consent = true where lower(email) = lower(:email)`，**沒有排除 `unsubscribed = true`**，而 PostgreSQL 的 UPDATE 即使值沒變也會回報 1 列。所以 `SubscriptionController` 那道 `affected > 0` 的條件，實際上只擋掉「名單裡完全沒有這個 email」——已退訂者、早已確認過的人，每次點舊連結都會發出事件。因此 `ReferralService` 的冪等檢查（`credit_txn` 的 `note` = 被邀者 email）**不是可選的加強，而是唯一真正的防重複發獎機制**，不可簡化。
+
 ### 5.5 發送：依 tier 分組（兩種內文）
 
 改寫 `CampaignService.send`：
