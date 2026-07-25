@@ -101,7 +101,7 @@ class ReaderSessionServiceTest {
         assertFalse(local.buildSessionCookie("dummy-jwt").isSecure());
     }
 
-    /** 清除用的 cookie 必須 maxAge=0 且值為空 */
+    /** 清除用的 cookie 必須 maxAge=0、值為空、path=/、httpOnly、SameSite=Lax——否則瀏覽器無法覆蓋對應的 session cookie */
     @Test
     void clearCookieExpiresImmediately() {
         ResponseCookie cookie = httpsService().buildClearCookie();
@@ -109,5 +109,8 @@ class ReaderSessionServiceTest {
         assertEquals(ReaderSessionService.COOKIE_NAME, cookie.getName());
         assertEquals("", cookie.getValue());
         assertEquals(Duration.ZERO, cookie.getMaxAge());
+        assertEquals("/", cookie.getPath(), "path 必須與 session cookie 相同，否則瀏覽器無法覆蓋");
+        assertTrue(cookie.isHttpOnly(), "必須保持 httpOnly，與 session cookie 屬性一致");
+        assertEquals("Lax", cookie.getSameSite(), "必須保持 SameSite=Lax，與 session cookie 屬性一致");
     }
 }

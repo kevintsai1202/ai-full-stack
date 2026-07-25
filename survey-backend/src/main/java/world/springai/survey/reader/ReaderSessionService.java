@@ -39,6 +39,9 @@ public class ReaderSessionService {
      * cookie 是否帶 Secure 旗標。
      * 依對外網址是否為 https 自動決定：Secure cookie 在 http 下會被瀏覽器丟棄，
      * 本機開發就永遠登不進去；改用自動判斷可避免多一個設定項又忘記在正式環境開啟。
+     *
+     * <p>判斷時會先 trim 再忽略大小寫比對：${app.public-base-url} 來自環境變數，
+     * 可能帶前導/尾部空白或不同的大小寫，須強健處理以免誤判為非 https 而遺漏安全旗標。</p>
      */
     private final boolean secureCookie;
 
@@ -48,7 +51,8 @@ public class ReaderSessionService {
                                 @Value("${app.public-base-url}") String publicBaseUrl) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.ttlDays = ttlDays;
-        this.secureCookie = publicBaseUrl != null && publicBaseUrl.startsWith("https://");
+        // trim 後忽略大小寫比對，確保環境變數帶空白或不同大小寫時也能正確判斷 Secure 旗標
+        this.secureCookie = publicBaseUrl != null && publicBaseUrl.trim().toLowerCase().startsWith("https://");
     }
 
     /** 簽發 JWT，subject 為 reader id，效期為 ttlDays 天 */
