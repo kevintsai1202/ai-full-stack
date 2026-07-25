@@ -10,6 +10,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Base64;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -68,6 +69,17 @@ public class LoginTokenService {
      *
      * <p>任何失敗一律回 empty 而不拋例外，也不區分「不存在」與「已使用」——
      * 對外不洩漏 token 的狀態。</p>
+     *
+     * <p><b>正確性由 {@code markUsedIfUnused} 的回傳值決定，不是這裡的前置檢查。</b>
+     * 先查 {@code findByTokenHash} 再依記憶體中的 {@code token.isUsed()} 判斷、
+     * 最後 {@code save()} 回去的寫法，在併發下有 TOCTOU 窗口：兩個請求可能都在
+     * 檢查當下讀到「未使用」，於是都通過檢查、都呼叫 save，同一個 token 被
+     * 兌換兩次。{@code token_hash} 的 UNIQUE 約束只防止插入重複列，防不了對
+     * 同一列的重複更新，所以無法倚賴它擋下這個競態。
+     * 這裡保留的 {@code token.isUsed()} 檢查只是省一次 UPDATE 的快速路徑，
+     * 不得被視為正確性保證——唯一的保證來自 {@code markUsedIfUnused} 這個
+     * 帶條件的原子 UPDATE：只有 usedAt 仍是 NULL 時才會更新成功，回傳受影響
+     * 筆數。若日後想把這段「簡化」回先查再存，請先讀這段註解。</p>
      */
     public Optional<String> consume(String rawToken, OffsetDateTime now) {
         if (!StringUtils.hasText(rawToken)) {
@@ -81,8 +93,12 @@ public class LoginTokenService {
         if (token.isUsed() || token.isExpired(now)) {
             return Optional.empty();
         }
-        token.markUsed(now);
-        repository.save(token);
+        // 正確性依賴這裡的回傳值，不是上面 isUsed() 的前置檢查：
+        // 0 表示這個 token 在原子更新發生前已被別的併發請求兌換走了。
+        int updated = repository.markUsedIfUnused(token.getTokenHash(), now);
+        if (updated == 0) {
+            return Optional.empty();
+        }
         return Optional.of(token.getEmail());
     }
 
@@ -106,6 +122,6 @@ public class LoginTokenService {
 
     /** email 正規化：去前後空白並轉小寫，與名單中心的比對基準一致 */
     private String normalize(String email) {
-        return email == null ? "" : email.trim().toLowerCase();
+        return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
     }
 }

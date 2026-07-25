@@ -70,20 +70,46 @@ class LoginTokenServiceTest {
         assertEquals(NOW.plusMinutes(15), captor.getValue().getExpiresAt());
     }
 
-    /** 正常兌換：回傳 email 並標記為已使用 */
+    /**
+     * 正常兌換：回傳 email，且必須是透過原子的 markUsedIfUnused 標記已使用。
+     *
+     * <p>注意：這裡不能只斷言 stored 物件的 isUsed()——stored 是同一個物件參照，
+     * 就算把 markUsedIfUnused 整段拿掉、只留下回傳 email 的路徑，物件狀態的
+     * 斷言依然會通過（因為前面 token.isUsed() 前置檢查根本沒改到 usedAt）。
+     * 真正要守住的行為是「有沒有呼叫原子更新」，所以改用 verify 驗證呼叫本身。</p>
+     */
     @Test
     void consumeValidTokenReturnsEmailAndMarksUsed() {
         when(repository.save(any(LoginToken.class))).thenAnswer(i -> i.getArgument(0));
         String rawToken = service.issue("user@example.com", NOW);
+        String tokenHash = service.hash(rawToken);
 
-        LoginToken stored = new LoginToken(service.hash(rawToken), "user@example.com", NOW.plusMinutes(15));
-        when(repository.findByTokenHash(service.hash(rawToken))).thenReturn(Optional.of(stored));
+        LoginToken stored = new LoginToken(tokenHash, "user@example.com", NOW.plusMinutes(15));
+        when(repository.findByTokenHash(tokenHash)).thenReturn(Optional.of(stored));
+        OffsetDateTime consumeTime = NOW.plusMinutes(1);
+        when(repository.markUsedIfUnused(tokenHash, consumeTime)).thenReturn(1);
 
-        Optional<String> email = service.consume(rawToken, NOW.plusMinutes(1));
+        Optional<String> email = service.consume(rawToken, consumeTime);
 
         assertTrue(email.isPresent());
         assertEquals("user@example.com", email.get());
-        assertTrue(stored.isUsed(), "兌換後必須標記為已使用");
+        verify(repository).markUsedIfUnused(tokenHash, consumeTime);
+    }
+
+    /**
+     * 併發下第二個請求必須失敗：token 存在且未過期，但 markUsedIfUnused 回傳 0，
+     * 表示已被另一個並行請求搶先兌換走了（原子 UPDATE 的 usedAt IS NULL 條件不成立）。
+     */
+    @Test
+    void consumeReturnsEmptyWhenConcurrentRequestAlreadyMarkedUsed() {
+        String rawToken = "some-raw-token";
+        String tokenHash = service.hash(rawToken);
+        LoginToken stored = new LoginToken(tokenHash, "user@example.com", NOW.plusMinutes(15));
+        when(repository.findByTokenHash(tokenHash)).thenReturn(Optional.of(stored));
+        OffsetDateTime consumeTime = NOW.plusMinutes(1);
+        when(repository.markUsedIfUnused(tokenHash, consumeTime)).thenReturn(0);
+
+        assertTrue(service.consume(rawToken, consumeTime).isEmpty());
     }
 
     /** 同一 token 不得兌換兩次 */
