@@ -128,6 +128,8 @@ reader ──▶ audience, mail, newsletter(唯讀 campaign)
 
 ### 4.1 新增表
 
+> **版本歸屬**：V7 只建立階段 B 用得到的五張表（`app_setting`、`reader`、`credit_txn`、`article_access`、`login_token`）。`email_open` 與 `media_asset` 的結構列在下方供設計參考，但**實際建立於後續階段**（分別是階段 E 的 V9 與階段 D 的 V10）——刻意不在用不到的時候建表。
+
 ```sql
 -- V7：讀者帳戶。以 email 對應名單中心，1:1 但刻意不合併
 CREATE TABLE reader (
@@ -176,7 +178,7 @@ CREATE TABLE login_token (
 );
 CREATE INDEX idx_login_token_email ON login_token (email, created_at DESC);
 
--- V7：開信事件。同一人可多次開信，全部記錄
+-- V9（階段 E 才建立，此處僅列出結構供設計參考）：開信事件。同一人可多次開信，全部記錄
 CREATE TABLE email_open (
     id          BIGSERIAL PRIMARY KEY,
     campaign_id BIGINT      NOT NULL,
@@ -186,7 +188,7 @@ CREATE TABLE email_open (
 );
 CREATE INDEX idx_email_open_campaign ON email_open (campaign_id, recipient);
 
--- V7：媒體檔案索引。實體存 MinIO，此表只記中介資料
+-- V10（階段 D 才建立，此處僅列出結構供設計參考）：媒體檔案索引。實體存 MinIO，此表只記中介資料
 CREATE TABLE media_asset (
     id            BIGSERIAL PRIMARY KEY,
     object_key    TEXT        NOT NULL UNIQUE,  -- MinIO 內的 key（含內容 hash）

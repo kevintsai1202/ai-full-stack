@@ -12,6 +12,10 @@ spring:
   flyway:
     enabled: true
     # 全新空白資料庫：不要 baseline，否則會跳過 V1 導致 validate 找不到資料表
+    # 顯式關閉 clean：訂閱名單的同意狀態是訂閱者親自點確認信給出的，清掉只能
+    # 重新徵求（設計文件 §4.0 的硬約束）。Flyway 11 的預設值已是 true，
+    # 但這條約束太重要，不依賴預設值。
+    clean-disabled: true
 server:
   port: ${PORT:8080}
 app:
