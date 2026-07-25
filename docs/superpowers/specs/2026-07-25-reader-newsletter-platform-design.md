@@ -607,7 +607,11 @@ MinIO 服務與上傳、後台插圖 UI、發送依 tier 分組、`vip_full_in_m
 
 ## 12. 測試策略
 
-沿用既有 `spring-boot-starter-test`（無新測試依賴）。
+以既有 `spring-boot-starter-test` 為主。**唯一允許的新測試依賴是 Testcontainers**（`org.testcontainers:postgresql` + `junit-jupiter`，版本由 Spring Boot 的 dependency management 管理），僅用於下表的 migration 相關測試。
+
+理由：「既有資料保全」與「backfill 正確性」需要一個真實的 PostgreSQL——H2 不支援本專案用到的 `jsonb` 與 `@>` 運算子，而手動腳本依賴人工執行。「既有訂閱名單不可清除」是本專案的硬約束（§4.0），這道防線不該靠人記得跑腳本。
+
+其餘測試（授權判斷、內容切分、token、session）一律不連資料庫，維持純單元測試。架構守衛 `PackageDependencyTest` 也不改用 ArchUnit——自製的 import 掃描已足夠，且已補上真空偵測。
 
 | 目標 | 測試 |
 |---|---|
@@ -625,8 +629,8 @@ MinIO 服務與上傳、後台插圖 UI、發送依 tier 分組、`vip_full_in_m
 | 補寄重建對象 | 依 `filter_levels` 重建，斷言與原次寄送的級別條件一致 |
 | 參數即時生效 | 改 `app_setting` 後下次授權判斷即採用新值（含快取清除） |
 | 規則頁與參數一致 | 改 `app_setting` 後，斷言 `/r/rules`、`/r/me`、PARTIAL 提示三處回應中的點數數字**全部**等於新設定值（防止任一處寫死） |
-| **既有資料保全** | 以「V1–V6 已套用且有既有資料」的 DB 快照跑 V7/V8，斷言 migration 後 `survey_response` 筆數不變、`consent` / `unsubscribed` / `email` 逐列不變 |
-| **backfill 正確性** | 同上快照，斷言已確認訂閱者的 `last_engaged_at` 非 NULL 且分級為 active；未確認匯入者維持 NULL 且分級仍為 active |
+| **既有資料保全** | Testcontainers 起真實 PostgreSQL → 只套用 V1–V6 → 塞入代表性既有資料（已確認訂閱者／未確認匯入者／已退訂者）→ 套用 V7/V8 → 斷言 `survey_response` 筆數不變、`consent` / `unsubscribed` / `email` 逐列不變 |
+| **backfill 正確性** | 同一容器，斷言已確認訂閱者的 `last_engaged_at` 非 NULL；未確認匯入者維持 NULL（刻意不回填）；`campaign` 既有列的 `tier` 皆取得 `BASIC` 預設值 |
 
 ## 13. 未決事項與已接受風險
 

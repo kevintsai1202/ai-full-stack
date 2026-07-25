@@ -23,7 +23,9 @@
 ### 對 spec 的兩處實作細化
 
 1. **migration 檔案切分**：spec §4.1 把所有新表寫在 V7。本階段只建立階段 B 用得到的 5 張表（`app_setting`、`reader`、`credit_txn`、`article_access`、`login_token`），`email_open` 與 `media_asset` 留給階段 E／D 的 V9／V10。`campaign` 的六個新欄位與 `survey_response.last_engaged_at` 一次在 V8 加完（含 `vip_full_in_mail`、`filter_levels` 這兩個後續階段才用的欄位），避免同一張表被反覆 ALTER。
-2. **migration 驗證方式**：spec §12 要求「既有資料保全」與「backfill 正確性」測試，但同時規定「無新測試依賴」。自動化這兩項需要 Testcontainers（新依賴），因此改以可重跑的驗證腳本 `scripts/verify-migration.ps1` 實作，沿用專案既有 `scripts/verify-*.mjs` / `*.ps1` 的慣例。**這是刻意的取捨，不是省略**——腳本必須在每次 migration 部署前執行。
+2. **migration 驗證改用 Testcontainers**（spec §12 已於階段 A 結束後更新）。原設計因「無新測試依賴」而採手動腳本，但環境檢查確認本機 Docker 與 Testcontainers 皆可用，且「既有訂閱名單不可清除」是硬約束（spec §4.0）——這道防線不該靠人記得跑腳本。因此改為 JUnit 測試 `MigrationSafetyTest`，每次 `mvn test` 都會驗證。
+
+   **本機環境事實**（實作時直接用，不必自行探索）：本機**沒有安裝 psql 執行檔**；已備好專用測試容器 `survey-test-db`（port **5433**，image `pgvector/pgvector:pg18`，帳密 `postgres` / `password`），供需要手動連線時使用。Testcontainers 測試會自行起容器，不使用這個。5432 埠是別的專案的容器，**不得動用**。
 
 ---
 
@@ -64,7 +66,7 @@
 |---|---|
 | `src/main/resources/db/migration/V7__create_reader_platform.sql` | 5 張新表 |
 | `src/main/resources/db/migration/V8__extend_campaign_and_engagement.sql` | campaign 欄位、`last_engaged_at`、backfill |
-| `scripts/verify-migration.ps1` | 既有資料保全與 backfill 正確性的可重跑驗證 |
+| `src/test/java/world/springai/survey/MigrationSafetyTest.java` | 既有資料保全與 backfill 正確性（Testcontainers 起真實 PostgreSQL） |
 
 ### 新增：讀者端靜態頁
 
@@ -115,7 +117,7 @@
 
 ---
 
-## Task 1: 新增 jjwt 依賴與讀者端部署設定
+## Task 1: 新增 jjwt 與 Testcontainers 依賴、讀者端部署設定
 
 **Files:**
 - Modify: `survey-backend/pom.xml`
@@ -123,7 +125,7 @@
 
 **Interfaces:**
 - Consumes: 無
-- Produces: `io.jsonwebtoken.Jwts` 可用；設定鍵 `app.reader.jwt-secret`、`app.reader.jwt-ttl-days`、`app.reader.login-token-ttl-minutes`、`app.reader.login-throttle-count`、`app.reader.login-throttle-minutes`、`app.mail.transactional-reserve`
+- Produces: `io.jsonwebtoken.Jwts` 可用；`org.testcontainers.containers.PostgreSQLContainer` 可用（test scope）；設定鍵 `app.reader.jwt-secret`、`app.reader.jwt-ttl-days`、`app.reader.login-token-ttl-minutes`、`app.reader.login-throttle-count`、`app.reader.login-throttle-minutes`、`app.mail.transactional-reserve`
 
 - [ ] **Step 1: 加入 jjwt 依賴**
 
@@ -147,7 +149,21 @@
       <version>0.12.6</version>
       <scope>runtime</scope>
     </dependency>
+    <!-- Testcontainers：僅供 migration 安全性測試使用（需要真實 PostgreSQL 的 jsonb 與 @> 支援）。
+         版本由 spring-boot-dependencies 的 BOM 管理，故不指定 version。 -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
 ```
+
+**不要為 Testcontainers 指定 `<version>`**——Spring Boot 3.5.0 的 parent POM 已透過 dependency management 管理 `testcontainers.version`。自行指定版本可能與 BOM 衝突。
 
 - [ ] **Step 2: 確認依賴可下載（需要網路）**
 
@@ -219,7 +235,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 **Files:**
 - Create: `survey-backend/src/main/resources/db/migration/V7__create_reader_platform.sql`
 - Create: `survey-backend/src/main/resources/db/migration/V8__extend_campaign_and_engagement.sql`
-- Create: `survey-backend/scripts/verify-migration.ps1`
+- Test: `survey-backend/src/test/java/world/springai/survey/MigrationSafetyTest.java`
 
 **Interfaces:**
 - Consumes: 無
@@ -349,142 +365,237 @@ INSERT INTO app_setting (setting_key, value) VALUES
 ON CONFLICT (setting_key) DO NOTHING;
 ```
 
-- [ ] **Step 3: 建立驗證腳本**
+- [ ] **Step 3: 寫 migration 安全性測試（Testcontainers）**
 
-Create `survey-backend/scripts/verify-migration.ps1`:
+Create `survey-backend/src/test/java/world/springai/survey/MigrationSafetyTest.java`:
 
-```powershell
-# V7／V8 migration 的既有資料保全與 backfill 正確性驗證。
-# 用途：每次要把 migration 套用到有既有資料的資料庫之前，先在該庫的複本上跑一次。
-# 為何是腳本而非 JUnit 測試：自動化需要 Testcontainers（新測試依賴），
-# 而 spec §12 規定不引入新測試依賴。此腳本可重跑，沿用專案 scripts/verify-* 慣例。
-#
-# 用法：
-#   .\scripts\verify-migration.ps1 -Database survey_copy
-#   .\scripts\verify-migration.ps1 -Database survey_copy -PsqlPath "C:\Program Files\PostgreSQL\16\bin\psql.exe"
+```java
+package world.springai.survey;
 
-param(
-    [Parameter(Mandatory = $true)][string]$Database,
-    [string]$DbHost = "127.0.0.1",
-    [int]$Port = 5432,
-    [string]$User = "postgres",
-    [string]$PsqlPath = "psql"
-)
+import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
-$ErrorActionPreference = "Stop"
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 
-# 執行一句 SQL 並回傳單一純量值
-function Invoke-Scalar([string]$sql) {
-    $result = & $PsqlPath -h $DbHost -p $Port -U $User -d $Database -t -A -c $sql
-    if ($LASTEXITCODE -ne 0) { throw "psql 執行失敗：$sql" }
-    return $result.Trim()
-}
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-Write-Host "=== migration 前狀態 ===" -ForegroundColor Cyan
-$beforeTotal      = Invoke-Scalar "SELECT count(*) FROM survey_response;"
-$beforeConsented  = Invoke-Scalar "SELECT count(*) FROM survey_response WHERE consent = TRUE AND unsubscribed = FALSE;"
-$beforeChecksum   = Invoke-Scalar "SELECT md5(string_agg(email || ':' || consent || ':' || unsubscribed, ',' ORDER BY id)) FROM survey_response;"
-Write-Host "survey_response 總筆數：$beforeTotal"
-Write-Host "已確認訂閱筆數：      $beforeConsented"
-Write-Host "email/consent/unsubscribed 檢查碼：$beforeChecksum"
+/**
+ * V7／V8 migration 的既有資料保全與 backfill 正確性測試。
+ *
+ * <p>為什麼需要真實 PostgreSQL：本專案用到 jsonb 與 @&gt; 運算子，H2 不支援；
+ * 而「既有訂閱名單不可清除」是硬約束（spec §4.0）——訂閱者的同意是他們親自
+ * 點確認信給出的，清掉就只能重新徵求。這道防線不該靠人記得跑腳本，
+ * 因此以 Testcontainers 起真實資料庫，每次 mvn test 都驗證。</p>
+ *
+ * <p>流程：只套用 V1–V6（模擬正式庫現況）→ 塞入代表性既有資料 →
+ * 套用 V7／V8 → 斷言既有資料逐列未變且 backfill 正確。</p>
+ */
+@Testcontainers
+class MigrationSafetyTest {
 
-Write-Host "`n請在此時對資料庫 [$Database] 套用 V7/V8 migration，完成後按 Enter 繼續..." -ForegroundColor Yellow
-Read-Host
+    /**
+     * 用本機已有的 pgvector image 避免額外下載；它就是 PostgreSQL 18。
+     * Testcontainers 對非官方 image 需明確宣告可替代 postgres，否則會拒絕啟動。
+     */
+    private static final DockerImageName IMAGE = DockerImageName
+        .parse("pgvector/pgvector:pg18")
+        .asCompatibleSubstituteFor("postgres");
 
-Write-Host "`n=== migration 後驗證 ===" -ForegroundColor Cyan
-$failures = @()
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(IMAGE)
+        .withDatabaseName("survey_migration_test");
 
-# 1. 既有資料保全：筆數與關鍵欄位逐列不變
-$afterTotal    = Invoke-Scalar "SELECT count(*) FROM survey_response;"
-$afterChecksum = Invoke-Scalar "SELECT md5(string_agg(email || ':' || consent || ':' || unsubscribed, ',' ORDER BY id)) FROM survey_response;"
-if ($afterTotal -ne $beforeTotal)       { $failures += "survey_response 筆數改變：$beforeTotal -> $afterTotal" }
-if ($afterChecksum -ne $beforeChecksum) { $failures += "email/consent/unsubscribed 有變動（檢查碼不符）" }
+    /** 既有資料的指紋：email 與同意狀態的組合，用於證明這些欄位逐列未被改寫 */
+    private static final String CHECKSUM_SQL = """
+        SELECT md5(string_agg(email || ':' || consent || ':' || unsubscribed, ',' ORDER BY id))
+          FROM survey_response
+        """;
 
-# 2. backfill：已確認訂閱者全部有 last_engaged_at
-$backfilled = Invoke-Scalar "SELECT count(*) FROM survey_response WHERE consent = TRUE AND unsubscribed = FALSE AND last_engaged_at IS NOT NULL;"
-if ($backfilled -ne $beforeConsented) { $failures += "backfill 不完整：應 $beforeConsented 筆，實際 $backfilled 筆" }
+    /** migration 前的 survey_response 筆數 */
+    private static int beforeCount;
+    /** migration 前的既有資料指紋 */
+    private static String beforeChecksum;
 
-# 3. 未確認者刻意保持 NULL
-$pendingWithStamp = Invoke-Scalar "SELECT count(*) FROM survey_response WHERE consent = FALSE AND last_engaged_at IS NOT NULL;"
-if ($pendingWithStamp -ne "0") { $failures += "未確認訂閱者被誤回填 $pendingWithStamp 筆" }
+    /** 套用 V1–V6 → 塞既有資料 → 記錄狀態 → 套用 V7／V8 */
+    @BeforeAll
+    static void applyMigrations() throws SQLException {
+        // 只套用到 V6，模擬正式資料庫目前的狀態
+        Flyway.configure()
+            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+            .target(MigrationVersion.fromVersion("6"))
+            .load()
+            .migrate();
 
-# 4. 新表存在且為空
-foreach ($t in "app_setting", "reader", "credit_txn", "article_access", "login_token") {
-    $exists = Invoke-Scalar "SELECT count(*) FROM information_schema.tables WHERE table_name = '$t';"
-    if ($exists -ne "1") { $failures += "資料表 $t 未建立" }
-}
-$settingCount = Invoke-Scalar "SELECT count(*) FROM app_setting;"
-if ($settingCount -ne "8") { $failures += "app_setting 初始值應為 8 筆，實際 $settingCount 筆" }
+        // 三種代表性的既有名單：已確認訂閱、待確認匯入、已退訂；外加一筆既有 campaign
+        try (Connection c = connect(); Statement st = c.createStatement()) {
+            st.execute("""
+                INSERT INTO survey_response (email, consent, unsubscribed, source) VALUES
+                  ('confirmed@example.com', TRUE,  FALSE, 'survey_form'),
+                  ('pending@example.com',   FALSE, FALSE, 'exam'),
+                  ('gone@example.com',      TRUE,  TRUE,  'survey_form')
+                """);
+            st.execute("""
+                INSERT INTO campaign (subject, markdown, mode, recipient_count,
+                                      accepted_count, failed_count, status)
+                VALUES ('既有電子報', '# 內容', 'now', 1, 1, 0, 'sent')
+                """);
+        }
 
-# 5. campaign 新欄位存在，既有列取得預設值
-foreach ($c in "tier", "credit_cost", "slug", "published_at", "vip_full_in_mail", "filter_levels") {
-    $exists = Invoke-Scalar "SELECT count(*) FROM information_schema.columns WHERE table_name = 'campaign' AND column_name = '$c';"
-    if ($exists -ne "1") { $failures += "campaign.$c 未建立" }
-}
-$badTier = Invoke-Scalar "SELECT count(*) FROM campaign WHERE tier IS NULL OR tier <> 'BASIC';"
-if ($badTier -ne "0") { $failures += "既有 campaign 的 tier 未全部預設為 BASIC（$badTier 筆異常）" }
+        beforeCount = queryInt("SELECT count(*) FROM survey_response");
+        beforeChecksum = queryString(CHECKSUM_SQL);
 
-Write-Host ""
-if ($failures.Count -eq 0) {
-    Write-Host "全部驗證通過。" -ForegroundColor Green
-    exit 0
-} else {
-    Write-Host "驗證失敗：" -ForegroundColor Red
-    $failures | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
-    exit 1
+        // 套用 V7／V8
+        Flyway.configure()
+            .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+            .load()
+            .migrate();
+    }
+
+    /** 既有列一筆都不能少，email 與同意狀態一個字都不能變 */
+    @Test
+    void existingRowsAreUntouched() throws SQLException {
+        assertEquals(beforeCount, queryInt("SELECT count(*) FROM survey_response"),
+            "migration 後 survey_response 筆數改變");
+        assertEquals(beforeChecksum, queryString(CHECKSUM_SQL),
+            "migration 後 email／consent／unsubscribed 有變動");
+    }
+
+    /**
+     * 已確認訂閱者必須被回填 last_engaged_at。
+     *
+     * <p>若不回填，階段 F 的參與度分級會因「已寄多期 + last_engaged_at 為 NULL」
+     * 把老訂閱者整批判為 sunset 而停寄——資料沒少但收不到信，且要到下次發送才顯現。</p>
+     */
+    @Test
+    void confirmedSubscribersAreBackfilled() throws SQLException {
+        assertEquals(1, queryInt("""
+            SELECT count(*) FROM survey_response
+             WHERE consent = TRUE AND unsubscribed = FALSE AND last_engaged_at IS NOT NULL
+            """), "已確認訂閱者未被回填 last_engaged_at");
+    }
+
+    /** 待確認與已退訂者刻意不回填，保持 NULL（回填會造出假的參與紀錄） */
+    @Test
+    void nonSubscribersAreNotBackfilled() throws SQLException {
+        assertEquals(0, queryInt("""
+            SELECT count(*) FROM survey_response
+             WHERE (consent = FALSE OR unsubscribed = TRUE) AND last_engaged_at IS NOT NULL
+            """), "未確認或已退訂者被誤回填");
+    }
+
+    /** V7 的五張新表都要建立 */
+    @Test
+    void newTablesAreCreated() throws SQLException {
+        for (String table : new String[] {"app_setting", "reader", "credit_txn", "article_access", "login_token"}) {
+            assertEquals(1, queryInt(
+                "SELECT count(*) FROM information_schema.tables WHERE table_name = '" + table + "'"),
+                "資料表 " + table + " 未建立");
+        }
+    }
+
+    /** 參數初始值要進去，且可安全重跑（ON CONFLICT DO NOTHING） */
+    @Test
+    void appSettingsAreSeeded() throws SQLException {
+        assertEquals(8, queryInt("SELECT count(*) FROM app_setting"), "app_setting 初始值筆數不符");
+        assertEquals("300", queryString(
+            "SELECT value FROM app_setting WHERE setting_key = 'credit.signup_grant'"));
+        assertEquals("10", queryString(
+            "SELECT value FROM app_setting WHERE setting_key = 'credit.premium_cost'"));
+    }
+
+    /** 既有 campaign 應取得新欄位的預設值，不得為 NULL */
+    @Test
+    void existingCampaignGetsColumnDefaults() throws SQLException {
+        assertEquals(0, queryInt("""
+            SELECT count(*) FROM campaign
+             WHERE tier IS DISTINCT FROM 'BASIC'
+                OR credit_cost <> 0
+                OR filter_levels IS DISTINCT FROM 'active'
+            """), "既有 campaign 未取得新欄位的預設值");
+    }
+
+    /** PREMIUM 卻沒有解鎖成本必須被 CHECK 約束擋下——否則進階內容會全面免費外洩 */
+    @Test
+    void premiumWithoutCostIsRejected() {
+        assertThrows(SQLException.class, () -> {
+            try (Connection c = connect(); Statement st = c.createStatement()) {
+                st.execute("""
+                    INSERT INTO campaign (subject, markdown, mode, recipient_count,
+                                          accepted_count, failed_count, status, tier, credit_cost)
+                    VALUES ('壞資料', '# x', 'now', 0, 0, 0, 'sent', 'PREMIUM', 0)
+                    """);
+            }
+        }, "tier=PREMIUM 且 credit_cost=0 應被 CHECK 約束拒絕");
+    }
+
+    /** 取得測試容器的連線 */
+    private static Connection connect() throws SQLException {
+        return DriverManager.getConnection(
+            postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+    }
+
+    /** 執行單值整數查詢 */
+    private static int queryInt(String sql) throws SQLException {
+        try (Connection c = connect(); Statement st = c.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            assertTrue(rs.next(), "查詢無結果：" + sql);
+            return rs.getInt(1);
+        }
+    }
+
+    /** 執行單值字串查詢 */
+    private static String queryString(String sql) throws SQLException {
+        try (Connection c = connect(); Statement st = c.createStatement(); ResultSet rs = st.executeQuery(sql)) {
+            assertTrue(rs.next(), "查詢無結果：" + sql);
+            return rs.getString(1);
+        }
+    }
 }
 ```
 
-- [ ] **Step 4: 在本機獨立資料庫上實測 migration**
-
-**絕對不要對正式資料庫執行。** 建立一個帶有代表性既有資料的本機庫：
-
-```powershell
-$env:PGPASSWORD = "password"
-psql -h 127.0.0.1 -U postgres -c "DROP DATABASE IF EXISTS survey_mig_test;"
-psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE survey_mig_test;"
-```
-
-先只套用 V1–V6（模擬正式庫現況），再塞入測試資料：
+- [ ] **Step 4: 跑測試確認通過**
 
 ```powershell
 cd d:\GitHub\hahow-ai-full-stack\survey-backend
 $env:JAVA_HOME = "D:\java\jdk-21"
-mvn flyway:migrate "-Dflyway.url=jdbc:postgresql://127.0.0.1:5432/survey_mig_test" "-Dflyway.user=postgres" "-Dflyway.password=password" "-Dflyway.target=6" "-Dflyway.locations=filesystem:src/main/resources/db/migration"
+mvn test -Dtest=MigrationSafetyTest
 ```
 
-塞入三種代表性資料（已確認訂閱者、未確認匯入者、已退訂者）與一筆既有 campaign：
+Expected: `Tests run: 7, Failures: 0, Errors: 0, Skipped: 0`
 
-```powershell
-psql -h 127.0.0.1 -U postgres -d survey_mig_test -c @'
-INSERT INTO survey_response (email, consent, unsubscribed, source) VALUES
-  ('confirmed@example.com', TRUE,  FALSE, 'survey_form'),
-  ('pending@example.com',   FALSE, FALSE, 'exam'),
-  ('gone@example.com',      TRUE,  TRUE,  'survey_form');
-INSERT INTO campaign (subject, markdown, mode, recipient_count, accepted_count, failed_count, status)
-  VALUES ('既有電子報', '# 內容', 'now', 1, 1, 0, 'sent');
-'@
+首次執行會拉 image；本機已有 `pgvector/pgvector:pg18` 故應直接使用。若出現 `Could not find a valid Docker environment`，確認 Docker Desktop 正在執行。
+
+- [ ] **Step 5: 驗證測試真的會抓到 backfill 缺失**
+
+暫時把 V8 最後的 backfill `UPDATE` 三行註解掉（保留其餘 SQL）：
+
+```sql
+-- UPDATE survey_response
+--    SET last_engaged_at = now()
+--  WHERE consent = TRUE AND unsubscribed = FALSE;
 ```
 
-- [ ] **Step 5: 跑驗證腳本（前半）→ 套用 V7/V8 → 驗證（後半）**
-
 ```powershell
-.\scripts\verify-migration.ps1 -Database survey_mig_test
-```
-
-腳本會印出 migration 前狀態並暫停。**在另一個終端**套用 V7/V8：
-
-```powershell
-cd d:\GitHub\hahow-ai-full-stack\survey-backend
 $env:JAVA_HOME = "D:\java\jdk-21"
-mvn flyway:migrate "-Dflyway.url=jdbc:postgresql://127.0.0.1:5432/survey_mig_test" "-Dflyway.user=postgres" "-Dflyway.password=password" "-Dflyway.locations=filesystem:src/main/resources/db/migration"
+mvn test -Dtest=MigrationSafetyTest
 ```
 
-回到第一個終端按 Enter。
+Expected: **FAIL**，`confirmedSubscribersAreBackfilled` 失敗並顯示「已確認訂閱者未被回填 last_engaged_at」。
 
-Expected: `全部驗證通過。`（綠字），exit code 0
+**這步不可省略。** 這個測試守的是「老訂閱者不會被整批停寄」——沒親眼看到它在 backfill 缺失時變紅，就不能相信它真的在守。確認後還原註解並重跑一次確認回綠。
 
-若任何一項失敗，修 SQL 後把測試庫 drop 重建再跑一次——不要在已套用的庫上反覆試，Flyway 的版本紀錄會擋住。
+（註：改動 migration 檔後 Flyway 的 checksum 會變，但本測試每次都用全新容器，不受既有 schema history 影響。）
 
 - [ ] **Step 6: 確認既有測試仍全綠**
 
@@ -493,14 +604,14 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 72, Failures: 0, Errors: 0, Skipped: 0`
+Expected: `Tests run: 79, Failures: 0, Errors: 0, Skipped: 0`（階段 A 的 72 + 本任務的 7）
 
-（此時 entity 還沒補上新欄位，但 `ddl-auto: validate` 只在啟動時驗證，單元測試不連 DB，所以不受影響。）
+（此時 entity 還沒補上新欄位，但 `ddl-auto: validate` 只在應用啟動時驗證；既有單元測試不連 DB，`MigrationSafetyTest` 用的是自己的 Testcontainers 容器且不經過 JPA，所以都不受影響。）
 
 - [ ] **Step 7: Commit**
 
 ```powershell
-git add src/main/resources/db/migration/V7__create_reader_platform.sql src/main/resources/db/migration/V8__extend_campaign_and_engagement.sql scripts/verify-migration.ps1
+git add src/main/resources/db/migration/V7__create_reader_platform.sql src/main/resources/db/migration/V8__extend_campaign_and_engagement.sql src/test/java/world/springai/survey/MigrationSafetyTest.java
 git commit -m @'
 feat(reader): V7/V8 migration —— 讀者端資料表與 campaign 擴充
 
@@ -517,9 +628,13 @@ V8（additive 擴充）：
 - 未確認匯入者刻意不回填（已寄期數為 0，本就判為 active）
 - app_setting 初始值 8 筆，ON CONFLICT DO NOTHING 可安全重跑
 
-驗證：scripts/verify-migration.ps1 檢查既有資料逐列不變、backfill
-完整性、新表與新欄位齊備。已在獨立測試庫實測通過。
-（不用 Testcontainers 是因 spec §12 規定無新測試依賴。）
+驗證：MigrationSafetyTest（Testcontainers 起真實 PostgreSQL）7 個測試——
+既有資料逐列不變、已確認訂閱者被回填、未確認者刻意不回填、五張新表齊備、
+參數初始值、既有 campaign 取得欄位預設值、PREMIUM 無成本被 CHECK 擋下。
+已實測「註解掉 backfill 會讓測試變紅」。
+
+改用 Testcontainers 而非手動腳本：既有訂閱名單不可清除是硬約束（spec §4.0），
+這道防線不該靠人記得跑腳本。spec §12 已同步更新。
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 '@
@@ -821,7 +936,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 77, Failures: 0, Errors: 0, Skipped: 0`（72 + 5）
+Expected: `Tests run: 84, Failures: 0, Errors: 0, Skipped: 0`（79 + 5）
 
 - [ ] **Step 8: Commit**
 
@@ -1073,7 +1188,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 84, Failures: 0, Errors: 0, Skipped: 0`（77 + 7）
+Expected: `Tests run: 91, Failures: 0, Errors: 0, Skipped: 0`（84 + 7）
 
 ```powershell
 git add src/main/java/world/springai/survey/reader/ContentSplitter.java src/test/java/world/springai/survey/reader/ContentSplitterTest.java
@@ -1732,7 +1847,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 92, Failures: 0, Errors: 0, Skipped: 0`（84 + 8）
+Expected: `Tests run: 99, Failures: 0, Errors: 0, Skipped: 0`（91 + 8）
 
 ```powershell
 git add src/main/java/world/springai/survey/reader/ src/main/java/world/springai/survey/audience/SurveyResponse.java src/test/java/world/springai/survey/reader/ReaderEntityMappingTest.java
@@ -2068,7 +2183,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 103, Failures: 0, Errors: 0, Skipped: 0`（92 + 11）
+Expected: `Tests run: 110, Failures: 0, Errors: 0, Skipped: 0`（99 + 11）
 
 ```powershell
 git add src/main/java/world/springai/survey/reader/LoginTokenService.java src/test/java/world/springai/survey/reader/LoginTokenServiceTest.java
@@ -2369,7 +2484,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 112, Failures: 0, Errors: 0, Skipped: 0`（103 + 9）
+Expected: `Tests run: 119, Failures: 0, Errors: 0, Skipped: 0`（110 + 9）
 
 ```powershell
 git add src/main/java/world/springai/survey/reader/ReaderSessionService.java src/test/java/world/springai/survey/reader/ReaderSessionServiceTest.java
@@ -3082,7 +3197,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 127, Failures: 0, Errors: 0, Skipped: 0`（112 + 8 + 7）
+Expected: `Tests run: 134, Failures: 0, Errors: 0, Skipped: 0`（119 + 8 + 7）
 
 ```powershell
 git add src/main/java/world/springai/survey/audience/SurveyResponseRepository.java src/main/java/world/springai/survey/reader/ReaderAccountService.java src/main/java/world/springai/survey/reader/LoginMailService.java src/test/java/world/springai/survey/reader/ReaderAccountServiceTest.java src/test/java/world/springai/survey/reader/LoginMailServiceTest.java
@@ -3300,7 +3415,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 131, Failures: 0, Errors: 0, Skipped: 0`（127 + 4）
+Expected: `Tests run: 138, Failures: 0, Errors: 0, Skipped: 0`（134 + 4）
 
 ```powershell
 git add src/main/java/world/springai/survey/newsletter/Campaign.java src/main/java/world/springai/survey/newsletter/CampaignRepository.java src/test/java/world/springai/survey/newsletter/CampaignTierTest.java
@@ -3707,7 +3822,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 143, Failures: 0, Errors: 0, Skipped: 0`（131 + 12）
+Expected: `Tests run: 150, Failures: 0, Errors: 0, Skipped: 0`（138 + 12）
 
 ```powershell
 git add src/main/java/world/springai/survey/reader/AccessDecisionService.java src/test/java/world/springai/survey/reader/AccessDecisionServiceTest.java
@@ -4559,7 +4674,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 160, Failures: 0, Errors: 0, Skipped: 0`（143 + 17）
+Expected: `Tests run: 167, Failures: 0, Errors: 0, Skipped: 0`（150 + 17）
 
 ```powershell
 git add src/main/java/world/springai/survey/reader/HtmlTemplate.java src/main/java/world/springai/survey/reader/ReaderAuthController.java src/main/java/world/springai/survey/WebConfig.java src/main/resources/static/reader/ src/test/java/world/springai/survey/reader/HtmlTemplateTest.java src/test/java/world/springai/survey/reader/ReaderAuthControllerTest.java
@@ -5261,7 +5376,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 171, Failures: 0, Errors: 0, Skipped: 0`（160 + 11）
+Expected: `Tests run: 178, Failures: 0, Errors: 0, Skipped: 0`（167 + 11）
 
 ```powershell
 git add src/main/java/world/springai/survey/reader/ src/main/resources/static/reader/ src/test/java/world/springai/survey/reader/
@@ -5482,9 +5597,17 @@ mvn clean test
 Expected:
 1. 第一項**無輸出**（V8 的 `UPDATE ... WHERE consent = TRUE` 是唯一允許的既有列改寫，且不在此比對範圍內）
 2. `ddl-auto: validate`
-3. `Tests run: 171, Failures: 0, Errors: 0`
+3. `Tests run: 178, Failures: 0, Errors: 0`
 
-**另外必做**：對正式資料庫的複本執行 `scripts/verify-migration.ps1`（Task 2 Step 5 的流程），確認既有名單逐列不變且 backfill 完整。**正式 DB 備份完成前不得部署。**
+**另外必做**：`MigrationSafetyTest` 驗證的是 migration **邏輯**（在乾淨容器上），不是正式資料庫的**真實資料**。部署前仍須對正式 DB 的複本實際套用一次 V7／V8，確認：`survey_response` 筆數不變、既有名單的 email／consent／unsubscribed 未變、已確認訂閱者的 `last_engaged_at` 全部非 NULL。**正式 DB 備份完成前不得部署。**
+
+本機沒有 psql 執行檔；可用專用測試容器 `survey-test-db`（port 5433）執行，例如：
+
+```powershell
+docker exec survey-test-db psql -U postgres -d <複本DB> -c "SELECT count(*) FROM survey_response WHERE consent = TRUE AND unsubscribed = FALSE AND last_engaged_at IS NULL;"
+```
+
+回傳 0 才算 backfill 完整。
 
 - [ ] **Step 7: Commit**
 
@@ -5512,8 +5635,9 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 
 全部滿足才算完成：
 
-- [ ] `mvn clean test` 為 `Tests run: 171, Failures: 0, Errors: 0`
-- [ ] `scripts/verify-migration.ps1` 對正式 DB 複本執行通過（既有名單逐列不變、backfill 完整）
+- [ ] `mvn clean test` 為 `Tests run: 178, Failures: 0, Errors: 0`
+- [ ] `MigrationSafetyTest` 7 個測試通過，且已實測「註解掉 backfill 會讓它變紅」
+- [ ] 對正式 DB 複本實際套用 V7／V8 驗證通過（筆數不變、同意狀態未變、backfill 完整）
 - [ ] `scripts/verify-reader-flow.mjs` 全部通過
 - [ ] 手動完成一次完整登入，確認 `reader` / `credit_txn` / `last_engaged_at` 三處都正確寫入，且臨時 log 已移除
 - [ ] 「受限區不洩漏」測試已實測會在授權條件被破壞時失敗（Task 12 Step 9）
