@@ -2,13 +2,10 @@ package world.springai.survey.newsletter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -18,7 +15,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 import world.springai.survey.audience.RecipientService;
-import world.springai.survey.audience.UnsubscribeTokenService;
+import world.springai.survey.audience.SubscriptionLinkBuilder;
 import world.springai.survey.mail.EmailLog;
 import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.EmailTemplate;
@@ -39,8 +36,7 @@ public class CampaignService {
     private final EmailLogRepository emailLogRepository;
     private final MarkdownRenderer markdownRenderer;
     private final EmailTemplate emailTemplate;
-    private final UnsubscribeTokenService tokenService;
-    private final String publicBaseUrl;
+    private final SubscriptionLinkBuilder linkBuilder; // 退訂連結組裝的唯一擁有者
 
     public CampaignService(MailSender mailSender,
                            RecipientService recipientService,
@@ -48,16 +44,14 @@ public class CampaignService {
                            EmailLogRepository emailLogRepository,
                            MarkdownRenderer markdownRenderer,
                            EmailTemplate emailTemplate,
-                           UnsubscribeTokenService tokenService,
-                           @Value("${app.public-base-url}") String publicBaseUrl) {
+                           SubscriptionLinkBuilder linkBuilder) {
         this.mailSender = mailSender;
         this.recipientService = recipientService;
         this.campaignRepository = campaignRepository;
         this.emailLogRepository = emailLogRepository;
         this.markdownRenderer = markdownRenderer;
         this.emailTemplate = emailTemplate;
-        this.tokenService = tokenService;
-        this.publicBaseUrl = publicBaseUrl;
+        this.linkBuilder = linkBuilder;
     }
 
     /** 發送結果摘要 */
@@ -66,7 +60,7 @@ public class CampaignService {
     /** 預覽：把 markdown 渲染並套外框（用示意退訂連結） */
     public String preview(String subject, String markdown) {
         String body = markdownRenderer.toHtml(markdown);
-        return emailTemplate.wrap(body, publicBaseUrl + "/api/survey/unsubscribe?email=preview%40example.com&t=preview");
+        return emailTemplate.wrap(body, linkBuilder.previewUnsubscribeLink());
     }
 
     /** 寄一封測試信給指定信箱（立即、單封） */
@@ -351,9 +345,7 @@ public class CampaignService {
 
     /** 把內文 HTML 套上「該收件人」的個人化退訂連結 */
     private String renderFor(String bodyHtml, String email) {
-        String link = publicBaseUrl + "/api/survey/unsubscribe?email="
-            + URLEncoder.encode(email, StandardCharsets.UTF_8) + "&t=" + tokenService.sign(email);
-        return emailTemplate.wrap(bodyHtml, link);
+        return emailTemplate.wrap(bodyHtml, linkBuilder.unsubscribeLink(email));
     }
 
     /** 依是否排程與成敗決定最終狀態字串 */

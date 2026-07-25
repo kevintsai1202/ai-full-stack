@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 import world.springai.survey.audience.RecipientService;
-import world.springai.survey.audience.UnsubscribeTokenService;
+import world.springai.survey.audience.SubscriptionLinkBuilder;
 import world.springai.survey.mail.EmailLog;
 import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.EmailTemplate;
@@ -37,11 +37,13 @@ class CampaignServiceTest {
     private final EmailLogRepository emailLogRepository = mock(EmailLogRepository.class);
     private final MarkdownRenderer markdownRenderer = new MarkdownRenderer();
     private final EmailTemplate emailTemplate = new EmailTemplate();
-    private final UnsubscribeTokenService tokenService = new UnsubscribeTokenService("secret");
+    // 連結格式已由 SubscriptionLinkBuilderTest 鎖住，這裡只 stub 固定回傳值以驗證
+    // 「每封信帶上該收件人的個人化連結」，不重複斷言連結字串本身的正確性
+    private final SubscriptionLinkBuilder linkBuilder = mock(SubscriptionLinkBuilder.class);
 
     private final CampaignService svc = new CampaignService(
         mailSender, recipientService, campaignRepository, emailLogRepository,
-        markdownRenderer, emailTemplate, tokenService, "https://api.example.com");
+        markdownRenderer, emailTemplate, linkBuilder);
 
     /** 立即發送：呼叫 sendBatch，每封 html 含該收件人的退訂連結，campaign 記為 sent、accepted=2 */
     @Test
@@ -49,6 +51,10 @@ class CampaignServiceTest {
         when(recipientService.recipients(null, null)).thenReturn(List.of("a@x.com", "b@x.com"));
         when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
         when(mailSender.sendBatch(anyList())).thenReturn("job-1");
+        // stub 固定值，驗證「每封信帶上該收件人專屬的連結」；連結格式本身由
+        // SubscriptionLinkBuilderTest 負責，這裡不重複斷言
+        when(linkBuilder.unsubscribeLink("a@x.com")).thenReturn("https://x/unsubscribe?u=a");
+        when(linkBuilder.unsubscribeLink("b@x.com")).thenReturn("https://x/unsubscribe?u=b");
 
         CampaignService.SendResult r = svc.send("主旨", "# 內文", null, null, "now", null);
 
@@ -61,8 +67,8 @@ class CampaignServiceTest {
         verify(mailSender).sendBatch(captor.capture());
         List<MailSender.Email> sent = captor.getValue();
         assertEquals(2, sent.size());
-        assertTrue(sent.get(0).html().contains("email=a%40x.com"), sent.get(0).html());
-        assertTrue(sent.get(1).html().contains("email=b%40x.com"), sent.get(1).html());
+        assertTrue(sent.get(0).html().contains("https://x/unsubscribe?u=a"), sent.get(0).html());
+        assertTrue(sent.get(1).html().contains("https://x/unsubscribe?u=b"), sent.get(1).html());
         assertTrue(sent.get(0).html().contains("內文"));
         verify(mailSender, never()).schedule(any(), any());
     }

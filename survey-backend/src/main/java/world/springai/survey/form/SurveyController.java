@@ -23,7 +23,6 @@ import java.util.stream.Stream;
 import world.springai.survey.AdminKeyGuard;
 import world.springai.survey.audience.SurveyResponse;
 import world.springai.survey.audience.SurveyResponseRepository;
-import world.springai.survey.audience.UnsubscribeTokenService;
 import world.springai.survey.audience.WelcomeMailService;
 
 /** 問卷收集與管理查詢端點 */
@@ -41,19 +40,16 @@ public class SurveyController {
 
     private final SurveyResponseRepository repository;
     private final ObjectMapper objectMapper;
-    private final UnsubscribeTokenService tokenService;     // 退訂 token 驗證
     private final WelcomeMailService welcomeMailService;    // 問卷送出後寄歡迎信
     private final AdminKeyGuard adminKeyGuard;              // 集中管理 X-Admin-Key 驗證
 
-    /** 注入資料層、JSON 序列化器、退訂 token 服務、歡迎信服務與管理金鑰守衛 */
+    /** 注入資料層、JSON 序列化器、歡迎信服務與管理金鑰守衛 */
     public SurveyController(SurveyResponseRepository repository,
                             ObjectMapper objectMapper,
-                            UnsubscribeTokenService tokenService,
                             WelcomeMailService welcomeMailService,
                             AdminKeyGuard adminKeyGuard) {
         this.repository = repository;
         this.objectMapper = objectMapper;
-        this.tokenService = tokenService;
         this.welcomeMailService = welcomeMailService;
         this.adminKeyGuard = adminKeyGuard;
     }
@@ -139,96 +135,6 @@ public class SurveyController {
         Stream<String> role = all.stream().map(SurveyResponse::getRole);
         return new SurveyStats(all.size(), buckets(interest, 99), buckets(status, 99), buckets(role, 6));
     }
-
-    /**
-     * 公開退訂端點：使用者從行銷信件點擊退訂連結（GET）後以瀏覽器開啟，故回 HTML。
-     * 連結形如 /api/survey/unsubscribe?email=<email>&t=<HMAC token>。
-     * 設計重點：
-     *  1. 防偽——僅當 t 為該 email 的合法 HMAC 簽章才執行退訂。
-     *  2. 冪等——已退訂者再點、或名單查無此 email，都回相同成功頁，不報錯。
-     *  3. 不洩漏名單——不論結果（含 token 不符）一律回相同訊息與 200。
-     *  4. 回應頁為固定字串、不回顯使用者輸入，避免 XSS。
-     */
-    @GetMapping(value = "/api/survey/unsubscribe", produces = "text/html; charset=UTF-8")
-    public ResponseEntity<String> unsubscribe(@RequestParam(value = "email", required = false) String email,
-                                              @RequestParam(value = "t", required = false) String token) {
-        // 僅在 email 有值且 token 通過驗證時才退訂；其餘情況靜默略過但仍回同一頁
-        if (StringUtils.hasText(email) && tokenService.verify(email, token)) {
-            repository.unsubscribeByEmail(email.trim());
-        }
-        return ResponseEntity.ok()
-            .contentType(MediaType.parseMediaType("text/html; charset=UTF-8"))
-            .body(UNSUBSCRIBE_HTML);
-    }
-
-    /**
-     * 公開確認訂閱端點：使用者從邀請信點擊確認連結（GET）後以瀏覽器開啟，故回 HTML。
-     * 連結形如 /api/survey/confirm?email=<email>&t=<HMAC token>。
-     * 設計與退訂端點一致：防偽（HMAC）、冪等、不洩漏名單、固定回應頁。
-     */
-    @GetMapping(value = "/api/survey/confirm", produces = "text/html; charset=UTF-8")
-    public ResponseEntity<String> confirm(@RequestParam(value = "email", required = false) String email,
-                                          @RequestParam(value = "t", required = false) String token) {
-        // 僅在 email 有值且 token 通過驗證時才轉為已同意；其餘情況靜默略過但仍回同一頁
-        if (StringUtils.hasText(email) && tokenService.verify(email, token)) {
-            repository.confirmByEmail(email.trim());
-        }
-        return ResponseEntity.ok()
-            .contentType(MediaType.parseMediaType("text/html; charset=UTF-8"))
-            .body(CONFIRM_HTML);
-    }
-
-    /** 確認訂閱成功頁（固定內容，不含使用者輸入）；中文提示，置中簡潔樣式 */
-    private static final String CONFIRM_HTML = """
-            <!doctype html>
-            <html lang="zh-Hant">
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1">
-              <title>訂閱確認成功</title>
-              <style>
-                body { font-family: system-ui, "Microsoft JhengHei", sans-serif; background: #f7f8fa;
-                       display: flex; min-height: 100vh; margin: 0; align-items: center; justify-content: center; }
-                .card { background: #fff; padding: 2.5rem 2rem; border-radius: 12px; max-width: 420px;
-                        box-shadow: 0 8px 30px rgba(0,0,0,.08); text-align: center; }
-                h1 { font-size: 1.4rem; margin: 0 0 .75rem; color: #1a1a2e; }
-                p { color: #555; line-height: 1.6; margin: 0; }
-              </style>
-            </head>
-            <body>
-              <div class="card">
-                <h1>✅ 訂閱確認成功</h1>
-                <p>謝謝你！之後的深入技術內容、新課程與學員專屬消息會寄到你的信箱。<br>若改變心意，每封信都有一鍵退訂。</p>
-              </div>
-            </body>
-            </html>
-            """;
-
-    /** 退訂成功頁（固定內容，不含使用者輸入）；中文提示，置中簡潔樣式 */
-    private static final String UNSUBSCRIBE_HTML = """
-            <!doctype html>
-            <html lang="zh-Hant">
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1">
-              <title>已取消訂閱</title>
-              <style>
-                body { font-family: system-ui, "Microsoft JhengHei", sans-serif; background: #f7f8fa;
-                       display: flex; min-height: 100vh; margin: 0; align-items: center; justify-content: center; }
-                .card { background: #fff; padding: 2.5rem 2rem; border-radius: 12px; max-width: 420px;
-                        box-shadow: 0 8px 30px rgba(0,0,0,.08); text-align: center; }
-                h1 { font-size: 1.4rem; margin: 0 0 .75rem; color: #1a1a2e; }
-                p { color: #555; line-height: 1.6; margin: 0; }
-              </style>
-            </head>
-            <body>
-              <div class="card">
-                <h1>您已成功取消訂閱</h1>
-                <p>我們不會再寄送行銷訊息給您。<br>若這是誤點，重新填寫問卷即可再次訂閱。</p>
-              </div>
-            </body>
-            </html>
-            """;
 
     /**
      * 取出某一題的答案值；底線開頭的系統鍵一律視為不存在。

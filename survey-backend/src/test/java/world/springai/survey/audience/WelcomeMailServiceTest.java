@@ -19,10 +19,12 @@ class WelcomeMailServiceTest {
 
     private final MailSender mailSender = mock(MailSender.class);
     private final EmailLogRepository emailLogRepository = mock(EmailLogRepository.class);
-    private final UnsubscribeTokenService tokenService = new UnsubscribeTokenService("secret");
     private final EmailTemplate emailTemplate = new EmailTemplate(); // 使用真實模板，驗證外框套用正確
+    // 連結格式已由 SubscriptionLinkBuilderTest 鎖住，這裡只 stub 固定回傳值，
+    // 不重複斷言連結字串正確性
+    private final SubscriptionLinkBuilder linkBuilder = mock(SubscriptionLinkBuilder.class);
     private final WelcomeMailService svc =
-        new WelcomeMailService(mailSender, tokenService, emailLogRepository, emailTemplate, "https://api.example.com");
+        new WelcomeMailService(mailSender, emailLogRepository, emailTemplate, linkBuilder);
 
     /** 寄送成功應寫入 status=sent 並帶 provider id */
     @Test

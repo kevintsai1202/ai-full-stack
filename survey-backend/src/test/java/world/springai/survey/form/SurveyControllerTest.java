@@ -16,7 +16,6 @@ import java.time.OffsetDateTime;
 import world.springai.survey.AdminKeyGuard;
 import world.springai.survey.audience.SurveyResponse;
 import world.springai.survey.audience.SurveyResponseRepository;
-import world.springai.survey.audience.UnsubscribeTokenService;
 import world.springai.survey.audience.WelcomeMailService;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -33,9 +32,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** SurveyController 行為測試：驗證、蜜罐、admin 金鑰、即時統計、退訂 token、歡迎信觸發 */
+/** SurveyController 行為測試：驗證、蜜罐、admin 金鑰、即時統計、歡迎信觸發（confirm/unsubscribe 已搬至 SubscriptionControllerTest） */
 @WebMvcTest(SurveyController.class)
-@Import({UnsubscribeTokenService.class, AdminKeyGuard.class}) // 用真實 token 服務以便計算合法 token，並注入金鑰守衛
+@Import(AdminKeyGuard.class) // 注入金鑰守衛
 @TestPropertySource(properties = {
     "app.admin-api-key=test-key",
     "app.cors-allowed-origins=http://localhost",
@@ -43,7 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 })
 class SurveyControllerTest {
     @Autowired MockMvc mvc;
-    @Autowired UnsubscribeTokenService tokenService;
     @Autowired SurveyController controller; // 供直接呼叫 stats() 的測試使用（@WebMvcTest 下 controller 本身是真實 bean）
     @MockBean SurveyResponseRepository repository;
     @MockBean WelcomeMailService welcomeMailService;
@@ -165,59 +163,6 @@ class SurveyControllerTest {
         mvc.perform(get("/api/survey/stats"))
            .andExpect(status().isOk())
            .andExpect(jsonPath("$.total").value(1));
-    }
-
-    /** 退訂：合法 token 應更新該 email 並回 200 HTML */
-    @Test
-    void unsubscribeWithValidTokenUpdates() throws Exception {
-        String email = "user@example.com";
-        String token = tokenService.sign(email);
-        mvc.perform(get("/api/survey/unsubscribe").param("email", email).param("t", token))
-           .andExpect(status().isOk());
-        verify(repository).unsubscribeByEmail(email);
-    }
-
-    /** 退訂：token 錯誤不更新，但仍回 200 同頁（不洩漏） */
-    @Test
-    void unsubscribeWithBadTokenDoesNotUpdate() throws Exception {
-        mvc.perform(get("/api/survey/unsubscribe").param("email", "user@example.com").param("t", "bad"))
-           .andExpect(status().isOk());
-        verify(repository, never()).unsubscribeByEmail(any());
-    }
-
-    /** 退訂：缺 token 不更新，仍回 200 */
-    @Test
-    void unsubscribeWithoutTokenDoesNotUpdate() throws Exception {
-        mvc.perform(get("/api/survey/unsubscribe").param("email", "user@example.com"))
-           .andExpect(status().isOk());
-        verify(repository, never()).unsubscribeByEmail(any());
-    }
-
-    /** 確認訂閱：合法 token 應把該 email 轉為已同意並回 200 HTML */
-    @Test
-    void confirmWithValidTokenUpdatesConsent() throws Exception {
-        String email = "student@example.com";
-        String token = tokenService.sign(email);
-        mvc.perform(get("/api/survey/confirm").param("email", email).param("t", token))
-           .andExpect(status().isOk())
-           .andExpect(content().contentTypeCompatibleWith("text/html"));
-        verify(repository).confirmByEmail(email);
-    }
-
-    /** 確認訂閱：token 錯誤不更新，但仍回 200 同頁（不洩漏名單） */
-    @Test
-    void confirmWithBadTokenDoesNotUpdate() throws Exception {
-        mvc.perform(get("/api/survey/confirm").param("email", "student@example.com").param("t", "bad"))
-           .andExpect(status().isOk());
-        verify(repository, never()).confirmByEmail(any());
-    }
-
-    /** 確認訂閱：缺 token 不更新，仍回 200 */
-    @Test
-    void confirmWithoutTokenDoesNotUpdate() throws Exception {
-        mvc.perform(get("/api/survey/confirm").param("email", "student@example.com"))
-           .andExpect(status().isOk());
-        verify(repository, never()).confirmByEmail(any());
     }
 
     /** 問卷送出的資料來源應標記為 survey_form */

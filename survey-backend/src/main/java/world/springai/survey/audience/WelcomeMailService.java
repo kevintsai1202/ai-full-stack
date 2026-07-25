@@ -2,11 +2,7 @@ package world.springai.survey.audience;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
 import world.springai.survey.mail.EmailLog;
 import world.springai.survey.mail.EmailLogRepository;
@@ -23,28 +19,25 @@ public class WelcomeMailService {
     private static final String SUBJECT = "歡迎加入｜AI 賦能全端開發課程資訊";
 
     private final MailSender mailSender;
-    private final UnsubscribeTokenService tokenService;
     private final EmailLogRepository emailLogRepository;
     private final EmailTemplate emailTemplate; // 共用信件外框模板
-    private final String publicBaseUrl; // 組退訂連結用的對外網址
+    private final SubscriptionLinkBuilder linkBuilder; // 退訂連結組裝的唯一擁有者
 
-    /** 注入寄信、token 服務、寄送記錄、信件模板與對外網址 */
+    /** 注入寄信、寄送記錄、信件模板與連結組裝器 */
     public WelcomeMailService(MailSender mailSender,
-                              UnsubscribeTokenService tokenService,
                               EmailLogRepository emailLogRepository,
                               EmailTemplate emailTemplate,
-                              @Value("${app.public-base-url}") String publicBaseUrl) {
+                              SubscriptionLinkBuilder linkBuilder) {
         this.mailSender = mailSender;
-        this.tokenService = tokenService;
         this.emailLogRepository = emailLogRepository;
         this.emailTemplate = emailTemplate;
-        this.publicBaseUrl = publicBaseUrl;
+        this.linkBuilder = linkBuilder;
     }
 
     /** 寄一封歡迎信給填寫者；成功記 sent、失敗記 failed，皆不向外拋例外 */
     public void sendWelcome(String email) {
         try {
-            String link = buildUnsubscribeLink(email);
+            String link = linkBuilder.unsubscribeLink(email);
             String html = buildHtml(link);
             String id = mailSender.send(email, SUBJECT, html);
             saveLog(email, id, "sent", null);
@@ -61,13 +54,6 @@ public class WelcomeMailService {
         } catch (Exception e) {
             log.warn("寫入 email_log 失敗 to={}：{}", email, e.getMessage());
         }
-    }
-
-    /** 組退訂連結：?email=<urlencoded>&t=<HMAC token> */
-    private String buildUnsubscribeLink(String email) {
-        String encoded = URLEncoder.encode(email, StandardCharsets.UTF_8);
-        String token = tokenService.sign(email);
-        return publicBaseUrl + "/api/survey/unsubscribe?email=" + encoded + "&t=" + token;
     }
 
     /** 組歡迎信 HTML：歡迎內文交給共用模板套外框與退訂頁腳 */

@@ -2,16 +2,13 @@ package world.springai.survey.newsletter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import world.springai.survey.audience.SubscriptionLinkBuilder;
 import world.springai.survey.audience.SurveyResponse;
 import world.springai.survey.audience.SurveyResponseRepository;
-import world.springai.survey.audience.UnsubscribeTokenService;
 import world.springai.survey.mail.EmailLog;
 import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.EmailTemplate;
@@ -40,22 +37,19 @@ public class InviteService {
     private final MailSender mailSender;
     private final EmailLogRepository emailLogRepository;
     private final MailTemplateRepository templateRepository; // 邀請信範本（後台可編輯）
-    private final UnsubscribeTokenService tokenService; // 確認連結重用同一 HMAC 簽章
-    private final String publicBaseUrl;                 // 組確認連結用的對外網址
+    private final SubscriptionLinkBuilder linkBuilder; // 確認連結組裝的唯一擁有者
 
-    /** 注入資料層、寄信、寄送記錄、範本、token 服務與對外網址 */
+    /** 注入資料層、寄信、寄送記錄、範本與連結組裝器 */
     public InviteService(SurveyResponseRepository repository,
                          MailSender mailSender,
                          EmailLogRepository emailLogRepository,
                          MailTemplateRepository templateRepository,
-                         UnsubscribeTokenService tokenService,
-                         @Value("${app.public-base-url}") String publicBaseUrl) {
+                         SubscriptionLinkBuilder linkBuilder) {
         this.repository = repository;
         this.mailSender = mailSender;
         this.emailLogRepository = emailLogRepository;
         this.templateRepository = templateRepository;
-        this.tokenService = tokenService;
-        this.publicBaseUrl = publicBaseUrl;
+        this.linkBuilder = linkBuilder;
     }
 
     /**
@@ -91,7 +85,7 @@ public class InviteService {
         int failed = 0;
         for (SurveyResponse r : targets) {
             try {
-                String html = template.getBodyHtml().replace(CONFIRM_LINK_PLACEHOLDER, buildConfirmLink(r.getEmail()));
+                String html = template.getBodyHtml().replace(CONFIRM_LINK_PLACEHOLDER, linkBuilder.confirmLink(r.getEmail()));
                 String id = mailSender.send(r.getEmail(), template.getSubject(), html);
                 emailLogRepository.save(new EmailLog(r.getEmail(), template.getSubject(), "invite", id, "sent", null));
                 accepted++;
@@ -168,7 +162,7 @@ public class InviteService {
         int failed = 0;
         for (SurveyResponse r : targets) {
             try {
-                String html = template.getBodyHtml().replace(CONFIRM_LINK_PLACEHOLDER, buildConfirmLink(r.getEmail()));
+                String html = template.getBodyHtml().replace(CONFIRM_LINK_PLACEHOLDER, linkBuilder.confirmLink(r.getEmail()));
                 String id = mailSender.send(r.getEmail(), template.getSubject(), html);
                 emailLogRepository.save(new EmailLog(r.getEmail(), template.getSubject(), REMINDER_TYPE, id, "sent", null));
                 accepted++;
@@ -244,12 +238,6 @@ public class InviteService {
             .count();
         long confirmed = repository.countBySourceAndConsentTrueAndUnsubscribedFalse(source);
         return new InviteOverview(invited.size(), remindedCount, confirmed, pending, logs);
-    }
-
-    /** 組確認連結：/api/survey/confirm?email=<urlencoded>&t=<HMAC token> */
-    private String buildConfirmLink(String email) {
-        return publicBaseUrl + "/api/survey/confirm?email="
-            + URLEncoder.encode(email, StandardCharsets.UTF_8) + "&t=" + tokenService.sign(email);
     }
 
     /**

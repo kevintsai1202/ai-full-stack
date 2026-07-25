@@ -6,9 +6,9 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 
+import world.springai.survey.audience.SubscriptionLinkBuilder;
 import world.springai.survey.audience.SurveyResponse;
 import world.springai.survey.audience.SurveyResponseRepository;
-import world.springai.survey.audience.UnsubscribeTokenService;
 import world.springai.survey.mail.EmailLog;
 import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.MailSender;
@@ -32,7 +32,9 @@ class InviteServiceTest {
     private MailSender mailSender;
     private EmailLogRepository emailLogRepository;
     private MailTemplateRepository templateRepository;
-    private UnsubscribeTokenService tokenService;
+    // 連結格式已由 SubscriptionLinkBuilderTest 鎖住，這裡只 stub 固定回傳值，
+    // 依 email 回傳可辨識的假連結，驗證「每人拿到專屬確認連結」，不重複斷言連結格式本身
+    private SubscriptionLinkBuilder linkBuilder;
     private InviteService service;
 
     @BeforeEach
@@ -43,9 +45,11 @@ class InviteServiceTest {
         templateRepository = mock(MailTemplateRepository.class);
         // 預設資料庫無範本 → 走內建預設內文
         when(templateRepository.findByTemplateKey("invite")).thenReturn(java.util.Optional.empty());
-        tokenService = new UnsubscribeTokenService("test-secret");
+        linkBuilder = mock(SubscriptionLinkBuilder.class);
+        when(linkBuilder.confirmLink(anyString()))
+            .thenAnswer(i -> "https://survey.example.com/api/survey/confirm?email=" + i.getArgument(0));
         service = new InviteService(repository, mailSender, emailLogRepository,
-            templateRepository, tokenService, "https://survey.example.com");
+            templateRepository, linkBuilder);
     }
 
     /** 建立一筆待確認名單資料 */
@@ -69,10 +73,9 @@ class InviteServiceTest {
         assertEquals(2, result.recipientCount());
         assertEquals(2, result.accepted());
         assertEquals(0, result.failed());
-        // 驗證 a@example.com 的信含其專屬確認連結（HMAC token）
-        String expectedToken = tokenService.sign("a@example.com");
+        // 驗證 a@example.com 的信含其專屬確認連結（由 SubscriptionLinkBuilder stub 組出）
         verify(mailSender).send(eq("a@example.com"), anyString(),
-            contains("/api/survey/confirm?email=a%40example.com&t=" + expectedToken));
+            contains("/api/survey/confirm?email=a@example.com"));
     }
 
     /** 已寄過邀請（email_log type=invite status=sent）的人應跳過，不重複寄 */
@@ -173,7 +176,7 @@ class InviteServiceTest {
         ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
         verify(mailSender).send(eq("a@example.com"), eq("自訂主旨"), html.capture());
         assertTrue(html.getValue().contains("自訂內文"), "應使用資料庫範本內文");
-        assertTrue(html.getValue().contains(tokenService.sign("a@example.com")), "佔位符應替換為個人化確認連結");
+        assertTrue(html.getValue().contains("email=a@example.com"), "佔位符應替換為個人化確認連結");
         assertTrue(!html.getValue().contains("{{confirmLink}}"), "佔位符不得殘留");
     }
 
