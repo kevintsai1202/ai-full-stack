@@ -259,7 +259,7 @@ class ReaderPageControllerTest {
     /** archive 只列已發布文章 */
     @Test
     void archiveListsPublishedArticles() throws Exception {
-        when(campaignRepository.findByPublishedAtIsNotNullOrderByPublishedAtDesc())
+        when(campaignRepository.findBySlugIsNotNullAndPublishedAtIsNotNullOrderByPublishedAtDesc())
             .thenReturn(List.of(gatedArticle(Campaign.TIER_BASIC, 0)));
         when(readerContext.resolve(any())).thenReturn(Optional.empty());
 
@@ -274,7 +274,7 @@ class ReaderPageControllerTest {
     /** archive 的列表也不得洩漏任何文章內容（連摘要都取自免費區） */
     @Test
     void archiveNeverLeaksGatedContent() throws Exception {
-        when(campaignRepository.findByPublishedAtIsNotNullOrderByPublishedAtDesc())
+        when(campaignRepository.findBySlugIsNotNullAndPublishedAtIsNotNullOrderByPublishedAtDesc())
             .thenReturn(List.of(gatedArticle(Campaign.TIER_PREMIUM, 10)));
         when(readerContext.resolve(any())).thenReturn(Optional.empty());
 
@@ -287,7 +287,7 @@ class ReaderPageControllerTest {
     /** 沒有已發布文章時顯示空狀態，不是錯誤頁 */
     @Test
     void emptyArchiveShowsEmptyState() throws Exception {
-        when(campaignRepository.findByPublishedAtIsNotNullOrderByPublishedAtDesc()).thenReturn(List.of());
+        when(campaignRepository.findBySlugIsNotNullAndPublishedAtIsNotNullOrderByPublishedAtDesc()).thenReturn(List.of());
         when(readerContext.resolve(any())).thenReturn(Optional.empty());
 
         mvc.perform(get("/r/archive")).andExpect(status().isOk());
