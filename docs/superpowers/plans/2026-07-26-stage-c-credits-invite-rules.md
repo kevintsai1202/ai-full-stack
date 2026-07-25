@@ -1171,6 +1171,7 @@ git diff HEAD --stat -- survey-backend/   # 必須無輸出
 - Modify: `survey-backend/src/main/java/world/springai/survey/reader/ReaderAccountService.java`
 - Modify: `survey-backend/src/main/java/world/springai/survey/audience/SurveyResponseRepository.java`
 - Test: `survey-backend/src/test/java/world/springai/survey/reader/ReferralServiceTest.java`
+- Test: `survey-backend/src/test/java/world/springai/survey/reader/ReferralRewardListenerTest.java`（會啟動 context，驗證監聽器真的被觸發）
 - Test: `survey-backend/src/test/java/world/springai/survey/reader/ReaderAccountServiceTest.java`（既有）
 
 **Interfaces:**
@@ -1631,11 +1632,10 @@ package world.springai.survey.reader;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 import world.springai.survey.audience.SubscriptionConfirmedEvent;
 
 /**
@@ -1646,18 +1646,31 @@ import world.springai.survey.audience.SubscriptionConfirmedEvent;
  * 保持 {@code reader → audience}（本類 import audience 的事件型別），
  * 拆解線不被破壞。</p>
  *
- * <p><b>為什麼用 AFTER_COMMIT + REQUIRES_NEW，而非 spec §5.4 寫的「同一交易內」</b>：
- * 確認訂閱是<b>不可重建的同意紀錄</b>——讀者親手點了信裡的連結，這件事一旦
- * 沒記下來，就只能重新徵求同意。推薦獎勵則是可補救的（後台能手動加點）。
- * 若兩者同交易，發獎時任何錯誤都會連帶回滾確認訂閱，等於用「可補救的失敗」
- * 換掉「不可補救的資產」，方向是錯的。</p>
+ * <p><b>為什麼是普通的 {@code @EventListener} 而不是
+ * {@code @TransactionalEventListener(AFTER_COMMIT)}</b>：因為
+ * <b>發布端沒有交易</b>。{@code SubscriptionController.confirm} 沒有
+ * {@code @Transactional}，它呼叫的 {@code confirmByEmail} 與
+ * {@code touchEngagement} 是 repository 上各自帶 {@code @Transactional} 的方法，
+ * 各自立即提交。所以 {@code publishEvent} 被呼叫時<b>沒有進行中的交易</b>，
+ * 而 {@code @TransactionalEventListener} 在沒有交易時<b>預設完全不觸發</b>
+ * （也不報錯）。用它的結果是：獎勵永遠不會發放，日誌乾淨，測試因為
+ * 監聽器被 mock 掉而全綠——最惡劣的靜默失效。</p>
  *
- * <p>此處也不能只是「在監聽器內 try/catch 但仍同交易」：一旦內層寫入失敗，
- * Spring 會把交易標記為 rollback-only，外層即使吞掉例外，commit 仍會以
- * {@code UnexpectedRollbackException} 收場。要真正隔離就必須分開交易。</p>
+ * <p><b>不需要「同一交易」也能保住優先順序</b>：確認訂閱在 publish 之前
+ * 就已經提交（repository 方法自帶交易），所以「確認成功但發獎失敗」時，
+ * 同意紀錄已經落地。這正是我們要的方向——確認訂閱是<b>不可重建的同意紀錄</b>
+ * （讀者親手點了信裡的連結，沒記下來只能重新徵求同意），而推薦獎勵是
+ * 可補救的（後台能手動加點）。spec §5.4 原本寫「同一交易內」，
+ * 那會讓可補救的失敗回滾掉不可補救的資產，方向是錯的。</p>
  *
- * <p>代價是「確認成功但發獎失敗」會靜默損失一次獎勵，因此失敗以 ERROR 記錄，
- * 並在 spec §5.4 記載此偏離與補救方式。</p>
+ * <p>{@code REQUIRES_NEW} 讓獎勵的三個寫入（加餘額、寫帳本）成為一個
+ * 獨立的原子單位——不是為了與確認訂閱隔離（本來就已經隔離），而是為了
+ * 讓獎勵本身不會只寫一半。</p>
+ *
+ * <p>例外在此與發布端<b>雙重</b>吞掉：本類吞是為了記錄可讀的 ERROR 供人工補點；
+ * {@code SubscriptionController} 也吞是因為 {@code publishEvent} 同步且例外會
+ * 往上拋，若變成 500，「不論結果一律回相同的 200」這條性質就破了，端點會變成
+ * 「這個 email 有沒有推薦關係」的探測器。防護不依賴任一端記得。</p>
  */
 @Component
 public class ReferralRewardListener {
@@ -1672,12 +1685,12 @@ public class ReferralRewardListener {
     }
 
     /**
-     * 在確認訂閱的交易提交後，於獨立交易中發放獎勵。
+     * 發放邀請獎勵。同步執行，但在自己的交易內。
      *
      * <p>例外一律在此吞掉並記為 ERROR：此時確認訂閱已經提交，讓例外往上拋
-     * 只會出現在無人查看的事件發布堆疊裡，而讀者早已看到「訂閱確認成功」的頁面。</p>
+     * 會讓公開端點回 500 而破壞「不洩漏名單」的性質。</p>
      */
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @EventListener
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onSubscriptionConfirmed(SubscriptionConfirmedEvent event) {
         try {
@@ -1694,10 +1707,101 @@ public class ReferralRewardListener {
 }
 ```
 
+- [ ] **Step 5b: 寫「監聽器真的會被觸發」的測試**
+
+新建 `survey-backend/src/test/java/world/springai/survey/reader/ReferralRewardListenerTest.java`。
+
+**這個測試不可省略。** 本計畫第一版用了 `@TransactionalEventListener(AFTER_COMMIT)`，那在沒有交易的發布端**完全不會觸發也不報錯**——若監聽器只在單元測試裡被直接呼叫，這種失效永遠不會被發現：獎勵不發、日誌乾淨、測試全綠。要抓到它，測試必須**真的透過 Spring 的事件機制發布事件**，而不是直接呼叫監聽器方法。
+
+```java
+package world.springai.survey.reader;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.ApplicationEventPublisher;
+import world.springai.survey.audience.SubscriptionConfirmedEvent;
+
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * 驗證 ReferralRewardListener 真的會被 Spring 的事件機制觸發。
+ *
+ * <p><b>為什麼需要一個會啟動 context 的測試</b>：本計畫第一版把監聽器寫成
+ * {@code @TransactionalEventListener(AFTER_COMMIT)}，而發布端
+ * {@code SubscriptionController.confirm} 沒有交易——那個註解在無交易時
+ * <b>預設完全不觸發，也不報錯</b>。若測試只直接呼叫
+ * {@code listener.onSubscriptionConfirmed(event)}，這種失效永遠不會被發現：
+ * 獎勵不發、日誌乾淨、測試全綠。唯一能抓到它的方式，就是真的用
+ * {@link ApplicationEventPublisher} 發布事件，讓 Spring 決定要不要呼叫。</p>
+ */
+@SpringBootTest(properties = {
+    "spring.flyway.enabled=false",
+    "spring.jpa.hibernate.ddl-auto=none",
+    "spring.datasource.url=jdbc:postgresql://127.0.0.1:5433/postgres",
+    "spring.datasource.username=postgres",
+    "spring.datasource.password=password"
+})
+class ReferralRewardListenerTest {
+
+    @Autowired ApplicationEventPublisher publisher;
+
+    /** 把真正的發放邏輯換成 mock：本測試只關心「監聽器有沒有被呼叫」 */
+    @MockBean ReferralService referralService;
+
+    /**
+     * 發布事件後，監聽器必須真的被呼叫。
+     *
+     * <p>若 {@code @EventListener} 被換回
+     * {@code @TransactionalEventListener}，這個測試會失敗（zero interactions）
+     * ——那正是它存在的理由。</p>
+     */
+    @Test
+    void listenerIsActuallyInvokedByPublishedEvent() {
+        when(referralService.rewardFor(anyString()))
+            .thenReturn(ReferralService.RewardOutcome.NO_REFERRER);
+
+        publisher.publishEvent(new SubscriptionConfirmedEvent("invitee@example.com"));
+
+        verify(referralService).rewardFor("invitee@example.com");
+    }
+
+    /**
+     * 發放邏輯拋例外時不可讓例外傳出去。
+     *
+     * <p>發布端是公開端點且必須「不論結果一律回相同的 200」。若例外往上拋，
+     * 有推薦關係的 email 回 500、其他人回 200，端點就變成關係探測器。</p>
+     */
+    @Test
+    void listenerSwallowsExceptionsSoPublisherIsUnaffected() {
+        when(referralService.rewardFor(anyString()))
+            .thenThrow(new RuntimeException("模擬帳本寫入失敗"));
+
+        // 不應拋出：監聽器內部必須自行吞掉
+        publisher.publishEvent(new SubscriptionConfirmedEvent("invitee@example.com"));
+
+        verify(referralService).rewardFor("invitee@example.com");
+    }
+}
+```
+
+> **環境前提**：`@SpringBootTest` 會建立完整 context，需要一個能連上的 PostgreSQL。上方 properties 指向本機專用測試容器 `survey-test-db`（port 5433）的 `postgres` 資料庫，並關閉 Flyway 與 `ddl-auto`——本測試不需要任何表，只需要 context 能起來。若容器未啟動，測試會失敗（這是刻意的，不要改成可跳過）：`docker start survey-test-db`
+>
+> **驗收前先破壞一次**：把 `@EventListener` 換成
+> `@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)`，確認
+> `listenerIsActuallyInvokedByPublishedEvent` 變紅（`Wanted but not invoked`）。
+> 若換了仍綠，這個測試沒有守住任何東西。
+
 - [ ] **Step 6: 執行測試確認通過**
 
 Run: `cd survey-backend && JAVA_HOME=/d/java/jdk-21 mvn -B test -Dtest=ReferralServiceTest`
 Expected: `Tests run: 12, Failures: 0, Errors: 0, Skipped: 0`
+
+Run: `cd survey-backend && JAVA_HOME=/d/java/jdk-21 mvn -B test -Dtest=ReferralRewardListenerTest`
+Expected: `Tests run: 2, Failures: 0, Errors: 0, Skipped: 0`
 
 - [ ] **Step 7: 首次登入時把 `_ref` 搬到 `reader.referred_by`**
 
@@ -1811,11 +1915,15 @@ Expected: 出現 `Started SurveyApplication`，且**沒有** `PropertyReferenceE
 
 在 spec `### 5.4 邀請歸因與獎勵` 的「實作注意」清單之後，補一段引用區塊，說明：
 
-1. 實作用 `@TransactionalEventListener(AFTER_COMMIT)` + `REQUIRES_NEW`，**不是**「同一交易內」。
-2. 理由：確認訂閱是不可重建的同意紀錄，推薦獎勵可由後台手動加點補救；同交易會讓可補救的失敗回滾掉不可補救的資產。
-3. 也不能只在監聽器內 try/catch 而仍同交易——rollback-only 標記會讓 commit 以 `UnexpectedRollbackException` 收場。
-4. 代價與補救：發獎失敗會靜默損失一次獎勵，以 ERROR 記錄，後台手動加點。
-5. 依賴方向：事件是為了不讓 `audience` 依賴 `reader`（spec §3）。
+1. 實作用普通的 `@EventListener` + `@Transactional(REQUIRES_NEW)`，**不是**「同一交易內」。
+2. **為什麼不能用 `@TransactionalEventListener(AFTER_COMMIT)`**（本計畫第一版寫錯，已修）：發布端 `SubscriptionController.confirm` **沒有交易**——它呼叫的 `confirmByEmail` 與 `touchEngagement` 是 repository 上各自帶 `@Transactional` 的方法，各自立即提交。`publishEvent` 被呼叫時沒有進行中的交易，而 `@TransactionalEventListener` 在無交易時**預設完全不觸發也不報錯**。結果會是「獎勵永遠不發放、日誌乾淨、測試因監聽器被 mock 而全綠」——最惡劣的靜默失效。
+3. 不需要同交易也已保住優先順序：確認訂閱在 publish 之前就已提交，所以發獎失敗時同意紀錄已落地。這正是要的方向——確認訂閱是不可重建的同意紀錄，推薦獎勵可由後台手動加點補救；spec 原本寫的「同一交易」會讓可補救的失敗回滾掉不可補救的資產。
+4. `REQUIRES_NEW` 的作用是讓獎勵的兩個寫入（加餘額、寫帳本）成為一個原子單位，**不是**為了與確認訂閱隔離（本來就已隔離）。
+5. 例外在監聽器與發布端**雙重**吞掉：`publishEvent` 同步且例外會往上拋，若變成 500，「不論結果一律回相同的 200」這條安全性質就破了，公開端點會變成「這個 email 有沒有推薦關係」的探測器。防護不依賴任一端記得。
+6. 代價與補救：發獎失敗會靜默損失一次獎勵，以 ERROR 記錄，後台手動加點。
+7. 依賴方向：事件是為了不讓 `audience` 依賴 `reader`（spec §3）。
+
+> **另一項必須寫進 spec 的發現**：`confirmByEmail` 的 JPQL 是 `update ... set consent = true where lower(email) = lower(:email)`，**沒有排除 `unsubscribed = true`**，而 PostgreSQL 的 UPDATE 即使值沒變也會回報 1 列。所以 `SubscriptionController` 那道 `affected > 0` 的條件，實際上只擋掉「名單裡完全沒有這個 email」——已退訂者、早已確認過的人，每次點舊連結都會發出事件。因此 `ReferralService` 的冪等檢查（`credit_txn` 的 `note` = 被邀者 email）**不是可選的加強，而是唯一真正的防重複發獎機制**，不可簡化。
 
 - [ ] **Step 12: Commit**
 
