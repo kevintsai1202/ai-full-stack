@@ -378,6 +378,29 @@ credits >= campaign.credit_cost           → FULL + 扣點
 - confirm 成功時讀出 `_ref` → 查推薦人 → 發 `REFERRAL` 獎勵；同時把值搬到 `reader.referred_by`（該讀者首次登入建帳戶時）。
 - 冪等：`credit_txn` 以 `(reason='REFERRAL', note=被邀者 email)` 檢查是否已發過，重複 confirm 不重複發獎。
 
+> **已知風險（階段 C 審查發現，待下一個允許 migration 的階段修）**：上述冪等檢查是
+> check-then-act，而 `credit_txn` **沒有** `(reason, note)` 的唯一索引——對比
+> `article_access` 有 `uq_article_access` 作為併發防線，這裡沒有對應設計。
+>
+> 若同一封確認信的連結被**近乎同時**觸發兩次，兩個獨立交易可能都在對方提交前
+> 判讀為「未發過」而各自發獎。這不是理論問題：Outlook Safe Links、Gmail 的圖片
+> 代理等郵件用戶端會對信中連結做背景 GET，與使用者本人的點擊構成真實的併發。
+>
+> **影響範圍**：不會破壞「`reader.credits` 永遠等於 `credit_txn` 總和」這條核心
+> 不變式（兩筆帳本與兩次加點仍然一致、仍可稽核），破壞的是「同一被邀者只發一次獎」
+> 這個業務保證。損失可由後台以負值 `ADMIN_GRANT` 修正。
+>
+> **修法**（需 migration，故階段 C 無法做）：
+> ```sql
+> CREATE UNIQUE INDEX uq_credit_txn_referral_note
+>     ON credit_txn (note) WHERE reason = 'REFERRAL';
+> ```
+> 並在 `save` 撞上唯一鍵時捕捉例外、視為 `ALREADY_REWARDED`。
+> **注意捕捉位置**：`ReferralService.rewardFor` 帶 `@Transactional`，在其內部捕捉
+> 約束違反後正常回傳會因 rollback-only 標記而在 commit 時改拋
+> `UnexpectedRollbackException`（與 `UnlockService` 同一個陷阱，見 §5.2）——
+> 捕捉必須發生在交易邊界之外，或改用 `saveAndFlush` 搭配呼叫端捕捉。
+
 > **實作偏離本節「同一交易內」的描述，原因與取捨如下**：
 >
 > 1. 實作用普通的 `@EventListener` + `@Transactional(REQUIRES_NEW)`，**不是**「同一交易內」發放獎勵。
