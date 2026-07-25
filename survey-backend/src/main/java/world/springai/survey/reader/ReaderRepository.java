@@ -31,4 +31,17 @@ public interface ReaderRepository extends JpaRepository<Reader, Long> {
     @Transactional
     @Query("update Reader r set r.credits = r.credits + :delta where r.id = :id")
     int addCredits(@Param("id") Long id, @Param("delta") int delta);
+
+    /**
+     * 條件式扣點：只有餘額足夠時才扣。回傳受影響筆數，0 表示餘額不足或讀者不存在。
+     *
+     * <p><b>{@code WHERE credits >= :cost} 是併發防線</b>，不是重複檢查。
+     * 呼叫端已經讀過餘額並判斷足夠，但在「讀取」與「扣款」之間，
+     * 同一讀者的另一個請求可能已經扣走點數。把條件放進 SQL 讓資料庫
+     * 以單一原子操作決定成敗——正確性來自受影響筆數，不是來自先前的檢查。</p>
+     */
+    @Modifying
+    @Transactional
+    @Query("update Reader r set r.credits = r.credits - :cost where r.id = :id and r.credits >= :cost")
+    int deductCredits(@Param("id") Long id, @Param("cost") int cost);
 }
