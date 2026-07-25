@@ -77,6 +77,27 @@ class ReaderAccountServiceTest {
         assertEquals(150, reader.getCredits());
     }
 
+    /**
+     * 贈點設為 0（後台關閉贈點）時，帳戶要照建，但不可寫入 delta=0 的帳本紀錄。
+     *
+     * <p>credit_txn 是只增不改的帳本，讀者的「交易明細」頁會逐筆顯示它。
+     * 一筆 delta=0 的紀錄對讀者毫無意義，卻會永久留在明細裡——帳本無法事後
+     * 清理，所以只能在寫入前擋掉。</p>
+     */
+    @Test
+    void zeroSignupGrantCreatesAccountWithoutLedgerEntry() {
+        when(creditPolicy.signupGrant()).thenReturn(0);
+        when(readerRepository.findByEmailIgnoreCase("nogrant@example.com")).thenReturn(Optional.empty());
+
+        Reader reader = service.findOrCreate("nogrant@example.com", NOW);
+
+        // 帳戶仍要建立，只是沒有點數
+        assertEquals("nogrant@example.com", reader.getEmail());
+        assertEquals(0, reader.getCredits());
+        assertNotNull(reader.getReferralCode(), "邀請碼與贈點無關，仍必須產生");
+        verify(creditTxnRepository, never()).save(any(CreditTxn.class));
+    }
+
     /** 既有帳戶再次登入：不得重複發贈點 */
     @Test
     void existingAccountDoesNotReceiveGrantAgain() {
