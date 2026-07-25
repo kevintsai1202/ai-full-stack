@@ -90,6 +90,31 @@ reader ──▶ audience, mail, newsletter(唯讀 campaign)
 
 ## 4. 資料模型
 
+### 4.0 硬約束：既有資料不可清除
+
+現有的訂閱名單與匯入名單（含 exam 匯入的 254 筆）是**不可重建的資產**——訂閱者的同意是他們親自點擊確認信給出的，一旦清除無法補回，只能重新徵求同意。本 spec 的所有變更受以下約束：
+
+**禁止事項**（適用於 migration、實作與本機測試）：
+
+- 任何 `DROP TABLE` / `DROP COLUMN` / `TRUNCATE`。
+- 任何無 WHERE 條件的 `DELETE`。
+- 任何會改寫既有列的 `UPDATE`，除 §4.2 的 `last_engaged_at` backfill（僅寫入原本為 NULL 的新欄位）。
+- 對正式 DB 執行 `flyway clean`（應以 `spring.flyway.clean-disabled=true` 強制關閉）。
+- 本機開發與測試一律使用獨立資料庫，**不得**連線正式 DB 跑測試。
+
+**已驗證的安全事實**（階段 A 的 package 分層不影響資料）：
+
+| 風險 | 查核結果 |
+|---|---|
+| Hibernate 重建或刪表 | `application.yml` 為 `ddl-auto: validate` — 只驗證不修改結構 |
+| 搬 package 導致表名改變 | 四個 entity 皆有明確 `@Table(name = "...")`，與類別所在 package 無關 |
+| 搬 package 導致 JPQL 失效 | `SurveyResponseRepository` 的 `@Query` 使用 entity **簡名**（`SurveyResponse`），Hibernate 以簡名解析，搬 package 不改類名故仍有效 |
+| Flyway baseline 誤跳 | 正式 DB 已套用 V1–V6，V7/V8 為單純續接 |
+
+**變更策略**：所有 migration 一律 additive（`CREATE TABLE` / `ADD COLUMN` / `CREATE INDEX`）。新欄位皆可為 NULL 或帶 DEFAULT，既有列不需改寫即維持有效。`reader`、`credit_txn`、`article_access` 等讀者端資料全部落在新表，`survey_response` 除新增一個欄位外完全不動。
+
+**部署前置檢查**（實作計畫須列為每階段的第一項）：確認正式 DB 已備份、確認 `ddl-auto` 仍為 `validate`、確認本次 migration 檔內無上述禁止的 SQL。
+
 ### 4.1 新增表
 
 ```sql
@@ -185,7 +210,19 @@ ALTER TABLE campaign ADD CONSTRAINT ck_campaign_premium_cost
 -- 但正是最需要被 sunset 判定的對象
 ALTER TABLE survey_response ADD COLUMN last_engaged_at TIMESTAMPTZ;
 CREATE INDEX idx_survey_response_engaged ON survey_response (last_engaged_at);
+
+-- 【必要 backfill】既有訂閱者在此之前沒有參與度追蹤，last_engaged_at 全為 NULL。
+-- 若不回填，他們的「已寄期數」可能早已超過淘汰門檻（12 期），依 5.10 規則會被判為
+-- sunset —— 分級功能上線當天，所有老訂閱者整批停收電子報。資料沒少，但收不到信，
+-- 且症狀要到下次發送才會顯現，極難察覺。
+-- 以 migration 執行時間作為參與度起算點，讓既有訂閱者一律從 active 開始，
+-- 並享有完整觀察期（6 期／90 天）後才可能依「migration 之後的真實行為」被降級。
+UPDATE survey_response
+   SET last_engaged_at = now()
+ WHERE consent = TRUE AND unsubscribed = FALSE;
 ```
+
+未確認訂閱者（如已匯入的 exam 名單）**刻意不回填**，保持 NULL：他們從未被寄過電子報（邀請信 `type='invite'` 不計入已寄期數），因此「已寄期數 < 沉睡門檻」條件成立，仍會被判為 active。回填反而會讓他們的參與度時間戳虛假。
 
 `survey_response` 的其餘結構不變。讀者自助維護的個人資料寫回它既有的 `name` / `role` / `experience` / `interest` / `answers` 欄位。
 
@@ -376,7 +413,9 @@ dormant  ← 不符 active，且 已寄期數 < 淘汰門檻(12)
 sunset   ← 已寄期數 >= 淘汰門檻(12) 且 last_engaged_at 為 NULL 或超過 365 天
 ```
 
-**關鍵邊界條件**：新訂閱者 `last_engaged_at` 可能為 `NULL`（匯入者尚未確認、或確認後從未開信）。若不特別處理，新人**第一封信就會被判為不活躍而收不到**——這會讓整個訂閱漏斗失效。因此「已寄期數 < 沉睡門檻」必須優先於時間判斷。
+**關鍵邊界條件一（新訂閱者）**：新訂閱者 `last_engaged_at` 可能為 `NULL`（匯入者尚未確認、或確認後從未開信）。若不特別處理，新人**第一封信就會被判為不活躍而收不到**——這會讓整個訂閱漏斗失效。因此「已寄期數 < 沉睡門檻」必須優先於時間判斷。
+
+**關鍵邊界條件二（migration 當下的既有訂閱者）**：現有訂閱者在本功能之前完全沒有參與度紀錄，`last_engaged_at` 為 NULL，但「已寄期數」可能早已超過淘汰門檻 —— 兩個條件同時成立就是 `sunset` 的定義。若不處理，**分級上線當天所有老訂閱者整批停收電子報**。已由 §4.2 的 backfill 解決（回填 `now()`，從 active 起算並享有完整觀察期）。此為 §4.0 硬約束下唯一允許改寫既有列的操作。
 
 **發送時的級別選擇**：`AdminCampaignController` 的發送與排程請求新增 `levels` 參數（可多選 `active` / `dormant` / `sunset`）：
 
@@ -534,7 +573,7 @@ CREATE TABLE app_setting (
 每階段結束都應可部署並實測。
 
 **階段 A：package 分層**
-純搬移 + 調整 import，不改行為。既有測試（`SurveyControllerTest`、`InviteServiceTest`）全綠即為驗證。先做這步，後續每個功能才有正確的落點。
+純搬移 + 調整 import，不改行為、**不含任何 migration**。既有測試（`SurveyControllerTest`、`InviteServiceTest`）全綠即為驗證。先做這步，後續每個功能才有正確的落點。資料安全性已於 §4.0 逐項查核（`ddl-auto: validate`、entity 有明確 `@Table`、JPQL 用簡名），此階段不動資料庫。
 
 **階段 B：讀者身分 + archive + paywall**（功能區 1、2）
 V7/V8 migration（**含 `credit_txn`，因為首次登入即需發 300 點 `SIGNUP_GRANT`**；**含 `app_setting`，因為贈點數必須可調**）、magic link、JWT、`ContentSplitter`、`AccessDecisionService`。此階段的授權只走「未登入 / 未確認訂閱 / BASIC / VIP / 已解鎖」五條路徑——扣點路徑尚未接上。讀者端 4 個頁面（`/r/`、`/r/archive`、`/r/news/{slug}`、`/r/login`）。此階段結束即為可上線產品。
@@ -575,6 +614,8 @@ MinIO 服務與上傳、後台插圖 UI、發送依 tier 分組、`vip_full_in_m
 | 補寄重建對象 | 依 `filter_levels` 重建，斷言與原次寄送的級別條件一致 |
 | 參數即時生效 | 改 `app_setting` 後下次授權判斷即採用新值（含快取清除） |
 | 規則頁與參數一致 | 改 `app_setting` 後，斷言 `/r/rules`、`/r/me`、PARTIAL 提示三處回應中的點數數字**全部**等於新設定值（防止任一處寫死） |
+| **既有資料保全** | 以「V1–V6 已套用且有既有資料」的 DB 快照跑 V7/V8，斷言 migration 後 `survey_response` 筆數不變、`consent` / `unsubscribed` / `email` 逐列不變 |
+| **backfill 正確性** | 同上快照，斷言已確認訂閱者的 `last_engaged_at` 非 NULL 且分級為 active；未確認匯入者維持 NULL 且分級仍為 active |
 
 ## 13. 未決事項與已接受風險
 
