@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.form;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,11 +13,11 @@ import java.util.List;
 import java.util.Map;
 import java.time.OffsetDateTime;
 
+import world.springai.survey.AdminKeyGuard;
 import world.springai.survey.audience.SurveyResponse;
 import world.springai.survey.audience.SurveyResponseRepository;
 import world.springai.survey.audience.UnsubscribeTokenService;
 import world.springai.survey.audience.WelcomeMailService;
-import world.springai.survey.form.SurveyController;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;

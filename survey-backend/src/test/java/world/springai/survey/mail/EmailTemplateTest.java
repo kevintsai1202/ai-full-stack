@@ -1,8 +1,6 @@
-package world.springai.survey;
+package world.springai.survey.mail;
 
 import org.junit.jupiter.api.Test;
-
-import world.springai.survey.mail.EmailTemplate;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

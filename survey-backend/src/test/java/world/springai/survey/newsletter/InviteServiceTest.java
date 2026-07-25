@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.newsletter;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,7 +14,6 @@ import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.MailSender;
 import world.springai.survey.mail.MailTemplate;
 import world.springai.survey.mail.MailTemplateRepository;
-import world.springai.survey.newsletter.InviteService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;

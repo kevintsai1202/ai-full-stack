@@ -1,10 +1,8 @@
-package world.springai.survey;
+package world.springai.survey.audience;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import world.springai.survey.audience.UnsubscribeTokenService;
-import world.springai.survey.audience.WelcomeMailService;
 import world.springai.survey.mail.EmailLog;
 import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.EmailTemplate;

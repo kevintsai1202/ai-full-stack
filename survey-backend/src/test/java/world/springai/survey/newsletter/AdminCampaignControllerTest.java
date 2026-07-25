@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.newsletter;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,11 +11,10 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import world.springai.survey.AdminKeyGuard;
 import world.springai.survey.audience.RecipientService;
 import world.springai.survey.mail.MailQuotaService;
-import world.springai.survey.newsletter.AdminCampaignController;
-import world.springai.survey.newsletter.CampaignService;
-import world.springai.survey.newsletter.InviteService;
+import world.springai.survey.mail.MailTemplate;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;

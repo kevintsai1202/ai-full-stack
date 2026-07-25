@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.audience;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -10,9 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
-import world.springai.survey.audience.AdminImportController;
-import world.springai.survey.audience.SurveyResponse;
-import world.springai.survey.audience.SurveyResponseRepository;
+import world.springai.survey.AdminKeyGuard;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
