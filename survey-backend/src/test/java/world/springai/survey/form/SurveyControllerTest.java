@@ -37,8 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Import(AdminKeyGuard.class) // 注入金鑰守衛
 @TestPropertySource(properties = {
     "app.admin-api-key=test-key",
-    "app.cors-allowed-origins=http://localhost",
-    "app.unsubscribe-secret=test-secret"
+    "app.cors-allowed-origins=http://localhost"
 })
 class SurveyControllerTest {
     @Autowired MockMvc mvc;

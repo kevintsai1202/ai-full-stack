@@ -1,5 +1,7 @@
 package world.springai.survey.audience;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +28,8 @@ import java.time.OffsetDateTime;
  */
 @RestController
 public class SubscriptionController {
+
+    private static final Logger log = LoggerFactory.getLogger(SubscriptionController.class);
 
     private final SurveyResponseRepository repository;
     private final UnsubscribeTokenService tokenService;
@@ -57,7 +61,16 @@ public class SubscriptionController {
             if (affected > 0) {
                 // 確認訂閱是高可靠的參與度訊號（spec §5.10）
                 repository.touchEngagement(normalized, OffsetDateTime.now());
-                eventPublisher.publishEvent(new SubscriptionConfirmedEvent(normalized));
+                // 事件發布是同步的，例外會往上拋。發放獎勵失敗不該影響「使用者已經
+                // 同意訂閱」這個已經成立且已提交的事實——更關鍵的是：若讓例外變成
+                // 500，「不論結果一律回相同的 200」這條性質就破了，端點會變成
+                // 「這個 email 有沒有推薦關係」的探測器。
+                // 這道防護刻意放在發布端，不依賴下游監聽器記得自己吞例外。
+                try {
+                    eventPublisher.publishEvent(new SubscriptionConfirmedEvent(normalized));
+                } catch (Exception e) {
+                    log.error("確認訂閱的後續處理失敗（同意已記錄，不影響訂閱狀態）：{}", normalized, e);
+                }
             }
         }
         return ResponseEntity.ok()

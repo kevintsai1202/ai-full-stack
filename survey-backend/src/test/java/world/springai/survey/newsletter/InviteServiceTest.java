@@ -46,8 +46,12 @@ class InviteServiceTest {
         // 預設資料庫無範本 → 走內建預設內文
         when(templateRepository.findByTemplateKey("invite")).thenReturn(java.util.Optional.empty());
         linkBuilder = mock(SubscriptionLinkBuilder.class);
+        // 刻意用不透明標記而非仿真路徑：真正的路徑格式已由 SubscriptionLinkBuilderTest
+        // 與 SubscriptionRoutingTest 鎖住，這裡若寫成像真連結的字串（且未編碼），
+        // 會讓人誤以為在驗證正式路徑與編碼，其實整串都是這裡自己 stub 出來的。
+        // 保留「逐 email 不同值」是為了驗證每位收件人拿到個人化連結，而非單一固定值。
         when(linkBuilder.confirmLink(anyString()))
-            .thenAnswer(i -> "https://survey.example.com/api/survey/confirm?email=" + i.getArgument(0));
+            .thenAnswer(i -> "CONFIRM_LINK_FOR:" + i.getArgument(0));
         service = new InviteService(repository, mailSender, emailLogRepository,
             templateRepository, linkBuilder);
     }
@@ -75,7 +79,7 @@ class InviteServiceTest {
         assertEquals(0, result.failed());
         // 驗證 a@example.com 的信含其專屬確認連結（由 SubscriptionLinkBuilder stub 組出）
         verify(mailSender).send(eq("a@example.com"), anyString(),
-            contains("/api/survey/confirm?email=a@example.com"));
+            contains("CONFIRM_LINK_FOR:a@example.com"));
     }
 
     /** 已寄過邀請（email_log type=invite status=sent）的人應跳過，不重複寄 */
@@ -176,7 +180,7 @@ class InviteServiceTest {
         ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
         verify(mailSender).send(eq("a@example.com"), eq("自訂主旨"), html.capture());
         assertTrue(html.getValue().contains("自訂內文"), "應使用資料庫範本內文");
-        assertTrue(html.getValue().contains("email=a@example.com"), "佔位符應替換為個人化確認連結");
+        assertTrue(html.getValue().contains("CONFIRM_LINK_FOR:a@example.com"), "佔位符應替換為個人化確認連結");
         assertTrue(!html.getValue().contains("{{confirmLink}}"), "佔位符不得殘留");
     }
 

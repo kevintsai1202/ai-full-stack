@@ -11,7 +11,6 @@ import world.springai.survey.audience.SurveyResponse;
 import world.springai.survey.audience.SurveyResponseRepository;
 import world.springai.survey.mail.EmailLog;
 import world.springai.survey.mail.EmailLogRepository;
-import world.springai.survey.mail.EmailTemplate;
 import world.springai.survey.mail.MailSender;
 import world.springai.survey.mail.MailTemplate;
 import world.springai.survey.mail.MailTemplateRepository;
