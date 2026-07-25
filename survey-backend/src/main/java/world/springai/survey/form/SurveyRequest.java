@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.form;
 
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;

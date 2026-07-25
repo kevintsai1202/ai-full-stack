@@ -6,6 +6,16 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 
+import world.springai.survey.audience.SurveyResponse;
+import world.springai.survey.audience.SurveyResponseRepository;
+import world.springai.survey.audience.UnsubscribeTokenService;
+import world.springai.survey.mail.EmailLog;
+import world.springai.survey.mail.EmailLogRepository;
+import world.springai.survey.mail.MailSender;
+import world.springai.survey.mail.MailTemplate;
+import world.springai.survey.mail.MailTemplateRepository;
+import world.springai.survey.newsletter.InviteService;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;

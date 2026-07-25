@@ -7,6 +7,9 @@ import org.springframework.web.client.RestClient;
 import java.time.Instant;
 import java.util.List;
 
+import world.springai.survey.mail.MailSender;
+import world.springai.survey.mail.ZSendMailSender;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.http.HttpMethod.DELETE;

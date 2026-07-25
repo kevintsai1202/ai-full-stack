@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.newsletter;
 
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,6 +14,11 @@ import org.springframework.http.HttpStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+
+import world.springai.survey.AdminKeyGuard;
+import world.springai.survey.audience.RecipientService;
+import world.springai.survey.mail.MailQuotaService;
+import world.springai.survey.mail.MailTemplate;
 
 /** 寄信後台 API（全部經 AdminKeyGuard 驗 X-Admin-Key） */
 @RestController

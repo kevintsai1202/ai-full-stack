@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.audience;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

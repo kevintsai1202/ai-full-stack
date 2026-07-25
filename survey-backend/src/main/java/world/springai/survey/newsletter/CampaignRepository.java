@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.newsletter;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 

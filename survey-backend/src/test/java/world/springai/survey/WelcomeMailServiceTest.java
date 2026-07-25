@@ -3,6 +3,13 @@ package world.springai.survey;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import world.springai.survey.audience.UnsubscribeTokenService;
+import world.springai.survey.audience.WelcomeMailService;
+import world.springai.survey.mail.EmailLog;
+import world.springai.survey.mail.EmailLogRepository;
+import world.springai.survey.mail.EmailTemplate;
+import world.springai.survey.mail.MailSender;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;

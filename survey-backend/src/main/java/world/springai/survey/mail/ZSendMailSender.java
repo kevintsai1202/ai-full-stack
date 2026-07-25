@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.mail;
 
 import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;

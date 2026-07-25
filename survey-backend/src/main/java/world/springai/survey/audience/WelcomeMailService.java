@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.audience;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,6 +7,11 @@ import org.springframework.stereotype.Service;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+
+import world.springai.survey.mail.EmailLog;
+import world.springai.survey.mail.EmailLogRepository;
+import world.springai.survey.mail.EmailTemplate;
+import world.springai.survey.mail.MailSender;
 
 /** 問卷送出後寄歡迎信：組信（含退訂連結）→ 寄送 → 寫 email_log；任何失敗只記 log，永不拋例外 */
 @Service

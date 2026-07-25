@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.audience;
 
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;

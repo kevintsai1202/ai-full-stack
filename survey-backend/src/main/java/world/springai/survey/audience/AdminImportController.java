@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.audience;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
@@ -11,6 +11,8 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+
+import world.springai.survey.AdminKeyGuard;
 
 /** 外部名單匯入後台 API：匯入為待確認狀態（consent=false），需 X-Admin-Key */
 @RestController

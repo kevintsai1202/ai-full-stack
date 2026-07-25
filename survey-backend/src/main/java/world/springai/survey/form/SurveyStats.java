@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.form;
 
 import java.util.List;
 

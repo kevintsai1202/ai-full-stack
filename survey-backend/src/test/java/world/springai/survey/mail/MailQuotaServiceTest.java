@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.mail;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.client.MockRestServiceServer;

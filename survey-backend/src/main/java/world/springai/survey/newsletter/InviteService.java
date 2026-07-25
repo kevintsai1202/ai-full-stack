@@ -1,4 +1,4 @@
-package world.springai.survey;
+package world.springai.survey.newsletter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,6 +8,16 @@ import org.springframework.stereotype.Service;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+
+import world.springai.survey.audience.SurveyResponse;
+import world.springai.survey.audience.SurveyResponseRepository;
+import world.springai.survey.audience.UnsubscribeTokenService;
+import world.springai.survey.mail.EmailLog;
+import world.springai.survey.mail.EmailLogRepository;
+import world.springai.survey.mail.EmailTemplate;
+import world.springai.survey.mail.MailSender;
+import world.springai.survey.mail.MailTemplate;
+import world.springai.survey.mail.MailTemplateRepository;
 
 /**
  * 二次確認（re-permission）邀請信：對「匯入的待確認名單」（consent=false 且未退訂）

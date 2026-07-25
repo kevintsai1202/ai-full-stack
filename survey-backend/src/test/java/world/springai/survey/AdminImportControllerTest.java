@@ -10,6 +10,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import world.springai.survey.audience.AdminImportController;
+import world.springai.survey.audience.SurveyResponse;
+import world.springai.survey.audience.SurveyResponseRepository;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;

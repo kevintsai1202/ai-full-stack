@@ -11,6 +11,12 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import world.springai.survey.audience.RecipientService;
+import world.springai.survey.mail.MailQuotaService;
+import world.springai.survey.newsletter.AdminCampaignController;
+import world.springai.survey.newsletter.CampaignService;
+import world.springai.survey.newsletter.InviteService;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
