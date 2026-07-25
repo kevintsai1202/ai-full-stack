@@ -3940,6 +3940,8 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 ## Task 11: HtmlTemplate 與登入 API
 
 **Files:**
+- Create: `survey-backend/src/main/java/world/springai/survey/reader/RedirectGuard.java`（Step 0，從 `LoginMailService` 抽出）
+- Modify: `survey-backend/src/main/java/world/springai/survey/reader/LoginMailService.java`（改用 `RedirectGuard`）
 - Create: `survey-backend/src/main/java/world/springai/survey/reader/HtmlTemplate.java`
 - Create: `survey-backend/src/main/java/world/springai/survey/reader/ReaderAuthController.java`
 - Create: `survey-backend/src/main/resources/static/reader/reader.css`
@@ -3961,6 +3963,20 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
   - `GET /r/` → index.html
 
 > **拆成兩個 controller 的理由**：把頁面渲染與登入 API 放在同一個類會需要注入 10 個依賴（登入 4 個 + 內容 4 個 + 名單 2 個）。依 CLAUDE.md 的單一任務原則拆為 `ReaderAuthController`（本 task）與 `ReaderPageController`（Task 12），各約 5 個依賴。
+
+- [ ] **Step 0: 把 redirect 安全檢查抽成共用類 `RedirectGuard`**
+
+`LoginMailService` 已經有一份修好的 `isSafeRedirect()`（Task 8 的審查抓到反斜線繞過後強化過，含四道檢查：拒絕控制字元、反斜線正規化後比對前綴、`java.net.URI` 解析確認無 scheme／host／authority、解析失敗視為不安全）。
+
+本 task 的 `ReaderAuthController` 也需要同一份判斷。**不要複製一份**——安全檢查有兩份實作就會漂移，而其中一份漂移就是一個漏洞。
+
+做法：
+
+1. 新建 `reader/RedirectGuard.java`，把 `LoginMailService.isSafeRedirect()` 的邏輯搬進去成為 `public static boolean isSafe(String redirect)`，並把原有的中文註解一併搬過去（那段註解解釋了反斜線為何等價、為何要多一道 URI 解析，是防止日後被「簡化」的關鍵）。
+2. 改 `LoginMailService`：刪掉自己的 `isSafeRedirect()`，改呼叫 `RedirectGuard.isSafe(...)`。
+3. 跑 `mvn test -Dtest=LoginMailServiceTest`，必須仍是 `Tests run: 7, Failures: 0`——既有測試已涵蓋五種惡意輸入與合法路徑，是這次重構的安全網。
+
+`RedirectGuard` 不需要獨立的測試檔：`LoginMailServiceTest` 已從 `sendLoginLink` 的角度覆蓋它，本 task 的 `ReaderAuthControllerTest` 再從 verify 端點覆蓋一次。
 
 - [ ] **Step 1: 寫 HtmlTemplate 的失敗測試**
 
@@ -4499,17 +4515,25 @@ class ReaderAuthControllerTest {
            .andExpect(header().string("Location", "/r/archive"));
     }
 
-    /** protocol-relative 網址（//evil.com）也必須被丟棄 */
+    /**
+     * protocol-relative 與反斜線變體都必須被丟棄。
+     *
+     * <p>反斜線變體是 Task 8 在 LoginMailService 上實際發生過的漏洞：
+     * {@code /\evil.com} 的「以 / 開頭且不以 // 開頭」為真，但瀏覽器把
+     * \ 與 / 視為等價，等同 {@code //evil.com}。兩種形式都要驗。</p>
+     */
     @Test
     void verifyRejectsProtocolRelativeRedirect() throws Exception {
         when(loginTokenService.consume(anyString(), any())).thenReturn(Optional.of("user@example.com"));
         when(readerAccountService.findOrCreate(anyString(), any())).thenReturn(reader());
 
-        mvc.perform(get("/api/reader/login/verify")
-                .param("t", "GOOD-TOKEN")
-                .param("redirect", "//evil.example.com"))
-           .andExpect(status().isFound())
-           .andExpect(header().string("Location", "/r/archive"));
+        for (String evil : new String[] {"//evil.example.com", "/\\evil.example.com", "\\\\evil.example.com"}) {
+            mvc.perform(get("/api/reader/login/verify")
+                    .param("t", "GOOD-TOKEN")
+                    .param("redirect", evil))
+               .andExpect(status().isFound())
+               .andExpect(header().string("Location", "/r/archive"));
+        }
     }
 
     /** 無效 token：導向登入頁並帶錯誤標記，不設 cookie */
@@ -4712,16 +4736,16 @@ public class ReaderAuthController {
     }
 
     /**
-     * 只接受站內相對路徑作為導向目標。
+     * 只接受站內相對路徑作為導向目標，否則回預設落點。
      *
-     * <p>必須排除 {@code //evil.com}：它以 / 開頭，但瀏覽器會視為站外網址，
-     * 是開放式轉址最常見的漏法。</p>
+     * <p>判斷邏輯委派給 {@code RedirectGuard}（見 Step 0），**不要在這裡自己寫
+     * 前綴比對**。原因見該類的註解：{@code /\evil.com} 這種反斜線變體會通過
+     * 「以 / 開頭且不以 // 開頭」的檢查，但瀏覽器把 \ 與 / 視為等價，等同
+     * {@code //evil.com}。這個漏洞已在 LoginMailService 上實際發生過一次，
+     * 所以兩處必須共用同一份實作，不得各寫一份。</p>
      */
     private String safeRedirect(String redirect) {
-        if (StringUtils.hasText(redirect) && redirect.startsWith("/") && !redirect.startsWith("//")) {
-            return redirect;
-        }
-        return DEFAULT_REDIRECT;
+        return RedirectGuard.isSafe(redirect) ? redirect.trim() : DEFAULT_REDIRECT;
     }
 }
 ```
