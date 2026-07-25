@@ -84,7 +84,9 @@ reader ──▶ audience, mail, newsletter(唯讀 campaign)
 - `reader` 讀取 `newsletter` 的 `Campaign` 作為「文章」，但不呼叫發送邏輯。
 - 這層 package 邊界即為日後真要拆服務時的拆解線。
 
-**共用元件**（`AdminKeyGuard`、`ApiExceptionHandler`、`WebConfig`、`SurveyApplication`）留在根 package，並新增 `AppSettingService`（可調參數讀寫，見 §9.1）——它跨越多個領域（點數參數給 `reader`、參與度門檻給 `audience`），不屬於任何單一 package。
+**共用元件**（`AdminKeyGuard`、`ApiExceptionHandler`、`WebConfig`、`SurveyApplication`、`TrackingController`）留在根 package，並新增 `AppSettingService`（可調參數讀寫，見 §9.1）——它跨越多個領域（點數參數給 `reader`、參與度門檻給 `audience`），不屬於任何單一 package。
+
+`TrackingController` 是廣告追蹤腳本產生器（GA4／Meta Pixel／LINE Tag，供 land-page 與問卷頁共用），**與 §5.7 的開信追蹤無關**，不屬任何單一領域故留在根 package。
 
 **前端**：延續現有 vanilla HTML + JS + CSS、無建置步驟的做法，與 `index.html` / `admin.html` 一致。新增靜態頁放在 `src/main/resources/static/`。
 
