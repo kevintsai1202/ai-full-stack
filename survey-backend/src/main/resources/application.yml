@@ -27,3 +27,8 @@ app:
     # 寄件人顯示名稱：本系統為個人電子報系統（非課程專用），統一以個人名義寄出
     from: ${MAIL_FROM:凱文大叔 <noreply@springai.world>}
     reply-to: ${MAIL_REPLY_TO:}
+    # 額度偵測用的 Zeabur 帳號 token（sk-...，即 CLI 登入的那把，非上面的 ZSend 寄信金鑰）；
+    # 留空則停用動態偵測，改用下面的 fallback-quota
+    zeabur-token: ${ZEABUR_API_TOKEN:}
+    # 偵測不可用（未設 token 或 API 失敗）時採用的保守額度（封）
+    fallback-quota: ${MAIL_FALLBACK_QUOTA:100}

@@ -30,16 +30,20 @@ public class AdminCampaignController {
     private final RecipientService recipientService;
     /** 二次確認邀請信服務 */
     private final InviteService inviteService;
+    /** 寄信額度偵測服務 */
+    private final MailQuotaService mailQuotaService;
 
     /** 注入依賴 */
     public AdminCampaignController(AdminKeyGuard guard,
                                    CampaignService campaignService,
                                    RecipientService recipientService,
-                                   InviteService inviteService) {
+                                   InviteService inviteService,
+                                   MailQuotaService mailQuotaService) {
         this.guard = guard;
         this.campaignService = campaignService;
         this.recipientService = recipientService;
         this.inviteService = inviteService;
+        this.mailQuotaService = mailQuotaService;
     }
 
     /** 預覽用請求：主旨與 markdown 內文 */
@@ -110,7 +114,18 @@ public class AdminCampaignController {
         return campaignService.send(req.subject(), req.markdown(), role, interest, req.mode(), scheduledAt);
     }
 
-    /** 邀請確認信請求：待確認名單的來源標記（如 exam）與單次寄送上限（配合每日額度） */
+    /**
+     * 目前寄信額度（動態偵測 Zeabur ZSend 帳號的日／月額度與已寄量），需提供有效金鑰。
+     * 後台以此決定「單次上限」欄位的上界與超量警告門檻，不再寫死 100 封。
+     */
+    @GetMapping("/api/admin/mail-quota")
+    public MailQuotaService.Quota mailQuota(
+            @RequestHeader(value = KEY_HEADER, required = false) String key) {
+        guard.verify(key);
+        return mailQuotaService.current();
+    }
+
+    /** 邀請確認信請求：待確認名單的來源標記（如 exam）與單次寄送上限（配合寄信額度） */
     public record InviteRequest(String source, Integer limit) {}
 
     /** 對指定來源的待確認名單寄二次確認邀請信，需提供有效金鑰 */
@@ -122,7 +137,21 @@ public class AdminCampaignController {
         if (req.source() == null || req.source().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "source 為必填");
         }
-        return inviteService.sendInvites(req.source(), req.limit());
+        return inviteService.sendInvites(req.source(), clampLimit(req.limit()));
+    }
+
+    /**
+     * 將前端傳來的單次上限收斂到「實際可用額度」與「單批安全上限」之內。
+     * 前端已依 /api/admin/mail-quota 設好欄位 max，這裡是伺服器端的第二道防線：
+     * 避免直接打 API 或前端快取過期時一次送出超量請求（逐封同步寄送會逾時）。
+     * limit 為 null 時代表「不限」，同樣收斂成 batchMax 而非放行全部。
+     */
+    private Integer clampLimit(Integer limit) {
+        long batchMax = mailQuotaService.current().batchMax();
+        if (limit == null || limit <= 0 || limit > batchMax) {
+            return (int) batchMax;
+        }
+        return limit;
     }
 
     /** 對「已邀請滿 3 天仍未確認」者補送提醒信（每人最多一次），需提供有效金鑰 */
@@ -134,7 +163,7 @@ public class AdminCampaignController {
         if (req.source() == null || req.source().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "source 為必填");
         }
-        return inviteService.sendReminders(req.source(), req.limit());
+        return inviteService.sendReminders(req.source(), clampLimit(req.limit()));
     }
 
     /** 取得邀請信範本（主旨與 HTML 內文，內文以 {{confirmLink}} 佔位確認連結），需提供有效金鑰 */

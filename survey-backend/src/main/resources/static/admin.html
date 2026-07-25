@@ -100,7 +100,7 @@
   <section class="view" id="campaign-view" hidden>
     <div class="card"><h2>① 撰寫</h2><label for="subject">主旨</label><input type="text" id="subject" placeholder="電子報主旨"><label for="markdown">內文（Markdown）</label><textarea id="markdown" placeholder="# 標題&#10;&#10;支援 **粗體**、清單、[連結](https://...)"></textarea><button class="btn ghost" id="preview-btn" style="margin-top:12px">更新預覽</button><div class="msg err" id="compose-msg"></div></div>
     <div class="card"><h2>② 預覽</h2><iframe class="preview" id="preview" title="預覽"></iframe></div>
-    <div class="card"><h2>③ 發送對象</h2><div class="row"><div><label for="role">身分（不限留空）</label><select id="role"><option value="">不限</option></select></div><div><label for="interest">想學主題（不限留空）</label><select id="interest"><option value="">不限</option></select></div></div><p style="margin:14px 0 0">將寄給 <span class="count" id="rcount">—</span> 人　<button class="btn ghost" id="rcount-btn">更新人數</button></p><p class="hint" id="rsample"></p><p class="warn" id="quota-warn" hidden>⚠️ 超過每日 100 封額度，超量部分會失敗。</p></div>
+    <div class="card"><h2>③ 發送對象</h2><div class="row"><div><label for="role">身分（不限留空）</label><select id="role"><option value="">不限</option></select></div><div><label for="interest">想學主題（不限留空）</label><select id="interest"><option value="">不限</option></select></div></div><p style="margin:14px 0 0">將寄給 <span class="count" id="rcount">—</span> 人　<button class="btn ghost" id="rcount-btn">更新人數</button></p><p class="hint" id="rsample"></p><p class="hint" id="quota-info">額度偵測中…</p><p class="warn" id="quota-warn" hidden></p></div>
     <div class="card"><h2>④ 測試寄送（寄給自己）</h2><div class="row"><div><input type="email" id="test-to" placeholder="your@email.com"></div><div style="flex:0"><button class="btn ghost" id="test-btn">寄測試信</button></div></div><div class="msg" id="test-msg"></div></div>
     <div class="card"><h2>⑤ 發送</h2><div class="row" style="align-items:center"><div style="flex:0"><label style="display:inline;font-weight:400"><input type="radio" name="mode" value="now" checked> 立即發送</label><label style="display:inline;font-weight:400;margin-left:14px"><input type="radio" name="mode" value="schedule"> 排程</label></div><div><input type="datetime-local" id="sched" disabled></div></div><button class="btn" id="send-btn" style="margin-top:14px">發送</button><div class="msg" id="send-msg"></div></div>
     <div class="card"><h2>⑥ 寄送歷史　<button class="btn ghost" id="hist-btn">重新整理</button></h2><div class="table-wrap"><table id="hist"><thead><tr><th>主旨</th><th>模式</th><th>時間</th><th>狀態</th><th>成功/失敗</th><th></th></tr></thead><tbody></tbody></table></div></div>
@@ -108,7 +108,7 @@
       <p class="hint">對匯入的待確認名單寄「訂閱確認」邀請信；已寄過的人會自動跳過，點確認連結後才進入可寄送名單。</p>
       <div class="row" style="align-items:flex-end">
         <div><label for="invite-source">名單來源</label><select id="invite-source"><option value="exam">線上測驗</option><option value="survey_form">問卷填寫</option></select></div>
-        <div><label for="invite-limit">單次上限（每日額度 100 封）</label><input type="number" id="invite-limit" value="50" min="1" max="100"></div>
+        <div><label for="invite-limit" id="invite-limit-label">單次上限（額度偵測中…）</label><input type="number" id="invite-limit" value="50" min="1" max="100"></div>
         <div style="flex:0"><button class="btn" id="invite-send-btn">寄送邀請信</button></div>
         <div style="flex:0"><button class="btn ghost" id="invite-remind-btn">補送提醒</button></div>
       </div>
@@ -186,11 +186,11 @@
     $('#lock-btn').onclick=()=>{sessionStorage.removeItem(KEY);location.reload();};
     $('#analytics-refresh').onclick=()=>loadAnalytics(true);$('#export-json').onclick=()=>downloadProtected('/api/admin/survey','survey-responses.json');$('#export-csv').onclick=()=>downloadProtected('/api/admin/survey?format=csv','survey-responses.csv');$('#export-pdf').onclick=exportPdf;
     ['#raw-search','#raw-source','#raw-role','#raw-budget','#raw-subscription','#raw-sort'].forEach(selector=>$(selector).addEventListener(selector==='#raw-search'?'input':'change',renderRawTable));
-    $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=doCount;$('#role').onchange=doCount;$('#interest').onchange=doCount;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#hist-btn').onclick=doHistory;
-    $('#invite-refresh').onclick=doInviteOverview;$('#invite-source').onchange=doInviteOverview;$('#invite-send-btn').onclick=doSendInvites;$('#invite-remind-btn').onclick=doSendReminders;
+    $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=()=>{doCount();doQuota();};$('#role').onchange=doCount;$('#interest').onchange=doCount;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#hist-btn').onclick=doHistory;
+    $('#invite-refresh').onclick=()=>{doInviteOverview();doQuota();};$('#invite-source').onchange=doInviteOverview;$('#invite-send-btn').onclick=doSendInvites;$('#invite-remind-btn').onclick=doSendReminders;
     $('#invite-tpl').addEventListener('toggle',()=>{if($('#invite-tpl').open)loadInviteTemplate();});$('#tpl-preview-btn').onclick=previewInviteTemplate;$('#tpl-save-btn').onclick=saveInviteTemplate;
     document.querySelectorAll('input[name=mode]').forEach(radio=>radio.onchange=()=>{$('#sched').disabled=mode()!=='schedule';});
-    buildRawHeader();doCount();doHistory();doInviteOverview();switchView('analytics');
+    buildRawHeader();doQuota();doCount();doHistory();doInviteOverview();switchView('analytics');
   }
 
   /** 載入全部受保護問卷資料並重繪所有分析區塊。 */
@@ -327,8 +327,56 @@
   function mode(){return document.querySelector('input[name=mode]:checked').value;}
   /** 呼叫後端渲染電子報預覽。 */
   async function doPreview(){const m=$('#compose-msg');m.className='msg';try{const r=await api('/api/admin/campaign/preview',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value})});$('#preview').srcdoc=r.html;}catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='預覽失敗：'+e.message;}}}
+  /** 目前偵測到的寄信額度（/api/admin/mail-quota 回應；偵測失敗時為 null）。 */
+  let mailQuota=null;
+  /**
+   * 查詢帳號實際寄信額度並更新 UI。
+   * 額度改由後端向 Zeabur 動態偵測（升級方案後上限會變動），前端不再假設每日 100 封。
+   */
+  async function doQuota(){try{mailQuota=await api('/api/admin/mail-quota');}catch(e){if(e.message!=='401')mailQuota=null;}renderQuota();}
+  /** 組額度重置時間說明；無時間資訊時回空字串（避免 null 被當成 1970 年）。 */
+  function resetAt(value){const text=value?formatDate(value):'';return text?`（${text} 重置）`:'';}
+  /** 把額度資訊反映到「額度說明列」「單次上限欄位」與「超量警告」。 */
+  function renderQuota(){
+    const info=$('#quota-info'),limitInput=$('#invite-limit'),label=$('#invite-limit-label');
+    if(!mailQuota){
+      info.textContent='額度偵測失敗，暫以欄位預設上限為準。';
+      label.textContent='單次上限（額度未知）';
+      renderQuotaWarn();return;
+    }
+    const q=mailQuota,batchMax=Math.max(1,q.batchMax);
+    // 欄位 max 收斂到單批安全上限；既有輸入值超過上限時一併下修，避免送出後被後端截掉
+    limitInput.max=batchMax;
+    if(parseInt(limitInput.value,10)>batchMax)limitInput.value=batchMax;
+    label.textContent=`單次上限（剩餘 ${q.remaining} 封，單批上限 ${batchMax}）`;
+    if(q.source==='fallback'){
+      info.textContent=`未偵測到 Zeabur 額度（未設定 ZEABUR_API_TOKEN），暫以 ${q.remaining} 封為上限。`;
+    }else{
+      // 日額度在付費方案下近似無限，僅在它確實比月剩餘更緊時才顯示，避免誤導
+      const daily=q.dailyRemaining<q.monthlyRemaining?`　今日剩餘 ${q.dailyRemaining} 封${resetAt(q.quotaResetAt)}`:'';
+      info.textContent=`本期額度 ${q.monthlyQuota} 封，已寄 ${q.monthlySent}，剩餘 ${q.monthlyRemaining}${resetAt(q.monthlyResetAt)}${daily}`;
+    }
+    renderQuotaWarn();
+  }
+  /**
+   * 依「收件人數 vs 剩餘額度」顯示超量警告。
+   * 超量後果取決於帳號是否開啟超量計費：開啟則轉為計費、未開啟則超量部分寄送失敗。
+   */
+  function renderQuotaWarn(){
+    const warn=$('#quota-warn'),count=parseInt($('#rcount').textContent,10);
+    if(!mailQuota||Number.isNaN(count)){warn.hidden=true;return;}
+    if(mailQuota.status&&mailQuota.status!=='healthy'&&mailQuota.status!=='unknown'){
+      warn.hidden=false;warn.textContent=`⚠️ ZSend 帳號狀態為 ${mailQuota.status}，寄送可能被拒絕。`;return;
+    }
+    warn.hidden=count<=mailQuota.remaining;
+    if(!warn.hidden){
+      warn.textContent=mailQuota.overageBillingEnabled
+        ?`⚠️ 收件人數 ${count} 超過剩餘額度 ${mailQuota.remaining} 封，超量部分將以超量計費寄出。`
+        :`⚠️ 收件人數 ${count} 超過剩餘額度 ${mailQuota.remaining} 封，超量部分會寄送失敗。`;
+    }
+  }
   /** 更新電子報收件人數與樣本。 */
-  async function doCount(){try{const q=new URLSearchParams();if($('#role').value)q.set('role',$('#role').value);if($('#interest').value)q.set('interest',$('#interest').value);const r=await api('/api/admin/recipients?'+q);$('#rcount').textContent=r.count;$('#rsample').textContent=r.sample.length?'樣本：'+r.sample.join(', '):'';$('#quota-warn').hidden=r.count<=100;}catch(e){if(e.message!=='401')$('#rcount').textContent='?';}}
+  async function doCount(){try{const q=new URLSearchParams();if($('#role').value)q.set('role',$('#role').value);if($('#interest').value)q.set('interest',$('#interest').value);const r=await api('/api/admin/recipients?'+q);$('#rcount').textContent=r.count;$('#rsample').textContent=r.sample.length?'樣本：'+r.sample.join(', '):'';renderQuotaWarn();}catch(e){if(e.message!=='401')$('#rcount').textContent='?';}}
   /** 寄送電子報測試信給指定信箱。 */
   async function doTest(){const m=$('#test-msg');m.className='msg';const to=$('#test-to').value.trim();if(!to){m.className='msg err';m.textContent='請填測試信箱';return;}try{await api('/api/admin/campaign/test',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,to})});m.className='msg ok';m.textContent='測試信已寄給 '+to;}catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='測試寄送失敗：'+e.message;}}}
   /** 確認後立即發送、排程電子報，或在修改模式下更新既有排程。 */
@@ -382,7 +430,7 @@
     $('#invite-remind-btn').disabled=true;
     try{const r=await api('/api/admin/campaign/invite/remind',{method:'POST',body:JSON.stringify({source,limit})});
       m.className='msg ok';m.textContent=`提醒 ${r.recipientCount} 封：成功 ${r.accepted}、失敗 ${r.failed}；已提醒跳過 ${r.alreadyReminded}、未滿 3 天跳過 ${r.tooRecent}、剩餘 ${r.remaining} 人待補送。`;
-      doInviteOverview();
+      doInviteOverview();doQuota(); // 寄送後已用額度改變，重新偵測
     }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='提醒寄送失敗：'+e.message;}}
     finally{$('#invite-remind-btn').disabled=false;}}
   /** 首次展開時載入邀請信範本到編輯區。 */
@@ -405,7 +453,7 @@
     $('#invite-send-btn').disabled=true;
     try{const r=await api('/api/admin/campaign/invite',{method:'POST',body:JSON.stringify({source,limit})});
       m.className='msg ok';m.textContent=`本批 ${r.recipientCount} 封：成功 ${r.accepted}、失敗 ${r.failed}；已邀請跳過 ${r.alreadyInvited}、剩餘 ${r.remaining} 人待邀請。`;
-      doInviteOverview();
+      doInviteOverview();doQuota(); // 寄送後已用額度改變，重新偵測
     }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='邀請寄送失敗：'+e.message;}}
     finally{$('#invite-send-btn').disabled=false;}}
   /** 轉義電子報歷史欄位，避免插入 HTML。 */
