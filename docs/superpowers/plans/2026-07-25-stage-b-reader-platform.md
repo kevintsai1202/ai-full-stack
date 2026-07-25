@@ -1217,7 +1217,19 @@ public class ContentSplitter {
         return new Split(free, gated, true);
     }
 
-    /** 找出第一個「整行只有標記」的行號；找不到回 -1 */
+    /**
+     * 找出第一個「整行只有標記」的行號；找不到回 -1。
+     *
+     * <p><b>不可只用 trim()</b>：trim() 只移除 ASCII 空白（碼位 ≤ 0x20），
+     * 而  （NBSP）不在其中——Java 的 Character.isWhitespace(' ')
+     * 也回傳 false，所以連 strip() 都救不了。從 Notion／Word 貼上的內容常夾帶
+     * NBSP，標記行只要帶一個就不被識別，結果是整篇進階內容變成免費區。
+     * 失效方向是洩漏而非破版，因此標記行的空白正規化必須涵蓋
+     * Character.isWhitespace 與 Character.isSpaceChar 的聯集。
+     *
+     * <p>同時必須保留「整行恰好等於標記」的語意：一行內容中順帶提到
+     * {@value #PAYWALL_MARKER} 但還有其他文字時，不得被判定為分隔線。</p>
+     */
     private int indexOfMarkerLine(String[] lines) {
         for (int i = 0; i < lines.length; i++) {
             if (PAYWALL_MARKER.equals(lines[i].trim())) {
