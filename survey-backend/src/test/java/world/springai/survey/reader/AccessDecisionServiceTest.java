@@ -4,7 +4,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
-import world.springai.survey.AppSettingService;
 import world.springai.survey.newsletter.Campaign;
 
 import java.time.OffsetDateTime;
@@ -12,9 +11,7 @@ import java.time.OffsetDateTime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -32,15 +29,15 @@ class AccessDecisionServiceTest {
     private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-07-25T12:00:00+08:00");
 
     private ArticleAccessRepository articleAccessRepository;
-    private AppSettingService appSettingService;
+    private CreditPolicy creditPolicy;
     private AccessDecisionService service;
 
     @BeforeEach
     void setUp() {
         articleAccessRepository = mock(ArticleAccessRepository.class);
-        appSettingService = mock(AppSettingService.class);
-        when(appSettingService.getInt(eq(AppSettingService.CREDIT_PREMIUM_COST), anyInt())).thenReturn(10);
-        service = new AccessDecisionService(articleAccessRepository, appSettingService);
+        creditPolicy = mock(CreditPolicy.class);
+        when(creditPolicy.costOf(any())).thenReturn(10);
+        service = new AccessDecisionService(articleAccessRepository, creditPolicy);
     }
 
     /** 文章 id 測試固定值；Campaign 沒有 setId，透過 ReflectionTestUtils 設定，
@@ -164,14 +161,14 @@ class AccessDecisionServiceTest {
         assertEquals(0, d.shortfall());
     }
 
-    /** creditCost 為 0 的 PREMIUM（理論上被 DB CHECK 擋掉）改用參數預設值，不當成免費 */
+    /** creditCost 為 0 的 PREMIUM 成本改由 CreditPolicy 計算，不當成免費 */
     @Test
     void premiumWithZeroCostFallsBackToSettingValue() {
         AccessDecisionService.Decision d =
             service.decide(reader(Reader.TIER_FREE, 4), true, article(Campaign.TIER_PREMIUM, 0), NOW);
 
         assertEquals(AccessDecisionService.Access.PARTIAL, d.access());
-        assertEquals(6, d.shortfall(), "應改用 app_setting 的 10 點計算，而非把 0 當免費");
+        assertEquals(6, d.shortfall(), "應改用 CreditPolicy 計算出的 10 點，而非把 0 當免費");
     }
 
     /** recordAccess 只在 VIP 決策時寫入，且已存在紀錄時不重複寫 */
@@ -246,21 +243,6 @@ class AccessDecisionServiceTest {
             .when(articleAccessRepository).save(any(ArticleAccess.class));
 
         assertDoesNotThrow(() -> service.recordAccess(vip, premium, full));
-    }
-
-    /**
-     * 【Important 4】app_setting 後備值被誤設為 0 或負數時，成本仍須 >= 1，
-     * 不可讓 PREMIUM 文章因此被當成免費。
-     */
-    @Test
-    void resolveCostFallbackNeverGoesToZeroOrBelow() {
-        when(appSettingService.getInt(eq(AppSettingService.CREDIT_PREMIUM_COST), anyInt())).thenReturn(0);
-
-        AccessDecisionService.Decision d =
-            service.decide(reader(Reader.TIER_FREE, 0), true, article(Campaign.TIER_PREMIUM, 0), NOW);
-
-        assertEquals(AccessDecisionService.Access.PARTIAL, d.access());
-        assertEquals(1, d.shortfall(), "後備成本被誤設為 0 時，仍應以 1 點計算，不得視為免費");
     }
 
     /**

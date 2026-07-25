@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import world.springai.survey.AppSettingService;
 import world.springai.survey.audience.SurveyResponseRepository;
 
 import java.security.SecureRandom;
@@ -34,25 +33,22 @@ public class ReaderAccountService {
     /** 邀請碼碰撞重試上限，避免字元集耗盡時無限迴圈 */
     private static final int MAX_CODE_ATTEMPTS = 10;
 
-    /** 初始贈點的預設值；實際值取自 app_setting，此為查不到時的後備 */
-    private static final int DEFAULT_SIGNUP_GRANT = 300;
-
     private final SecureRandom random = new SecureRandom();
 
     private final ReaderRepository readerRepository;
     private final CreditTxnRepository creditTxnRepository;
     private final SurveyResponseRepository surveyResponseRepository;
-    private final AppSettingService appSettingService;
+    private final CreditPolicy creditPolicy;
 
-    /** 注入讀者、帳本、名單中心與參數服務 */
+    /** 注入讀者、帳本、名單中心與點數參數唯一來源 */
     public ReaderAccountService(ReaderRepository readerRepository,
                                CreditTxnRepository creditTxnRepository,
                                SurveyResponseRepository surveyResponseRepository,
-                               AppSettingService appSettingService) {
+                               CreditPolicy creditPolicy) {
         this.readerRepository = readerRepository;
         this.creditTxnRepository = creditTxnRepository;
         this.surveyResponseRepository = surveyResponseRepository;
-        this.appSettingService = appSettingService;
+        this.creditPolicy = creditPolicy;
     }
 
     /**
@@ -83,10 +79,13 @@ public class ReaderAccountService {
         Reader reader = new Reader(email, generateUniqueReferralCode());
         reader = readerRepository.save(reader);
 
-        int grant = appSettingService.getInt(AppSettingService.CREDIT_SIGNUP_GRANT, DEFAULT_SIGNUP_GRANT);
-        creditTxnRepository.save(new CreditTxn(
-            reader.getId(), grant, CreditTxn.REASON_SIGNUP_GRANT, null, "首次登入初始贈點"));
-        reader.setCredits(grant);
+        int grant = creditPolicy.signupGrant();
+        // 後台可把贈點調成 0（關閉贈點）；此時不寫帳本，避免留下 delta=0 的無意義紀錄
+        if (grant > 0) {
+            creditTxnRepository.save(new CreditTxn(
+                reader.getId(), grant, CreditTxn.REASON_SIGNUP_GRANT, null, "首次登入初始贈點"));
+            reader.setCredits(grant);
+        }
 
         log.info("建立讀者帳戶 {} 並發放初始贈點 {} 點", email, grant);
         return reader;

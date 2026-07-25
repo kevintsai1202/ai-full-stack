@@ -2,7 +2,6 @@ package world.springai.survey.reader;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import world.springai.survey.AppSettingService;
 import world.springai.survey.newsletter.Campaign;
 
 import java.time.OffsetDateTime;
@@ -59,17 +58,14 @@ public class AccessDecisionService {
      */
     public record Decision(Access access, Reason reason, int shortfall) {}
 
-    /** PREMIUM 解鎖點數的後備預設值；實際值取自 app_setting */
-    private static final int DEFAULT_PREMIUM_COST = 10;
-
     private final ArticleAccessRepository articleAccessRepository;
-    private final AppSettingService appSettingService;
+    private final CreditPolicy creditPolicy;
 
-    /** 注入解鎖紀錄與參數服務 */
+    /** 注入解鎖紀錄與點數參數唯一來源 */
     public AccessDecisionService(ArticleAccessRepository articleAccessRepository,
-                                AppSettingService appSettingService) {
+                                CreditPolicy creditPolicy) {
         this.articleAccessRepository = articleAccessRepository;
-        this.appSettingService = appSettingService;
+        this.creditPolicy = creditPolicy;
     }
 
     /**
@@ -141,25 +137,10 @@ public class AccessDecisionService {
     /**
      * 取得該文章的解鎖成本。
      *
-     * <p>campaign.creditCost 為 0 時改用參數預設值——PREMIUM 卻成本為 0 理論上
-     * 已被資料庫 CHECK 擋掉，但若真的出現，把它當成免費會讓進階內容全面外洩，
-     * 所以這裡選擇保守處理。</p>
-     *
-     * <p>結果永遠 {@code >= 1}：這個方法存在的唯一理由就是「絕不把 PREMIUM
-     * 當免費」，若後台把 app_setting 的 credit.premium_cost 誤設為 0 或負數，
-     * 階段 C 接上 {@code credits >= cost} 後會讓所有 PREMIUM 文章免費解鎖，
-     * 所以在此夾住下限，不把後備值的正確性寄望在後台設定上。</p>
-     *
-     * <p>對外公開（原為 private）：{@link ReaderPageController} 的 paywall 提示文案
-     * 需要顯示同一個成本數字，若各自實作一份，兩邊很容易因為忘記同步下限保護
-     * 而出現「文案顯示 0 點、實際判定卻是 1 點」這種不一致，因此統一由本方法
-     * 作為唯一真相來源。</p>
+     * <p>實際計算與下限保護已收斂到 {@link CreditPolicy#costOf(Campaign)}；
+     * 本方法保留為既有呼叫端的入口，不再自行讀取 app_setting。</p>
      */
     public int resolveCost(Campaign campaign) {
-        if (campaign.getCreditCost() > 0) {
-            return campaign.getCreditCost();
-        }
-        int fallback = appSettingService.getInt(AppSettingService.CREDIT_PREMIUM_COST, DEFAULT_PREMIUM_COST);
-        return Math.max(1, fallback);
+        return creditPolicy.costOf(campaign);
     }
 }

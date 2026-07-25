@@ -3,7 +3,6 @@ package world.springai.survey.reader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import world.springai.survey.AppSettingService;
 import world.springai.survey.audience.SurveyResponseRepository;
 
 import java.time.OffsetDateTime;
@@ -13,9 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -30,7 +27,7 @@ class ReaderAccountServiceTest {
     private ReaderRepository readerRepository;
     private CreditTxnRepository creditTxnRepository;
     private SurveyResponseRepository surveyResponseRepository;
-    private AppSettingService appSettingService;
+    private CreditPolicy creditPolicy;
     private ReaderAccountService service;
 
     @BeforeEach
@@ -38,8 +35,8 @@ class ReaderAccountServiceTest {
         readerRepository = mock(ReaderRepository.class);
         creditTxnRepository = mock(CreditTxnRepository.class);
         surveyResponseRepository = mock(SurveyResponseRepository.class);
-        appSettingService = mock(AppSettingService.class);
-        when(appSettingService.getInt(eq(AppSettingService.CREDIT_SIGNUP_GRANT), anyInt())).thenReturn(300);
+        creditPolicy = mock(CreditPolicy.class);
+        when(creditPolicy.signupGrant()).thenReturn(300);
         // save 回傳帶 id 的物件，模擬資料庫產生主鍵
         when(readerRepository.save(any(Reader.class))).thenAnswer(i -> {
             Reader r = i.getArgument(0);
@@ -49,7 +46,7 @@ class ReaderAccountServiceTest {
             return r;
         });
         service = new ReaderAccountService(readerRepository, creditTxnRepository,
-            surveyResponseRepository, appSettingService);
+            surveyResponseRepository, creditPolicy);
     }
 
     /** 首次登入：建立帳戶、發初始贈點、餘額同步為贈點數 */
@@ -72,7 +69,7 @@ class ReaderAccountServiceTest {
     /** 初始贈點金額取自可調參數，不寫死 */
     @Test
     void signupGrantAmountComesFromSettings() {
-        when(appSettingService.getInt(eq(AppSettingService.CREDIT_SIGNUP_GRANT), anyInt())).thenReturn(150);
+        when(creditPolicy.signupGrant()).thenReturn(150);
         when(readerRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.empty());
 
         Reader reader = service.findOrCreate("user@example.com", NOW);
