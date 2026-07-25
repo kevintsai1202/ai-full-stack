@@ -18,7 +18,7 @@
 
 ## 2. 範圍
 
-### 交付範圍（7 個功能區）
+### 交付範圍（8 個功能區）
 
 | # | 功能區 | 內容 |
 |---|---|---|
@@ -29,6 +29,18 @@
 | 5 | 寄送紀錄與補寄 | 每篇「誰寄成功／誰失敗」，對未成功寄出者補寄 |
 | 6 | 開信追蹤 | 追蹤像素、每篇開信名單與開信率報表 |
 | 7 | 內容製作升級 | 圖片上傳（MinIO）、raw HTML 引用、VIP 分組寄送 |
+| 8 | 參與度分級與 sunset | 依真實互動分 active / dormant / sunset，發送時選擇級別 |
+
+### 刻意否決的替代方案：寄信扣點
+
+曾評估「每寄一封信就扣該讀者點數、歸零即停寄」，**否決**。記錄理由以免日後重複討論：
+
+1. **消耗方向對著核心讀者**：寄信扣點是被動消耗，讀者什麼都不做也在扣。扣得最快的是訂閱最久、每期都在名單裡的人；而從未開信的殭屍地址扣點速度完全相同。該機制無法區分兩者卻同時處死兩者。
+2. **整份名單同步倒數**：所有現有訂閱者從同一天開始扣，約 7 個月後同時歸零（週更、10 點/封計）。這不是篩選讀者，是為整份名單設到期日。
+3. **邀請飛輪變質**：回報從「獲得更多深度內容」變成「免於被斷訊」，是懲罰的解除而非獎勵。
+4. **價值交換方向相反**：寄信的邊際成本由營運方支付（ZSend 額度），讀者收信是被動接受已同意的事，向其收費無對應價值。
+
+「篩掉不活躍讀者」的正確工具是功能區 8 的 sunset policy——它看真實參與度而非時間流逝，因此鐵粉永不被停寄、殭屍地址快速淘汰，且能保護寄信信譽。
 
 ### 非目標（明確不做）
 
@@ -44,7 +56,8 @@
 world.springai.survey/
 ├─ audience/    名單中心 ── 唯一真相：這個 email 是誰、同意了什麼、從哪來
 │                 SurveyResponse, SurveyResponseRepository, RecipientService,
-│                 UnsubscribeTokenService, AdminImportController, WelcomeMailService
+│                 UnsubscribeTokenService, AdminImportController, WelcomeMailService,
+│                 EngagementService(新)
 ├─ mail/        寄信唯一出口 ── 所有信都從這裡出去，額度在這裡統一控管
 │                 MailSender, ZSendMailSender, NoopMailSender, MailConfig,
 │                 MailQuotaService, EmailLog(+Repository), MailTemplate(+Repository), EmailTemplate
@@ -71,7 +84,7 @@ reader ──▶ audience, mail, newsletter(唯讀 campaign)
 - `reader` 讀取 `newsletter` 的 `Campaign` 作為「文章」，但不呼叫發送邏輯。
 - 這層 package 邊界即為日後真要拆服務時的拆解線。
 
-**共用元件**（`AdminKeyGuard`、`ApiExceptionHandler`、`WebConfig`、`SurveyApplication`）留在根 package。
+**共用元件**（`AdminKeyGuard`、`ApiExceptionHandler`、`WebConfig`、`SurveyApplication`）留在根 package，並新增 `AppSettingService`（可調參數讀寫，見 §9.1）——它跨越多個領域（點數參數給 `reader`、參與度門檻給 `audience`），不屬於任何單一 package。
 
 **前端**：延續現有 vanilla HTML + JS + CSS、無建置步驟的做法，與 `index.html` / `admin.html` 一致。新增靜態頁放在 `src/main/resources/static/`。
 
@@ -157,6 +170,7 @@ ALTER TABLE campaign ADD COLUMN credit_cost     INT     NOT NULL DEFAULT 0;     
 ALTER TABLE campaign ADD COLUMN slug            TEXT;                             -- 網頁網址片段
 ALTER TABLE campaign ADD COLUMN published_at    TIMESTAMPTZ;                      -- 非 NULL 才出現在 archive
 ALTER TABLE campaign ADD COLUMN vip_full_in_mail BOOLEAN NOT NULL DEFAULT FALSE;  -- VIP 是否在信件收全文
+ALTER TABLE campaign ADD COLUMN filter_levels   TEXT NOT NULL DEFAULT 'active';   -- 本次寄送的參與度級別（逗號分隔），供補寄重建對象
 CREATE UNIQUE INDEX uq_campaign_slug ON campaign (slug) WHERE slug IS NOT NULL;
 
 -- 防呆：PREMIUM 必須有解鎖成本，否則等同免費卻標成付費內容
@@ -166,7 +180,14 @@ ALTER TABLE campaign ADD CONSTRAINT ck_campaign_premium_cost
 
 發布 API 亦須在寫入前驗證此規則，回 400 並附明確訊息（不要只靠 DB 約束丟出 500）。
 
-`survey_response` **不變更結構**。讀者自助維護的個人資料寫回它既有的 `name` / `role` / `experience` / `interest` / `answers` 欄位。
+```sql
+-- V8：參與度時間戳。放在名單中心而非 reader，因為未登入過的殭屍地址沒有 reader 列，
+-- 但正是最需要被 sunset 判定的對象
+ALTER TABLE survey_response ADD COLUMN last_engaged_at TIMESTAMPTZ;
+CREATE INDEX idx_survey_response_engaged ON survey_response (last_engaged_at);
+```
+
+`survey_response` 的其餘結構不變。讀者自助維護的個人資料寫回它既有的 `name` / `role` / `experience` / `interest` / `answers` 欄位。
 
 ### 4.3 `reader` 與 `survey_response` 為何不合併
 
@@ -276,6 +297,8 @@ credits >= campaign.credit_cost           → FULL + 扣點
 改寫 `CampaignService.send`：
 
 ```
+取收件人：既有 filter_role / filter_interest 過濾
+          → 再以參與度級別過濾（filter_levels，見 5.10）
 渲染兩個版本：fullHtml（含受限區）、foldedHtml（僅免費區 + 「到網頁解鎖」連結）
 收件人依 reader.tier 分兩組（無 reader 列者視為 FREE）
   VIP 組  → campaign.vip_full_in_mail ? fullHtml : foldedHtml
@@ -328,6 +351,45 @@ credits >= campaign.credit_cost           → FULL + 扣點
 
 在 spec 中明確記錄此為刻意決定：內容作者僅限 admin（受 `AdminKeyGuard` 保護），不做 HTML 淨化。若日後開放非 admin 投稿，必須先加 sanitizer——這是啟用投稿功能的前置條件。
 
+### 5.10 參與度分級與 sunset policy
+
+**目的**：不再寄給早已不看的人（保護寄信信譽與送達率），同時保留對這些人寄「重大優惠／召回信」的能力。
+
+**唯一的參與度事實**：`survey_response.last_engaged_at`。以下行為全部更新它（取 `now()`）：
+
+| 行為 | 可靠性 | 寫入點 |
+|---|---|---|
+| 點確認信完成訂閱 | 高 | `/api/survey/confirm` |
+| 開信（追蹤像素） | 低（信箱常封鎖圖片） | `email_open` 寫入時 |
+| magic link 登入成功 | 高 | 登入流程 |
+| 解鎖／閱讀文章 | 高 | `article_access` 寫入時 |
+| 更新個人資料 | 高 | `/r/me` 儲存時 |
+
+**分級規則**（`audience/EngagementService` 即時計算，**不物化 level 欄位**——衍生值物化會過期）：
+
+```
+已寄期數 = email_log 中該 recipient 且 type IN ('campaign','campaign_resend') 的 campaign 去重計數
+
+active   ← last_engaged_at 在 90 天內
+         或 已寄期數 < 沉睡門檻(6)          ← 新訂閱者未達觀察期，一律視為 active
+dormant  ← 不符 active，且 已寄期數 < 淘汰門檻(12)
+sunset   ← 已寄期數 >= 淘汰門檻(12) 且 last_engaged_at 為 NULL 或超過 365 天
+```
+
+**關鍵邊界條件**：新訂閱者 `last_engaged_at` 可能為 `NULL`（匯入者尚未確認、或確認後從未開信）。若不特別處理，新人**第一封信就會被判為不活躍而收不到**——這會讓整個訂閱漏斗失效。因此「已寄期數 < 沉睡門檻」必須優先於時間判斷。
+
+**發送時的級別選擇**：`AdminCampaignController` 的發送與排程請求新增 `levels` 參數（可多選 `active` / `dormant` / `sunset`）：
+
+- 常規電子報 → 只勾 `active`（預設）
+- 重大優惠、課程開賣、召回信（即「訂閱廣告」）→ 勾 `active` + `dormant`
+- `sunset` 預設不勾，需明確勾選才寄（保留能力但不會誤觸）
+
+級別過濾疊加在既有的 `filter_role` / `filter_interest` 之上，`campaign` 表記錄本次所選級別（新增 `filter_levels TEXT` 欄位，逗號分隔），供補寄時重建相同對象。
+
+**與開信率下限的關係**（見 5.7）：開信是低可靠訊號，因此門檻刻意放寬（6 期沉睡、12 期淘汰、365 天），且登入／解鎖／改資料這些高可靠行為都會重置。設計上寧可留下一個不活躍者，也不要誤斷一個只是封鎖圖片的真實讀者。
+
+**不做的部分**：不自動改變任何人的訂閱狀態（`consent` / `unsubscribed` 完全不動）。sunset 只影響「這次要不要寄給他」，不是退訂。讀者任何時候回來互動，`last_engaged_at` 更新後自動回到 active，無需人工處理。
+
 ## 6. 寄信額度：交易信優先權
 
 **風險**：ZSend 有日／月額度上限（`MailQuotaService` 已能動態偵測）。magic link 登入信是**交易信**——讀者當下在等它。若額度被電子報群發吃光，讀者將無法登入，這是產品級故障，而不只是「信晚一點到」。
@@ -350,6 +412,9 @@ credits >= campaign.credit_cost           → FULL + 扣點
 | 寄送紀錄 | 每篇的成功／失敗名單，一鍵補寄 | 新增 |
 | 開信報表 | 每篇開信率與未開信名單 | 新增 |
 | 點數帳本查詢 | 依 email 查交易明細（客訴對帳用） | 新增 |
+| 名單健康度 | active / dormant / sunset 各級人數與趨勢；可匯出各級名單 | 新增 |
+| 發送級別選擇 | 發送與排程時勾選要寄給哪些參與度級別（預設只勾 active） | 擴充 |
+| 參數設定 | 修改點數、門檻等所有參數，**存 DB、改完立即生效** | 新增 |
 
 ## 8. 讀者端頁面
 
@@ -364,22 +429,50 @@ credits >= campaign.credit_cost           → FULL + 扣點
 
 沿用 `index.html` 的視覺語言與 vanilla JS 做法，無建置步驟。
 
-## 9. 參數表（全部由 `application.yml` 或後台設定，不寫死）
+## 9. 參數
 
-| 參數 | 值 |
-|---|---|
-| 初始贈點 | 300 |
-| PREMIUM 單篇預設解鎖點數 | 10 |
-| 邀請成功獎勵 | 100 |
-| 受限區起點 | 作者以 `<!--paywall-->` 標記 |
-| VIP 預設效期 | 1 年 |
-| 點數過期 | 不過期 |
-| magic link 有效期 | 15 分鐘 |
-| JWT 有效期 | 4 週 |
-| 登入信節流 | 同 email 15 分鐘內 3 封 |
-| 交易信保留額度 | 50 封 |
-| 圖片單檔上限 | 5 MB |
-| `vip_full_in_mail` 預設 | false |
+### 9.1 存放位置：DB 設定表，非 `application.yml`
+
+點數與門檻類參數**必須存 DB 並由後台修改、改完立即生效**。理由是明確的產品意圖：這些數字第一版是估的，要靠上線後的真實行為迭代。放進 `application.yml` 意味著每次調整都要重新部署——實務結果是不會有人去調，參數就永遠停在初版猜測值。
+
+```sql
+-- V7：可調參數。key-value 表，型別在讀取端轉換
+CREATE TABLE app_setting (
+    setting_key TEXT        PRIMARY KEY,
+    value       TEXT        NOT NULL,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+讀取端以 60 秒快取（比照 `MailQuotaService` 的既有做法），避免每次授權判斷都打 DB；後台儲存時主動清除快取，做到「改完立即生效」。查無此 key 時退回程式內的預設常數，所以新增參數不需要 data migration。
+
+**留在 `application.yml` 的**（屬部署設定，不是產品參數）：magic link 有效期、JWT 有效期、登入信節流、交易信保留額度、圖片單檔上限、MinIO 連線資訊、各種 secret。
+
+### 9.2 初始值
+
+第一版**照下表上線不調整**，觀察真實解鎖頻率與參與度分布後再校準。
+
+| 參數 | 初始值 | 存放 |
+|---|---|---|
+| 初始贈點 | 300 | DB |
+| PREMIUM 單篇預設解鎖點數 | 10 | DB |
+| 邀請成功獎勵 | 100 | DB |
+| VIP 預設效期 | 1 年 | DB |
+| 沉睡門檻（已寄期數） | 6 期 | DB |
+| 淘汰門檻（已寄期數） | 12 期 | DB |
+| active 判定天數 | 90 天 | DB |
+| sunset 判定天數 | 365 天 | DB |
+| 受限區起點 | 作者以 `<!--paywall-->` 標記 | 內容 |
+| 點數過期 | 不過期 | 不實作 |
+| magic link 有效期 | 15 分鐘 | yml |
+| JWT 有效期 | 4 週 | yml |
+| 登入信節流 | 同 email 15 分鐘內 3 封 | yml |
+| 交易信保留額度 | 50 封 | yml |
+| 圖片單檔上限 | 5 MB | yml |
+| `vip_full_in_mail` 預設 | false | 每篇設定 |
+| 發送預設級別 | 只勾 `active` | 每篇設定 |
+
+**上線後應觀察的指標**（決定怎麼調參數）：PREMIUM 平均解鎖率、300 點的實際耗盡時間中位數、邀請轉換率、各參與度級別的人數分布。
 
 ## 10. 安全考量彙整
 
@@ -404,7 +497,7 @@ credits >= campaign.credit_cost           → FULL + 扣點
 純搬移 + 調整 import，不改行為。既有測試（`SurveyControllerTest`、`InviteServiceTest`）全綠即為驗證。先做這步，後續每個功能才有正確的落點。
 
 **階段 B：讀者身分 + archive + paywall**（功能區 1、2）
-V7/V8 migration（**含 `credit_txn`，因為首次登入即需發 300 點 `SIGNUP_GRANT`**）、magic link、JWT、`ContentSplitter`、`AccessDecisionService`。此階段的授權只走「未登入 / 未確認訂閱 / BASIC / VIP / 已解鎖」五條路徑——**扣點路徑尚未接上，PREMIUM 對非 VIP 一律 PARTIAL**。讀者端 4 個頁面（`/r/`、`/r/archive`、`/r/news/{slug}`、`/r/login`）。此階段結束即為可上線產品。
+V7/V8 migration（**含 `credit_txn`，因為首次登入即需發 300 點 `SIGNUP_GRANT`**；**含 `app_setting`，因為贈點數必須可調**）、magic link、JWT、`ContentSplitter`、`AccessDecisionService`。此階段的授權只走「未登入 / 未確認訂閱 / BASIC / VIP / 已解鎖」五條路徑——**扣點路徑尚未接上，PREMIUM 對非 VIP 一律 PARTIAL**。讀者端 4 個頁面（`/r/`、`/r/archive`、`/r/news/{slug}`、`/r/login`）。此階段結束即為可上線產品。
 
 **階段 C：點數消耗 + 邀請**（功能區 3、4）
 接上 `AccessDecisionService` 的扣點路徑（`article_access` + 條件式 UPDATE）、後台手動／批次加點、VIP 授予、邀請碼與 confirm 時發獎、`/r/me`、`/r/invite`。
@@ -414,6 +507,11 @@ MinIO 服務與上傳、後台插圖 UI、發送依 tier 分組、`vip_full_in_m
 
 **階段 E：寄送追蹤**（功能區 5、6）
 補寄（差集 + 冪等）、開信像素與 HMAC、開信報表、名單匯入 UI。
+
+**階段 F：參與度分級與 sunset**（功能區 8）
+`EngagementService` 分級計算、發送級別選擇 UI、`filter_levels` 記錄與補寄重建、名單健康度報表、參數設定 UI。
+
+**`last_engaged_at` 的漸進接線**：欄位在階段 B 的 V8 就建立，各個寫入點隨對應功能上線時一併接上（登入→階段 B、解鎖→階段 C、開信→階段 E、confirm 與改資料→各自所屬階段）。階段 F 只負責讀取與分級，不需回頭改前面的功能。這樣到階段 F 上線時已累積數個月的真實參與度資料，分級一開始就有效——若把寫入也留到階段 F，上線當天全部人的 `last_engaged_at` 都是 NULL，分級毫無意義。
 
 ## 12. 測試策略
 
@@ -430,6 +528,10 @@ MinIO 服務與上傳、後台插圖 UI、發送依 tier 分組、`vip_full_in_m
 | 開信追蹤 | 驗簽成功記錄 / 驗簽失敗不記錄但仍回圖片 |
 | 額度保留 | 剩餘額度低於 reserve 時群發縮減、登入信照送 |
 | PARTIAL 不洩漏 | 斷言 PARTIAL 回應的 HTML **不含**受限區任何字串 |
+| 參與度分級 | **新訂閱者（已寄 0 期、`last_engaged_at` 為 NULL）必須為 active**；已寄 6 期未互動為 dormant；已寄 12 期且逾 365 天為 sunset；互動後立即回 active |
+| 級別過濾寄送 | 只勾 active 時 dormant/sunset 不在收件人內；勾 active+dormant 時 sunset 仍排除 |
+| 補寄重建對象 | 依 `filter_levels` 重建，斷言與原次寄送的級別條件一致 |
+| 參數即時生效 | 改 `app_setting` 後下次授權判斷即採用新值（含快取清除） |
 
 ## 13. 未決事項與已接受風險
 
@@ -438,3 +540,6 @@ MinIO 服務與上傳、後台插圖 UI、發送依 tier 分組、`vip_full_in_m
 3. **邀請無上限**：接受風險，理由見 5.4。若帳本出現異常集中的 REFERRAL，再加上限。
 4. **MinIO bucket 公開讀取**：圖片 URL 無法撤回（信已寄出，收件人隨時可能重看舊信）。因此不得上傳敏感圖片，此為使用約定而非技術限制。
 5. **VIP 到期後**：`tier` 保持 `VIP` 但 `vip_expires_at` 已過 → 授權判斷視為 FREE。不做自動降級排程，也不寄到期通知（第一版）。
+6. **點數初版參數是估的**：300 點 / 10 點一篇在週更、半數 PREMIUM 的情境下約 14 個月才耗盡，稀缺感可能不足。已刻意接受並改為上線後依真實數據校準（見 §9.2 觀察指標），這是選擇 `app_setting` DB 設定表而非 yml 的直接原因。
+7. **參與度分級依賴開信率下限**：開信是低可靠訊號（信箱封鎖圖片），因此門檻放寬且以登入／解鎖等高可靠行為為主。仍可能有真實讀者被判為 dormant——但因 dormant 只影響「常規信不寄」而非退訂，且任何互動立即恢復 active，損害可逆。刻意接受。
+8. **`EngagementService` 的已寄期數需掃 `email_log`**：名單成長後此查詢會變重。第一版直接查（名單規模數百至數千，成本可忽略）；若日後變慢，對策是在 `survey_response` 加物化的 `campaigns_sent_count` 並於寄送時遞增，而非改變分級語意。
