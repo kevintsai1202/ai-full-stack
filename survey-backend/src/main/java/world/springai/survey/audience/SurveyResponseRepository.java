@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 /** 問卷回應資料存取層 */
@@ -38,6 +39,33 @@ public interface SurveyResponseRepository extends JpaRepository<SurveyResponse, 
     /** 可寄送名單：同意且未退訂的去重 email（小寫），供未來批量發送使用 */
     @Query("select distinct lower(s.email) from SurveyResponse s where s.consent = true and s.unsubscribed = false")
     List<String> findDistinctRecipients();
+
+    /**
+     * 該 email 是否為已確認訂閱者（同意且未退訂）。
+     *
+     * <p>讀者端的授權判斷用它——訂閱狀態只有名單中心這一份真相，
+     * reader 表刻意不自帶訂閱狀態。</p>
+     */
+    @Query("""
+        select count(s) > 0 from SurveyResponse s
+         where lower(s.email) = lower(:email)
+           and s.consent = true
+           and s.unsubscribed = false
+        """)
+    boolean isSubscribed(@Param("email") String email);
+
+    /**
+     * 更新最後互動時間（供參與度分級使用）。
+     *
+     * <p>高可靠互動訊號：確認訂閱、登入、解鎖文章、更新個人資料。
+     * 開信是低可靠訊號（信箱常封鎖圖片）但同樣會更新。</p>
+     *
+     * @return 受影響筆數；0 表示該 email 不在名單中（讀者可能尚未訂閱）
+     */
+    @Modifying
+    @Transactional
+    @Query("update SurveyResponse s set s.lastEngagedAt = :at where lower(s.email) = lower(:email)")
+    int touchEngagement(@Param("email") String email, @Param("at") OffsetDateTime at);
 
     /**
      * 可寄送名單（去重小寫 email）：同意且未退訂；
