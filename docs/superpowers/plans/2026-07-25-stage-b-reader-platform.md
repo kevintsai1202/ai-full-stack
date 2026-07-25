@@ -1962,6 +1962,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 **Interfaces:**
 - Consumes: `LoginToken`、`LoginTokenRepository`（Task 5）
 - Produces:
+  - `LoginTokenRepository.markUsedIfUnused(String tokenHash, OffsetDateTime now) → int`（**原子條件更新**，見下方併發說明）
   - `LoginTokenService.issue(String email, OffsetDateTime now) → String`（回**明文** token，只有這一刻存在於記憶體，之後只留雜湊）
   - `LoginTokenService.consume(String rawToken, OffsetDateTime now) → Optional<String>`（回正規化後的 email；成功即標記 used）
   - `LoginTokenService.isThrottled(String email, OffsetDateTime now) → boolean`
@@ -2202,10 +2203,17 @@ public class LoginTokenService {
     }
 
     /**
-     * 兌換 token：驗證存在、未過期、未使用，成功則標記已使用並回傳 email。
+     * 兌換 token：驗證存在、未過期，並以**原子條件更新**取得使用權，成功則回傳 email。
      *
      * <p>任何失敗一律回 empty 而不拋例外，也不區分「不存在」與「已使用」——
      * 對外不洩漏 token 的狀態。</p>
+     *
+     * <p><b>一次性必須靠原子更新，不能靠「先查再存」</b>：先 findByTokenHash 檢查
+     * isUsed() 再 save() 會有 TOCTOU 窗口——兩個併發請求都會查到「未使用」而各自
+     * 標記成功，兩者都能登入。token_hash 的 UNIQUE 只防止插入重複列，擋不住對既有列
+     * 的重複更新。而一次性正是本元件不沿用無狀態 HMAC 的唯一理由，所以正確性必須由
+     * markUsedIfUnused 的回傳值（受影響筆數）決定。這不是理論問題：email 客戶端預抓、
+     * Outlook Safe Links 之類的掃描器、使用者開兩個分頁，都會讓同一連結被兌換兩次。</p>
      */
     public Optional<String> consume(String rawToken, OffsetDateTime now) {
         if (!StringUtils.hasText(rawToken)) {
@@ -2256,7 +2264,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test -Dtest=LoginTokenServiceTest
 ```
 
-Expected: `Tests run: 11, Failures: 0, Errors: 0, Skipped: 0`
+Expected: `Tests run: 12, Failures: 0, Errors: 0, Skipped: 0`
 
 - [ ] **Step 5: 跑全部測試並 commit**
 
@@ -2265,7 +2273,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 110, Failures: 0, Errors: 0, Skipped: 0`（99 + 11）
+Expected: `Tests run: 111, Failures: 0, Errors: 0, Skipped: 0`（99 + 12）
 
 ```powershell
 git add src/main/java/world/springai/survey/reader/LoginTokenService.java src/test/java/world/springai/survey/reader/LoginTokenServiceTest.java
@@ -2566,7 +2574,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 119, Failures: 0, Errors: 0, Skipped: 0`（110 + 9）
+Expected: `Tests run: 120, Failures: 0, Errors: 0, Skipped: 0`（111 + 9）
 
 ```powershell
 git add src/main/java/world/springai/survey/reader/ReaderSessionService.java src/test/java/world/springai/survey/reader/ReaderSessionServiceTest.java
@@ -3279,7 +3287,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 134, Failures: 0, Errors: 0, Skipped: 0`（119 + 8 + 7）
+Expected: `Tests run: 135, Failures: 0, Errors: 0, Skipped: 0`（120 + 8 + 7）
 
 ```powershell
 git add src/main/java/world/springai/survey/audience/SurveyResponseRepository.java src/main/java/world/springai/survey/reader/ReaderAccountService.java src/main/java/world/springai/survey/reader/LoginMailService.java src/test/java/world/springai/survey/reader/ReaderAccountServiceTest.java src/test/java/world/springai/survey/reader/LoginMailServiceTest.java
@@ -3497,7 +3505,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 138, Failures: 0, Errors: 0, Skipped: 0`（134 + 4）
+Expected: `Tests run: 139, Failures: 0, Errors: 0, Skipped: 0`（135 + 4）
 
 ```powershell
 git add src/main/java/world/springai/survey/newsletter/Campaign.java src/main/java/world/springai/survey/newsletter/CampaignRepository.java src/test/java/world/springai/survey/newsletter/CampaignTierTest.java
@@ -3904,7 +3912,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 150, Failures: 0, Errors: 0, Skipped: 0`（138 + 12）
+Expected: `Tests run: 151, Failures: 0, Errors: 0, Skipped: 0`（139 + 12）
 
 ```powershell
 git add src/main/java/world/springai/survey/reader/AccessDecisionService.java src/test/java/world/springai/survey/reader/AccessDecisionServiceTest.java
@@ -4756,7 +4764,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 167, Failures: 0, Errors: 0, Skipped: 0`（150 + 17）
+Expected: `Tests run: 168, Failures: 0, Errors: 0, Skipped: 0`（151 + 17）
 
 ```powershell
 git add src/main/java/world/springai/survey/reader/HtmlTemplate.java src/main/java/world/springai/survey/reader/ReaderAuthController.java src/main/java/world/springai/survey/WebConfig.java src/main/resources/static/reader/ src/test/java/world/springai/survey/reader/HtmlTemplateTest.java src/test/java/world/springai/survey/reader/ReaderAuthControllerTest.java
@@ -5458,7 +5466,7 @@ $env:JAVA_HOME = "D:\java\jdk-21"
 mvn test
 ```
 
-Expected: `Tests run: 178, Failures: 0, Errors: 0, Skipped: 0`（167 + 11）
+Expected: `Tests run: 179, Failures: 0, Errors: 0, Skipped: 0`（168 + 11）
 
 ```powershell
 git add src/main/java/world/springai/survey/reader/ src/main/resources/static/reader/ src/test/java/world/springai/survey/reader/
@@ -5679,7 +5687,7 @@ mvn clean test
 Expected:
 1. 第一項**無輸出**（V8 的 `UPDATE ... WHERE consent = TRUE` 是唯一允許的既有列改寫，且不在此比對範圍內）
 2. `ddl-auto: validate`
-3. `Tests run: 178, Failures: 0, Errors: 0`
+3. `Tests run: 179, Failures: 0, Errors: 0`
 
 **另外必做**：`MigrationSafetyTest` 驗證的是 migration **邏輯**（在乾淨容器上），不是正式資料庫的**真實資料**。部署前仍須對正式 DB 的複本實際套用一次 V7／V8，確認：`survey_response` 筆數不變、既有名單的 email／consent／unsubscribed 未變、已確認訂閱者的 `last_engaged_at` 全部非 NULL。**正式 DB 備份完成前不得部署。**
 
@@ -5717,7 +5725,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 
 全部滿足才算完成：
 
-- [ ] `mvn clean test` 為 `Tests run: 178, Failures: 0, Errors: 0`
+- [ ] `mvn clean test` 為 `Tests run: 179, Failures: 0, Errors: 0`
 - [ ] `MigrationSafetyTest` 7 個測試通過，且已實測「註解掉 backfill 會讓它變紅」
 - [ ] 對正式 DB 複本實際套用 V7／V8 驗證通過（筆數不變、同意狀態未變、backfill 完整）
 - [ ] `scripts/verify-reader-flow.mjs` 全部通過
