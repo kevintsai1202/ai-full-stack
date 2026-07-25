@@ -376,7 +376,21 @@ mvn test
 
 Expected: `Tests run: 70, Failures: 0, Errors: 0, Skipped: 0`
 
-測試檔此時仍在根 package。它們能通過是因為根 package 的測試可以 import 子 package 的 public 類。**若此步失敗，先修到綠再繼續**——不要帶著紅燈進 Task 3。
+測試檔此時仍在根 package，**必須為它們補上跨 package import 才能編譯**。Java 的簡名解析不會因為「這些類曾經同 package」而繼續生效——搬走之後，測試檔對 `SurveyResponse`、`MailSender` 等的簡名引用全部失效。
+
+需要補 import 的 10 個測試檔與其 import 清單，見 Task 3 Step 3 的對照表（該表原本是為搬移後準備的，此處提前使用同一份清單）。
+
+**唯一的例外**：`MailQuotaServiceTest` 引用 package-private 的 `MailQuotaService.BATCH_CAP`，補 import 無法解決可見性問題，必須**在此步就把它搬到 `mail/`**：
+
+```powershell
+cd d:\GitHub\hahow-ai-full-stack\survey-backend\src	est\java\world\springai\survey
+New-Item -ItemType Directory -Force mail | Out-Null
+git mv MailQuotaServiceTest.java mail/
+```
+
+搬完後同步把它的 `package` 宣告改成 `world.springai.survey.mail`，並移除因此變得多餘的 `import ...MailQuotaService;`。
+
+**若此步失敗，先修到綠再繼續**——不要帶著紅燈進 Task 3。
 
 - [ ] **Step 11: 確認搬移是純粹的（只有 package 行與 import 變動）**
 
@@ -427,7 +441,9 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 - Consumes: Task 2 產出的四個子 package
 - Produces: 測試檔與被測類同 package，後續階段的新測試依同一規則放置
 
-> **為什麼測試也要搬**：測試留在根 package 雖然能編譯（子 package 的 public 類可被 import），但兩個 package-private 成員（`MailQuotaService.BATCH_CAP`、`InviteService` 的四個常數）的測試會失去存取權。`MailQuotaServiceTest` 現在就在用 `MailQuotaService.BATCH_CAP`——不搬會直接編譯失敗。
+> **為什麼測試也要搬**：Task 2 已為根 package 的測試檔補上跨 package import，所以此刻是能編譯的。但 `InviteService` 的四個 package-private 常數（`TEMPLATE_KEY` 等）若日後被測試引用就會失去存取權，而測試與被測類同 package 也讓後續階段的新測試有明確落點。
+>
+> **本 task 的前提**：`MailQuotaServiceTest` 已在 Task 2 被迫提前搬到 `mail/`（它引用 package-private 的 `BATCH_CAP`，補 import 無法解決），因此本 task 只需搬其餘 10 個檔。
 
 - [ ] **Step 1: 建立測試目錄並搬移**
 
@@ -435,7 +451,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 cd d:\GitHub\hahow-ai-full-stack\survey-backend\src\test\java\world\springai\survey
 New-Item -ItemType Directory -Force audience, mail, newsletter, form | Out-Null
 git mv UnsubscribeTokenServiceTest.java AdminImportControllerTest.java WelcomeMailServiceTest.java audience/
-git mv MailQuotaServiceTest.java ZSendMailSenderTest.java EmailTemplateTest.java mail/
+git mv ZSendMailSenderTest.java EmailTemplateTest.java mail/   # MailQuotaServiceTest 已於 Task 2 搬移，此處不再列入
 git mv CampaignServiceTest.java AdminCampaignControllerTest.java InviteServiceTest.java MarkdownRendererTest.java newsletter/
 git mv SurveyControllerTest.java form/
 Get-ChildItem *.java | Select-Object -ExpandProperty Name
@@ -458,9 +474,13 @@ Select-String -Path */*.java -Pattern "^package " | ForEach-Object { $_.Line } |
 
 Expected 恰好 4 行，與生產類相同的四個 package 宣告
 
-- [ ] **Step 3: 為測試檔加入跨 package import**
+- [ ] **Step 3: 校正測試檔的 import**
 
-以下是每個測試檔需要新增的 import。**逐檔照抄**（不要推測，測試檔用到的型別比生產類多）：
+Task 2 已為這些測試檔補過 import（當時它們還在根 package，需要 import 所有搬走的類）。搬進子 package 後，**指向自己所在 package 的那些 import 變成多餘**——Java 不會因此編譯失敗，只會留下未使用的 import 警告與技術債，必須清掉。
+
+下表是每個測試檔搬移後**應該保留的完整 import 集合**。逐檔比對：不在表內的跨 package import 一律刪除，表內缺少的補上。
+
+例如 `newsletter/CampaignServiceTest.java`：Task 2 為它加的 `world.springai.survey.newsletter.Campaign`、`...CampaignRepository`、`...CampaignService`、`...MarkdownRenderer` 四行，在檔案搬進 `newsletter/` 後全部變成同 package 引用，應刪除；表內列出的 `audience.*` 與 `mail.*` 則保留。
 
 `audience/AdminImportControllerTest.java`
 ```java
