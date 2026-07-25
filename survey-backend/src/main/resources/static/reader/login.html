@@ -45,6 +45,13 @@
     msg.className = 'msg show ' + (ok ? 'ok' : 'err');
   }
 
+  // magic link 失效（不存在／過期／已使用過）會被導回這裡並帶 error=invalid，
+  // 讀者點了過期連結（15 分鐘效期）常見；沒有這段提示時頁面完全不會說明原因。
+  const error = new URLSearchParams(location.search).get('error');
+  if (error === 'invalid') {
+    showMsg('登入連結已失效或已使用過，請重新寄送。', false);
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const button = form.querySelector('button');

@@ -12,6 +12,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import world.springai.survey.AppSettingService;
 import world.springai.survey.newsletter.Campaign;
 import world.springai.survey.newsletter.CampaignRepository;
+import world.springai.survey.newsletter.ContentSplitter;
 import world.springai.survey.newsletter.MarkdownRenderer;
 
 import java.time.OffsetDateTime;

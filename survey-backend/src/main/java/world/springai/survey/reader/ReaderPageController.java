@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import world.springai.survey.newsletter.Campaign;
 import world.springai.survey.newsletter.CampaignRepository;
+import world.springai.survey.newsletter.ContentSplitter;
 import world.springai.survey.newsletter.MarkdownRenderer;
 
 import java.time.OffsetDateTime;
@@ -202,8 +203,8 @@ public class ReaderPageController {
             case NOT_LOGGED_IN -> gateHtml("接下來的內容需要登入",
                 "用訂閱時的 email 登入就能繼續看，不需要密碼。",
                 "<a class=\"btn\" href=\"/r/login?redirect=" + HtmlTemplate.escapeHtml(encodedRedirect) + "\">登入繼續閱讀</a>");
-            case NOT_SUBSCRIBED -> gateHtml("確認訂閱後就能看完整內容",
-                "你的信箱裡應該有一封確認信，點了就完成訂閱。找不到的話可以重新訂閱一次。",
+            case NOT_SUBSCRIBED -> gateHtml("這個 email 尚未完成訂閱確認",
+                "看完整內容需要先完成訂閱確認，可以直接在訂閱頁重新訂閱一次。",
                 "<a class=\"btn\" href=\"/r/\">重新訂閱</a>");
             case NEEDS_CREDITS -> gateHtml("這是進階內容",
                 decision.shortfall() > 0

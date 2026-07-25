@@ -33,6 +33,12 @@ public class SurveyRequest {
     private boolean consent;
     /** 蜜罐：以 CSS 隱藏，機器人才會填 */
     private String website;
+    /**
+     * 資料來源。刻意只是「呼叫端聲稱的值」，實際是否採信由 SurveyController 以白名單
+     * 過濾（目前只接受 "newsletter"），避免任意呼叫端指定 survey_form 之外的值來
+     * 汙染或偽造對外公開的問卷統計。
+     */
+    private String source;
 
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
@@ -56,4 +62,6 @@ public class SurveyRequest {
     public void setConsent(boolean consent) { this.consent = consent; }
     public String getWebsite() { return website; }
     public void setWebsite(String website) { this.website = website; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
 }

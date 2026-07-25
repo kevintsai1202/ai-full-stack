@@ -24,7 +24,7 @@
 
   <div class="card" style="margin-top:26px">
     <h2 style="margin-top:0;font-size:1.1rem">訂閱電子報</h2>
-    <p style="color:var(--muted);font-size:.94rem">填入 email，你會收到一封確認信；點了確認才算訂閱，之前不會收到任何信。</p>
+    <p style="color:var(--muted);font-size:.94rem">填入 email，訂閱立即生效，之後會收到一封歡迎信。</p>
     <form id="subscribe-form" class="form-row">
       <input type="email" id="email" name="email" placeholder="your@email.com" required autocomplete="email">
       <button class="btn" type="submit">訂閱</button>
@@ -61,7 +61,9 @@
     const button = form.querySelector('button');
     button.disabled = true;
     try {
-      const body = { email: document.getElementById('email').value, consent: true };
+      // source: "newsletter" 讓後端能與課程問卷（survey_form）區分，
+      // 避免電子報訂閱者污染 /api/survey/stats 對外公開的問卷統計
+      const body = { email: document.getElementById('email').value, consent: true, source: 'newsletter' };
       if (ref) { body.ref = ref; }
       const res = await fetch('/api/survey', {
         method: 'POST',
@@ -69,7 +71,7 @@
         body: JSON.stringify(body)
       });
       if (res.status === 201 || res.status === 204) {
-        showMsg('已送出，請到信箱點確認連結完成訂閱。', true);
+        showMsg('已訂閱成功，歡迎信已經寄到你的信箱。', true);
         form.reset();
       } else {
         showMsg('送出失敗，請確認 email 格式後再試一次。', false);

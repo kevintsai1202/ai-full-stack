@@ -227,6 +227,49 @@ class SurveyControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals("survey_form", captor.getValue().getSource());
     }
 
+    /** /r/ 訂閱頁帶 source=newsletter 時，寫入的 source 應為 newsletter（白名單放行） */
+    @Test
+    void submitWithNewsletterSourceMarksAsNewsletter() throws Exception {
+        String body = "{\"email\":\"reader@example.com\",\"consent\":true,\"source\":\"newsletter\"}";
+        mvc.perform(post("/api/survey").contentType(MediaType.APPLICATION_JSON).content(body))
+           .andExpect(status().isCreated());
+        org.mockito.ArgumentCaptor<SurveyResponse> captor =
+            org.mockito.ArgumentCaptor.forClass(SurveyResponse.class);
+        verify(repository).save(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("newsletter", captor.getValue().getSource());
+    }
+
+    /**
+     * source 白名單：任意非 "newsletter" 的值一律忽略，落回預設 survey_form。
+     * 這是防止外部呼叫端偽造 survey_form 以外的字面值來灌水公開統計的關鍵測試——
+     * 白名單本身不會被誤放行成「照單全收」。
+     */
+    @Test
+    void submitWithArbitrarySourceFallsBackToSurveyForm() throws Exception {
+        String body = "{\"email\":\"faker@example.com\",\"consent\":true,\"source\":\"totally-made-up\"}";
+        mvc.perform(post("/api/survey").contentType(MediaType.APPLICATION_JSON).content(body))
+           .andExpect(status().isCreated());
+        org.mockito.ArgumentCaptor<SurveyResponse> captor =
+            org.mockito.ArgumentCaptor.forClass(SurveyResponse.class);
+        verify(repository).save(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("survey_form", captor.getValue().getSource());
+    }
+
+    /** 公開統計不得含 newsletter 來源的列，避免電子報訂閱者污染問卷公開數字 */
+    @Test
+    void publicStatsExcludesNewsletterSource() throws Exception {
+        SurveyResponse filled = new SurveyResponse();
+        filled.setRole("後端工程師");
+        filled.setSource("survey_form");
+        SurveyResponse newsletter = new SurveyResponse();
+        newsletter.setSource("newsletter");
+        when(repository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(filled, newsletter));
+
+        mvc.perform(get("/api/survey/stats"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.total").value(1));
+    }
+
     /** CSV 匯出須包含來源欄位，可分辨 survey_form 與 exam */
     @Test
     void adminCsvIncludesSourceColumn() throws Exception {

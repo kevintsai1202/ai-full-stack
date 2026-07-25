@@ -28,6 +28,9 @@ import world.springai.survey.audience.WelcomeMailService;
 /** 問卷收集與管理查詢端點 */
 @RestController
 public class SurveyController {
+    /** /api/survey 的 source 白名單：目前唯一接受的非預設值，供 /r/ 電子報訂閱頁使用 */
+    private static final String SOURCE_NEWSLETTER = "newsletter";
+
     private final SurveyResponseRepository repository;
     private final ObjectMapper objectMapper;
     private final UnsubscribeTokenService tokenService;     // 退訂 token 驗證
@@ -65,6 +68,12 @@ public class SurveyController {
         entity.setBudget(req.getBudget());
         entity.setUtm(req.getUtm());
         entity.setConsent(req.isConsent());
+        // source 白名單：僅接受 "newsletter"（/r/ 訂閱頁使用），其餘一律忽略、
+        // 沿用 entity 預設值 "survey_form"。不可讓呼叫端任意指定 source，
+        // 否則外部能偽造 survey_form 灌水 stats() 對外公開的無金鑰統計數字。
+        if (SOURCE_NEWSLETTER.equals(req.getSource())) {
+            entity.setSource(SOURCE_NEWSLETTER);
+        }
         repository.save(entity);
         // 寫入成功後寄歡迎信；sendWelcome 內部已 try/catch，失敗不影響此回應
         welcomeMailService.sendWelcome(entity.getEmail());
