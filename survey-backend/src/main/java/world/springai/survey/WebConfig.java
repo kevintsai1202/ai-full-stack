@@ -3,6 +3,7 @@ package world.springai.survey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /** CORS 設定：只允許設定檔列出的來源呼叫 /api/** */
@@ -19,5 +20,15 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedOrigins(allowedOrigins)
                 .allowedMethods("GET", "POST", "OPTIONS")
                 .allowedHeaders("*");
+    }
+
+    /**
+     * 讓 /r/** 能取到 static/reader/ 下的資源（如 reader.css）。
+     * HTML 頁面本身由 controller 提供（需要 server 端渲染），這裡只服務靜態附件。
+     */
+    @Override
+    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/r/*.css", "/r/*.js")
+                .addResourceLocations("classpath:/static/reader/");
     }
 }

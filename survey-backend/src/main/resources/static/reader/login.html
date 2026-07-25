@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><!--PAGE_TITLE--></title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/r/reader.css">
+</head>
+<body>
+<header class="site-head">
+  <div class="site-head-inner">
+    <a class="brand" href="/r/">凱文大叔的電子報</a>
+    <nav><a href="/r/archive">歷史內容</a></nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <h1 style="margin-top:0;font-size:1.3rem">登入</h1>
+    <p style="color:var(--muted);font-size:.94rem">
+      不需要密碼。填入訂閱時用的 email，我們寄一個登入連結給你，連結 15 分鐘內有效、只能用一次。
+    </p>
+    <form id="login-form" class="form-row">
+      <input type="email" id="email" name="email" placeholder="your@email.com" required autocomplete="email">
+      <button class="btn" type="submit">寄送登入連結</button>
+    </form>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <p style="margin-top:22px;color:var(--muted);font-size:.92rem">
+    還沒訂閱？<a href="/r/">先訂閱電子報</a>。
+  </p>
+</div>
+
+<script>
+  // 登入請求：把當前的 redirect 參數一併帶上，登入後回到原本要看的頁面
+  const redirect = new URLSearchParams(location.search).get('redirect');
+  const form = document.getElementById('login-form');
+  const msg = document.getElementById('msg');
+
+  /** 顯示提示訊息 */
+  function showMsg(text, ok) {
+    msg.textContent = text;
+    msg.className = 'msg show ' + (ok ? 'ok' : 'err');
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const button = form.querySelector('button');
+    button.disabled = true;
+    try {
+      const res = await fetch('/api/reader/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: document.getElementById('email').value, redirect: redirect })
+      });
+      const data = await res.json();
+      if (data.sent) {
+        showMsg('登入連結已寄出，請到信箱點開。', true);
+        form.reset();
+      } else if (data.throttled) {
+        showMsg('剛剛已經寄過幾封了，請稍等一下再試，或直接找先前那封信。', false);
+      } else {
+        // 寄送失敗不顯示成功假象（spec §6）——讀者正在等這封信
+        showMsg('登入信寄送失敗，請稍後再試一次。', false);
+      }
+    } catch (err) {
+      showMsg('連線失敗，請稍後再試。', false);
+    } finally {
+      button.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
