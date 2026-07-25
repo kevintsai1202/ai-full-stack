@@ -43,7 +43,7 @@ class ReaderAuthControllerTest {
     @MockBean LoginMailService loginMailService;
     @MockBean LoginTokenService loginTokenService;
     @MockBean ReaderAccountService readerAccountService;
-    @MockBean ReaderRepository readerRepository;
+    @MockBean ReaderContext readerContext;
 
     /** 建立一位讀者 */
     private Reader reader() {
@@ -184,7 +184,8 @@ class ReaderAuthControllerTest {
     /** /api/reader/me 已登入回帳戶資訊 */
     @Test
     void meReturnsAccountInfo() throws Exception {
-        when(readerRepository.findById(1L)).thenReturn(Optional.of(reader()));
+        when(readerContext.resolve(anyString()))
+            .thenReturn(Optional.of(new ReaderContext.Current(reader(), true)));
         String jwt = sessionService.issueJwt(1L, OffsetDateTime.now());
 
         mvc.perform(get("/api/reader/me").cookie(

@@ -33,7 +33,7 @@ public class ReaderAuthController {
     private final LoginTokenService loginTokenService;
     private final ReaderAccountService readerAccountService;
     private final ReaderSessionService sessionService;
-    private final ReaderRepository readerRepository;
+    private final ReaderContext readerContext;
     private final HtmlTemplate htmlTemplate;
 
     /** 注入登入流程所需的服務 */
@@ -41,13 +41,13 @@ public class ReaderAuthController {
                                LoginTokenService loginTokenService,
                                ReaderAccountService readerAccountService,
                                ReaderSessionService sessionService,
-                               ReaderRepository readerRepository,
+                               ReaderContext readerContext,
                                HtmlTemplate htmlTemplate) {
         this.loginMailService = loginMailService;
         this.loginTokenService = loginTokenService;
         this.readerAccountService = readerAccountService;
         this.sessionService = sessionService;
-        this.readerRepository = readerRepository;
+        this.readerContext = readerContext;
         this.htmlTemplate = htmlTemplate;
     }
 
@@ -133,8 +133,7 @@ public class ReaderAuthController {
 
     /** 由 session cookie 取出目前登入的讀者；無效一律視為未登入 */
     private Optional<Reader> currentReader(String sessionCookie) {
-        return sessionService.readReaderId(sessionCookie, OffsetDateTime.now())
-            .flatMap(readerRepository::findById);
+        return readerContext.resolve(sessionCookie).map(ReaderContext.Current::reader);
     }
 
     /**
