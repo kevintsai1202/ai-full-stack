@@ -5757,7 +5757,9 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 - [ ] 「受限區不洩漏」測試已實測會在授權條件被破壞時失敗（Task 12 Step 9）
 - [ ] 實機啟動無 `Schema-validation` 錯誤（Task 5 Step 9）
 - [ ] `PackageDependencyTest` 仍通過（`reader` 未反向被下層依賴）
-- [ ] 正式 DB 已備份，且 `ddl-auto` 仍為 `validate`
+- [x] 正式 DB 已備份，且 `ddl-auto` 仍為 `validate`
+  （備份 `6a6519be8177cae08f172517`，34,312 bytes，已實測還原成功——筆數與結構全數吻合。
+  工具與紀錄見 spec §4.0「備份機制與 V7/V8 部署前的備份紀錄」）
 - [ ] **文章能透過 API 發布**（`slug` / `tier` / `publishedAt` 可設定，驗證規則回 400 而非 500）
 - [ ] **「非 BASIC 拒絕寄送」守門已實測有效**（在階段 D 的信件折疊實作前，這道守門把「只發 BASIC」從人為約定變成程式約束）
 

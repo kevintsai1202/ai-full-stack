@@ -128,6 +128,31 @@ reader ──▶ audience, mail, newsletter(唯讀 campaign)
 
 **部署前置檢查**（實作計畫須列為每階段的第一項）：確認正式 DB 已備份、確認 `ddl-auto` 仍為 `validate`、確認本次 migration 檔內無上述禁止的 SQL。
 
+#### 備份機制與 V7/V8 部署前的備份紀錄
+
+備份走 Zeabur 官方 GraphQL API 的 `createBackup`，工具為 [`survey-backend/scripts/zeabur-db-backup.ps1`](../../../survey-backend/scripts/zeabur-db-backup.ps1)（token 從 `$env:ZEABUR_TOKEN` 讀取，故腳本本身可進版控）。
+
+**刻意不採用的做法**：把 PostgreSQL 的連線埠對外開放以便本機 `pg_dump`。那會讓正式庫暴露在公網，風險遠高於備份本身要解決的問題。Zeabur 的 postgresql 服務沒有 public domain，這是它的預設保護，不該為了備份而拆掉。
+
+**V7/V8 部署前的備份（2026-07-25）**：
+
+| 項目 | 值 |
+|---|---|
+| 備份 ID | `6a6519be8177cae08f172517` |
+| 狀態 / 大小 | SUCCESS / 34,312 bytes（ZIP） |
+| 格式 | `pg_dumpall` cluster dump（含 role、`CREATE DATABASE zeabur`、5 張表） |
+| 還原驗證 | 灌進一次性 PG18 空容器，`psql -v ON_ERROR_STOP=1` 結束碼 0 |
+| 筆數 | `survey_response` 308、`email_log` 553、`campaign` 4、`mail_template` 1、`flyway_schema_history` 6 |
+| 結構 | 5 個 PK、1 個 unique、10 個索引全數重建；Flyway 1–6 皆 `success = true` |
+
+> **「status = SUCCESS」不等於備份可用。** 0 位元組的 dump、只含 schema 不含資料的 dump 都可能是 SUCCESS。備份唯一的用途是還原，所以驗收條件必須是「實際還原一次且筆數吻合」。上表的還原驗證正是因此而做，也順帶發現一件事：cluster dump 必須灌進**空的 cluster**——灌進既有測試庫會因 `role "root" already exists` 中止，那是還原程序的錯而非備份的錯，但若沒實測過，災難當下才發現就來不及了。
+>
+> **這次備份也是本專案的第一次備份**（備份清單原本是 0 筆）。建議另行以 `setAutoBackup` 開啟每日自動備份，否則「有備份」這件事只在人記得的時候成立。
+
+**backfill 目標數已由 93 更新為 95**：複本驗證（紀錄於 `.superpowers/sdd/progress.md`）當時 `consent = true` 為 94 筆，備份驗證時為 96 筆，而總筆數兩次都是 308、`source` 分布與最新 `created_at`（2026-07-24）均未變——所以不是新增訂閱，而是**兩筆既有資料的 `consent` 由 false 翻成 true**（兩人點了確認信）。扣掉 `consent = true` 且 `unsubscribed = true` 的 1 筆（id=45），§4.2 的 backfill 會命中 95 列。
+
+> 這個數字會隨上線前的真實訂閱行為繼續變動，**不該被當成驗收條件**。backfill 的正確性來自它的 WHERE 條件（`consent = TRUE AND unsubscribed = FALSE`），不是來自某個特定筆數。記錄它的用途是部署後對照「命中列數是否落在合理範圍」。
+
 ### 4.1 新增表
 
 > **版本歸屬**：V7 只建立階段 B 用得到的五張表（`app_setting`、`reader`、`credit_txn`、`article_access`、`login_token`）。`email_open` 與 `media_asset` 的結構列在下方供設計參考，但**實際建立於後續階段**（分別是階段 E 的 V9 與階段 D 的 V10）——刻意不在用不到的時候建表。
