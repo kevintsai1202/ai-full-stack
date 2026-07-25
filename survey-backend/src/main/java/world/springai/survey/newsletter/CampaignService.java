@@ -108,7 +108,7 @@ public class CampaignService {
         // 待 CampaignService 補上 foldedHtml（依 tier 分兩種內文：全文版／折疊版）後，此檢查方可移除。
         if (!Campaign.TIER_BASIC.equals(normalizedTier)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "PREMIUM 內容的信件折疊尚未實作（階段 D），目前僅能發送 BASIC 內容；此文章可在網頁上以 PREMIUM 發布");
+                "目前僅支援 BASIC 內容寄送；PREMIUM 內容需等信件折疊功能（階段 D）實作後才能發布");
         }
 
         // 取得收件人清單
@@ -202,7 +202,7 @@ public class CampaignService {
         // 非 BASIC 的 campaign 一律拒絕重排寄送。此檢查待 foldedHtml 實作後可移除。
         if (!Campaign.TIER_BASIC.equals(campaign.getTier())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "PREMIUM 內容的信件折疊尚未實作（階段 D），目前僅能發送 BASIC 內容；此文章可在網頁上以 PREMIUM 發布");
+                "目前僅支援 BASIC 內容寄送；PREMIUM 內容需等信件折疊功能（階段 D）實作後才能發布");
         }
 
         // 1. 取消舊的 provider 排程信（把舊 email_log 標 cancelled）

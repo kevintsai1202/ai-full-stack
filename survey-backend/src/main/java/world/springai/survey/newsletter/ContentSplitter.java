@@ -1,4 +1,4 @@
-package world.springai.survey.reader;
+package world.springai.survey.newsletter;
 
 import org.springframework.stereotype.Component;
 
