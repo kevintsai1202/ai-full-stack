@@ -26,7 +26,9 @@ import static org.junit.jupiter.api.Assertions.fail;
  *       這是不引入 ArchUnit 的必然取捨，這類寫法仍須靠 code review 把關。</li>
  *   <li>只掃描 {@code src/main/java}，<b>不涵蓋 {@code src/test/java}</b>。</li>
  *   <li>只檢查「下層 → 上層」與「mail → audience」兩條依賴線，
- *       <b>未涵蓋上層 package 彼此之間</b>的依賴（例如 {@code form} 與 {@code newsletter} 互相依賴）。</li>
+ *       <b>未涵蓋上層 package 彼此之間</b>的依賴（例如 {@code form} 與 {@code newsletter} 互相依賴）——
+ *       {@code newsletterMustNotDependOnReader} 是唯一的例外，因為 {@code reader → newsletter}
+ *       已是既有且授權的方向，一旦反向依賴就會立刻形成循環，值得為這一組上層關係單獨把關。</li>
  * </ul>
  */
 class PackageDependencyTest {
@@ -111,6 +113,43 @@ class PackageDependencyTest {
 
         assertTrue(violations.isEmpty(),
             "mail 是最底層，不得依賴 audience（WelcomeMailService 的 audience → mail 方向才是對的）：\n"
+                + String.join("\n", violations));
+    }
+
+    /**
+     * newsletter 不得 import reader：兩者皆為上層 package，本守衛原本不涵蓋
+     * 「上層彼此之間」的依賴（見類 Javadoc 盲區說明），但 reader → newsletter
+     * （唯讀 Campaign）已存在；若 newsletter 也反向依賴 reader（例如階段 D
+     * CampaignService 想直接複用 reader 底下的型別），就會形成上層互相依賴的循環，
+     * 而前述盲區會讓這個循環悄悄出現而不會有任何測試變紅。故在此另開一條專屬檢查。
+     */
+    @Test
+    void newsletterMustNotDependOnReader() throws IOException {
+        Path dir = SOURCE_ROOT.resolve("newsletter");
+
+        if (!Files.isDirectory(dir)) {
+            fail("newsletter 目錄不存在，SOURCE_ROOT 可能解析錯誤，或 newsletter 已被移除："
+                + dir.toAbsolutePath());
+        }
+
+        List<String> violations = new ArrayList<>();
+        List<Path> javaFiles = javaFilesIn(dir);
+
+        assertTrue(!javaFiles.isEmpty(),
+            "newsletter 目錄下未掃到任何生產類，SOURCE_ROOT 可能解析錯誤：" + dir.toAbsolutePath());
+
+        for (Path javaFile : javaFiles) {
+            for (String line : Files.readAllLines(javaFile)) {
+                String trimmed = line.trim();
+                if (trimmed.startsWith("import ") && trimmed.contains("world.springai.survey.reader.")) {
+                    violations.add(javaFile.getFileName() + "：" + trimmed);
+                }
+            }
+        }
+
+        assertTrue(violations.isEmpty(),
+            "newsletter 不得依賴 reader（reader → newsletter 才是 spec §3 授權的方向，"
+                + "反向依賴會形成上層互相依賴的循環）：\n"
                 + String.join("\n", violations));
     }
 
