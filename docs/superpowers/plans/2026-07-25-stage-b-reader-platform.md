@@ -5711,7 +5711,7 @@ mvn clean test
 Expected:
 1. 第一項**無輸出**（V8 的 `UPDATE ... WHERE consent = TRUE` 是唯一允許的既有列改寫，且不在此比對範圍內）
 2. `ddl-auto: validate`
-3. `Tests run: 188, Failures: 0, Errors: 0`
+3. `Tests run: 203, Failures: 0, Errors: 0`
 
 **另外必做**：`MigrationSafetyTest` 驗證的是 migration **邏輯**（在乾淨容器上），不是正式資料庫的**真實資料**。部署前仍須對正式 DB 的複本實際套用一次 V7／V8，確認：`survey_response` 筆數不變、既有名單的 email／consent／unsubscribed 未變、已確認訂閱者的 `last_engaged_at` 全部非 NULL。**正式 DB 備份完成前不得部署。**
 
@@ -5749,7 +5749,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 
 全部滿足才算完成：
 
-- [ ] `mvn clean test` 為 `Tests run: 188, Failures: 0, Errors: 0`
+- [ ] `mvn clean test` 為 `Tests run: 203, Failures: 0, Errors: 0`
 - [ ] `MigrationSafetyTest` 7 個測試通過，且已實測「註解掉 backfill 會讓它變紅」
 - [ ] 對正式 DB 複本實際套用 V7／V8 驗證通過（筆數不變、同意狀態未變、backfill 完整）
 - [ ] `scripts/verify-reader-flow.mjs` 全部通過
@@ -5758,6 +5758,8 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 - [ ] 實機啟動無 `Schema-validation` 錯誤（Task 5 Step 9）
 - [ ] `PackageDependencyTest` 仍通過（`reader` 未反向被下層依賴）
 - [ ] 正式 DB 已備份，且 `ddl-auto` 仍為 `validate`
+- [ ] **文章能透過 API 發布**（`slug` / `tier` / `publishedAt` 可設定，驗證規則回 400 而非 500）
+- [ ] **「非 BASIC 拒絕寄送」守門已實測有效**（在階段 D 的信件折疊實作前，這道守門把「只發 BASIC」從人為約定變成程式約束）
 
 ## 給階段 C 的交接資訊
 

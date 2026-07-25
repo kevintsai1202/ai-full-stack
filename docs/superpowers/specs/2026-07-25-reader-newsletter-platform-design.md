@@ -89,7 +89,9 @@ reader ──▶ audience, mail, newsletter(唯讀 campaign)
 1. **三個 package 寫死了 `form` 擁有的路由**。`/api/survey/unsubscribe` 與 `/api/survey/confirm` 的端點由 `form/SurveyController` 提供，但 `audience/WelcomeMailService`、`newsletter/CampaignService`、`newsletter/InviteService` 都以**字串**形式組出這兩個網址。`audience → form` 是本節明確禁止的方向，只因為是字串而非 import 才逃過 `PackageDependencyTest`。真要拆服務時，退訂連結會指向被拆走的 form 服務。
 2. **`consent` 生命週期由 `form` 的端點驅動**。`SurveyController` 直接呼叫 `unsubscribeByEmail()` 與 `confirmByEmail()`——`survey_response` 的同意狀態變更（本專案最敏感的資料）發生在 `form` 而非 `audience`，而觸發連結的信件由 `newsletter/InviteService` 寄出，形成 `newsletter →(URL)→ form →(write)→ audience` 的隱形環路。
 
-**階段 B 的處置**：把這兩個端點搬進 `audience`（它們本質是名單同意管理，不是問卷表單功能），並把連結組裝集中成 `audience` 的單一 builder，讓三處字串收斂到一個擁有者。做完之後這條拆解線才真的可拆。
+**處置：改期至階段 C**（原定階段 B，執行時未納入任務範圍）。做法是把這兩個端點搬進 `audience`（它們本質是名單同意管理，不是問卷表單功能），並把連結組裝集中成 `audience` 的單一 builder，讓三處字串收斂到一個擁有者。做完之後這條拆解線才真的可拆。
+
+> 改期理由：階段 B 的範圍已聚焦在讀者端的登入與閱讀，而這項搬遷會動到既有的 confirm／unsubscribe 閉環（18 個 `SurveyControllerTest` 覆蓋的行為），風險與階段 B 的目標無關。**在完成之前，這條「拆解線」是名義上的**——`audience` 與 `newsletter` 仍以字串形式依賴 `form` 的路由，而 `PackageDependencyTest` 抓不到字串依賴。
 
 **`form` 與 `newsletter` 之間不授權任何方向的依賴**。目前實際上也沒有這條 import；`PackageDependencyTest` 尚未涵蓋上層之間的檢查（該測試的 Javadoc 已載明此盲區），階段 B 新增 `reader` 時需特別留意——`reader → newsletter` 是唯讀 `Campaign`，是本節唯一授權的上層間依賴。
 
@@ -271,7 +273,8 @@ UPDATE survey_response
 - **不用既有的無狀態 HMAC**（`UnsubscribeTokenService`）：那個簽章沒有到期也不能失效，對退訂連結是特性，對登入是漏洞。登入必須可到期、可一次性作廢，所以走 DB 表。
 - **只存 hash 不存明文**：DB 洩漏時 token 不可用。
 - **JWT 放 httpOnly cookie 而非 localStorage**：XSS 無法讀取。因為前端與後端同源（同一個 Spring Boot），不需要處理跨域 cookie。
-- **email 不存在名單中也照樣可登入**：登入後導向訂閱確認流程，而不是拒絕登入——降低摩擦，且讓「我明明訂閱了為何進不去」這類客訴消失。
+- **email 不存在名單中也照樣可登入**：不拒絕登入——降低摩擦，且讓「我明明訂閱了為何進不去」這類客訴消失。登入後導向 `redirect` 參數指定的頁面（預設 `/r/archive`）；未確認訂閱者在讀文章時會被 `AccessDecisionService` 判為 `NOT_SUBSCRIBED`，由頁面的 gate 區塊引導他去訂閱。
+  > 實作註記：原設計寫「登入後導向訂閱確認流程」，實際實作是導向原本要看的頁面並由 gate 引導。後者的摩擦更低（讀者仍能瀏覽免費區），且不需要一條專屬的確認流程頁。
 
 **節流**：同一 email 15 分鐘內最多發 3 次登入信（查 `login_token` 計數），避免被當寄信放大器。
 
@@ -290,7 +293,7 @@ credits >= campaign.credit_cost           → FULL + 扣點
 否則                                      → PARTIAL（回傳「還差幾點」與邀請碼）
 ```
 
-**三條在實作階段由審查補上的規則**，都是 fail-closed 方向的收斂：
+**四條在實作階段由審查補上的規則**，都是 fail-closed 方向的收斂：
 
 1. **BASIC 判斷必須是「精確等於 `'BASIC'`」，不可寫成「不是 `'PREMIUM'`」。** 後者會讓 `tier` 打錯字（小寫 `premium`、前後空白、`null`）的進階文章被判為 BASIC 而全文外洩。而資料庫層沒有 `tier IN ('BASIC','PREMIUM')` 白名單，`ck_campaign_premium_cost` 也只檢查 `tier <> 'PREMIUM' OR credit_cost > 0`——所以 `tier = 'premium'` 會同時繞過該 CHECK 與 paywall。
 2. **未發布檢查放在最前面。** 草稿的授權前提不該留給呼叫端判斷，否則「唯一的授權決策點」名不副實。
@@ -498,6 +501,10 @@ sunset   ← 已寄期數 >= 淘汰門檻(12) 且 last_engaged_at 為 NULL 或�
 2. 群發與補寄前檢查：`剩餘額度 - reserve` 才是可用於行銷信的量，不足則縮減批量並在後台顯示原因。
 3. 登入信、確認信、歡迎信不受 reserve 限制（它們就是 reserve 的使用者）。
 4. 登入信送出失敗時，前端明確告知「登入信寄送失敗，請稍後再試」，不要顯示成功假象。
+
+> **階段 B 的實際狀態（誠實記錄）**：只有第 1 項與第 4 項完成。設定鍵 `app.mail.transactional-reserve` 已存在，但**沒有任何程式讀取它**——第 2 項的額度扣減檢查未實作（它需要動群發邏輯，屬階段 D 的範圍）。
+>
+> 這意味著「群發吃光額度導致讀者無法登入」這個本節自稱的「產品級故障」風險，**從階段 B 上線那天就成立**，而不是階段 D 才成立。緩解方式是上線初期避免大量群發，或在階段 C 提前補上第 2 項。**不要因為設定鍵已存在就以為防護已就緒。**
 
 ## 7. 後台新增功能
 
