@@ -29,6 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -379,5 +380,18 @@ class SurveyControllerTest {
         // status 應被統計；_ref 不得出現在任何一組 bucket 的標籤中
         assertTrue(stats.status().stream().anyMatch(b -> "在職".equals(b.label())));
         assertTrue(stats.status().stream().noneMatch(b -> b.label().startsWith("_")));
+
+        // 直接鎖住 answerOf 的契約：底線開頭的鍵一律視為不存在。
+        //
+        // 為什麼要這一行：stats() 目前唯一的呼叫是 answerOf(r, "status")，key 永遠是
+        // 字面量，永遠不會是 "_ref"。若只斷言上面兩行，把 answerOf 的
+        // key.startsWith("_") 檢查整段刪掉，這個測試照樣是綠的——它驗的其實只是
+        // 「status 有被統計」。而這道過濾存在的理由是「日後有人攤平 answers
+        // 全部鍵做統計時，系統鍵不會外洩」，那條路徑現在還不存在，所以必須直接
+        // 對 answerOf 斷言，契約才真的被鎖住。
+        assertNull(SurveyController.answerOf(withRef, "_ref"),
+            "底線開頭的系統鍵必須被視為不存在，否則推薦碼會出現在無需金鑰的公開統計中");
+        assertEquals("在職", SurveyController.answerOf(withRef, "status"),
+            "一般問卷鍵仍必須讀得到，過濾不可過寬");
     }
 }

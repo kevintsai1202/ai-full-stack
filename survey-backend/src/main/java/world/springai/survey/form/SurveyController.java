@@ -237,7 +237,7 @@ public class SurveyController {
      * （目前是邀請歸因 {@link #REF_KEY}）。集中在這個方法過濾，讓日後
      * 新增統計題目不必各自記得排除——忘記一次就是把讀者的邀請關係公開。</p>
      */
-    private static Object answerOf(SurveyResponse r, String key) {
+    static Object answerOf(SurveyResponse r, String key) {
         if (key.startsWith("_") || r.getAnswers() == null) {
             return null;
         }
