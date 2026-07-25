@@ -38,19 +38,44 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 class MigrationSafetyTest {
 
-    /** 專用測試容器的維護資料庫連線（用於重建測試資料庫） */
-    private static final String ADMIN_URL = "jdbc:postgresql://127.0.0.1:5433/postgres";
+    /** 取得環境變數，未設定或空字串時退回預設值；用於讓連線資訊可在別人的機器上覆寫 */
+    private static String env(String name, String defaultValue) {
+        String v = System.getenv(name);
+        return (v == null || v.isBlank()) ? defaultValue : v;
+    }
+
+    /** 測試資料庫主機，可用環境變數 MIGRATION_TEST_DB_HOST 覆寫（預設 127.0.0.1） */
+    private static final String DB_HOST = env("MIGRATION_TEST_DB_HOST", "127.0.0.1");
+    /** 測試資料庫連接埠，可用環境變數 MIGRATION_TEST_DB_PORT 覆寫（預設 5433） */
+    private static final String DB_PORT = env("MIGRATION_TEST_DB_PORT", "5433");
+    /** 連線帳號，可用環境變數 MIGRATION_TEST_DB_USER 覆寫（預設 postgres） */
+    private static final String USER = env("MIGRATION_TEST_DB_USER", "postgres");
+    /** 連線密碼，可用環境變數 MIGRATION_TEST_DB_PASSWORD 覆寫（預設 password） */
+    private static final String PASS = env("MIGRATION_TEST_DB_PASSWORD", "password");
+    /** 專用測試容器的維護資料庫連線（用於重建測試資料庫）；主機/埠/帳密皆可由環境變數覆寫 */
+    private static final String ADMIN_URL = "jdbc:postgresql://" + DB_HOST + ":" + DB_PORT + "/postgres";
     /** 測試資料庫名稱；每次執行都會重建，只有本測試使用 */
     private static final String TEST_DB = "survey_migration_test";
     /** 測試資料庫連線 */
-    private static final String TEST_URL = "jdbc:postgresql://127.0.0.1:5433/" + TEST_DB;
-    private static final String USER = "postgres";
-    private static final String PASS = "password";
+    private static final String TEST_URL = "jdbc:postgresql://" + DB_HOST + ":" + DB_PORT + "/" + TEST_DB;
 
-    /** 既有資料的指紋：email 與同意狀態的組合，用於證明這些欄位逐列未被改寫 */
+    /**
+     * 既有資料的指紋：涵蓋整列（排除本次新增的 last_engaged_at 欄位）。
+     *
+     * <p>用 {@code to_jsonb(t) - 'last_engaged_at'} 而非列出個別欄位，是為了讓這道防線
+     * 自動涵蓋所有既有欄位（name／role／experience／frontend_experience／interest／
+     * budget／utm／answers／source／created_at…），不會因為漏列某個欄位而讓誤改寫
+     * 的資料矇混過關。jsonb 序列化的 key 順序是決定性的，指紋才會穩定。</p>
+     *
+     * <p>減掉 {@code last_engaged_at} 是因為它是 V8 本次新增的欄位，migration 後
+     * 必然從 NULL 被 backfill 成非 NULL（見 confirmedSubscribersAreBackfilled），
+     * 屬於預期中的變動，不應被既有資料指紋擋下。<b>未來若再新增欄位，一律在
+     * 減號後面補上欄名</b>（例如 {@code to_jsonb(t) - 'last_engaged_at' - 'new_col'}），
+     * 這樣既有欄位才會持續全數在防線內，不需要每次手動加回歸斷言。</p>
+     */
     private static final String CHECKSUM_SQL = """
-        SELECT md5(string_agg(email || ':' || consent || ':' || unsubscribed, ',' ORDER BY id))
-          FROM survey_response
+        SELECT md5(string_agg((to_jsonb(t) - 'last_engaged_at')::text, ',' ORDER BY t.id))
+          FROM survey_response t
         """;
 
     /** migration 前的 survey_response 筆數 */
@@ -128,17 +153,25 @@ class MigrationSafetyTest {
             """), "未確認或已退訂者被誤回填");
     }
 
-    /** V7 的五張新表都要建立 */
+    /** V7 的五張新表都要建立在 public schema（避免同名表存在於其他 schema 而誤判通過） */
     @Test
     void newTablesAreCreated() throws SQLException {
         for (String table : new String[] {"app_setting", "reader", "credit_txn", "article_access", "login_token"}) {
             assertEquals(1, queryInt(
-                "SELECT count(*) FROM information_schema.tables WHERE table_name = '" + table + "'"),
+                "SELECT count(*) FROM information_schema.tables"
+                    + " WHERE table_schema = 'public' AND table_name = '" + table + "'"),
                 "資料表 " + table + " 未建立");
         }
     }
 
-    /** 參數初始值要進去，且可安全重跑（ON CONFLICT DO NOTHING） */
+    /**
+     * 參數初始值要逐項核對 8 組 key 與 value（而非只驗筆數與抽驗 2 筆）。
+     *
+     * <p>若只驗 count=8 與部分 key，一旦某個 key 名稱打錯（例如
+     * engagement.active_days 誤植為 engagement.active_day），count 仍是 8、
+     * 測試照樣全綠，但上線後讀取端查不到該 key 會靜默退回程式內建預設值，
+     * 參數調整從此無效且不會有任何錯誤訊息。逐項斷言才能守住這道防線。</p>
+     */
     @Test
     void appSettingsAreSeeded() throws SQLException {
         assertEquals(8, queryInt("SELECT count(*) FROM app_setting"), "app_setting 初始值筆數不符");
@@ -146,9 +179,21 @@ class MigrationSafetyTest {
             "SELECT value FROM app_setting WHERE setting_key = 'credit.signup_grant'"));
         assertEquals("10", queryString(
             "SELECT value FROM app_setting WHERE setting_key = 'credit.premium_cost'"));
+        assertEquals("100", queryString(
+            "SELECT value FROM app_setting WHERE setting_key = 'credit.referral_reward'"));
+        assertEquals("365", queryString(
+            "SELECT value FROM app_setting WHERE setting_key = 'vip.default_days'"));
+        assertEquals("6", queryString(
+            "SELECT value FROM app_setting WHERE setting_key = 'engagement.dormant_after_campaigns'"));
+        assertEquals("12", queryString(
+            "SELECT value FROM app_setting WHERE setting_key = 'engagement.sunset_after_campaigns'"));
+        assertEquals("90", queryString(
+            "SELECT value FROM app_setting WHERE setting_key = 'engagement.active_days'"));
+        assertEquals("365", queryString(
+            "SELECT value FROM app_setting WHERE setting_key = 'engagement.sunset_days'"));
     }
 
-    /** 既有 campaign 應取得新欄位的預設值，不得為 NULL */
+    /** 既有 campaign 應取得新欄位的預設值，不得為 NULL；slug／published_at 應維持 NULL（尚未設定） */
     @Test
     void existingCampaignGetsColumnDefaults() throws SQLException {
         assertEquals(0, queryInt("""
@@ -156,6 +201,9 @@ class MigrationSafetyTest {
              WHERE tier IS DISTINCT FROM 'BASIC'
                 OR credit_cost <> 0
                 OR filter_levels IS DISTINCT FROM 'active'
+                OR vip_full_in_mail IS DISTINCT FROM FALSE
+                OR slug IS NOT NULL
+                OR published_at IS NOT NULL
             """), "既有 campaign 未取得新欄位的預設值");
     }
 
@@ -184,10 +232,12 @@ class MigrationSafetyTest {
             // 能連上即可
         } catch (SQLException e) {
             fail("""
-                連不上本機測試資料庫（%s）。
+                連不上本機測試資料庫（%s，帳號：%s）。
 
                 本測試驗證 migration 不會破壞既有訂閱名單（spec §4.0 的硬約束），
-                不能靜默跳過。請先啟動專用測試容器：
+                不能靜默跳過。連線資訊可用環境變數 MIGRATION_TEST_DB_HOST／
+                MIGRATION_TEST_DB_PORT／MIGRATION_TEST_DB_USER／
+                MIGRATION_TEST_DB_PASSWORD 覆寫。請先啟動專用測試容器：
 
                   docker start survey-test-db
 
@@ -196,7 +246,7 @@ class MigrationSafetyTest {
                   docker run -d --name survey-test-db -e POSTGRES_PASSWORD=password ^
                     -p 5433:5432 pgvector/pgvector:pg18
 
-                原始錯誤：%s""".formatted(ADMIN_URL, e.getMessage()));
+                原始錯誤：%s""".formatted(ADMIN_URL, USER, e.getMessage()));
         }
     }
 
