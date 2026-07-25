@@ -2,9 +2,11 @@ package world.springai.survey.newsletter;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import world.springai.survey.audience.RecipientService;
 import world.springai.survey.audience.UnsubscribeTokenService;
@@ -14,6 +16,8 @@ import world.springai.survey.mail.EmailTemplate;
 import world.springai.survey.mail.MailSender;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -125,5 +129,130 @@ class CampaignServiceTest {
 
         assertEquals(0, r.accepted());
         assertEquals(2, r.failed());
+    }
+
+    // ===================== 發布欄位（tier / creditCost / slug / publishedAt）驗證 =====================
+
+    /** tier 為未知值時回 400，且不建立 campaign（save 從未被呼叫） */
+    @Test
+    void sendWithUnknownTierRejected() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@x.com"));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.send("主旨", "內文", null, null, "now", null,
+                "GOLD", null, null, null));
+
+        assertEquals(400, ex.getStatusCode().value());
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
+    /** slug 格式不合法（含大寫、底線等）時回 400，且不建立 campaign */
+    @Test
+    void sendWithInvalidSlugFormatRejected() {
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.send("主旨", "內文", null, null, "now", null,
+                null, null, "Hello_World", null));
+
+        assertEquals(400, ex.getStatusCode().value());
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
+    /** tier=PREMIUM 但 creditCost 為 0（或未指定）時回 400，且不建立 campaign */
+    @Test
+    void sendWithPremiumZeroCreditCostRejected() {
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.send("主旨", "內文", null, null, "now", null,
+                Campaign.TIER_PREMIUM, 0, null, null));
+
+        assertEquals(400, ex.getStatusCode().value());
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
+    /** slug 重複時回明確 400（而非讓唯一索引丟 500），且不建立 campaign */
+    @Test
+    void sendWithDuplicateSlugRejected() {
+        when(campaignRepository.findBySlug("hello-world"))
+            .thenReturn(Optional.of(new Campaign("舊", "舊", "舊", null, null, "now", null, 0, "sent")));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.send("主旨", "內文", null, null, "now", null,
+                null, null, "hello-world", null));
+
+        assertEquals(400, ex.getStatusCode().value());
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
+    /** 設了 slug 但沒設 publishedAt → 自動視為立即發布（publishedAt 非 NULL，archive 查得到） */
+    @Test
+    void sendWithSlugButNoPublishedAtAutoPublishes() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@x.com"));
+        when(campaignRepository.findBySlug("hello-world")).thenReturn(Optional.empty());
+        ArgumentCaptor<Campaign> captor = ArgumentCaptor.forClass(Campaign.class);
+        when(campaignRepository.save(captor.capture())).thenAnswer(i -> i.getArgument(0));
+        when(mailSender.sendBatch(anyList())).thenReturn("job-1");
+
+        svc.send("主旨", "內文", null, null, "now", null,
+            null, null, "hello-world", null);
+
+        Campaign saved = captor.getAllValues().get(0);
+        assertNotNull(saved.getPublishedAt(), "設了 slug 卻沒設 publishedAt 應自動視為立即發布");
+        assertEquals("hello-world", saved.getSlug());
+    }
+
+    /** 正常發布 BASIC：campaign 建立且 tier/creditCost/slug/publishedAt 欄位正確落地 */
+    @Test
+    void sendBasicWithPublishFieldsCreatesCampaignCorrectly() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@x.com"));
+        when(campaignRepository.findBySlug("my-post")).thenReturn(Optional.empty());
+        ArgumentCaptor<Campaign> captor = ArgumentCaptor.forClass(Campaign.class);
+        when(campaignRepository.save(captor.capture())).thenAnswer(i -> i.getArgument(0));
+        when(mailSender.sendBatch(anyList())).thenReturn("job-1");
+        Instant publishedAt = Instant.parse("2026-07-25T04:00:00Z");
+
+        CampaignService.SendResult r = svc.send("主旨", "內文", null, null, "now", null,
+            Campaign.TIER_BASIC, 0, "my-post", publishedAt);
+
+        assertEquals(1, r.accepted());
+        Campaign saved = captor.getAllValues().get(0);
+        assertEquals(Campaign.TIER_BASIC, saved.getTier());
+        assertEquals(0, saved.getCreditCost());
+        assertEquals("my-post", saved.getSlug());
+        assertEquals(publishedAt, saved.getPublishedAt().toInstant());
+    }
+
+    /**
+     * 守門：tier=PREMIUM 時即使 creditCost/slug 皆合法，發送仍被拒絕
+     * （階段 D 的信件折疊尚未實作，PREMIUM 內容不得寄出，只能在網頁上發布）。
+     * 這是本次任務最重要的一條測試——確保「能設定 PREMIUM」與「信件端全開」不會同時成立。
+     */
+    @Test
+    void sendPremiumTierIsRejectedByFoldingGuard() {
+        when(campaignRepository.findBySlug("premium-post")).thenReturn(Optional.empty());
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.send("主旨", "內文", null, null, "now", null,
+                Campaign.TIER_PREMIUM, 10, "premium-post", null));
+
+        assertEquals(400, ex.getStatusCode().value());
+        verify(campaignRepository, never()).save(any(Campaign.class));
+        verify(mailSender, never()).sendBatch(anyList());
+    }
+
+    /** 重排（reschedule）同樣受折疊守門保護：既有 campaign 的 tier 為 PREMIUM 時拒絕重排寄送 */
+    @Test
+    void reschedulePremiumTierIsRejectedByFoldingGuard() {
+        Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
+            null, 1, "scheduled");
+        existing.setTier(Campaign.TIER_PREMIUM);
+        existing.setCreditCost(10);
+        when(campaignRepository.findById(11L)).thenReturn(Optional.of(existing));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.reschedule(11L, "新主旨", "新內文", null, null,
+                Instant.parse("2030-01-01T00:00:00Z")));
+
+        assertEquals(400, ex.getStatusCode().value());
+        verify(mailSender, never()).schedule(any(), any());
+        verify(mailSender, never()).cancelScheduled(any());
     }
 }

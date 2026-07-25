@@ -60,8 +60,15 @@ public class AdminCampaignController {
     /** 收件人篩選條件：職業角色、興趣主題 */
     public record Filter(String role, String interest) {}
 
-    /** 發送請求：主旨、markdown 內文、篩選條件、發送模式、排程時間（ISO-8601） */
-    public record SendRequest(String subject, String markdown, Filter filter, String mode, String scheduledAt) {}
+    /**
+     * 發送請求：主旨、markdown 內文、篩選條件、發送模式、排程時間（ISO-8601）。
+     * 以下四個為本次擴充的發布欄位（皆可省略）：
+     * tier（BASIC/PREMIUM，省略視為 BASIC）、creditCost（PREMIUM 解鎖點數）、
+     * slug（網頁文章網址片段）、publishedAt（發布時間 ISO-8601；省略且有 slug 時視為立即發布）。
+     * vipFullInMail 與 filterLevels 屬階段 D／F 範圍，本次不開放設定。
+     */
+    public record SendRequest(String subject, String markdown, Filter filter, String mode, String scheduledAt,
+                              String tier, Integer creditCost, String slug, String publishedAt) {}
 
     /** 收件名單計數與樣本（前 5 筆），需提供有效金鑰 */
     @GetMapping("/api/admin/recipients")
@@ -116,7 +123,19 @@ public class AdminCampaignController {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "排程時間需為未來");
             }
         }
-        return campaignService.send(req.subject(), req.markdown(), role, interest, req.mode(), scheduledAt);
+
+        // 解析發布時間（ISO-8601），格式錯誤回 400 而非讓例外以 500 洩漏
+        Instant publishedAt = null;
+        if (req.publishedAt() != null) {
+            try {
+                publishedAt = Instant.parse(req.publishedAt());
+            } catch (java.time.format.DateTimeParseException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "publishedAt 格式錯誤");
+            }
+        }
+
+        return campaignService.send(req.subject(), req.markdown(), role, interest, req.mode(), scheduledAt,
+            req.tier(), req.creditCost(), req.slug(), publishedAt);
     }
 
     /**

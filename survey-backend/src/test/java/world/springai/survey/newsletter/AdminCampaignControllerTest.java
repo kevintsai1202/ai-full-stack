@@ -153,10 +153,11 @@ class AdminCampaignControllerTest {
            .andExpect(jsonPath("$.html").value("<div>內文</div>"));
     }
 
-    /** 發送：立即模式回摘要 */
+    /** 發送：立即模式回摘要（控制器實際委派至含發布欄位的 10 參數 send 版本） */
     @Test
     void sendNowReturnsSummary() throws Exception {
-        when(campaignService.send(eq("主旨"), eq("內文"), any(), any(), eq("now"), any()))
+        when(campaignService.send(eq("主旨"), eq("內文"), any(), any(), eq("now"), any(),
+                any(), any(), any(), any()))
             .thenReturn(new CampaignService.SendResult(7L, 3, 3, 0));
         mvc.perform(post("/api/admin/campaign/send").header("X-Admin-Key", "test-key")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -164,5 +165,30 @@ class AdminCampaignControllerTest {
            .andExpect(status().isOk())
            .andExpect(jsonPath("$.campaignId").value(7))
            .andExpect(jsonPath("$.accepted").value(3));
+    }
+
+    /** 發送：可一併帶入發布欄位（tier/creditCost/slug/publishedAt），控制器原樣轉交 CampaignService */
+    @Test
+    void sendWithPublishFieldsDelegatesAllFields() throws Exception {
+        when(campaignService.send(eq("主旨"), eq("內文"), any(), any(), eq("now"), any(),
+                eq("PREMIUM"), eq(10), eq("hello-world"), any()))
+            .thenReturn(new CampaignService.SendResult(8L, 1, 1, 0));
+        mvc.perform(post("/api/admin/campaign/send").header("X-Admin-Key", "test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"subject\":\"主旨\",\"markdown\":\"內文\",\"mode\":\"now\","
+                    + "\"tier\":\"PREMIUM\",\"creditCost\":10,\"slug\":\"hello-world\","
+                    + "\"publishedAt\":\"2026-07-25T04:00:00Z\"}"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.campaignId").value(8));
+    }
+
+    /** 發送：publishedAt 格式錯誤回 400，且不呼叫 CampaignService */
+    @Test
+    void sendWithInvalidPublishedAtReturns400() throws Exception {
+        mvc.perform(post("/api/admin/campaign/send").header("X-Admin-Key", "test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"subject\":\"主旨\",\"markdown\":\"內文\",\"mode\":\"now\",\"publishedAt\":\"not-a-date\"}"))
+           .andExpect(status().isBadRequest());
+        org.mockito.Mockito.verifyNoInteractions(campaignService);
     }
 }
