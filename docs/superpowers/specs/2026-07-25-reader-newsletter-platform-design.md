@@ -280,14 +280,22 @@ UPDATE survey_response
 `reader/AccessDecisionService.decide(readerOrNull, campaign) → FULL | PARTIAL`
 
 ```
+未發布（published_at 為 null）              → PARTIAL（草稿不對任何人開放，連 VIP 也不行）
 未登入                                    → PARTIAL
 未確認訂閱（consent=false 或 unsubscribed） → PARTIAL
-campaign.tier == BASIC                    → FULL
-reader.tier == VIP 且未到期                → FULL（同時補寫 article_access，cost=0）
+campaign.tier 精確等於 'BASIC'             → FULL
+reader.tier == VIP 且未到期                → FULL（並補寫 article_access，cost=0）
 已存在 article_access                     → FULL
 credits >= campaign.credit_cost           → FULL + 扣點
 否則                                      → PARTIAL（回傳「還差幾點」與邀請碼）
 ```
+
+**三條在實作階段由審查補上的規則**，都是 fail-closed 方向的收斂：
+
+1. **BASIC 判斷必須是「精確等於 `'BASIC'`」，不可寫成「不是 `'PREMIUM'`」。** 後者會讓 `tier` 打錯字（小寫 `premium`、前後空白、`null`）的進階文章被判為 BASIC 而全文外洩。而資料庫層沒有 `tier IN ('BASIC','PREMIUM')` 白名單，`ck_campaign_premium_cost` 也只檢查 `tier <> 'PREMIUM' OR credit_cost > 0`——所以 `tier = 'premium'` 會同時繞過該 CHECK 與 paywall。
+2. **未發布檢查放在最前面。** 草稿的授權前提不該留給呼叫端判斷，否則「唯一的授權決策點」名不副實。
+3. **`recordAccess()` 只在 VIP（以及階段 C 的付費解鎖）時寫入 `article_access`，不對 BASIC 寫。** 因為 `article_access` 同時是 `ALREADY_UNLOCKED` 的判斷來源：若 BASIC 閱讀也留紀錄，文章日後改為 PREMIUM 時，該讀者會走 `ALREADY_UNLOCKED` 永久免費。
+4. **`resolveCost()` 永遠回 ≥ 1。** 若後台把 `credit.premium_cost` 設成 0 或負數，階段 C 接上 `credits >= cost` 後會變成「所有 PREMIUM 免費」。
 
 只有這個方法能做授權判斷，controller 只呼叫、不重複判斷。
 
