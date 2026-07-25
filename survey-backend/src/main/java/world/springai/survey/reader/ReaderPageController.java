@@ -1,13 +1,14 @@
 package world.springai.survey.reader;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import world.springai.survey.AppSettingService;
 import world.springai.survey.newsletter.Campaign;
 import world.springai.survey.newsletter.CampaignRepository;
 import world.springai.survey.newsletter.MarkdownRenderer;
@@ -36,9 +37,6 @@ public class ReaderPageController {
     /** 日期顯示格式 */
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-    /** PREMIUM 解鎖點數的後備預設值 */
-    private static final int DEFAULT_PREMIUM_COST = 10;
-
     private final CampaignRepository campaignRepository;
     private final MarkdownRenderer markdownRenderer;
     private final ContentSplitter contentSplitter;
@@ -46,17 +44,21 @@ public class ReaderPageController {
     private final ArticleAccessRepository articleAccessRepository;
     private final ReaderContext readerContext;
     private final HtmlTemplate htmlTemplate;
-    private final AppSettingService appSettingService;
 
-    /** 注入內容、授權與渲染所需的服務 */
+    /**
+     * 注入內容、授權與渲染所需的服務。
+     *
+     * <p>不再直接注入 {@code AppSettingService}：解鎖成本的計算（含 §5.2 第 4 條
+     * 的下限保護）已收斂到 {@link AccessDecisionService#resolveCost(Campaign)}
+     * 唯一一份實作，controller 不應再自行讀取 app_setting 重算一次。</p>
+     */
     public ReaderPageController(CampaignRepository campaignRepository,
                                MarkdownRenderer markdownRenderer,
                                ContentSplitter contentSplitter,
                                AccessDecisionService accessDecisionService,
                                ArticleAccessRepository articleAccessRepository,
                                ReaderContext readerContext,
-                               HtmlTemplate htmlTemplate,
-                               AppSettingService appSettingService) {
+                               HtmlTemplate htmlTemplate) {
         this.campaignRepository = campaignRepository;
         this.markdownRenderer = markdownRenderer;
         this.contentSplitter = contentSplitter;
@@ -64,12 +66,11 @@ public class ReaderPageController {
         this.articleAccessRepository = articleAccessRepository;
         this.readerContext = readerContext;
         this.htmlTemplate = htmlTemplate;
-        this.appSettingService = appSettingService;
     }
 
     /** 歷史內容列表：只列已發布者，登入者會看到自己的解鎖狀態 */
     @GetMapping(value = "/r/archive", produces = MediaType.TEXT_HTML_VALUE)
-    public String archive(
+    public ResponseEntity<String> archive(
             @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
         Optional<ReaderContext.Current> current = readerContext.resolve(sessionCookie);
         List<Campaign> articles = campaignRepository.findByPublishedAtIsNotNullOrderByPublishedAtDesc();
@@ -81,9 +82,17 @@ public class ReaderPageController {
                 .collect(Collectors.toSet()))
             .orElse(Collections.emptySet());
 
-        return htmlTemplate.render("static/reader/archive.html", Map.of(
+        String html = htmlTemplate.render("static/reader/archive.html", Map.of(
             "<!--NAV_LINKS-->", navLinks(current.isPresent()),
             "<!--ARTICLE_LIST-->", renderArticleList(articles, unlocked)));
+
+        // 同一個 URL 的內容會因 reader_session cookie 而異（登入者看到已解鎖標記），
+        // 缺這兩個標頭會讓共享快取（CDN、app-gateway 反向代理）把某位讀者的
+        // 授權結果快取下來餵給別人，因此一律標記為不可共享快取、且依 Cookie 變化。
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+            .header(HttpHeaders.VARY, HttpHeaders.COOKIE)
+            .body(html);
     }
 
     /**
@@ -93,7 +102,7 @@ public class ReaderPageController {
      * <b>完全不進入回應</b>，不是靠 CSS 隱藏。</p>
      */
     @GetMapping(value = "/r/news/{slug}", produces = MediaType.TEXT_HTML_VALUE)
-    public String article(@PathVariable String slug,
+    public ResponseEntity<String> article(@PathVariable String slug,
                          @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
         Campaign campaign = campaignRepository.findBySlug(slug)
             .filter(Campaign::isPublished)
@@ -127,7 +136,15 @@ public class ReaderPageController {
         vars.put("<!--ARTICLE_CONTENT-->", contentHtml); // 已是渲染後的 HTML，不可再跳脫
         vars.put("<!--NAV_LINKS-->", navLinks(current.isPresent()));
         vars.put("<!--GATE_BLOCK-->", full || !split.hasGate() ? "" : renderGate(decision, campaign, slug));
-        return htmlTemplate.render("static/reader/article.html", vars);
+        String html = htmlTemplate.render("static/reader/article.html", vars);
+
+        // 同一篇文章的網址對登入 VIP 與匿名訪客回傳不同內容（全文 vs 截斷），
+        // 若缺這兩個標頭，CDN／app-gateway 這類共享快取可能把某位 VIP 的 FULL
+        // 回應快取下來，直接餵給後續的匿名訪客，造成全站付費內容外洩。
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+            .header(HttpHeaders.VARY, HttpHeaders.COOKIE)
+            .body(html);
     }
 
     /** 依登入狀態顯示不同的導覽連結 */
@@ -138,7 +155,7 @@ public class ReaderPageController {
         return "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/login\">登入</a>";
     }
 
-    /** 渲染 archive 的文章列表；摘要一律取自免費區 */
+    /** 渲染 archive 的文章列表；列表不輸出任何內文，日後若要加摘要，必須取自 split(...).freeMarkdown() */
     private String renderArticleList(List<Campaign> articles, Set<Long> unlocked) {
         if (articles.isEmpty()) {
             return "<p class=\"empty\">還沒有已發布的內容，訂閱後第一封就會寄給你。</p>";
@@ -149,7 +166,11 @@ public class ReaderPageController {
               .append("<h2><a href=\"/r/news/").append(HtmlTemplate.escapeHtml(c.getSlug())).append("\">")
               .append(HtmlTemplate.escapeHtml(c.getSubject())).append("</a></h2>")
               .append("<div class=\"article-meta\">").append(renderMeta(c));
-            if (unlocked.contains(c.getId())) {
+            // 未持久化（尚未存檔）的 campaign id 為 null，Set.of()/不可變集合的
+            // contains(null) 會直接拋 NPE，因此在呼叫點先擋掉 null，
+            // 而不是依賴 unlocked 集合的實作細節（例如原本用 Collections.emptySet()
+            // 只是恰好不會踩到，換個集合實作就會靜默復發）。
+            if (c.getId() != null && unlocked.contains(c.getId())) {
                 sb.append("<span class=\"tag unlocked\">已解鎖</span>");
             }
             sb.append("</div></li>");
@@ -186,8 +207,8 @@ public class ReaderPageController {
                 "<a class=\"btn\" href=\"/r/\">重新訂閱</a>");
             case NEEDS_CREDITS -> gateHtml("這是進階內容",
                 decision.shortfall() > 0
-                    ? "解鎖需要 " + resolveCost(campaign) + " 點，你還差 " + decision.shortfall() + " 點。"
-                    : "解鎖需要 " + resolveCost(campaign) + " 點。",
+                    ? "解鎖需要 " + accessDecisionService.resolveCost(campaign) + " 點，你還差 " + decision.shortfall() + " 點。"
+                    : "解鎖需要 " + accessDecisionService.resolveCost(campaign) + " 點。",
                 "<a class=\"btn\" href=\"/r/archive\">先看其他內容</a>");
             default -> "";
         };
@@ -203,13 +224,6 @@ public class ReaderPageController {
               %s
             </div>
             """.formatted(title, description, action);
-    }
-
-    /** 取得解鎖成本；與 AccessDecisionService 用同一套後備規則 */
-    private int resolveCost(Campaign campaign) {
-        return campaign.getCreditCost() > 0
-            ? campaign.getCreditCost()
-            : appSettingService.getInt(AppSettingService.CREDIT_PREMIUM_COST, DEFAULT_PREMIUM_COST);
     }
 
     /** 從免費區 markdown 取前 120 字作為 meta description（去掉標記符號） */

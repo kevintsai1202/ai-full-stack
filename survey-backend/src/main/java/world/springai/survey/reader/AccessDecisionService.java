@@ -149,8 +149,13 @@ public class AccessDecisionService {
      * 當免費」，若後台把 app_setting 的 credit.premium_cost 誤設為 0 或負數，
      * 階段 C 接上 {@code credits >= cost} 後會讓所有 PREMIUM 文章免費解鎖，
      * 所以在此夾住下限，不把後備值的正確性寄望在後台設定上。</p>
+     *
+     * <p>對外公開（原為 private）：{@link ReaderPageController} 的 paywall 提示文案
+     * 需要顯示同一個成本數字，若各自實作一份，兩邊很容易因為忘記同步下限保護
+     * 而出現「文案顯示 0 點、實際判定卻是 1 點」這種不一致，因此統一由本方法
+     * 作為唯一真相來源。</p>
      */
-    private int resolveCost(Campaign campaign) {
+    public int resolveCost(Campaign campaign) {
         if (campaign.getCreditCost() > 0) {
             return campaign.getCreditCost();
         }

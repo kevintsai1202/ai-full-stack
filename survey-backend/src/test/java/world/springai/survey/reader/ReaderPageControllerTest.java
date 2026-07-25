@@ -1,10 +1,12 @@
 package world.springai.survey.reader;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import world.springai.survey.AppSettingService;
@@ -16,15 +18,17 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -89,26 +93,63 @@ class ReaderPageControllerTest {
         when(readerContext.resolve(any())).thenReturn(Optional.empty());
         stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
 
-        String body = mvc.perform(get("/r/news/test-article"))
+        var response = mvc.perform(get("/r/news/test-article"))
             .andExpect(status().isOk())
-            .andReturn().getResponse().getContentAsString();
+            // 【Important 1】單篇頁必須帶上這兩個標頭，否則共享快取（CDN／app-gateway）
+            // 可能把某位讀者的授權結果快取下來餵給別人。
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "private, no-store"))
+            .andReturn().getResponse();
+        // CORS 設定也會為 Vary 加上 Origin 等值，因此逐一檢查是否含 Cookie，
+        // 而不是假設 Cookie 是唯一或第一個值。
+        assertTrue(response.getHeaders(HttpHeaders.VARY).stream().anyMatch(v -> v.contains(HttpHeaders.COOKIE)),
+            "Vary 標頭必須包含 Cookie，否則共享快取無法區分不同讀者的回應");
+        String body = response.getContentAsString();
 
         assertFalse(body.contains(SENTINEL), "未登入者的回應不得含受限區內容");
         assertTrue(body.contains(FREE_MARKER), "免費區應正常顯示");
+
+        // 【Important 5】NOT_LOGGED_IN：頁面須含登入連結，且帶正確的 redirect 目標
+        assertTrue(body.contains("/r/login?redirect=/r/news/test-article"), "應含帶正確 redirect 的登入連結");
+
+        // 【Important 2/3】decide() 只應被呼叫一次，且引數必須是「未登入」的正確組合：
+        // reader 為 null、subscribed 為 false。若 controller 把 subscribed 寫死成 true，
+        // 這裡會抓到。
+        ArgumentCaptor<Boolean> subscribedCaptor = ArgumentCaptor.forClass(Boolean.class);
+        ArgumentCaptor<Reader> readerCaptor = ArgumentCaptor.forClass(Reader.class);
+        verify(accessDecisionService, times(1))
+            .decide(readerCaptor.capture(), subscribedCaptor.capture(), any(), any());
+        assertNull(readerCaptor.getValue(), "未登入時傳給 decide() 的 reader 必須是 null");
+        assertFalse(subscribedCaptor.getValue(), "未登入時傳給 decide() 的 subscribed 必須是 false");
     }
 
     /** 已登入但未確認訂閱：同樣不得含受限區 */
     @Test
     void unsubscribedResponseNeverContainsGatedContent() throws Exception {
         when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(gatedArticle(Campaign.TIER_BASIC, 0)));
+        Reader loggedInReader = reader(Reader.TIER_FREE, 300);
         when(readerContext.resolve(any()))
-            .thenReturn(Optional.of(new ReaderContext.Current(reader(Reader.TIER_FREE, 300), false)));
+            .thenReturn(Optional.of(new ReaderContext.Current(loggedInReader, false)));
         stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_SUBSCRIBED, 0);
 
         String body = mvc.perform(get("/r/news/test-article"))
             .andReturn().getResponse().getContentAsString();
 
         assertFalse(body.contains(SENTINEL), "未確認訂閱者的回應不得含受限區內容");
+
+        // 【Important 5】NOT_SUBSCRIBED：頁面須含「重新訂閱」的指引
+        assertTrue(body.contains("重新訂閱"), "應含重新訂閱的指引文案");
+
+        // 【Important 2】已登入未訂閱：decide() 只呼叫一次，reader 必須是 ReaderContext 提供的
+        // 那個物件、subscribed 必須是 false。
+        ArgumentCaptor<Boolean> subscribedCaptor = ArgumentCaptor.forClass(Boolean.class);
+        ArgumentCaptor<Reader> readerCaptor = ArgumentCaptor.forClass(Reader.class);
+        verify(accessDecisionService, times(1))
+            .decide(readerCaptor.capture(), subscribedCaptor.capture(), any(), any());
+        assertEquals(loggedInReader, readerCaptor.getValue(), "傳給 decide() 的 reader 必須是 ReaderContext.Current 提供的那個物件");
+        assertFalse(subscribedCaptor.getValue(), "已登入但未確認訂閱時 subscribed 必須是 false");
+
+        // 【Important 3】PARTIAL 時絕不能呼叫 recordAccess，否則階段 C 接上扣點後會重複扣款
+        verify(accessDecisionService, never()).recordAccess(any(), any(), any());
     }
 
     /** 已訂閱但 PREMIUM 點數不足：同樣不得含受限區 */
@@ -124,22 +165,46 @@ class ReaderPageControllerTest {
             .andReturn().getResponse().getContentAsString();
 
         assertFalse(body.contains(SENTINEL), "點數不足者的回應不得含受限區內容");
+
+        // 【Important 5】NEEDS_CREDITS：頁面須含 shortfall 的文案
+        assertTrue(body.contains("還差 6 點"), "應含差幾點才能解鎖的文案");
+
+        // 【Important 3】PARTIAL 時絕不能呼叫 recordAccess
+        verify(accessDecisionService, never()).recordAccess(any(), any(), any());
     }
 
     /** 授權為 FULL：受限區才會出現 */
     @Test
     void fullAccessIncludesGatedContent() throws Exception {
         when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(gatedArticle(Campaign.TIER_BASIC, 0)));
+        Reader loggedInReader = reader(Reader.TIER_FREE, 300);
         when(readerContext.resolve(any()))
-            .thenReturn(Optional.of(new ReaderContext.Current(reader(Reader.TIER_FREE, 300), true)));
+            .thenReturn(Optional.of(new ReaderContext.Current(loggedInReader, true)));
         stubDecision(AccessDecisionService.Access.FULL, AccessDecisionService.Reason.BASIC_OPEN, 0);
 
-        String body = mvc.perform(get("/r/news/test-article"))
+        var response = mvc.perform(get("/r/news/test-article"))
             .andExpect(status().isOk())
-            .andReturn().getResponse().getContentAsString();
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "private, no-store"))
+            .andReturn().getResponse();
+        // CORS 設定也會為 Vary 加上 Origin 等值，因此逐一檢查是否含 Cookie，
+        // 而不是假設 Cookie 是唯一或第一個值。
+        assertTrue(response.getHeaders(HttpHeaders.VARY).stream().anyMatch(v -> v.contains(HttpHeaders.COOKIE)),
+            "Vary 標頭必須包含 Cookie，否則共享快取無法區分不同讀者的回應");
+        String body = response.getContentAsString();
 
         assertTrue(body.contains(SENTINEL), "授權為 FULL 時受限區應顯示");
         assertTrue(body.contains(FREE_MARKER));
+
+        // 【Important 2】已登入已訂閱：decide() 只呼叫一次，subscribed 必須是 true
+        ArgumentCaptor<Boolean> subscribedCaptor = ArgumentCaptor.forClass(Boolean.class);
+        ArgumentCaptor<Reader> readerCaptor = ArgumentCaptor.forClass(Reader.class);
+        verify(accessDecisionService, times(1))
+            .decide(readerCaptor.capture(), subscribedCaptor.capture(), any(), any());
+        assertEquals(loggedInReader, readerCaptor.getValue());
+        assertTrue(subscribedCaptor.getValue(), "已訂閱時 subscribed 必須是 true");
+
+        // 【Important 3】FULL 時 recordAccess 恰好呼叫一次
+        verify(accessDecisionService, times(1)).recordAccess(any(), any(), any());
     }
 
     /** paywall 標記本身不得出現在頁面上 */
@@ -225,5 +290,39 @@ class ReaderPageControllerTest {
         when(readerContext.resolve(any())).thenReturn(Optional.empty());
 
         mvc.perform(get("/r/archive")).andExpect(status().isOk());
+    }
+
+    /**
+     * 【Important 6】meta description 不得從受限區洩漏。
+     *
+     * <p>原本的三個哨兵測試之所以能抓到「summaryOf 改吃 campaign.getMarkdown()」這種洩漏，
+     * 純粹是因為 fixture 的免費區只有約 50 字元，哨兵字串因此仍落在 120 字元截斷範圍內。
+     * 這裡刻意把免費區撐到超過 120 字元，讓「meta 洩漏受限內容」這個獨立的失敗模式
+     * 不再依賴 fixture 長度的偶然性。</p>
+     */
+    @Test
+    void metaDescriptionNeverLeaksGatedContentEvenWhenFreeSectionIsLong() throws Exception {
+        // 免費區故意超過 120 字元，確保就算 summaryOf 改吃 campaign.getMarkdown()，
+        // 若哨兵洩漏進去，也不會只是「恰好被截斷保護住」。
+        String longFreeMarkdown = "免費區內容。".repeat(30); // 中文全形字元，遠超過 120 字元
+        String markdown = longFreeMarkdown + "\n\n<!--paywall-->\n\n" + SENTINEL;
+        Campaign c = new Campaign("測試文章", markdown, null, null, null, "now", null, 1, "sent");
+        c.setTier(Campaign.TIER_BASIC);
+        c.setCreditCost(0);
+        c.setSlug("test-article");
+        c.setPublishedAt(OffsetDateTime.parse("2026-07-20T10:00:00+08:00"));
+
+        when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(c));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+
+        String body = mvc.perform(get("/r/news/test-article"))
+            .andReturn().getResponse().getContentAsString();
+
+        int metaStart = body.indexOf("<meta name=\"description\"");
+        assertTrue(metaStart >= 0, "應輸出 meta description 標籤");
+        int metaEnd = body.indexOf(">", metaStart);
+        String metaTag = body.substring(metaStart, metaEnd + 1);
+        assertFalse(metaTag.contains(SENTINEL), "meta description 不得含受限區的哨兵字串");
     }
 }
