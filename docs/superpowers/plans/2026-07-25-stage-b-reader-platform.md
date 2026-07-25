@@ -5711,7 +5711,7 @@ mvn clean test
 Expected:
 1. 第一項**無輸出**（V8 的 `UPDATE ... WHERE consent = TRUE` 是唯一允許的既有列改寫，且不在此比對範圍內）
 2. `ddl-auto: validate`
-3. `Tests run: 203, Failures: 0, Errors: 0`
+3. `Tests run: 204, Failures: 0, Errors: 0`
 
 **另外必做**：`MigrationSafetyTest` 驗證的是 migration **邏輯**（在乾淨容器上），不是正式資料庫的**真實資料**。部署前仍須對正式 DB 的複本實際套用一次 V7／V8，確認：`survey_response` 筆數不變、既有名單的 email／consent／unsubscribed 未變、已確認訂閱者的 `last_engaged_at` 全部非 NULL。**正式 DB 備份完成前不得部署。**
 
@@ -5749,7 +5749,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 
 全部滿足才算完成：
 
-- [ ] `mvn clean test` 為 `Tests run: 203, Failures: 0, Errors: 0`
+- [ ] `mvn clean test` 為 `Tests run: 204, Failures: 0, Errors: 0`
 - [ ] `MigrationSafetyTest` 7 個測試通過，且已實測「註解掉 backfill 會讓它變紅」
 - [ ] 對正式 DB 複本實際套用 V7／V8 驗證通過（筆數不變、同意狀態未變、backfill 完整）
 - [ ] `scripts/verify-reader-flow.mjs` 全部通過
