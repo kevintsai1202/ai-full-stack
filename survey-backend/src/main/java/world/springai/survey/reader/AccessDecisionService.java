@@ -1,5 +1,6 @@
 package world.springai.survey.reader;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import world.springai.survey.AppSettingService;
 import world.springai.survey.newsletter.Campaign;
@@ -44,7 +45,9 @@ public class AccessDecisionService {
         /** 先前已解鎖 */
         ALREADY_UNLOCKED,
         /** 需要點數才能解鎖 */
-        NEEDS_CREDITS
+        NEEDS_CREDITS,
+        /** 文章尚未發布 */
+        NOT_PUBLISHED
     }
 
     /**
@@ -76,13 +79,21 @@ public class AccessDecisionService {
      * @param subscribed 是否為已確認訂閱者（由名單中心提供，不從 reader 推導）
      */
     public Decision decide(Reader reader, boolean subscribed, Campaign campaign, OffsetDateTime now) {
+        // 發布狀態是授權的前提，必須排在最前面：草稿不對任何人開放，連 VIP 也不行，
+        // 不能把這個決定留給呼叫端各自判斷。
+        if (!campaign.isPublished()) {
+            return new Decision(Access.PARTIAL, Reason.NOT_PUBLISHED, 0);
+        }
         if (reader == null) {
             return new Decision(Access.PARTIAL, Reason.NOT_LOGGED_IN, 0);
         }
         if (!subscribed) {
             return new Decision(Access.PARTIAL, Reason.NOT_SUBSCRIBED, 0);
         }
-        if (!campaign.isPremium()) {
+        // 只有精確為 BASIC 才免費開放；未知值、null、大小寫不符一律走進階規則。
+        // 這個方向很重要：反過來寫（!isPremium() 就開放）會讓 tier 打錯字
+        // 變成付費內容全面外洩，而資料庫沒有 tier 白名單約束可以兜底。
+        if (Campaign.TIER_BASIC.equals(campaign.getTier())) {
             return new Decision(Access.FULL, Reason.BASIC_OPEN, 0);
         }
         if (reader.isActiveVip(now)) {
@@ -99,19 +110,32 @@ public class AccessDecisionService {
     }
 
     /**
-     * 記錄閱讀歷史：僅在 FULL 且尚無紀錄時寫入，cost 為 0（本階段不扣點）。
+     * 記錄閱讀歷史：僅在 reason 為 VIP 時寫入，cost 為 0（本階段不扣點）。
      *
-     * <p>由 controller 在取得 FULL 決策後呼叫一次。已有紀錄時跳過，
-     * 避免撞上 article_access 的 UNIQUE 約束。</p>
+     * <p>只在 VIP 分支寫入，BASIC_OPEN 與 ALREADY_UNLOCKED 都不寫：
+     * article_access 同時是 {@link #decide} 判斷 ALREADY_UNLOCKED 的依據，
+     * 若對 BASIC_OPEN 也寫入，會出現「文章以 BASIC 發布時被讀者讀過 → 後台
+     * 改為 PREMIUM → 該讀者再訪時因 ALREADY_UNLOCKED 永久免費看到全文」的
+     * 升級漏洞。此行為與設計文件 §5.2 一致——spec 只在 VIP 分支補寫。
+     * 階段 C 接上付費解鎖後，會再加上「本次扣點解鎖」的寫入情況。</p>
+     *
+     * <p>並發下這裡是 check-then-act：兩個分頁同時通過 exists 檢查、
+     * 都嘗試 INSERT 是常見情況，第二筆會撞上 uq_article_access。
+     * 忽略該例外是正確語意，因為此時紀錄已經存在（本階段 cost 恆為 0，
+     * 不會有扣點被吞掉的疑慮），讀者本來就有權讀取，不該因此收到 500。</p>
      */
     public void recordAccess(Reader reader, Campaign campaign, Decision decision) {
-        if (decision.access() != Access.FULL || reader == null) {
+        if (decision.access() != Access.FULL || decision.reason() != Reason.VIP || reader == null) {
             return;
         }
         if (articleAccessRepository.existsByReaderIdAndCampaignId(reader.getId(), campaign.getId())) {
             return;
         }
-        articleAccessRepository.save(new ArticleAccess(reader.getId(), campaign.getId(), 0));
+        try {
+            articleAccessRepository.save(new ArticleAccess(reader.getId(), campaign.getId(), 0));
+        } catch (DataIntegrityViolationException e) {
+            // 併發寫入撞上 UNIQUE 約束：代表紀錄已被另一個請求寫入，忽略即可。
+        }
     }
 
     /**
@@ -120,11 +144,17 @@ public class AccessDecisionService {
      * <p>campaign.creditCost 為 0 時改用參數預設值——PREMIUM 卻成本為 0 理論上
      * 已被資料庫 CHECK 擋掉，但若真的出現，把它當成免費會讓進階內容全面外洩，
      * 所以這裡選擇保守處理。</p>
+     *
+     * <p>結果永遠 {@code >= 1}：這個方法存在的唯一理由就是「絕不把 PREMIUM
+     * 當免費」，若後台把 app_setting 的 credit.premium_cost 誤設為 0 或負數，
+     * 階段 C 接上 {@code credits >= cost} 後會讓所有 PREMIUM 文章免費解鎖，
+     * 所以在此夾住下限，不把後備值的正確性寄望在後台設定上。</p>
      */
     private int resolveCost(Campaign campaign) {
         if (campaign.getCreditCost() > 0) {
             return campaign.getCreditCost();
         }
-        return appSettingService.getInt(AppSettingService.CREDIT_PREMIUM_COST, DEFAULT_PREMIUM_COST);
+        int fallback = appSettingService.getInt(AppSettingService.CREDIT_PREMIUM_COST, DEFAULT_PREMIUM_COST);
+        return Math.max(1, fallback);
     }
 }
