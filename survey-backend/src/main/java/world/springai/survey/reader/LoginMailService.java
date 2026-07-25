@@ -92,21 +92,67 @@ public class LoginMailService {
             .append("/api/reader/login/verify?t=")
             .append(URLEncoder.encode(rawToken, StandardCharsets.UTF_8));
         if (isSafeRedirect(redirect)) {
+            // 放進連結的是「原始值」而非正規化後的值：isSafeRedirect 已確認
+            // 正規化後（反斜線轉斜線）的樣子不含 scheme/host/authority，
+            // 而若原始值含反斜線，瀏覽器解析時本來就會等價地轉成斜線，
+            // 所以放原始值不會讓使用者實際跳轉到與正規化判斷不同的地方，
+            // 且能保留使用者原本輸入的路徑字面樣式（例如大小寫、既有跳脫）。
             link.append("&redirect=").append(URLEncoder.encode(redirect, StandardCharsets.UTF_8));
         }
         return link.toString();
     }
 
     /**
-     * 只允許站內相對路徑。
+     * 只允許站內相對路徑（防開放式轉址）。
      *
-     * <p>必須排除 {@code //evil.com} 這種 protocol-relative 網址——它以 / 開頭，
-     * 但瀏覽器會當成站外網址處理。</p>
+     * <p><b>不能只比對字串前綴</b>：舊版只檢查「以 / 開頭、且不以 // 開頭」，
+     * 但這擋不住反斜線變體，例如 {@code /\evil.com}——它以 / 開頭，且不是以
+     * // 開頭，字串比對會判定為安全。然而依 WHATWG URL 規範，瀏覽器在解析
+     * http/https 這類 special scheme 時，會把 {@code \} 與 {@code /} 視為
+     * 等價字元；也就是說瀏覽器實際看到的是 {@code //evil.com}，會被當成
+     * protocol-relative 網址導去外部網域。因此判斷前必須先把反斜線正規化成
+     * 斜線，用「瀏覽器看到的樣子」而不是「字面上的樣子」來判斷是否安全。</p>
+     *
+     * <p>此外，字串比對永遠只能防禦「已知的變形」，無法窮舉所有前綴陷阱
+     * （例如未來瀏覽器行為變化、其他等價字元）。所以正規化後再多一道
+     * {@link java.net.URI} 解析，確認 scheme、host、authority 三者皆為
+     * null——這是結構化的保險，用來擋掉沒被明確列舉到的站外網址形式，而不是
+     * 又疊一條字串前綴規則。</p>
+     *
+     * <p>也必須先擋控制字元（尤其是 {@code \r} {@code \n}）：redirect 最終
+     * 會被組進信件內容，若放行 CR/LF 有 header injection 之類的風險，且
+     * URLEncoder 不會替我們過濾原始輸入是否「看似安全」，必須在判斷階段就拒絕。</p>
+     *
+     * <p><b>切勿把這個方法「簡化」回三行字串比對</b>——那正是本次修的漏洞來源。</p>
      */
     private boolean isSafeRedirect(String redirect) {
-        return StringUtils.hasText(redirect)
-            && redirect.startsWith("/")
-            && !redirect.startsWith("//");
+        if (!StringUtils.hasText(redirect)) {
+            return false;
+        }
+        String trimmed = redirect.trim();
+
+        // 拒絕任何控制字元（含 \r \n），避免 header injection 或其他注入手法
+        if (trimmed.chars().anyMatch(Character::isISOControl)) {
+            return false;
+        }
+
+        // 反斜線正規化為斜線：瀏覽器對 special scheme（http/https）會這樣解析，
+        // 所以判斷必須依「正規化後」的樣子，而不是字面原始輸入
+        String normalized = trimmed.replace('\\', '/');
+        if (!normalized.startsWith("/") || normalized.startsWith("//")) {
+            return false;
+        }
+
+        // 再用 URI 解析正規化後的值，確保沒有 scheme/host/authority——
+        // 這是擋掉前面字串比對沒想到的站外網址形式的最後一道保險
+        try {
+            java.net.URI uri = new java.net.URI(normalized);
+            return uri.getScheme() == null
+                && uri.getHost() == null
+                && uri.getAuthority() == null;
+        } catch (java.net.URISyntaxException e) {
+            return false;
+        }
     }
 
     /** 組登入信 HTML；刻意不含退訂連結（交易信） */

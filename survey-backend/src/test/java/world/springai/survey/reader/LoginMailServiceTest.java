@@ -136,18 +136,55 @@ class LoginMailServiceTest {
         assertEquals("failed", logCaptor.getValue().getStatus());
     }
 
-    /** 站外 redirect 必須被丟棄，避免變成開放式轉址 */
+    /**
+     * 站外／開放式轉址的各種變形都必須被丟棄。
+     *
+     * <p>逐一驗證的案例與理由：</p>
+     * <ul>
+     *   <li>{@code https://evil.example.com/steal}：絕對網址，最基本的案例，
+     *       既有 startsWith("/") 檢查就能擋下。</li>
+     *   <li>{@code //evil.example.com}：protocol-relative 網址，舊版三行防線
+     *       原本就是為了擋這個而寫的，必須繼續守住。</li>
+     *   <li>{@code /\evil.example.com}：本次修正的主角。字面上以單一 / 開頭、
+     *       不是以 // 開頭，舊版字串比對會誤判為安全；但瀏覽器對 http/https
+     *       這類 special scheme 會把 {@code \} 當成 {@code /}，實際等同
+     *       {@code //evil.example.com}，會導去外部網域。</li>
+     *   <li>{@code \\evil.example.com}：雙反斜線變體，正規化後同樣變成
+     *       {@code //evil.example.com}，必須一併擋下。</li>
+     *   <li>{@code /path\r\nSet-Cookie:x}：直接用真正的 CR/LF 字元（而非
+     *       {@code %0D%0A} 編碼字串）來驗證控制字元防線。之所以不用編碼後的
+     *       字串，是因為 {@code %0D%0A} 只是文字上的百分比符號，並不含真正的
+     *       控制字元，本來就不會觸發 header injection 風險，也不會被
+     *       isSafeRedirect 的控制字元檢查攔下（這層防線防的是「輸入本身含
+     *       控制字元」，不是防「輸入看起來像編碼過的控制字元」）；用真正的
+     *       {@code \r\n} 字元才能驗證到目前程式碼真正要防的風險。</li>
+     * </ul>
+     */
     @Test
     void externalRedirectIsRejected() {
         when(tokenService.isThrottled(anyString(), any())).thenReturn(false);
         when(tokenService.issue(anyString(), any())).thenReturn("TOK");
         when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
 
-        service.sendLoginLink("user@example.com", "https://evil.example.com/steal", NOW);
+        String[] unsafeRedirects = {
+            "https://evil.example.com/steal",
+            "//evil.example.com",
+            "/\\evil.example.com",
+            "\\\\evil.example.com",
+            "/path\r\nSet-Cookie:x"
+        };
 
-        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
-        verify(mailSender).send(anyString(), anyString(), html.capture());
-        assertFalse(html.getValue().contains("evil.example.com"), "站外 redirect 必須被丟棄");
-        assertFalse(html.getValue().contains("redirect="), "無效 redirect 不應出現在連結中");
+        for (String redirect : unsafeRedirects) {
+            service.sendLoginLink("user@example.com", redirect, NOW);
+
+            ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+            verify(mailSender, org.mockito.Mockito.atLeastOnce())
+                .send(anyString(), anyString(), html.capture());
+            String sentHtml = html.getValue();
+            assertFalse(sentHtml.contains("evil.example.com"),
+                "站外 redirect 必須被丟棄：" + redirect);
+            assertFalse(sentHtml.contains("redirect="),
+                "無效 redirect 不應出現在連結中：" + redirect);
+        }
     }
 }
