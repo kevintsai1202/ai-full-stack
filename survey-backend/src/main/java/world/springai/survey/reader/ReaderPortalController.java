@@ -132,10 +132,17 @@ public class ReaderPortalController {
      * CreditPolicy#referralReward()} 的下限刻意是 0（關閉邀請獎勵是合法的營運
      * 設定），若整段文案原樣套用數字，讀者會看到「你會拿到 0 點」這種讀起來像
      * 故障的字。</p>
+     *
+     * <p><b>0 值文案不得承諾「成功邀請仍會被記錄」</b>：{@code ReferralService.rewardFor}
+     * 在 {@code reward <= 0} 時完全不寫帳本，而同一頁下半部的成效區塊
+     * （{@link #renderStats}）數的正是帳本裡 REFERRAL 的筆數。舊文案會讓這一頁
+     * 自己打自己的臉——上面說會記錄，下面說「還沒有人透過你的連結完成訂閱」，
+     * 即使讀者已經成功邀請了五個人。理由與 {@link RulesPageController#referralRewardNote}
+     * 逐字相同，兩處必須同步。</p>
      */
     private String rewardIntro(int reward) {
         if (reward == 0) {
-            return "把連結分享給可能有興趣的人。目前邀請獎勵暫停發放，成功邀請仍會被記錄。";
+            return "把連結分享給可能有興趣的人。目前邀請獎勵暫停發放，恢復發放後成功的邀請才會開始累計。";
         }
         return "把連結分享給可能有興趣的人。對方確認訂閱後，你會拿到 " + reward + " 點。";
     }

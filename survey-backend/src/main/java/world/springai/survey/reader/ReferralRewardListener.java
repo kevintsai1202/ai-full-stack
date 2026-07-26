@@ -37,10 +37,24 @@ import world.springai.survey.audience.SubscriptionConfirmedEvent;
  * 獨立的原子單位——不是為了與確認訂閱隔離（本來就已經隔離），而是為了
  * 讓獎勵本身不會只寫一半。</p>
  *
- * <p>例外在此與發布端<b>雙重</b>吞掉：本類吞是為了記錄可讀的 ERROR 供人工補點；
- * {@code SubscriptionController} 也吞是因為 {@code publishEvent} 同步且例外會
- * 往上拋，若變成 500，「不論結果一律回相同的 200」這條性質就破了，端點會變成
- * 「這個 email 有沒有推薦關係」的探測器。防護不依賴任一端記得。</p>
+ * <p>例外在此與發布端<b>雙重</b>吞掉，但<b>實際接住的那一層並不是直覺的那一層</b>：
+ * 本類是 {@code REQUIRES_NEW}，所以 {@code referralService.rewardFor} 的
+ * {@code @Transactional} 會加入本類開的內層交易。{@code rewardFor} 拋出
+ * {@code IllegalStateException} 時，該內層 proxy 先把交易標記為 rollback-only，
+ * 例外才傳到本類的 {@code catch}——本類記下 ERROR 並<b>正常返回</b>，
+ * 但外層（本類自己的）proxy 在提交時發現 rollback-only，改拋
+ * {@code UnexpectedRollbackException}。那個例外<b>發生在本方法返回之後</b>，
+ * 逃得過這裡的 catch，最終落到 {@code SubscriptionController.confirm} 的第二道
+ * catch。也就是說：<b>本類的 catch 負責產生可讀的 ERROR 日誌供人工補點，
+ * 真正阻止端點回 500 的是發布端那一道。</b>兩道都必要，但職責不同。</p>
+ *
+ * <p>副作用是同一次失敗會在 log 留下兩筆語意不同的錯誤（本類的
+ * 「邀請獎勵發放失敗」與發布端的「確認訂閱的後續處理失敗」）。這是已知且
+ * 可接受的：兩筆各自帶著不同層次的資訊，排查時知道它們指向同一次失敗即可。</p>
+ *
+ * <p>{@code SubscriptionController} 那道存在的理由：{@code publishEvent} 是同步的，
+ * 例外會往上拋；若變成 500，「不論結果一律回相同的 200」這條性質就破了，
+ * 端點會變成「這個 email 有沒有推薦關係」的探測器。防護不依賴任一端記得。</p>
  */
 @Component
 public class ReferralRewardListener {
@@ -57,8 +71,14 @@ public class ReferralRewardListener {
     /**
      * 發放邀請獎勵。同步執行，但在自己的交易內。
      *
-     * <p>例外一律在此吞掉並記為 ERROR：此時確認訂閱已經提交，讓例外往上拋
-     * 會讓公開端點回 500 而破壞「不洩漏名單」的性質。</p>
+     * <p>例外在此記為 ERROR 供人工補點：此時確認訂閱已經提交，發獎失敗不該
+     * 影響已成立的同意紀錄。</p>
+     *
+     * <p><b>但這個 catch 並不是最終防線</b>：本類是 {@code REQUIRES_NEW}，
+     * {@code rewardFor} 拋例外時內層 proxy 已把交易標記為 rollback-only，
+     * 本方法正常返回後、外層 proxy 提交時會改拋 {@code UnexpectedRollbackException}，
+     * 逃過這裡的 catch，由 {@code SubscriptionController.confirm} 的第二道 catch 接住。
+     * 詳見類別層級的說明——不要因為「這裡已經 catch 了」就把那一道拿掉。</p>
      */
     @EventListener
     @Transactional(propagation = Propagation.REQUIRES_NEW)

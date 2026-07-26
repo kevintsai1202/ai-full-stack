@@ -588,6 +588,41 @@ class ReaderPortalControllerTest {
     }
 
     /**
+     * 獎勵為 0 時，{@code /r/invite} <b>不得承諾「成功邀請仍會被記錄」</b>。
+     *
+     * <p>{@code ReferralService.rewardFor} 在 {@code reward <= 0} 時完全不寫帳本，
+     * 而同一頁下半部的成效區塊數的正是帳本裡 REFERRAL 的筆數。舊文案會讓
+     * <b>同一個 HTTP 回應內自我矛盾</b>：上面說「成功邀請仍會被記錄」，
+     * 下面說「還沒有人透過你的連結完成訂閱」——即使讀者已成功邀請五個人。
+     * 本測試同時斷言那兩句不會並存。</p>
+     */
+    @Test
+    void zeroRewardInviteCopyMakesNoPromiseThatInvitesAreRecorded() throws Exception {
+        givenLoggedIn(reader(300));
+        when(creditPolicy.referralReward()).thenReturn(0);
+
+        String html = mvc.perform(get("/r/invite").cookie(cookie()))
+            .andReturn().getResponse().getContentAsString();
+
+        for (String promise : java.util.List.of("會被記錄", "仍會記錄", "仍會被記下", "會先記錄", "累計中")) {
+            org.junit.jupiter.api.Assertions.assertFalse(html.contains(promise),
+                "承諾了程式不保證的「" + promise + "」：獎勵為 0 時邀請不會寫進帳本，"
+                    + "同一頁的成效區塊永遠顯示 0");
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("暫停發放"));
+    }
+
+    /** {@code /r/me} 的「每篇 N 點」必須與規則頁一樣標明是參考值，實際以文章頁為準 */
+    @Test
+    void mePagePresentsPremiumCostAsTypicalNotExact() throws Exception {
+        givenLoggedIn(reader(300));
+
+        mvc.perform(get("/r/me").cookie(cookie()))
+           .andExpect(content().string(containsString("通常每篇 33 點")))
+           .andExpect(content().string(containsString("實際點數以各篇文章頁顯示為準")));
+    }
+
+    /**
      * 必須說明「被邀者點確認信才算成功」。
      *
      * <p>spec §5.4 明訂先講清楚以避免爭議：讀者分享了連結、朋友也訂閱了，

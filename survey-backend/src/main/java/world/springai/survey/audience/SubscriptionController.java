@@ -56,7 +56,7 @@ public class SubscriptionController {
     public ResponseEntity<String> confirm(@RequestParam(value = "email", required = false) String email,
                                           @RequestParam(value = "t", required = false) String token) {
         if (StringUtils.hasText(email) && tokenService.verify(email, token)) {
-            String normalized = email.trim().toLowerCase();
+            String normalized = normalize(email);
             int affected = repository.confirmByEmail(normalized);
             if (affected > 0) {
                 // 確認訂閱是高可靠的參與度訊號（spec §5.10）
@@ -86,11 +86,25 @@ public class SubscriptionController {
     public ResponseEntity<String> unsubscribe(@RequestParam(value = "email", required = false) String email,
                                               @RequestParam(value = "t", required = false) String token) {
         if (StringUtils.hasText(email) && tokenService.verify(email, token)) {
-            repository.unsubscribeByEmail(email.trim().toLowerCase());
+            repository.unsubscribeByEmail(normalize(email));
         }
         return ResponseEntity.ok()
             .contentType(MediaType.parseMediaType("text/html; charset=UTF-8"))
             .body(UNSUBSCRIBE_HTML);
+    }
+
+    /**
+     * email 正規化：去前後空白並轉小寫。
+     *
+     * <p>{@code Locale.ROOT} 不可省略：土耳其語系（tr-TR）下無參數的
+     * {@code toLowerCase()} 會把 {@code I} 轉成 {@code ı}。這裡的值不只用來查名單，
+     * 還會原樣傳進 {@code SubscriptionConfirmedEvent} 成為
+     * {@code ReferralService} 的<b>發獎冪等鍵</b>——與 {@code reader} 套件那三處
+     * （皆已帶 {@code Locale.ROOT}）算出不同的鍵，就會重複發獎。
+     * 四處必須用同一套正規化規則。</p>
+     */
+    private static String normalize(String email) {
+        return email.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
     /** 確認訂閱成功頁（固定內容，不含使用者輸入）；中文提示，置中簡潔樣式 */

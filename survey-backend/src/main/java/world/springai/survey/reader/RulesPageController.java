@@ -16,7 +16,19 @@ import java.util.Map;
  * <p><b>所有數字動態注入，不寫死</b>（spec §5.11 硬要求）：§9.2 明訂第一版
  * 參數就是要靠上線後數據校準。若頁面寫死「一篇 10 點」而後台已調成 50 點，
  * 讀者看到的代價與實際扣的不一致——那是最傷信任的一類落差。數字一律取自
- * {@link CreditPolicy}，與 paywall 提示區塊、{@code /r/me} 同源。</p>
+ * {@link CreditPolicy}，與 {@code /r/me} 同源。</p>
+ *
+ * <p><b>但它與 paywall 顯示的價格<u>不</u>同源，文案必須說清楚</b>：本頁與
+ * {@code /r/me} 用的是全域預設 {@link CreditPolicy#premiumCost()}，而文章頁的
+ * gate 與 {@code UnlockService} 實際扣的是 {@code CreditPolicy.costOf(campaign)}
+ * ——<b>該篇自己的 {@code campaign.credit_cost}</b>。且 {@code ck_campaign_premium_cost}
+ * 與 {@code CampaignService.validateCreditCost} 都強制 PREMIUM 的 {@code credit_cost > 0}，
+ * 所以 {@code costOf()} 退回全域預設的那條分支是死碼：本頁顯示的數字<b>結構性地</b>
+ * 不會是任何一篇文章的實際扣款額（除非數值恰好巧合）。這不是三處不同步的邊緣情況。
+ * 每篇文章有自己的定價本來就是對的（已解鎖的讀者付的是當時的價，不該被全域參數
+ * 追溯改價），所以修的是文案而不是行為——頁面明講「通常每篇 N 點，實際以各篇
+ * 文章頁為準」。規則頁的存在理由就是點數機制的可信度來源，帶著結構性錯誤的
+ * 數字上線比沒有規則頁更傷。</p>
  *
  * <p><b>刻意不做 CMS</b>（YAGNI）：文案寫在靜態 HTML，只有數字動態注入。
  * 文案大改需要部署一次，但這頻率遠低於參數調整。不為此建
@@ -117,10 +129,24 @@ public class RulesPageController {
         return "邀請朋友訂閱，每位 +" + referralReward + " 點";
     }
 
-    /** 「邀請怎麼算成功」段落末句；X 為 0 時說明獎勵暫停發放，而非顯示「拿到 0 點」 */
+    /**
+     * 「邀請怎麼算成功」段落末句；X 為 0 時說明獎勵暫停發放，而非顯示「拿到 0 點」。
+     *
+     * <p><b>0 值文案不得承諾「成功邀請仍會被記錄」</b>：程式並不保證這件事。
+     * {@code ReferralService.rewardFor} 在 {@code reward <= 0} 時直接 return、
+     * <b>完全不寫帳本</b>（刻意如此——占用了冪等鍵，日後把獎勵調回 100，
+     * 這位被邀者的獎勵就永遠拿不到了），而 {@code ReferralService.stats} 數的正是
+     * {@code credit_txn} 裡 REFERRAL 的筆數。於是舊文案會造成同一個 HTTP 回應內
+     * 自我矛盾：上半頁寫「成功邀請仍會被記錄」，下半頁的成效區塊卻顯示
+     * 「還沒有人透過你的連結完成訂閱」——即使讀者確實已經邀請成功五個人。
+     * 文案不得對行為做出程式碼不保證的承諾。</p>
+     *
+     * <p>機制本身（獎勵為 0 時該不該留下計數）屬 spec §5.4 的待辦，需要另一張
+     * 表或冪等鍵設計，排在下一階段；但這句話現在就在誤導讀者，先改掉。</p>
+     */
     private String referralRewardNote(int referralReward) {
         if (referralReward == 0) {
-            return "。目前邀請獎勵暫停發放，成功邀請仍會被記錄。";
+            return "。目前邀請獎勵暫停發放，恢復發放後成功的邀請才會開始累計。";
         }
         return "，你才會拿到 " + referralReward + " 點。";
     }

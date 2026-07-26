@@ -8,6 +8,7 @@ import world.springai.survey.audience.SurveyResponse;
 import world.springai.survey.audience.SurveyResponseRepository;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -149,8 +150,17 @@ public class ReferralService {
         return new ReferralStats(rewards.size(), earned);
     }
 
-    /** email 正規化：去前後空白並轉小寫 */
+    /**
+     * email 正規化：去前後空白並轉小寫。
+     *
+     * <p>{@code Locale.ROOT} 不可省略，而且這裡比別處更不能省：此處的值會成為
+     * <b>發獎冪等鍵</b>（{@code credit_txn.note}）。土耳其語系（tr-TR）下無參數的
+     * {@code toLowerCase()} 會把 {@code I} 轉成 {@code ı}，正規化結果與
+     * {@code ReaderAccountService#normalize} 及 {@code AdminReaderService#normalizeEmail}
+     * 這兩處（都已帶 {@code Locale.ROOT}）不一致——同一個 email 會算出兩把不同的
+     * 冪等鍵，{@code existsByReasonAndNote} 因此查不到既有紀錄，獎勵重複發放。</p>
+     */
     private static String normalize(String email) {
-        return email == null ? "" : email.trim().toLowerCase();
+        return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
     }
 }

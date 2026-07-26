@@ -177,4 +177,63 @@ class RulesPageControllerTest {
         org.junit.jupiter.api.Assertions.assertFalse(html.contains("+0 點"));
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("目前暫無邀請獎勵"));
     }
+
+    /**
+     * 獎勵為 0 時，頁面<b>不得承諾「成功邀請仍會被記錄」</b>——程式不保證這件事。
+     *
+     * <p>{@code ReferralService.rewardFor} 在 {@code reward <= 0} 時直接 return、
+     * 完全不寫帳本，而邀請頁的成效區塊數的正是 {@code credit_txn} 的 REFERRAL 筆數。
+     * 於是讀者會在 {@code /r/invite} 同一個回應裡看到「成功邀請仍會被記錄」與
+     * 「還沒有人透過你的連結完成訂閱」並列，即使他已經成功邀請五個人。
+     * 文案不得對行為做出程式碼不保證的承諾。</p>
+     *
+     * <p>刻意用「記錄／記下／累計中」這類承諾字眼做黑名單，而不是比對整句：
+     * 換句話說也不行，換掉的必須是那個承諾本身。</p>
+     */
+    @Test
+    void zeroRewardCopyMakesNoPromiseThatInvitesAreRecorded() throws Exception {
+        when(creditPolicy.referralReward()).thenReturn(0);
+        String html = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
+        for (String promise : java.util.List.of("會被記錄", "仍會記錄", "仍會被記下", "會先記錄", "累計中")) {
+            org.junit.jupiter.api.Assertions.assertFalse(html.contains(promise),
+                "獎勵為 0 時承諾了程式不保證的「" + promise + "」：邀請不會寫進帳本，成效頁永遠是 0");
+        }
+        // 仍要說明目前的狀態，不能靠整段刪掉來「通過」
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("暫停發放"));
+    }
+
+    /**
+     * 規則頁的「每篇 N 點」必須標明是參考值，實際以各篇文章頁為準。
+     *
+     * <p>本頁顯示的是全域預設 {@code CreditPolicy.premiumCost()}，而 paywall 與
+     * {@code UnlockService} 實際扣的是該篇自己的 {@code campaign.credit_cost}；
+     * 又因 {@code ck_campaign_premium_cost} 與 {@code validateCreditCost} 都強制
+     * PREMIUM 的 {@code credit_cost > 0}，{@code costOf()} 退回全域預設的分支是死碼——
+     * 這個數字<b>結構性地</b>不會是實際扣款額。規則頁的存在理由就是點數機制的
+     * 可信度來源，帶著結構性錯誤的數字上線比沒有規則頁更傷。</p>
+     */
+    @Test
+    void premiumCostIsPresentedAsTypicalNotExact() throws Exception {
+        String html = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("通常每篇 33 點"),
+            "沒有把全域預設標示為「通常」，讀者會以為那就是每篇的實際扣款額");
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("實際點數以各篇文章頁顯示為準"),
+            "沒有指出實際點數要看文章頁");
+    }
+
+    /**
+     * VIP 段落必須講明「到期後 VIP 期間讀過的文章仍永久免費」。
+     *
+     * <p>這是 {@code AccessDecisionService.recordAccess} 已經成立的行為
+     * （VIP 閱讀會寫一筆 {@code cost=0} 的 {@code article_access}，到期後仍命中
+     * ALREADY_UNLOCKED）。對讀者有利、講出來只會加分，不講反而讓人以為 VIP
+     * 一到期就全部鎖回去。</p>
+     */
+    @Test
+    void vipSectionStatesReadArticlesStayFreeAfterExpiry() throws Exception {
+        String html = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(
+            html.contains("VIP 到期後，VIP 期間讀過的文章仍然永久免費"),
+            "VIP 段落沒有說明到期後已讀文章仍免費");
+    }
 }
