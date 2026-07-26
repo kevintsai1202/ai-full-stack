@@ -172,6 +172,70 @@ class ReaderAccountServiceTest {
         assertEquals(NOW, reader.getLastLoginAt());
     }
 
+    /**
+     * 後台代為建帳（findOrCreateWithoutLogin）不得偽造登入與參與度訊號。
+     *
+     * <p>站方為從未登入的學員設 VIP 時，若沿用登入路徑，該讀者會立刻在後台顯示
+     * 「剛剛登入過」，名單中心的參與度時間戳也被推到今天。參與度是名單評分與
+     * 再行銷判斷的依據，被後台操作污染之後，站方再也分不出誰真的來過。</p>
+     */
+    @Test
+    void findOrCreateWithoutLoginDoesNotTouchLoginOrEngagement() {
+        when(readerRepository.findByEmailIgnoreCase("new@example.com")).thenReturn(Optional.empty());
+
+        Reader reader = service.findOrCreateWithoutLogin("new@example.com", NOW);
+
+        org.junit.jupiter.api.Assertions.assertNull(reader.getLastLoginAt(), "後台建帳不是一次登入");
+        verify(surveyResponseRepository, never()).touchEngagement(anyString(), any());
+    }
+
+    /**
+     * 後台代為建帳的其餘行為與登入建帳<b>完全相同</b>：初始贈點、帳本、邀請碼一個都不少。
+     *
+     * <p>這條是「不要繞過 findOrCreate 自己 new Reader」的保證：只要建帳入口唯一，
+     * 後台建出來的帳戶就不會少發贈點或少了邀請碼。</p>
+     */
+    @Test
+    void findOrCreateWithoutLoginStillGrantsSignupCredits() {
+        when(readerRepository.findByEmailIgnoreCase("new@example.com")).thenReturn(Optional.empty());
+
+        Reader reader = service.findOrCreateWithoutLogin("new@example.com", NOW);
+
+        assertEquals(300, reader.getCredits(), "初始贈點不因後台建帳而缺席");
+        assertNotNull(reader.getReferralCode());
+        ArgumentCaptor<CreditTxn> txn = ArgumentCaptor.forClass(CreditTxn.class);
+        verify(creditTxnRepository).save(txn.capture());
+        assertEquals(CreditTxn.REASON_SIGNUP_GRANT, txn.getValue().getReason());
+    }
+
+    /** 後台對既有讀者建帳：既不重複發贈點，也不動最後登入時間 */
+    @Test
+    void findOrCreateWithoutLoginLeavesExistingReaderUntouched() {
+        Reader existing = new Reader("user@example.com", "OLDCODE1");
+        existing.setId(7L);
+        existing.setCredits(120);
+        existing.setLastLoginAt(NOW.minusDays(30));
+        when(readerRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(existing));
+
+        Reader reader = service.findOrCreateWithoutLogin("user@example.com", NOW);
+
+        assertEquals(NOW.minusDays(30), reader.getLastLoginAt(), "既有的最後登入時間不得被覆寫");
+        assertEquals(120, reader.getCredits());
+        verify(creditTxnRepository, never()).save(any(CreditTxn.class));
+        verify(surveyResponseRepository, never()).touchEngagement(anyString(), any());
+    }
+
+    /** 一般登入路徑的行為不得因為新增後台路徑而改變 */
+    @Test
+    void loginPathStillTouchesLoginAndEngagement() {
+        when(readerRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.empty());
+
+        Reader reader = service.findOrCreate("user@example.com", NOW);
+
+        assertEquals(NOW, reader.getLastLoginAt());
+        verify(surveyResponseRepository).touchEngagement("user@example.com", NOW);
+    }
+
     /** 首次登入時應把名單中心的推薦碼轉成 reader.referred_by */
     @Test
     void firstLoginRecordsReferrer() {

@@ -8,6 +8,7 @@ import world.springai.survey.audience.SurveyResponseRepository;
 
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -52,7 +53,7 @@ public class ReaderAccountService {
     }
 
     /**
-     * 取得讀者帳戶，不存在則建立。
+     * 取得讀者帳戶，不存在則建立（<b>視為一次登入</b>）。
      *
      * <p>首次建立時發放初始贈點（金額取自可調參數）；既有帳戶不重複發。
      * 無論新舊都更新最後登入時間，並更新名單中心的最後互動時間
@@ -60,10 +61,41 @@ public class ReaderAccountService {
      */
     @Transactional
     public Reader findOrCreate(String email, OffsetDateTime now) {
+        return findOrCreate(email, now, true);
+    }
+
+    /**
+     * 取得讀者帳戶，不存在則建立，但<b>不視為一次登入</b>（後台代為建帳專用）。
+     *
+     * <p>建帳的其餘行為與 {@link #findOrCreate} 完全相同——初始贈點、帳本、
+     * 邀請碼、推薦歸因一個都不少，所以後台不必（也不該）繞過本服務自己 new Reader。
+     * 唯一的差別是<b>不更新 {@code last_login_at}、不呼叫
+     * {@code touchEngagement}</b>。</p>
+     *
+     * <p><b>為什麼要區分</b>：站方為從未登入過的學員設 VIP 時，若沿用登入路徑，
+     * 該讀者會立刻在後台顯示「剛剛登入過」，名單中心的參與度時間戳也被推到今天。
+     * 參與度是名單評分與再行銷判斷的依據，被後台操作污染之後，站方再也分不出
+     * 誰真的來過。</p>
+     */
+    @Transactional
+    public Reader findOrCreateWithoutLogin(String email, OffsetDateTime now) {
+        return findOrCreate(email, now, false);
+    }
+
+    /**
+     * 建帳共用流程。
+     *
+     * @param asLogin true 才更新 last_login_at 與名單中心的參與度時間戳
+     */
+    private Reader findOrCreate(String email, OffsetDateTime now, boolean asLogin) {
         String normalized = normalize(email);
 
         Optional<Reader> existing = readerRepository.findByEmailIgnoreCase(normalized);
         Reader reader = existing.orElseGet(() -> createWithSignupGrant(normalized, now));
+
+        if (!asLogin) {
+            return reader;
+        }
 
         reader.setLastLoginAt(now);
         reader = readerRepository.save(reader);
@@ -123,8 +155,14 @@ public class ReaderAccountService {
         return sb.toString();
     }
 
-    /** email 正規化：去前後空白並轉小寫 */
+    /**
+     * email 正規化：去前後空白並轉小寫。
+     *
+     * <p>{@code Locale.ROOT} 不可省略：土耳其語系（tr-TR）下無參數的
+     * {@code toLowerCase()} 會把 {@code I} 轉成 {@code ı}，正規化結果與資料庫裡的
+     * email 對不起來，該讀者就此查不到。</p>
+     */
     private String normalize(String email) {
-        return email == null ? "" : email.trim().toLowerCase();
+        return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
     }
 }
