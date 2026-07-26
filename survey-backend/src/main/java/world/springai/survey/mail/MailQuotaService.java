@@ -40,6 +40,24 @@ public class MailQuotaService {
     /** 額度查詢結果快取秒數：後台每次更新人數都會問一次，避免頻繁打外部 API */
     private static final Duration CACHE_TTL = Duration.ofSeconds(60);
 
+    /** {@link Quota#source()} 的值：實際向 Zeabur 偵測而來 */
+    public static final String SOURCE_ZEABUR = "zeabur";
+
+    /** {@link Quota#source()} 的值：偵測不可用，數字為設定檔推測值 */
+    public static final String SOURCE_FALLBACK = "fallback";
+
+    /**
+     * fallback 路徑的行銷可用量硬上限（封）。
+     *
+     * <p>偵測失敗時我們<b>不知道</b>實際還剩多少額度，{@code fallbackQuota} 只是一個猜測值。
+     * 而它來自環境變數 {@code MAIL_FALLBACK_QUOTA}：若有人為了「偵測壞掉時不要卡住營運」
+     * 把它調成 5000，偵測一失敗就等於放行 4950 封毫無保護的群發，把交易信額度連同
+     * 保留額度一起吃光——那正是 reserve 機制要防的事，卻由一個「只是預設值」的設定繞過。
+     * 因此 fallback 路徑的行銷可用量另外收斂到這個保守常數：猜測值只能用來寄一小批，
+     * 不能用來授權大量群發。</p>
+     */
+    static final int FALLBACK_MARKETING_CAP = 50;
+
     /**
      * 單次後台操作的安全上限。
      * 邀請信是逐封同步呼叫 {@link MailSender#send}，一封一個 HTTP request，
@@ -88,7 +106,16 @@ public class MailQuotaService {
                         boolean overageBillingEnabled,
                         String quotaResetAt, String monthlyResetAt) {}
 
-    /** 注入 HTTP 客戶端建構器、Zeabur 帳號 token、偵測失敗時的保守額度與交易信保留額度 */
+    /**
+     * 注入 HTTP 客戶端建構器、Zeabur 帳號 token、偵測失敗時的保守額度與交易信保留額度。
+     *
+     * <p><b>保留額度必須夾到 0 以上</b>：{@link #marketingLimits} 的
+     * {@code Math.max(0, remaining - transactionalReserve)} 只保護 marketingRemaining
+     * 不為負，卻不保護 reserve 本身為負。{@code MAIL_TRANSACTIONAL_RESERVE=-500}
+     * （打錯正負號，或誤以為負數代表「不保留」）會讓 remaining=1000 時算出
+     * marketingRemaining=1500——保留機制反向放大可用量，群發被允許超額寄出 500 封。
+     * 負值一律視為 0 並留下警告，讓設定錯誤在 log 裡看得見而不是靜默生效。</p>
+     */
     public MailQuotaService(RestClient.Builder builder,
                             @Value("${app.mail.zeabur-token:}") String zeaburToken,
                             @Value("${app.mail.fallback-quota:100}") long fallbackQuota,
@@ -96,7 +123,12 @@ public class MailQuotaService {
         this.client = builder.baseUrl("https://api.zeabur.com").build();
         this.zeaburToken = zeaburToken;
         this.fallbackQuota = fallbackQuota;
-        this.transactionalReserve = transactionalReserve;
+        if (transactionalReserve < 0) {
+            log.warn("app.mail.transactional-reserve 為負值（{}），已視為 0；"
+                + "負的保留額度會反向放大群發可用量，請檢查 MAIL_TRANSACTIONAL_RESERVE 設定",
+                transactionalReserve);
+        }
+        this.transactionalReserve = Math.max(0, transactionalReserve);
     }
 
     /**
@@ -119,6 +151,20 @@ public class MailQuotaService {
             log.warn("查詢 Zeabur 寄信額度失敗，改用預設額度 {} 封：{}", fallbackQuota, e.getMessage());
             return fallback();
         }
+    }
+
+    /**
+     * 讓快取立即失效，強迫下一次 {@link #current()} 重新向外部查詢。
+     *
+     * <p><b>為什麼必須有這支</b>：額度檢查是無狀態的——每次群發只問一次外部快照，
+     * 寄出後不做任何本地扣減。快取 60 秒的情況下，管理者送出 950 人的群發（成功）後，
+     * 60 秒內再送第二批 950 人時 {@link #current()} 回的仍是同一份舊快照，
+     * marketingRemaining 還是 950，第二批照樣放行——實際寄出 1900 封 vs 額度 1000，
+     * 保留給登入信的額度被吃光，讀者收不到 magic link。凡是實際寄出過信的路徑
+     * 都必須在寄完後呼叫本方法，把這個窗口從 60 秒縮成單次查詢的延遲。</p>
+     */
+    public void invalidate() {
+        cache.set(null);
     }
 
     /** 實際發出 GraphQL 查詢並轉成 {@link Quota}（含日／月剩餘與單批上限計算） */
@@ -150,7 +196,7 @@ public class MailQuotaService {
         long remaining = Math.min(dailyRemaining, monthlyRemaining);
         long[] marketing = marketingLimits(remaining);
 
-        return new Quota("zeabur", str(s.get("status")),
+        return new Quota(SOURCE_ZEABUR, str(s.get("status")),
             dailyQuota, dailySent, dailyRemaining,
             monthlyQuota, monthlySent, monthlyRemaining,
             remaining, Math.min(remaining, BATCH_CAP),
@@ -159,10 +205,18 @@ public class MailQuotaService {
             str(s.get("quotaResetAt")), str(s.get("monthlyResetAt")));
     }
 
-    /** 偵測不可用時的保守額度：日／月皆以 fallbackQuota 計，已寄量未知以 0 計 */
+    /**
+     * 偵測不可用時的保守額度：日／月皆以 fallbackQuota 計，已寄量未知以 0 計。
+     *
+     * <p>行銷可用量另外收斂到 {@link #FALLBACK_MARKETING_CAP}——理由見該常數的說明：
+     * 這條路徑上的數字是猜的，不能用來授權大量群發。</p>
+     */
     private Quota fallback() {
         long[] marketing = marketingLimits(fallbackQuota);
-        return new Quota("fallback", "unknown",
+        // 猜測值只授權一小批：行銷可用量與單批上限一併收斂到保守常數
+        marketing[0] = Math.min(marketing[0], FALLBACK_MARKETING_CAP);
+        marketing[1] = Math.min(marketing[1], marketing[0]);
+        return new Quota(SOURCE_FALLBACK, "unknown",
             fallbackQuota, 0, fallbackQuota,
             fallbackQuota, 0, fallbackQuota,
             fallbackQuota, Math.min(fallbackQuota, BATCH_CAP),

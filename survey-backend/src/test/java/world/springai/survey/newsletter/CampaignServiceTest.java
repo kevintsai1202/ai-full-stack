@@ -23,7 +23,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
@@ -319,8 +318,111 @@ class CampaignServiceTest {
             () -> svc.send("主旨", "# 內容", null, null, "now", null));
 
         assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
-        // 一封都不能寄出
-        verify(mailSender, never()).send(anyString(), anyString(), anyString());
+        // 一封都不能寄出。立即群發走的是 sendBatch(List)，不是 send(to,subject,html)——
+        // 後者只有 sendTest() 會呼叫，用它斷言等於什麼都沒鎖住。
+        verify(mailSender, never()).sendBatch(anyList());
+        // 更關鍵的是不能留下 campaign 紀錄：留了就會在後台歷史裡出現一筆「寄了 0 人」的批次
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
+    /**
+     * 重排（reschedule）同樣要受行銷可用額度截斷。
+     *
+     * <p><b>為什麼非有這條不可</b>：reschedule 看起來像「只是改時間」，實際上它會
+     * 取消舊排程信後<b>重新寄出整批</b>。若這段檢查缺席或被改壞，它就是一條繞過
+     * 保留額度的後門，而三個既有的 reschedule 測試全跑在額度充足之下，
+     * 把整段檢查刪掉都不會變紅。</p>
+     */
+    @Test
+    void rescheduleTruncatesToMarketingQuota() {
+        Instant newAt = Instant.parse("2030-06-01T10:00:00Z");
+        Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
+            null, 5, "scheduled");
+        when(campaignRepository.findById(21L)).thenReturn(Optional.of(existing));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(emailLogRepository.findByCampaignIdAndStatus(21L, "scheduled")).thenReturn(List.of());
+        when(recipientService.recipients(null, null))
+            .thenReturn(List.of("a@b.com", "b@b.com", "c@b.com", "d@b.com", "e@b.com"));
+        when(mailQuotaService.current()).thenReturn(quotaWithMarketing(2));
+        when(mailSender.schedule(any(), eq(newAt))).thenReturn("sched-x");
+
+        CampaignService.SendResult r = svc.reschedule(21L, "新主旨", "新內文", null, null, newAt);
+
+        assertEquals(2, r.recipientCount(), "只應重排額度允許的人數");
+        assertEquals(3, r.skippedForQuota(), "縮減數必須回報");
+        // 實際只對 2 人呼叫 provider——回傳值對了但仍寄 5 封的話等於檢查形同虛設
+        verify(mailSender, times(2)).schedule(any(), eq(newAt));
+        assertEquals(2, existing.getRecipientCount(), "campaign 應記錄實際寄送人數");
+    }
+
+    /** 重排時行銷可用量為 0 → 回 409，且完全不呼叫 provider（同 send 的理由） */
+    @Test
+    void rescheduleIsRejectedWhenNoMarketingQuota() {
+        Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
+            null, 2, "scheduled");
+        when(campaignRepository.findById(22L)).thenReturn(Optional.of(existing));
+        when(emailLogRepository.findByCampaignIdAndStatus(22L, "scheduled")).thenReturn(List.of());
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@b.com", "c@b.com"));
+        when(mailQuotaService.current()).thenReturn(quotaWithMarketing(0));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.reschedule(22L, "新主旨", "新內文", null, null,
+                Instant.parse("2030-06-01T10:00:00Z")));
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+        verify(mailSender, never()).schedule(any(), any());
+        // 舊 campaign 不可被改成任何新狀態：整批被拒時它應維持原樣等下次重排
+        assertEquals("scheduled", existing.getStatus());
+    }
+
+    // ===================== 額度快取失效（連續兩批群發不得穿過同一份快照） =====================
+
+    /**
+     * 群發後必須讓額度快取失效。
+     *
+     * <p>額度檢查是無狀態的：每次只問一次外部快照、寄出後不做本地扣減。
+     * {@code MailQuotaService} 的快取存活 60 秒，若群發後不主動失效，
+     * 60 秒內的第二批群發會拿到<b>同一份</b>還沒扣掉第一批的快照而被放行——
+     * 兩批 950 人可以在額度只剩 1000 的情況下全部寄出，保留給登入信的額度被吃光。</p>
+     */
+    @Test
+    void sendInvalidatesQuotaCacheAfterSending() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@b.com"));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(mailSender.sendBatch(anyList())).thenReturn("job-1");
+
+        svc.send("主旨", "# 內容", null, null, "now", null);
+
+        verify(mailQuotaService).invalidate();
+    }
+
+    /** 重排同樣實際寄出信件，寄完也必須讓額度快取失效 */
+    @Test
+    void rescheduleInvalidatesQuotaCacheAfterSending() {
+        Instant newAt = Instant.parse("2030-06-01T10:00:00Z");
+        Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
+            null, 1, "scheduled");
+        when(campaignRepository.findById(23L)).thenReturn(Optional.of(existing));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(emailLogRepository.findByCampaignIdAndStatus(23L, "scheduled")).thenReturn(List.of());
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@b.com"));
+        when(mailSender.schedule(any(), eq(newAt))).thenReturn("sched-y");
+
+        svc.reschedule(23L, "新主旨", "新內文", null, null, newAt);
+
+        verify(mailQuotaService).invalidate();
+    }
+
+    /** 額度不足被拒（409）時不算寄出，不需要也不應該去清額度快取 */
+    @Test
+    void rejectedSendDoesNotInvalidateQuotaCache() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@b.com"));
+        when(mailQuotaService.current()).thenReturn(quotaWithMarketing(0));
+
+        assertThrows(ResponseStatusException.class,
+            () -> svc.send("主旨", "# 內容", null, null, "now", null));
+
+        verify(mailQuotaService, never()).invalidate();
     }
 
     /**

@@ -91,4 +91,42 @@ class AppSettingServiceTransactionTest {
         assertTrue(firstTxn.get().contains("AppSettingService.setAll"),
             "交易不是由 AppSettingService.setAll 開的：" + firstTxn.get());
     }
+
+    /**
+     * 交易期間的並行讀取會把「未提交的舊值」寫進快取，因此提交後必須再清一次。
+     *
+     * <p><b>失效情境</b>：{@code set()} 的 {@code cache.remove} 發生在提交<b>之前</b>。
+     * 在那之後、提交之前，任何並行的 {@code get()} 讀到的都還是資料庫裡的舊值
+     * （新值尚未提交、對其他連線不可見），並把它重新快取 60 秒。後台顯示
+     * 「已儲存，立即生效」，讀者的規則頁卻最長還會顯示舊數字一分鐘。</p>
+     *
+     * <p>本測試以 {@code beforeCommit} 回呼精確重現那個時間點的並行讀取；
+     * 把 {@code setAll} 尾端的 afterCommit 清快取拿掉，這個測試就會變紅。</p>
+     */
+    @Test
+    void setAllClearsCacheAgainAfterCommit() {
+        String key = AppSettingService.CREDIT_PREMIUM_COST;
+        service.clearCache(); // service 是共用單例，先清掉其他測試留下的快取
+        // 模擬資料庫目前可見的值：提交前是舊值 10，提交後才變成 20
+        AtomicReference<String> visibleValue = new AtomicReference<>("10");
+        when(repository.findById(anyString()))
+            .thenAnswer(inv -> Optional.of(new AppSetting(inv.getArgument(0), visibleValue.get())));
+        when(repository.save(any(AppSetting.class))).thenAnswer(inv -> {
+            // 在交易內註冊一個 beforeCommit 回呼，重現「提交前的並行讀取」
+            TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void beforeCommit(boolean readOnly) {
+                        service.get(key);          // 讀到未提交的舊值 10，並寫進快取
+                        visibleValue.set("20");    // 此後其他連線才看得到新值
+                    }
+                });
+            return inv.getArgument(0);
+        });
+
+        service.setAll(Map.of(key, 20));
+
+        assertEquals(20, service.getInt(key, -1),
+            "提交後仍讀到舊值：setAll 沒有在 commit 之後再清一次快取");
+    }
 }

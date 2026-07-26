@@ -128,23 +128,9 @@ public class CampaignService {
 
         // 保留交易信額度（spec §6）：群發不得吃掉登入信與確認信的可用量，
         // 否則讀者收不到 magic link 就整個登不進讀者端。
-        MailQuotaService.Quota quota = mailQuotaService.current();
-        int skippedForQuota = 0;
-        if (quota.marketingRemaining() <= 0) {
-            // 完全沒有行銷可用量時直接拒絕，而不是寄 0 封後回報成功——
-            // 後者會讓後台顯示「已發送」而實際上沒人收到。
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                "行銷可用額度為 0（剩餘 " + quota.remaining() + " 封已全數保留給登入信等交易信）。"
-                    + "請等額度重置後再發送。");
-        }
-        if (recipients.size() > quota.marketingRemaining()) {
-            // 縮減批量而非全部拒絕：先寄一部分，剩下的下次再寄。
-            // 縮減量必須回報，否則「已發送」會被誤解成全部寄出。
-            skippedForQuota = (int) (recipients.size() - quota.marketingRemaining());
-            recipients = recipients.subList(0, (int) quota.marketingRemaining());
-            log.warn("群發縮減批量：原 {} 人，因保留 {} 封交易信額度而只寄 {} 人",
-                recipients.size() + skippedForQuota, quota.reserve(), recipients.size());
-        }
+        QuotaLimited limited = applyMarketingQuota(recipients, "群發");
+        recipients = limited.recipients();
+        int skippedForQuota = limited.skippedForQuota();
 
         // 渲染 markdown 為 HTML 內文
         String bodyHtml = markdownRenderer.toHtml(markdown);
@@ -200,6 +186,9 @@ public class CampaignService {
         campaign.setStatus(finalStatus(scheduled, accepted, failed));
         campaignRepository.save(campaign);
 
+        // 本批已消耗額度，讓下一次查詢重新向外部取數（理由見 MailQuotaService.invalidate）
+        mailQuotaService.invalidate();
+
         return new SendResult(campaignId, recipients.size(), accepted, failed, skippedForQuota);
     }
 
@@ -245,19 +234,10 @@ public class CampaignService {
         List<String> recipients = recipientService.recipients(role, interest);
 
         // 保留交易信額度（spec §6）：重排仍會實際寄出信件，同 send() 的理由。
-        MailQuotaService.Quota quota = mailQuotaService.current();
-        int skippedForQuota = 0;
-        if (quota.marketingRemaining() <= 0) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                "行銷可用額度為 0（剩餘 " + quota.remaining() + " 封已全數保留給登入信等交易信）。"
-                    + "請等額度重置後再發送。");
-        }
-        if (recipients.size() > quota.marketingRemaining()) {
-            skippedForQuota = (int) (recipients.size() - quota.marketingRemaining());
-            recipients = recipients.subList(0, (int) quota.marketingRemaining());
-            log.warn("重排縮減批量：原 {} 人，因保留 {} 封交易信額度而只寄 {} 人",
-                recipients.size() + skippedForQuota, quota.reserve(), recipients.size());
-        }
+        // 與 send() 共用同一份判斷（applyMarketingQuota），避免兩條路徑各改一邊。
+        QuotaLimited limited = applyMarketingQuota(recipients, "重排");
+        recipients = limited.recipients();
+        int skippedForQuota = limited.skippedForQuota();
 
         String bodyHtml = markdownRenderer.toHtml(markdown);
         int[] rc = scheduleAll(campaignId, subject, bodyHtml, recipients, scheduledAt);
@@ -275,7 +255,51 @@ public class CampaignService {
         campaign.setStatus(finalStatus(true, rc[0], rc[1]));
         campaignRepository.save(campaign);
 
+        // 重排同樣實際寄出信件，消耗額度後必須讓快取失效（同 send()）
+        mailQuotaService.invalidate();
+
         return new SendResult(campaignId, recipients.size(), rc[0], rc[1], skippedForQuota);
+    }
+
+    /** 套用保留額度後的收件人清單與被略過人數 */
+    private record QuotaLimited(List<String> recipients, int skippedForQuota) {}
+
+    /**
+     * 依「行銷可用額度」裁切收件人清單（spec §6）。
+     *
+     * <p><b>為什麼要抽成共用方法</b>：{@code send()} 與 {@code reschedule()} 都會實際寄出信件，
+     * 兩邊原本是字面重複的 15 行。重複的判斷遲早只會被改一邊，而漏改的那一邊就是一條
+     * 繞過保留額度的後門——reschedule 尤其危險，它看起來像「只是改時間」，實際上會重寄整批。</p>
+     *
+     * @param recipients 原始收件人清單
+     * @param action     log 用的動作名稱（群發／重排）
+     * @return 裁切後的清單與被略過人數；行銷可用量為 0 時直接拋 409
+     */
+    private QuotaLimited applyMarketingQuota(List<String> recipients, String action) {
+        MailQuotaService.Quota quota = mailQuotaService.current();
+        // 偵測失敗時的額度是「推測值」而非實際剩餘量，必須在 log 裡標明，
+        // 否則事後查「為什麼只寄了這些人」會誤以為那是真實額度
+        if (MailQuotaService.SOURCE_FALLBACK.equals(quota.source())) {
+            log.warn("{}：本次額度為推測值（未偵測到實際額度 source=fallback），行銷可用 {} 封",
+                action, quota.marketingRemaining());
+        }
+        if (quota.marketingRemaining() <= 0) {
+            // 完全沒有行銷可用量時直接拒絕，而不是寄 0 封後回報成功——
+            // 後者會讓後台顯示「已發送」而實際上沒人收到。
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "行銷可用額度為 0（剩餘 " + quota.remaining() + " 封已全數保留給登入信等交易信）。"
+                    + "請等額度重置後再發送。");
+        }
+        if (recipients.size() <= quota.marketingRemaining()) {
+            return new QuotaLimited(recipients, 0);
+        }
+        // 縮減批量而非全部拒絕：先寄一部分，剩下的下次再寄。
+        // 縮減量必須回報，否則「已發送」會被誤解成全部寄出。
+        int skipped = (int) (recipients.size() - quota.marketingRemaining());
+        List<String> allowed = recipients.subList(0, (int) quota.marketingRemaining());
+        log.warn("{}縮減批量：原 {} 人，因保留 {} 封交易信額度而只寄 {} 人",
+            action, recipients.size(), quota.reserve(), allowed.size());
+        return new QuotaLimited(allowed, skipped);
     }
 
     /**

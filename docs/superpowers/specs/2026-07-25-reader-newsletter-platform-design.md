@@ -563,7 +563,7 @@ sunset   ← 已寄期數 >= 淘汰門檻(12) 且 last_engaged_at 為 NULL 或�
 3. 登入信、確認信、歡迎信不受 reserve 限制（它們就是 reserve 的使用者）。
 4. 登入信送出失敗時，前端明確告知「登入信寄送失敗，請稍後再試」，不要顯示成功假象。
 
-> **階段 C 的實際狀態（誠實記錄）**：四項全部完成（第 2 項原規劃在階段 D，依使用者決定提前至階段 C 完成，見 Task 13）。`MailQuotaService.current()` 回傳的 `Quota` 新增 `reserve`／`marketingRemaining`／`marketingBatchMax` 三個欄位，`marketingRemaining = max(0, 剩餘額度 - reserve)`；`reserve` 讀自 `app.mail.transactional-reserve`（預設 50 封），不再是「存在但沒人讀」的死設定。
+> **階段 C 的實際狀態（誠實記錄）**：第 1、3、4 項完成；第 2 項**部分完成**——「群發前檢查、不足則縮減批量並在後台顯示原因」已完成（第 2 項原規劃在階段 D，依使用者決定提前至階段 C 完成，見 Task 13、Task 14），但「**補寄**前檢查」尚未成立，因為補寄功能本身要到階段 E 才存在。`MailQuotaService.current()` 回傳的 `Quota` 新增 `reserve`／`marketingRemaining`／`marketingBatchMax` 三個欄位，`marketingRemaining = max(0, 剩餘額度 - reserve)`；`reserve` 讀自 `app.mail.transactional-reserve`（預設 50 封），不再是「存在但沒人讀」的死設定。負值的 reserve 會被夾到 0（負數會反向放大可用量）；偵測失敗（`source=fallback`）時行銷可用量另外收斂到保守常數，避免把 `MAIL_FALLBACK_QUOTA` 調大就等於解除保護。
 >
 > `CampaignService.send()` 與 `reschedule()` 在取得收件人清單後、建立／更新 campaign 之前檢查此值：`marketingRemaining <= 0` 時整批拒絕並回 409（不寄 0 封後回報成功）；收件人數超過 `marketingRemaining` 時縮減批量，縮減人數以 `SendResult.skippedForQuota` 回報，且 `campaign.recipientCount` 記錄的是**實際寄送人數**（供階段 E 補寄算差集使用）。登入信、確認信、歡迎信完全不受此檢查影響——它們走的是 `LoginMailService` 等既有路徑，未經過 `CampaignService`。
 >

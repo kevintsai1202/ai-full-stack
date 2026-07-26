@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.client.ExpectedCount.times;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -184,15 +185,94 @@ class MailQuotaServiceTest {
         server.verify();
     }
 
-    /** 保留額度設為 0 時，行銷可用量等於剩餘額度（等同關閉此機制） */
+    /**
+     * 保留額度設為 0 時，行銷可用量等於剩餘額度（等同關閉此機制）。
+     *
+     * <p>刻意走「偵測成功」的路徑：fallback 路徑另有
+     * {@link MailQuotaService#FALLBACK_MARKETING_CAP} 的獨立收斂（推測值不授權大量群發），
+     * 在那條路徑上驗證「reserve=0 等同不限制」會把兩個不同的保護混為一談。</p>
+     */
     @Test
     void zeroReserveMeansNoRestriction() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        MailQuotaService service = new MailQuotaService(builder, "", 100, 0);
+        MailQuotaService service = new MailQuotaService(builder, "sk-test", 100, 0);
+
+        server.expect(requestTo("https://api.zeabur.com/graphql"))
+              .andRespond(withSuccess(PRO_RESPONSE, APPLICATION_JSON));
 
         MailQuotaService.Quota q = service.current();
 
         assertEquals(q.remaining(), q.marketingRemaining());
+        server.verify();
+    }
+
+    /**
+     * 保留額度為負值時一律夾到 0，不得反向放大行銷可用量。
+     *
+     * <p>{@code MAIL_TRANSACTIONAL_RESERVE=-500}（打錯正負號，或誤以為負數代表
+     * 「不保留」）若原樣採用，{@code remaining - reserve} 會算成 1000 -(-500) = 1500，
+     * 保留機制反過來授權群發超額寄出 500 封——比完全沒有保留機制更糟。</p>
+     */
+    @Test
+    void negativeReserveIsClampedToZero() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        // fallback 額度 1000、保留 -500：若不夾到 0，行銷可用量會變成 1500
+        MailQuotaService service = new MailQuotaService(builder, "", 1000, -500);
+
+        MailQuotaService.Quota q = service.current();
+
+        assertEquals(0, q.reserve(), "負的保留額度必須被視為 0");
+        assertTrue(q.marketingRemaining() <= q.remaining(),
+            "行銷可用量不得大於剩餘額度：" + q.marketingRemaining() + " > " + q.remaining());
+        server.verify();
+    }
+
+    /**
+     * 偵測失敗時的行銷可用量必須收斂到保守上限，不隨 {@code MAIL_FALLBACK_QUOTA} 放大。
+     *
+     * <p>fallback 路徑上的數字是猜的。若有人把環境變數調成 5000「以免偵測壞掉時卡住營運」，
+     * 偵測一失敗就等於放行 4950 封毫無保護的群發。</p>
+     */
+    @Test
+    void fallbackMarketingRemainingIsCappedConservatively() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        MailQuotaService service = new MailQuotaService(builder, "", 5000, 50);
+
+        MailQuotaService.Quota q = service.current();
+
+        assertEquals("fallback", q.source());
+        assertEquals(5000, q.remaining(), "顯示用的剩餘量仍照設定值");
+        assertEquals(MailQuotaService.FALLBACK_MARKETING_CAP, q.marketingRemaining(),
+            "推測值不得授權大量群發");
+        assertEquals(MailQuotaService.FALLBACK_MARKETING_CAP, q.marketingBatchMax());
+        server.verify();
+    }
+
+    /**
+     * {@code invalidate()} 之後必須重新向外部查詢，不得回快取。
+     *
+     * <p>本測試同時鎖住兩件事：① 未失效時 60 秒內只查一次（第二次 current 若打外部
+     * API，MockRestServiceServer 會因超出預期次數而失敗）；② invalidate 之後必須
+     * 再查一次（少於兩次時 {@code server.verify()} 會因「還有預期請求未發生」而失敗）。
+     * 群發寄出後若不讓快取失效，60 秒內的第二批群發會拿到同一份舊快照而被放行。</p>
+     */
+    @Test
+    void invalidateForcesRefetchInsteadOfServingCache() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        MailQuotaService service = new MailQuotaService(builder, "sk-test", 100, 50);
+
+        server.expect(times(2), requestTo("https://api.zeabur.com/graphql"))
+              .andRespond(withSuccess(PRO_RESPONSE, APPLICATION_JSON));
+
+        service.current();
+        service.current();   // 快取命中：不得再打外部 API
+        service.invalidate();
+        service.current();   // 快取已失效：必須重新查詢
+
+        server.verify();     // 恰好兩次請求
     }
 }

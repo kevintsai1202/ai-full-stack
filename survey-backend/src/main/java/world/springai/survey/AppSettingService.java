@@ -4,11 +4,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -106,10 +109,31 @@ public class AppSettingService {
      * 經過 Spring proxy 時才會生效；若把這個迴圈寫成本類別內部呼叫的私有方法，
      * 註解會靜默失效。{@link AdminSettingController} 持有的是被 proxy 包裹的
      * {@code AppSettingService} bean，因此從那裡呼叫本方法才真的會開交易。</p>
+     *
+     * <p><b>為什麼提交後要再清一次快取</b>：{@link #set} 的 {@code cache.remove}
+     * 發生在交易<b>提交之前</b>。在交易還沒提交的那段時間內，任何並行的
+     * {@link #get} 都會讀到資料庫裡的<b>舊值</b>（新值尚未提交、對其他連線不可見）
+     * 並把它重新寫進快取，存活 60 秒。結果就是「已儲存，立即生效」的提示出現了，
+     * 後台與讀者頁面卻最長還會顯示舊數字一分鐘——正是這支端點存在的理由被繞過。
+     * 故在提交之後再清一次；沒有交易同步時（例如被非交易路徑呼叫）就直接清。</p>
      */
     @Transactional
     public void setAll(Map<String, Integer> updates) {
         updates.forEach((k, v) -> set(k, String.valueOf(v)));
+
+        // 快照鍵集合：afterCommit 回呼在方法返回後才執行，不可依賴呼叫端的 map 仍未變動
+        Set<String> keys = Set.copyOf(updates.keySet());
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                /** 提交後再清一次，蓋掉交易期間並行讀取所快取的未提交舊值 */
+                @Override
+                public void afterCommit() {
+                    keys.forEach(cache::remove);
+                }
+            });
+        } else {
+            keys.forEach(cache::remove);
+        }
     }
 
     /** 清除全部快取（測試與後台批次更新後使用） */
