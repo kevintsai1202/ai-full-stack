@@ -2,9 +2,11 @@ package world.springai.survey.reader;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -36,8 +38,15 @@ class RulesPageControllerTest {
         when(creditPolicy.premiumCost()).thenReturn(33);
         when(creditPolicy.referralReward()).thenReturn(55);
         when(creditPolicy.vipDefaultDays()).thenReturn(111);
+        // standalone MockMvc 沒有 Spring Boot 的 WebMvcAutoConfiguration，
+        // 預設的 StringHttpMessageConverter 用 ISO-8859-1，中文字會變亂碼。
+        // 產品程式碼維持 MediaType.TEXT_HTML_VALUE（與套件內其他頁面一致），
+        // UTF-8 的保證改由這裡手動註冊一個帶 UTF-8 預設值的 converter 負責——
+        // 真實部署時 Spring Boot 會自動註冊等效的 converter，這裡只是補上
+        // standalone 環境缺少的那一層，不是多餘的樣板。
         mvc = MockMvcBuilders
             .standaloneSetup(new RulesPageController(new HtmlTemplate(), creditPolicy, readerContext))
+            .setMessageConverters(new StringHttpMessageConverter(StandardCharsets.UTF_8))
             .build();
     }
 
@@ -115,10 +124,57 @@ class RulesPageControllerTest {
            .andExpect(content().string(org.hamcrest.Matchers.containsString("最後更新")));
     }
 
-    /** 登入者的導覽列要顯示「我的帳戶」，未登入則顯示「登入」 */
+    /**
+     * 登入者的導覽列要顯示「我的帳戶」（{@code /r/me}）且不含未登入版連結，
+     * 未登入則顯示「登入」（{@code /r/login}）且不含已登入版連結。
+     *
+     * <p>兩個方向都要驗：只驗未登入分支的話，把 {@code navLinks} 的
+     * {@code loggedIn} 分支改成恆回未登入版本，這個測試依然全綠，等於證明不了
+     * 自己的名字（「反映登入狀態」）。</p>
+     */
     @Test
     void navReflectsLoginState() throws Exception {
         String anonymous = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
         org.junit.jupiter.api.Assertions.assertTrue(anonymous.contains("/r/login"));
+        org.junit.jupiter.api.Assertions.assertFalse(anonymous.contains("/r/me"));
+
+        // 讓 resolve 回傳非 empty，模擬已登入讀者
+        Reader loggedInReader = new Reader("user@example.com", "CODE1234");
+        loggedInReader.setId(1L);
+        when(readerContext.resolve(any()))
+            .thenReturn(Optional.of(new ReaderContext.Current(loggedInReader, true)));
+
+        String loggedIn = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(loggedIn.contains("/r/me"));
+        org.junit.jupiter.api.Assertions.assertFalse(loggedIn.contains("/r/login"));
+    }
+
+    /**
+     * 首次登入贈點為 0 時（合法的「關閉贈點」營運設定），頁面不得出現
+     * 「送 0 點」這種讀起來像系統故障的文案，須改用講得通的說法。
+     *
+     * <p>破壞性驗證：拿掉 0 的文案分支（一律回傳「首次登入送 X 點」）→
+     * 本測試會抓到「送 0 點」而變紅。</p>
+     */
+    @Test
+    void signupGrantZeroUsesSensibleWording() throws Exception {
+        when(creditPolicy.signupGrant()).thenReturn(0);
+        String html = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("送 0 點"));
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("目前暫無首次登入贈點"));
+    }
+
+    /**
+     * 邀請獎勵為 0 時，頁面不得出現「+0 點」這種文案，須改用講得通的說法。
+     *
+     * <p>破壞性驗證：拿掉 0 的文案分支（一律回傳「每位 +X 點」）→
+     * 本測試會抓到「+0 點」而變紅。</p>
+     */
+    @Test
+    void referralRewardZeroUsesSensibleWording() throws Exception {
+        when(creditPolicy.referralReward()).thenReturn(0);
+        String html = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("+0 點"));
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("目前暫無邀請獎勵"));
     }
 }

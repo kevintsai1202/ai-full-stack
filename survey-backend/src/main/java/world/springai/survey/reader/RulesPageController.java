@@ -1,6 +1,7 @@
 package world.springai.survey.reader;
 
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,22 +51,28 @@ public class RulesPageController {
     /**
      * 規則頁：公開，不需登入。
      *
-     * <p><b>必須明確指定 charset=UTF-8</b>：{@code MediaType.TEXT_HTML_VALUE}
-     * 不含 charset 參數，standalone MockMvc（無 Spring Boot 自動配置）用的
-     * {@code StringHttpMessageConverter} 預設 charset 是 ISO-8859-1，中文字會
-     * 被錯誤編碼成亂碼。實際部署時 Spring Boot 會覆寫成 UTF-8，但測試環境
-     * 不能依賴這個假設，故在此明確寫死。</p>
+     * <p>與套件內其他頁面（{@code /r/archive}、{@code /r/news/{slug}}、
+     * {@code /r/login}、{@code /r/}）一致，統一用 {@link MediaType#TEXT_HTML_VALUE}。
+     * 實際部署時 Spring Boot 的 {@code WebMvcAutoConfiguration} 會註冊帶 UTF-8
+     * 預設值的 {@code StringHttpMessageConverter}，回應本來就是 UTF-8；
+     * standalone MockMvc 測試環境沒有這層自動配置，UTF-8 的保證改由測試自行
+     * 註冊對應的 converter 負責（見 {@code RulesPageControllerTest}）。</p>
      */
-    @GetMapping(value = "/r/rules", produces = "text/html;charset=UTF-8")
+    @GetMapping(value = "/r/rules", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> rules(
             @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
         boolean loggedIn = readerContext.resolve(sessionCookie).isPresent();
 
+        int signupGrant = creditPolicy.signupGrant();
+        int referralReward = creditPolicy.referralReward();
+
         Map<String, String> vars = new HashMap<>();
         vars.put("<!--NAV_LINKS-->", navLinks(loggedIn));
-        vars.put("<!--SIGNUP_GRANT-->", String.valueOf(creditPolicy.signupGrant()));
+        vars.put("<!--SIGNUP_GRANT_LINE-->", signupGrantLine(signupGrant));
+        vars.put("<!--SIGNUP_GRANT_NOTE-->", signupGrantNote(signupGrant));
         vars.put("<!--PREMIUM_COST-->", String.valueOf(creditPolicy.premiumCost()));
-        vars.put("<!--REFERRAL_REWARD-->", String.valueOf(creditPolicy.referralReward()));
+        vars.put("<!--REFERRAL_REWARD_LINE-->", referralRewardLine(referralReward));
+        vars.put("<!--REFERRAL_REWARD_NOTE-->", referralRewardNote(referralReward));
         vars.put("<!--VIP_DAYS-->", String.valueOf(creditPolicy.vipDefaultDays()));
         vars.put("<!--LAST_UPDATED-->", LAST_UPDATED);
 
@@ -77,11 +84,50 @@ public class RulesPageController {
             .body(htmlTemplate.render("static/reader/rules.html", vars));
     }
 
-    /** 依登入狀態顯示不同的導覽連結 */
+    /**
+     * 依登入狀態顯示不同的導覽連結。
+     *
+     * <p><b>注意</b>：{@code /r/me}（我的帳戶）頁面由 Task 9 提供，目前 repo 內
+     * 尚無對應的 {@code @GetMapping}。在 Task 9 完成前，已登入讀者點這個連結
+     * 會得到 404——這是預期中的暫時狀態，連結本身沒有打錯，不需改掉。</p>
+     */
     private String navLinks(boolean loggedIn) {
         if (loggedIn) {
             return "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/me\">我的帳戶</a>";
         }
         return "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/login\">登入</a>";
+    }
+
+    /** 「首次登入送 X 點」列項文案；X 為 0 時改用不荒謬的說法（關閉贈點是合法營運設定） */
+    private String signupGrantLine(int signupGrant) {
+        if (signupGrant == 0) {
+            return "目前暫無首次登入贈點";
+        }
+        return "首次登入送 " + signupGrant + " 點";
+    }
+
+    /** 「為什麼有些文章要點數」段落末句；X 為 0 時不提贈點字眼，避免文意矛盾 */
+    private String signupGrantNote(int signupGrant) {
+        if (signupGrant == 0) {
+            return "而不是把好東西鎖起來，只是目前首次登入暫無贈點。";
+        }
+        return "而不是把好東西鎖起來——" + signupGrant
+            + " 點的初始贈點就是希望你先看幾篇再決定值不值得。";
+    }
+
+    /** 「邀請朋友訂閱，每位 +X 點」列項文案；X 為 0 時改用不荒謬的說法 */
+    private String referralRewardLine(int referralReward) {
+        if (referralReward == 0) {
+            return "目前暫無邀請獎勵";
+        }
+        return "邀請朋友訂閱，每位 +" + referralReward + " 點";
+    }
+
+    /** 「邀請怎麼算成功」段落末句；X 為 0 時說明獎勵暫停發放，而非顯示「拿到 0 點」 */
+    private String referralRewardNote(int referralReward) {
+        if (referralReward == 0) {
+            return "。目前邀請獎勵暫停發放，成功邀請仍會被記錄。";
+        }
+        return "，你才會拿到 " + referralReward + " 點。";
     }
 }
