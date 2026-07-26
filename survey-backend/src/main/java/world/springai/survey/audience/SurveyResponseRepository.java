@@ -35,6 +35,44 @@ public interface SurveyResponseRepository extends JpaRepository<SurveyResponse, 
     /** 指定來源已確認訂閱（同意且未退訂）的人數，邀請成效統計用 */
     long countBySourceAndConsentTrueAndUnsubscribedFalse(String source);
 
+    /**
+     * 只更新顯示名稱一欄的條件式 UPDATE（讀者在 {@code /r/me} 改名時使用）。
+     *
+     * <p><b>為什麼不能用 {@code save(entity)}</b>：{@link SurveyResponse} 沒有
+     * {@code @Version} 也沒有 {@code @DynamicUpdate}，Hibernate 的 UPDATE 會帶上
+     * <b>所有</b>可更新欄位——包含 {@code consent}、{@code unsubscribed}、
+     * {@code last_engaged_at}。失效情境：讀者在 A 分頁開著 {@code /r/me}
+     * （SELECT 讀到 {@code unsubscribed=false}），期間他在 B 分頁或從信件連結點了退訂，
+     * {@code /api/survey/unsubscribe} 讓 {@link #unsubscribeByEmail} 把它改成 true；
+     * 然後 A 分頁按下「儲存顯示名稱」→ 整列 UPDATE 把 {@code unsubscribed} 寫回
+     * <b>false</b>。<b>退訂狀態被無聲還原，而退訂是合規事項</b>，沒有任何錯誤訊息。
+     * 同理 {@link #confirmByEmail} 寫入的 {@code consent} 也會被覆蓋。
+     * 這與本專案已修的兩個 Critical（{@code grantVip} 與登入路徑的整列寫回）
+     * 是同一個機制，只是發生在最敏感的同意狀態上。</p>
+     *
+     * <p><b>{@code clearAutomatically = true} 不是可選的</b>：{@code findFirstBy...}
+     * 回傳的是<b>受管理的</b> entity，光是在它身上呼叫 {@code setName(...)}，
+     * Hibernate 的 dirty check 就會在提交時自己補一道帶全欄位的 UPDATE，
+     * <b>完全不需要呼叫 {@code save()}</b>。換掉 {@code save()} 並不夠——必須讓 entity
+     * 脫離管理。作法與理由逐字同 {@code ReaderRepository.touchLastLogin}。</p>
+     *
+     * <p><b>為什麼以 id 而非 email 為條件</b>（與本檔其他 UPDATE 不同）：同一個 email
+     * 可能有多筆（已在正式資料中實測到有人相隔一個月填了兩次問卷，見
+     * {@link #findFirstByEmailIgnoreCaseOrderByCreatedAtDesc}）。改用 email 當條件會把
+     * 名稱寫進<b>全部</b>歷史列，那是一個沒人要求的行為變更；以 id 為條件則精確保留
+     * 「只改最新那一筆」的既有語意。{@code consent}／{@code unsubscribed} 用 email
+     * 是對的——退訂必須涵蓋該 email 的所有列。</p>
+     *
+     * <p>顯示名稱的長度截斷由呼叫端（{@code ReaderProfileService}）負責，
+     * 那裡才知道以 code point 計數的規則。</p>
+     *
+     * @return 受影響筆數，0 表示該列已不存在（呼叫端應回 404，不可回報成功）
+     */
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query("update SurveyResponse s set s.name = :name where s.id = :id")
+    int updateName(@Param("id") Long id, @Param("name") String name);
+
     /** 將指定 email（大小寫不敏感）標記為已退訂；回傳受影響筆數 */
     @Modifying
     @Transactional

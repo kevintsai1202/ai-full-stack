@@ -236,22 +236,18 @@ class ReaderPortalControllerTest {
     @Test
     void updatesDisplayNameAndTouchesEngagement() throws Exception {
         givenLoggedIn(reader(300));
-        SurveyResponse row = new SurveyResponse();
-        row.setEmail("reader@example.com");
-        when(surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc("reader@example.com"))
-            .thenReturn(Optional.of(row));
+        nameRow(null);
 
         mvc.perform(post("/api/reader/profile").cookie(cookie())
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                 .content("{\"name\":\"凱文\"}"))
            .andExpect(status().isOk());
 
-        verify(surveyResponseRepository).save(row);
+        assertStoredName("凱文");
         // 身分只能來自 session：驗證傳給 touchEngagement 的 email 就是 reader@example.com，
         // 而不是隨便哪個字串——把 controller 改成傳其他值（例如 request body 帶的值）
         // 用 anyString() 驗不出來，必須釘死實際值。
         verify(surveyResponseRepository).touchEngagement(eq("reader@example.com"), any());
-        org.junit.jupiter.api.Assertions.assertEquals("凱文", row.getName());
     }
 
     /** 未登入不可更新個人資料 */
@@ -326,8 +322,9 @@ class ReaderPortalControllerTest {
     @Test
     void displayNameIsHtmlEscapedInValueAttribute() throws Exception {
         givenLoggedIn(reader(287));
-        when(surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc(anyString()))
-            .thenReturn(Optional.of(nameRow("\"><script>x</script>")));
+        // nameRow 自己已經 stub 好 findFirstBy...，不可再包在另一個 when(...) 的引數裡
+        // （Mockito 會判為 UnfinishedStubbing）
+        nameRow("\"><script>x</script>");
 
         String html = mvc.perform(get("/r/me").cookie(cookie()))
             .andReturn().getResponse().getContentAsString();
@@ -337,53 +334,73 @@ class ReaderPortalControllerTest {
         org.junit.jupiter.api.Assertions.assertFalse(html.contains("\"><script>x</script>"), "不得出現未跳脫的原始字元序列");
     }
 
-    /** 建一筆帶顯示名稱的名單列 */
+    /**
+     * 建一筆帶顯示名稱的名單列，並讓「只寫 name 一欄的條件式 UPDATE」回報成功。
+     *
+     * <p>{@code id} 是必要的：改名走的是 {@code updateName(id, name)} 而不是
+     * {@code save(entity)}——後者會把 {@code consent}／{@code unsubscribed} 一起
+     * 整列寫回，覆蓋併發的退訂（見 {@code ReaderProfileNamePersistenceTest}）。</p>
+     */
     private SurveyResponse nameRow(String name) {
         SurveyResponse row = new SurveyResponse();
+        row.setId(77L);
         row.setEmail("reader@example.com");
         row.setName(name);
+        when(surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc("reader@example.com"))
+            .thenReturn(Optional.of(row));
+        when(surveyResponseRepository.updateName(eq(77L), any())).thenReturn(1);
         return row;
+    }
+
+    /**
+     * 斷言「實際寫入資料庫的顯示名稱」是預期值。
+     *
+     * <p>不能再斷言 {@code row.getName()}：實作刻意<b>不對受管理的 entity 呼叫
+     * setter</b>——只要碰了 setter，Hibernate 的 dirty check 就會在提交時自己補一道
+     * 帶全欄位的 UPDATE，等於繞過條件式 UPDATE。因此要驗的是傳給
+     * {@code updateName} 的那個值。</p>
+     */
+    private void assertStoredName(String expected) {
+        ArgumentCaptor<String> stored = ArgumentCaptor.forClass(String.class);
+        verify(surveyResponseRepository).updateName(eq(77L), stored.capture());
+        org.junit.jupiter.api.Assertions.assertEquals(expected, stored.getValue());
+        // 絕不整列寫回：那會把同意與退訂狀態覆蓋回 SELECT 當下的舊值
+        verify(surveyResponseRepository, org.mockito.Mockito.never()).save(any(SurveyResponse.class));
     }
 
     /** name 為 null（請求體是 {}）：應 200 且存空字串，不得拋例外 */
     @Test
     void nullNameIsStoredAsEmptyString() throws Exception {
         givenLoggedIn(reader(300));
-        SurveyResponse row = nameRow("舊名稱");
-        when(surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc("reader@example.com"))
-            .thenReturn(Optional.of(row));
+        nameRow("舊名稱");
 
         mvc.perform(post("/api/reader/profile").cookie(cookie())
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                 .content("{}"))
            .andExpect(status().isOk());
 
-        org.junit.jupiter.api.Assertions.assertEquals("", row.getName());
+        assertStoredName("");
     }
 
     /** 名稱前後空白必須去除 */
     @Test
     void nameIsTrimmed() throws Exception {
         givenLoggedIn(reader(300));
-        SurveyResponse row = nameRow("");
-        when(surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc("reader@example.com"))
-            .thenReturn(Optional.of(row));
+        nameRow("");
 
         mvc.perform(post("/api/reader/profile").cookie(cookie())
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                 .content("{\"name\":\"  凱文  \"}"))
            .andExpect(status().isOk());
 
-        org.junit.jupiter.api.Assertions.assertEquals("凱文", row.getName());
+        assertStoredName("凱文");
     }
 
     /** 41 字以上只存前 40 字（依 code point，而非 UTF-16 char） */
     @Test
     void nameLongerThan40CharsIsTruncatedTo40() throws Exception {
         givenLoggedIn(reader(300));
-        SurveyResponse row = nameRow("");
-        when(surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc("reader@example.com"))
-            .thenReturn(Optional.of(row));
+        nameRow("");
         String longName = "測".repeat(45);
 
         mvc.perform(post("/api/reader/profile").cookie(cookie())
@@ -391,7 +408,7 @@ class ReaderPortalControllerTest {
                 .content("{\"name\":\"" + longName + "\"}"))
            .andExpect(status().isOk());
 
-        org.junit.jupiter.api.Assertions.assertEquals("測".repeat(40), row.getName());
+        assertStoredName("測".repeat(40));
     }
 
     /**
@@ -401,16 +418,14 @@ class ReaderPortalControllerTest {
     @Test
     void emptyNameClearsPreviouslyStoredName() throws Exception {
         givenLoggedIn(reader(300));
-        SurveyResponse row = nameRow("原本的姓名");
-        when(surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc("reader@example.com"))
-            .thenReturn(Optional.of(row));
+        nameRow("原本的姓名");
 
         mvc.perform(post("/api/reader/profile").cookie(cookie())
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                 .content("{\"name\":\"\"}"))
            .andExpect(status().isOk());
 
-        org.junit.jupiter.api.Assertions.assertEquals("", row.getName());
+        assertStoredName("");
     }
 
     /**

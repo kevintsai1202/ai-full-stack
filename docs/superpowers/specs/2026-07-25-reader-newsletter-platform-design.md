@@ -814,9 +814,11 @@ V7/V8 migration（**含 `credit_txn`，因為首次登入即需發 300 點 `SIGN
 >
 > - ~~`credit_txn` 缺 `(reason, note)` 的唯一索引，邀請獎勵的冪等是 check-then-act~~
 >   **（已修：V9 的部分唯一索引 `uq_credit_txn_referral_note`，捕捉點移到交易邊界外；詳見 §5.4）**
-> - `Reader` / `SurveyResponse` 部分路徑仍是整列 `save()`，可能靜默覆蓋條件式 UPDATE（詳見 §13.9；
->   VIP 授予已修，`ReaderAccountService.findOrCreate` 的 `setLastLoginAt` 與
->   `ReaderPortalController.updateProfile` 尚未修）。
+> - ~~`Reader` / `SurveyResponse` 部分路徑仍是整列 `save()`，可能靜默覆蓋條件式 UPDATE~~
+>   **（三處路徑皆已改為只寫必要欄位的條件式 UPDATE：VIP 授予、`ReaderAccountService.findOrCreate`
+>   的 `setLastLoginAt`、`ReaderProfileService.updateName`。全庫已無 read-modify-write 的整列
+>   `save()` 呼叫點。但 `SurveyResponse` 仍沒有 `@Version`，日後新增同類路徑會重新打開同一個
+>   窗口——那一條需要 migration，仍未做；詳見 §13.9 的 (A)/(B) 兩段）**
 > - ~~邀請獎勵被後台關成 0 時，`/r/invite` 的「已成功邀請人數」會停止成長~~
 >   **（已修：人數改數 `reader.referred_by`，不再數帳本筆數；人數在被邀者**首次登入**時成長，
 >   文案已把這個條件寫明；詳見 §5.4）**
@@ -955,7 +957,7 @@ migration 相關測試（`MigrationSafetyTest`）需要真實的 PostgreSQL—�
 6. **點數初版參數是估的**：300 點 / 10 點一篇在週更、半數 PREMIUM 的情境下約 14 個月才耗盡，稀缺感可能不足。已刻意接受並改為上線後依真實數據校準（見 §9.2 觀察指標），這是選擇 `app_setting` DB 設定表而非 yml 的直接原因。
 7. **參與度分級依賴開信率下限**：開信是低可靠訊號（信箱封鎖圖片），因此門檻放寬且以登入／解鎖等高可靠行為為主。仍可能有真實讀者被判為 dormant——但因 dormant 只影響「常規信不寄」而非退訂，且任何互動立即恢復 active，損害可逆。刻意接受。
 8. **`EngagementService` 的已寄期數需掃 `email_log`**：名單成長後此查詢會變重。第一版直接查（名單規模數百至數千，成本可忽略）；若日後變慢，對策是在 `survey_response` 加物化的 `campaigns_sent_count` 並於寄送時遞增，而非改變分級語意。
-9. **`Reader`／`SurveyResponse` 部分路徑仍是整列 `save()`，會靜默覆蓋條件式 UPDATE 寫入的欄位**（階段 C 審查發現）：
+9. **`SurveyResponse` 缺 `@Version`，整列 `save()` 會靜默覆蓋條件式 UPDATE 寫入的欄位**（階段 C 審查發現）。**三條已知路徑皆已修（見下方 (A)），但類別層級的防護仍未建立（見下方 (B)，需 migration）**：
 
 > **機制**：`Reader` 沒有 `@Version` 也沒有 `@DynamicUpdate`，Hibernate 對它的 UPDATE 一律帶上所有可更新欄位（含 `credits`）；`SurveyResponse` 同理（含 `consent`、`unsubscribed`、`last_engaged_at`）。凡是「先 `findBy...` 讀出整個 entity、改一兩個欄位、再 `save()`」的路徑，寫回去的不只是被改的欄位，而是 SELECT 當下讀到的**整份快照**。若同一時間另一個請求用條件式 `@Modifying` UPDATE（`addCredits`／`deductCredits`／`touchEngagement`／`confirmByEmail`／`unsubscribeByEmail`）改了同一列的其他欄位，這個 save() 提交時會把那些欄位改動蓋回舊值——不會報錯，帳本／稽核資料與物化欄位從此對不上。
 >
@@ -969,24 +971,34 @@ migration 相關測試（`MigrationSafetyTest`）需要真實的 PostgreSQL—�
 >
 > - **已修（`AdminReaderService.grantVip`／`revokeVip`）**：改用 `ReaderRepository.updateVip`（只寫 `tier`、`vip_expires_at` 兩欄的條件式 UPDATE），`credits` 永遠不在該 UPDATE 敘述裡。
 > - **已修（`ReaderAccountService.findOrCreate` 登入分支）**：改用 `ReaderRepository.touchLastLogin(id, now)`（只寫 `last_login_at` 一欄）。這條**比 `grantVip` 更容易發生**：兩端都是讀者本人的即時操作（A 分頁點 magic link、B 分頁解鎖文章），不需要站方同時在後台操作。該查詢帶 `flushAutomatically = true, clearAutomatically = true`，後者同時負責把 entity 清出一級快取，使得之後為了回傳值而設的 `setLastLoginAt` 不會觸發 dirty-check UPDATE。守住這條的測試是 `ReaderLoginPersistenceTest`（真實 PostgreSQL + Hibernate `StatementInspector`，直接斷言送出的 `update reader` 敘述不含 `credits`，並以 `TransactionTemplate` 重現「交易已讀到舊值後才發生併發扣點」）與 `ReaderAccountServiceTest.loginUsesSingleColumnUpdateInsteadOfFullRowSave`。
+> - **已修（`ReaderProfileService.updateName`，B3、`fix/stage-c-followups`）**：改用 `SurveyResponseRepository.updateName(id, name)`（只寫 `name` 一欄的條件式 UPDATE，帶 `clearAutomatically = true`），`consent`／`unsubscribed`／`last_engaged_at` 永遠不在該 UPDATE 敘述裡。**這條原本被列在下面的 (B)，理由是「根治要 `@Version` ⇒ 要 migration」——那個理由對根治成立，但對「立刻止住這一條路徑」不成立，於是一個不需要 migration 的修法被 migration 禁令一起延後了。這正是分 (A)/(B) 兩段要防的事，而它仍然發生了一次。**
+>   - **失效情境（合規事項）**：讀者在 A 分頁開著 `/r/me`（SELECT 讀到 `unsubscribed=false`），期間他在 B 分頁、或直接從信件裡的退訂連結點了退訂，`unsubscribeByEmail` 把欄位改成 true；然後 A 分頁按下「儲存顯示名稱」→ 整列 UPDATE 把 `unsubscribed` 寫回 **false**。退訂狀態被無聲還原，站方會繼續寄信給一位已明確表達不想再收信的人。`consent` 同理。
+>   - **以 `id` 而非 `email` 為 UPDATE 條件**（與同檔其他 UPDATE 不同）：同一 email 可能有多筆（已在正式資料實測到）。用 email 會把名稱寫進全部歷史列，那是沒人要求的行為變更；用 id 精確保留「只改最新那一筆」的既有語意。`consent`／`unsubscribed` 用 email 是對的——退訂必須涵蓋該 email 的所有列。
+>   - **守住這條的測試是 `ReaderProfileNamePersistenceTest`**（真實 PostgreSQL + Hibernate `StatementInspector`）：斷言送出的 `update survey_response` 敘述不含 `unsubscribed`／`consent`，並以 `TransactionTemplate` 重現「交易已讀到 `unsubscribed=false` 之後才發生併發退訂」。**破壞性驗證的實測輸出**（把實作改成只呼叫 `setName(...)`、連 `save()` 都不呼叫）：
+>     ```
+>     update survey_response set answers=?,budget=?,consent=?,email=?,experience=?,
+>       frontend_experience=?,interest=?,last_engaged_at=?,name=?,role=?,source=?,
+>       unsubscribed=?,utm=? where id=?
+>     ```
+>     ——沒有任何 `save()` 呼叫，dirty check 自己補了這一道全欄位 UPDATE，併發的退訂確實被還原。這逐字證實了本節「⚠️ 補充」那一段的機制。
 > - **（同檔案 `createWithSignupGrant` 內的 `readerRepository.save(newReader)` 是新列的 INSERT，不是 read-modify-write，不在此列。）**
+>
+> 已用 `grep -rn "readerRepository\.save\|surveyResponseRepository\.save" survey-backend/src/main` 重新掃過全庫，**現在只剩上述那一處 INSERT**，沒有任何 read-modify-write 的整列 `save()` 呼叫點。
 
-**（B）已知且刻意保留：`ReaderPortalController.updateProfile` → `ReaderProfileService.updateName` 對 `SurveyResponse` 的整列 `save()`**
+**（B）仍未做，且確實需要 migration：`SurveyResponse` 沒有 `@Version`，整列覆蓋只是「目前沒有路徑會踩到」而非「不可能發生」**
 
-> **狀態：明確接受，非遺漏。** 它 `findFirstByEmailIgnoreCaseOrderByCreatedAtDesc` 讀出整個 `SurveyResponse`、只改 `name`，就整列 `save()`。若同一 email 在這之間被 `confirmByEmail`（改 `consent`）、`unsubscribeByEmail`（改 `unsubscribed`）或 `touchEngagement`（改 `last_engaged_at`）動過，這次 `save()` 會把那些欄位的新值蓋回讀取當下的舊值。這是同一類缺陷，只是發生在 `SurveyResponse` 而非 `Reader`，且 `consent`／`unsubscribed` 是本專案最敏感的同意狀態，覆蓋風險不比 `credits` 輕。
+> **狀態：未修，理由與 (A) 不同——這一條真的需要 migration。** 不要把 (A) 裡 `updateName` 的修好讀成本條已解決：那個修法關掉的是**目前唯一一條**會踩到它的路徑，不是這個類別的防護。
 >
-> **為什麼還沒修**：`name` 是唯一由讀者自己寫入的欄位，`SurveyResponse` 的可更新欄位遠多於 `Reader`（未來還會增加），逐欄補條件式 UPDATE 只是把同一個競爭窗口切碎，不是根治；`SurveyResponse` 的根治解法是 `@Version` 樂觀鎖，**需要新增 `version` 欄位 ⇒ 需要一支 Flyway migration**，而階段 C 明文禁止新增 migration。因此這一條**確實**屬於 (B) 類，與 (A) 的延後理由不同。
+> **剩下的風險**：`SurveyResponse` 的可更新欄位遠多於 `Reader`（`consent`、`unsubscribed`、`last_engaged_at`、`answers`、`interest`…，未來還會增加），而它既沒有 `@Version` 也沒有 `@DynamicUpdate`。任何**日後**新增的「讀出整個 entity、改一兩個欄位、再 `save()`（或只是碰 setter）」路徑都會重新打開同一個覆蓋窗口，而且——如本節「⚠️ 補充」所述——**mock 測試看不到，靜默失敗**。逐欄補條件式 UPDATE 只是把競爭窗口切碎，不是根治。
 >
-> **下一個允許 migration 的階段必做**：原本計畫與 §5.4 的 `uq_credit_txn_referral_note` 一併排入。
-> **現況（`fix/stage-c-followups`）：§5.4 的索引已隨 V9 完成，本條仍未做**——V9 的任務範圍
-> 只有邀請獎勵的冪等，加 `version` 欄位是另一件會改動 entity 對應與呼叫端錯誤處理的事，
-> 不併進同一支 migration。屆時若只想先降低風險而不加 migration，
-> `SurveyResponseRepository.updateName(email, name)` 條件式 UPDATE 是可接受的過渡。
+> **根治解法**：`@Version` 樂觀鎖，**需要新增 `version` 欄位 ⇒ 需要一支 Flyway migration**（目前 migration 維持 V1–V9）。它也不是免費的午餐：樂觀鎖把問題轉成「後到者拋 `OptimisticLockingFailureException`」，每個呼叫端都得決定重試或回錯誤。
 >
-> 已用 `grep -rn "readerRepository\.save\|surveyResponseRepository\.save" survey-backend/src/main` 掃過全庫，以上為僅有的呼叫點（含前述已排除的 INSERT 一處），無遺漏。
+> **下一個允許 migration 的階段必做**。原本計畫與 §5.4 的 `uq_credit_txn_referral_note` 一併排入；§5.4 的索引已隨 V9 完成，**本條仍未做**——V9 的任務範圍只有邀請獎勵的冪等，加 `version` 欄位是另一件會改動 entity 對應與呼叫端錯誤處理的事，不併進同一支 migration。
+>
+> **在那之前的紀律（可立即執行、不需 migration）**：對 `SurveyResponse` 的任何欄位更新一律走只寫該欄位的 `@Modifying` 條件式 UPDATE——現有四支 `updateName`／`unsubscribeByEmail`／`confirmByEmail`／`touchEngagement`——**不得**新增 read-modify-write 的 `save()`。新增這類路徑時必須同時補一支真實資料庫 + `StatementInspector` 的測試，否則沒有任何測試能發現它。
 
 **修法選項備忘**
 
-> 1. **只寫必要欄位的 `@Modifying` 條件式 UPDATE**，與既有 `addCredits`／`deductCredits`／`updateVip`／`touchLastLogin` 一致。代價最低（不需 migration、不需新依賴），(A) 的兩處都採用此法。**注意必須搭配 `clearAutomatically = true`**，否則受管理的 entity 仍會被 dirty check 補一道全欄位 UPDATE。
+> 1. **只寫必要欄位的 `@Modifying` 條件式 UPDATE**，與既有 `addCredits`／`deductCredits`／`updateVip`／`touchLastLogin` 一致。代價最低（不需 migration、不需新依賴），(A) 的三處都採用此法。**注意必須搭配 `clearAutomatically = true`**，否則受管理的 entity 仍會被 dirty check 補一道全欄位 UPDATE。
 > 2. **加 `@Version` 樂觀鎖**：從根本阻止靜默覆蓋，但**需要新增 `version INT` 欄位 ⇒ 需要 Flyway migration**，階段 C 不可執行。且樂觀鎖只把問題轉成「後到者拋例外」，呼叫端仍需處理重試或回錯誤，不是免費的午餐。
 > 3. **加 `@DynamicUpdate`**：只縮小競爭視窗、非根治——若併發的另一方也改了同一欄位，它不提供任何保護。可作為選項 1 覆蓋不到的欄位的過渡防線，不應作為長期解法。

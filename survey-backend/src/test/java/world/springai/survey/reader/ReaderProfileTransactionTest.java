@@ -64,9 +64,10 @@ class ReaderProfileTransactionTest {
             : null;
     }
 
-    /** 建一筆名單列 */
+    /** 建一筆名單列（帶 id：改名走的是以 id 為條件的 UPDATE） */
     private static SurveyResponse row() {
         SurveyResponse r = new SurveyResponse();
+        r.setId(42L);
         r.setEmail(EMAIL);
         return r;
     }
@@ -79,14 +80,15 @@ class ReaderProfileTransactionTest {
      */
     @Test
     void updateNameWritesNameAndEngagementInsideSameTransaction() {
-        AtomicReference<String> saveTxn = new AtomicReference<>();
+        AtomicReference<String> nameTxn = new AtomicReference<>();
         AtomicReference<String> touchTxn = new AtomicReference<>();
 
         when(surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc(anyString()))
             .thenReturn(Optional.of(row()));
-        when(surveyResponseRepository.save(any(SurveyResponse.class))).thenAnswer(inv -> {
-            saveTxn.set(currentTransactionName());
-            return inv.getArgument(0);
+        // 改名走的是只寫 name 一欄的條件式 UPDATE，不是 save(entity) 整列寫回
+        when(surveyResponseRepository.updateName(any(), anyString())).thenAnswer(inv -> {
+            nameTxn.set(currentTransactionName());
+            return 1;
         });
         when(surveyResponseRepository.touchEngagement(anyString(), any())).thenAnswer(inv -> {
             touchTxn.set(currentTransactionName());
@@ -95,12 +97,34 @@ class ReaderProfileTransactionTest {
 
         assertTrue(service.updateName(EMAIL, "凱文"));
 
-        assertNotNull(saveTxn.get(), "改名寫入不在交易內：@Transactional 沒有經過 proxy");
+        assertNotNull(nameTxn.get(), "改名寫入不在交易內：@Transactional 沒有經過 proxy");
         assertNotNull(touchTxn.get(), "參與度寫入不在交易內：@Transactional 沒有經過 proxy");
         // 同一個交易名稱才能證明兩個寫入會一起提交、一起回滾
-        assertEquals(saveTxn.get(), touchTxn.get(), "改名與參與度寫入落在不同交易");
-        assertTrue(saveTxn.get().contains("ReaderProfileService.updateName"),
-            "交易不是由 ReaderProfileService.updateName 開的：" + saveTxn.get());
+        assertEquals(nameTxn.get(), touchTxn.get(), "改名與參與度寫入落在不同交易");
+        assertTrue(nameTxn.get().contains("ReaderProfileService.updateName"),
+            "交易不是由 ReaderProfileService.updateName 開的：" + nameTxn.get());
+        // 絕不整列寫回：那會把 consent／unsubscribed 一起覆蓋回 SELECT 當下的舊值
+        org.mockito.Mockito.verify(surveyResponseRepository, org.mockito.Mockito.never())
+            .save(any(SurveyResponse.class));
+    }
+
+    /**
+     * 該列在 SELECT 與 UPDATE 之間被刪掉時回 {@code false}（→ 404），不假裝成功，
+     * 也不寫參與度時間戳。
+     *
+     * <p>正確性來自受影響筆數，不是來自「先前查到過那一列」。若把回傳值丟掉不看，
+     * 讀者會看到「已儲存」而名稱其實沒有任何地方存著。</p>
+     */
+    @Test
+    void updateNameReportsFailureWhenNoRowUpdated() {
+        when(surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc(anyString()))
+            .thenReturn(Optional.of(row()));
+        when(surveyResponseRepository.updateName(any(), anyString())).thenReturn(0);
+
+        org.junit.jupiter.api.Assertions.assertFalse(service.updateName(EMAIL, "凱文"));
+
+        org.mockito.Mockito.verify(surveyResponseRepository, org.mockito.Mockito.never())
+            .touchEngagement(anyString(), any());
     }
 
     /**
@@ -117,6 +141,8 @@ class ReaderProfileTransactionTest {
 
         org.mockito.Mockito.verify(surveyResponseRepository, org.mockito.Mockito.never())
             .save(any(SurveyResponse.class));
+        org.mockito.Mockito.verify(surveyResponseRepository, org.mockito.Mockito.never())
+            .updateName(any(), anyString());
         org.mockito.Mockito.verify(surveyResponseRepository, org.mockito.Mockito.never())
             .touchEngagement(anyString(), any());
     }

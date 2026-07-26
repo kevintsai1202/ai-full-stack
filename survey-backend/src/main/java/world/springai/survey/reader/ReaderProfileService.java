@@ -52,6 +52,19 @@ public class ReaderProfileService {
      * <p>名稱只截斷不拒絕：使用者輸入超長名稱時默默存前 40 字比回 400 友善，
      * 而顯示名稱沒有任何正確性要求。</p>
      *
+     * <p><b>只寫 {@code name} 一欄的條件式 UPDATE，絕不 {@code save(entity)} 整列寫回</b>：
+     * {@link SurveyResponse} 沒有 {@code @Version} 也沒有 {@code @DynamicUpdate}，
+     * 整列 UPDATE 會把 SELECT 當下的快照寫回去，包含 {@code consent} 與
+     * {@code unsubscribed}。失效情境：讀者在 A 分頁開著 {@code /r/me}
+     * （讀到 {@code unsubscribed=false}），期間在 B 分頁或從信件連結點了退訂，
+     * 然後 A 分頁按下「儲存顯示名稱」→ <b>退訂狀態被無聲還原</b>，而退訂是合規事項。
+     * 詳細機制與為何 {@code clearAutomatically} 不可省略，見
+     * {@code SurveyResponseRepository.updateName} 的註解。</p>
+     *
+     * <p><b>刻意不在讀出來的 entity 上呼叫任何 setter</b>：那個物件是<b>受管理的</b>，
+     * 光是 {@code setName(...)} 就會讓 dirty check 在提交時自己補一道全欄位 UPDATE，
+     * 完全不需要呼叫 {@code save()}。這裡只從它取出 id，其餘一概不碰。</p>
+     *
      * @param email 讀者 email（由 session 解析而來，已可信）
      * @param name  使用者輸入的顯示名稱，可為 null
      * @return true 表示已更新；false 表示名單中查無此 email，呼叫端應回 404
@@ -65,8 +78,14 @@ public class ReaderProfileService {
         }
 
         String trimmed = name == null ? "" : name.trim();
-        row.get().setName(truncateByCodePoint(trimmed, DISPLAY_NAME_MAX_LENGTH));
-        surveyResponseRepository.save(row.get());
+        // 只取 id；不對這個受管理的 entity 做任何 setter（理由見上方 javadoc）
+        int updated = surveyResponseRepository.updateName(
+            row.get().getId(), truncateByCodePoint(trimmed, DISPLAY_NAME_MAX_LENGTH));
+        if (updated == 0) {
+            // 該列在 SELECT 與 UPDATE 之間被刪掉了。回 false（→ 404）而不是假裝成功：
+            // 正確性來自受影響筆數，不是來自先前查到過那一列。
+            return false;
+        }
         // 更新個人資料是高可靠的參與度訊號（spec §5.10）
         surveyResponseRepository.touchEngagement(email, OffsetDateTime.now());
         return true;
