@@ -294,6 +294,97 @@ class ReaderPageControllerTest {
     }
 
     /**
+     * CAN_UNLOCK 時要有解鎖按鈕與成本數字，且**仍不含受限區內容**。
+     *
+     * <p>最後那個斷言是 paywall 的驗收條件本身：只檢查「有解鎖按鈕」
+     * 不能證明受限內容沒被送到瀏覽器。</p>
+     */
+    @Test
+    void canUnlockRendersUnlockButtonWithoutGatedContent() throws Exception {
+        when(campaignRepository.findBySlug("test-article"))
+            .thenReturn(Optional.of(gatedArticle(Campaign.TIER_PREMIUM, 10)));
+        when(readerContext.resolve(any()))
+            .thenReturn(Optional.of(new ReaderContext.Current(reader(Reader.TIER_FREE, 300), true)));
+        when(accessDecisionService.resolveCost(any())).thenReturn(10);
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.CAN_UNLOCK, 0);
+
+        String html = mvc.perform(get("/r/news/test-article")
+                .cookie(new jakarta.servlet.http.Cookie(ReaderSessionService.COOKIE_NAME, "JWT")))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(html.contains("用 10 點解鎖"), "應顯示成本與解鎖按鈕文字");
+        assertTrue(html.contains("id=\"unlock-btn\""), "應有解鎖按鈕");
+        assertTrue(html.contains("/r/rules"), "gate 區塊必須附規則頁連結（spec §5.11）");
+        assertTrue(html.contains(FREE_MARKER), "免費區必須看得到");
+        assertFalse(html.contains(SENTINEL), "受限區絕不可出現在 PARTIAL 回應中");
+    }
+
+    /** NEEDS_CREDITS 時顯示差額與邀請連結，不得有解鎖按鈕，也不得含受限區 */
+    @Test
+    void needsCreditsRendersShortfallAndInviteLink() throws Exception {
+        when(campaignRepository.findBySlug("test-article"))
+            .thenReturn(Optional.of(gatedArticle(Campaign.TIER_PREMIUM, 10)));
+        when(readerContext.resolve(any()))
+            .thenReturn(Optional.of(new ReaderContext.Current(reader(Reader.TIER_FREE, 3), true)));
+        when(accessDecisionService.resolveCost(any())).thenReturn(10);
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NEEDS_CREDITS, 7);
+
+        String html = mvc.perform(get("/r/news/test-article")
+                .cookie(new jakarta.servlet.http.Cookie(ReaderSessionService.COOKIE_NAME, "JWT")))
+            .andReturn().getResponse().getContentAsString();
+
+        // 成本與差額都必須取自 resolveCost（唯一來源）。少了「解鎖需要 10 點」這一項，
+        // 把 renderGate 的 cost 改成寫死的數字時 NEEDS_CREDITS 分支不會有任何測試變紅，
+        // 頁面就能長期顯示與實際扣點不同的數字（spec §5.11 最在意的信任缺陷）。
+        assertTrue(html.contains("解鎖需要 10 點"), "應顯示取自 resolveCost 的成本");
+        assertTrue(html.contains("還差 7 點"), "應顯示差額");
+        assertTrue(html.contains("/r/invite"), "應引導去邀請頁賺點數");
+        assertTrue(html.contains("/r/rules"), "gate 區塊必須附規則頁連結");
+        assertFalse(html.contains("id=\"unlock-btn\""), "餘額不足時不可出現解鎖按鈕");
+        assertFalse(html.contains(SENTINEL), "受限區絕不可出現在 PARTIAL 回應中");
+    }
+
+    /**
+     * 解鎖腳本只在 CAN_UNLOCK 時輸出。
+     *
+     * <p>不是效能考量——未登入者頁面帶著一段解鎖腳本，會讓「這篇要付費」
+     * 的訊息在錯誤的時機出現，而該讀者要做的是登入。</p>
+     */
+    @Test
+    void unlockScriptOnlyAppearsForCanUnlock() throws Exception {
+        when(campaignRepository.findBySlug("test-article"))
+            .thenReturn(Optional.of(gatedArticle(Campaign.TIER_PREMIUM, 10)));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        when(accessDecisionService.resolveCost(any())).thenReturn(10);
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+
+        String html = mvc.perform(get("/r/news/test-article"))
+            .andReturn().getResponse().getContentAsString();
+
+        assertFalse(html.contains("unlock-btn"), "未登入時不該有解鎖腳本或按鈕");
+        assertTrue(html.contains("/r/login"), "應引導登入");
+        assertFalse(html.contains(SENTINEL));
+    }
+
+    /** FULL 時受限區必須出現，且不該有 gate 區塊 */
+    @Test
+    void fullAccessRendersGatedContentAndNoGate() throws Exception {
+        when(campaignRepository.findBySlug("test-article"))
+            .thenReturn(Optional.of(gatedArticle(Campaign.TIER_PREMIUM, 10)));
+        when(readerContext.resolve(any()))
+            .thenReturn(Optional.of(new ReaderContext.Current(reader(Reader.TIER_FREE, 290), true)));
+        stubDecision(AccessDecisionService.Access.FULL, AccessDecisionService.Reason.ALREADY_UNLOCKED, 0);
+
+        String html = mvc.perform(get("/r/news/test-article")
+                .cookie(new jakarta.servlet.http.Cookie(ReaderSessionService.COOKIE_NAME, "JWT")))
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(html.contains(SENTINEL), "已解鎖者必須看得到受限區");
+        assertFalse(html.contains("id=\"unlock-btn\""), "已解鎖不該再顯示解鎖按鈕");
+    }
+
+    /**
      * 【Important 6】meta description 不得從受限區洩漏。
      *
      * <p>原本的三個哨兵測試之所以能抓到「summaryOf 改吃 campaign.getMarkdown()」這種洩漏，

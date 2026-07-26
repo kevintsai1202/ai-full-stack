@@ -136,7 +136,15 @@ public class ReaderPageController {
         vars.put("<!--ARTICLE_META-->", renderMeta(campaign));
         vars.put("<!--ARTICLE_CONTENT-->", contentHtml); // 已是渲染後的 HTML，不可再跳脫
         vars.put("<!--NAV_LINKS-->", navLinks(current.isPresent()));
-        vars.put("<!--GATE_BLOCK-->", full || !split.hasGate() ? "" : renderGate(decision, campaign, slug));
+        // 只有「未取得全文且該文章真的有受限區」時才需要 paywall 區塊
+        boolean gateRendered = !full && split.hasGate();
+        vars.put("<!--GATE_BLOCK-->", gateRendered ? renderGate(decision, campaign, slug) : "");
+        // CAN_UNLOCK 時才需要解鎖腳本，其餘情況輸出空字串——
+        // 不讓不需要的頁面帶著一段用不到的 JS。
+        // 額外要求 gateRendered：沒有渲染出 #unlock-btn 卻輸出腳本，
+        // getElementById 會回 null 而讓 addEventListener 在讀者的 console 報錯。
+        vars.put("<!--UNLOCK_SCRIPT-->",
+            gateRendered && decision.reason() == AccessDecisionService.Reason.CAN_UNLOCK ? UNLOCK_SCRIPT : "");
         String html = htmlTemplate.render("static/reader/article.html", vars);
 
         // 同一篇文章的網址對登入 VIP 與匿名訪客回傳不同內容（全文 vs 截斷），
@@ -194,11 +202,15 @@ public class ReaderPageController {
     /**
      * 渲染 paywall 提示區塊。
      *
-     * <p>階段 B 一律只發布 BASIC 文章（見 Global Constraints），因此 NEEDS_CREDITS
-     * 的文案是為階段 C 預備的；此時真正會出現的是「未登入」與「未確認訂閱」兩種。</p>
+     * <p>這是讀者第一次遇到點數的地方，也是唯一會認真讀規則的時刻
+     * （spec §5.11），因此點數相關的兩種狀態都必須附上規則頁連結。</p>
+     *
+     * <p>所有點數數字都取自 {@link AccessDecisionService#resolveCost}，
+     * 不在此重算——頁面顯示的代價與實際扣的必須是同一個來源。</p>
      */
     private String renderGate(AccessDecisionService.Decision decision, Campaign campaign, String slug) {
         String encodedRedirect = "/r/news/" + slug;
+        int cost = accessDecisionService.resolveCost(campaign);
         return switch (decision.reason()) {
             case NOT_LOGGED_IN -> gateHtml("接下來的內容需要登入",
                 "用訂閱時的 email 登入就能繼續看，不需要密碼。",
@@ -206,14 +218,70 @@ public class ReaderPageController {
             case NOT_SUBSCRIBED -> gateHtml("這個 email 尚未完成訂閱確認",
                 "看完整內容需要先完成訂閱確認，可以直接在訂閱頁重新訂閱一次。",
                 "<a class=\"btn\" href=\"/r/\">重新訂閱</a>");
+            case CAN_UNLOCK -> gateHtml("這是進階內容",
+                "解鎖需要 " + cost + " 點，<strong>一次解鎖永久可讀</strong>。",
+                "<button class=\"btn\" id=\"unlock-btn\" data-slug=\"" + HtmlTemplate.escapeHtml(slug)
+                    + "\" data-cost=\"" + cost + "\">用 " + cost + " 點解鎖</button>"
+                    + "<div class=\"msg\" id=\"unlock-msg\"></div>"
+                    + rulesHint());
             case NEEDS_CREDITS -> gateHtml("這是進階內容",
-                decision.shortfall() > 0
-                    ? "解鎖需要 " + accessDecisionService.resolveCost(campaign) + " 點，你還差 " + decision.shortfall() + " 點。"
-                    : "解鎖需要 " + accessDecisionService.resolveCost(campaign) + " 點。",
-                "<a class=\"btn\" href=\"/r/archive\">先看其他內容</a>");
+                "解鎖需要 " + cost + " 點，你還差 " + decision.shortfall() + " 點。"
+                    + "邀請朋友訂閱可以獲得點數。",
+                "<a class=\"btn\" href=\"/r/invite\">看我的邀請連結</a>" + rulesHint());
             default -> "";
         };
     }
+
+    /** 規則頁連結：點數機制的可信度來源，兩種點數狀態都必須附上（spec §5.11） */
+    private String rulesHint() {
+        return "<p class=\"gate-hint\">不清楚點數怎麼運作？<a href=\"/r/rules\">看遊戲規則</a></p>";
+    }
+
+    /**
+     * 解鎖按鈕的前端腳本。
+     *
+     * <p>解鎖成功後以 {@code location.reload()} 重新載入，讓受限區由 server
+     * 重新渲染進來——不是用 JS 把內容插進頁面。受限區必須始終由 server 端
+     * 依授權結果決定是否輸出（spec §5.3），前端插入等於受限區曾經出現在
+     * 某個 API 回應中，paywall 就形同虛設。</p>
+     */
+    private static final String UNLOCK_SCRIPT = """
+        <script>
+          const unlockBtn = document.getElementById('unlock-btn');
+          const unlockMsg = document.getElementById('unlock-msg');
+          unlockBtn.addEventListener('click', async () => {
+            unlockBtn.disabled = true;
+            unlockMsg.textContent = '處理中…';
+            unlockMsg.className = 'msg show';
+            try {
+              const res = await fetch('/api/reader/unlock/' + encodeURIComponent(unlockBtn.dataset.slug),
+                { method: 'POST' });
+              if (res.status === 401) {
+                unlockMsg.textContent = '登入已過期，請重新登入。';
+                unlockMsg.className = 'msg show err';
+                unlockBtn.disabled = false;
+                return;
+              }
+              if (!res.ok) { throw new Error('unlock failed'); }
+              const data = await res.json();
+              if (data.outcome === 'UNLOCKED' || data.outcome === 'ALREADY_UNLOCKED') {
+                // 重新載入讓 server 重新渲染受限區，不由前端插入內容
+                location.reload();
+                return;
+              }
+              if (data.outcome === 'INSUFFICIENT_CREDITS') {
+                unlockMsg.textContent = '點數不足，目前有 ' + data.credits + ' 點。';
+                unlockMsg.className = 'msg show err';
+              }
+            } catch (e) {
+              unlockMsg.textContent = '解鎖失敗，請稍後再試。';
+              unlockMsg.className = 'msg show err';
+            } finally {
+              unlockBtn.disabled = false;
+            }
+          });
+        </script>
+        """;
 
     /** 組 paywall 區塊的 HTML（含漸層淡出） */
     private String gateHtml(String title, String description, String action) {

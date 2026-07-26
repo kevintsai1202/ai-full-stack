@@ -75,3 +75,28 @@ input[type=email] { width:100%; padding:12px 14px; border:1px solid var(--border
 
 .empty { color:var(--muted); text-align:center; padding:40px 0; }
 .foot { margin-top:50px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted-2); font-size:.86rem; }
+
+/* paywall 提示區塊內的規則頁連結。
+   選擇器刻意用 .gate .gate-hint（兩個 class）而非單一 .gate-hint：
+   上方的 .gate p 為 (0,1,1)，單一 class 的 (0,1,0) 會被它蓋掉 margin-top。 */
+.gate .gate-hint {
+  margin-top: 14px;
+  margin-bottom: 0;
+  font-size: .88rem;
+  color: var(--muted);
+}
+
+/* 解鎖按鈕為 <button>（其餘 .btn 多為 <a>），需補齊按鈕預設樣式差異。
+   只繼承 font-family，不用 font: inherit——後者是縮寫屬性，會連帶把
+   .btn 的 font-weight:700 與 font-size:1rem 重設掉（button.btn 的
+   specificity 比 .btn 高），解鎖按鈕就會變成細小字。 */
+button.btn {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+button.btn:disabled {
+  opacity: .6;
+  cursor: default;
+}
