@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 
 /** 讀者帳戶資料存取層 */
@@ -13,6 +14,9 @@ public interface ReaderRepository extends JpaRepository<Reader, Long> {
 
     /** 依 email 查讀者（不分大小寫），登入時使用 */
     Optional<Reader> findByEmailIgnoreCase(String email);
+
+    /** 依 email 片段搜尋（不分大小寫），後台讀者管理使用 */
+    List<Reader> findByEmailContainingIgnoreCaseOrderByEmailAsc(String fragment);
 
     /** 邀請碼是否已存在，產生新碼時用於避免碰撞 */
     boolean existsByReferralCode(String referralCode);
