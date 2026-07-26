@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
+import world.springai.survey.AdminSettingController;
 import world.springai.survey.audience.RecipientService;
 import world.springai.survey.audience.SubscriptionLinkBuilder;
 import world.springai.survey.mail.EmailLog;
@@ -685,14 +686,27 @@ public class CampaignService {
     }
 
     /**
-     * 驗證 creditCost：tier=PREMIUM 時必須 > 0（否則等同免費卻顯示為付費內容，
-     * 資料庫另有 ck_campaign_premium_cost 約束，此處提前攔截以回 400 而非讓寫入以 500 失敗）。
+     * {@code campaign.credit_cost} 的上限：與 {@link AdminSettingController#CREDIT_MAX}
+     * 共用同一個常數，理由見該常數的 javadoc——單篇文章的解鎖成本與後台的
+     * {@code credit.premium_cost} 是同一類風險（打錯位數把內容鎖死），必須維持
+     * 同一量級，各自維護一份遲早只會改到一邊。
+     */
+    private static final int CREDIT_COST_MAX = AdminSettingController.CREDIT_MAX;
+
+    /**
+     * 驗證 creditCost：tier=PREMIUM 時必須落在 [1, {@link #CREDIT_COST_MAX}] 區間
+     * （資料庫另有 ck_campaign_premium_cost 約束下限，此處提前攔截以回 400 而非讓寫入以
+     * 500 失敗；上限則是 B5 上限漏未涵蓋的同一類輸入路徑——{@code CreditPolicy.costOf()}
+     * 優先採用這個欄位，B5 對 {@code app_setting} 的上限完全擋不到它，且發布後沒有任何
+     * UI／API 可以改價，打錯位數只能靠手動 UPDATE 補救）。
      * tier=BASIC 時忽略呼叫端傳入值，一律正規化為 0。
      */
     private int validateCreditCost(String tier, Integer creditCost) {
         if (Campaign.TIER_PREMIUM.equals(tier)) {
-            if (creditCost == null || creditCost <= 0) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PREMIUM 內容的 creditCost 必須大於 0");
+            if (creditCost == null || creditCost < 1 || creditCost > CREDIT_COST_MAX) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "PREMIUM 內容的 creditCost 必須在 1 到 " + CREDIT_COST_MAX + " 之間，收到："
+                        + creditCost);
             }
             return creditCost;
         }

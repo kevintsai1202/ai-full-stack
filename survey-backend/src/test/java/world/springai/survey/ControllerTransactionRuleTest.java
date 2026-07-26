@@ -45,12 +45,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 來說明「為什麼這裡不加」。兩支守衛的掃描前處理不同，合在一起只會讓兩邊都變複雜。</p>
  *
  * <p><b>本守衛的偵測盲區</b>（勿把綠燈當成「絕不會發生」）：只看原始碼文字，
- * 不涵蓋 ① 以 meta-annotation 包裝的 {@code @Transactional}（自訂註解上掛
- * {@code @Transactional}，再把自訂註解掛到 controller）② 全限定名寫法
- * {@code @org.springframework.transaction.annotation.Transactional}——
- * 後者其實會被抓到（字串裡含 {@code @...Transactional} 但比對的是
- * {@code @Transactional} 開頭，見 {@link #TRANSACTIONAL}），這裡明列是為了
- * 提醒它<b>只</b>抓得到這一種寫法。</p>
+ * 不涵蓋以 meta-annotation 包裝的 {@code @Transactional}（自訂註解上掛
+ * {@code @Transactional}，再把自訂註解掛到 controller）。<b>全限定名寫法</b>
+ * {@code @org.springframework.transaction.annotation.Transactional} <b>不是</b>盲區——
+ * {@link #TRANSACTIONAL} 允許在 {@code @} 與 {@code Transactional} 之間插入
+ * 任意以句點結尾的字首，故全限定名一樣會被抓到（見
+ * {@link #fullyQualifiedTransactionalIsDetected}）。</p>
  */
 class ControllerTransactionRuleTest {
 
@@ -69,11 +69,19 @@ class ControllerTransactionRuleTest {
     /**
      * 交易註解本體。
      *
+     * <p>{@code (?:[\w.]+\.)?} 是可省略的全限定名字首（例如
+     * {@code org.springframework.transaction.annotation.}），讓
+     * {@code @org.springframework.transaction.annotation.Transactional} 這種
+     * 合法可編譯、不需 import 的寫法也會被抓到——早期版本少了這段，只比對
+     * {@code @Transactional} 開頭，全限定名寫法會讓守衛完全沉默
+     * （見 {@link #fullyQualifiedTransactionalIsDetected}）。</p>
+     *
      * <p>{@code \b} 讓 {@code @TransactionalEventListener}
      * （{@code ReferralRewardListener} 用的那個）不會被誤判——它掛在 listener 上，
-     * 與本規則無關。</p>
+     * 與本規則無關。字首是可省略的，所以這個排除對全限定名寫法的
+     * {@code @...TransactionalEventListener} 同樣成立。</p>
      */
-    private static final Pattern TRANSACTIONAL = Pattern.compile("@Transactional\\b");
+    private static final Pattern TRANSACTIONAL = Pattern.compile("@(?:[\\w.]+\\.)?Transactional\\b");
 
     /**
      * 失敗訊息：講清楚規則、理由與正確做法。
@@ -187,6 +195,28 @@ class ControllerTransactionRuleTest {
     @Test
     void transactionalEventListenerIsNotAViolation() {
         assertEquals(false, TRANSACTIONAL.matcher("@TransactionalEventListener(AFTER_COMMIT)").find());
+    }
+
+    /**
+     * 全限定名寫法必須被抓到，這是本守衛存在的核心承諾之一。
+     *
+     * <p>{@code @org.springframework.transaction.annotation.Transactional} 合法可編譯、
+     * 不需要任何 import——本測試曾經聲稱這是「已知盲區」，但實測顯示它其實會讓
+     * {@link #TRANSACTIONAL} 完全沉默（舊 pattern 只比對 {@code @Transactional} 開頭，
+     * 而全限定名裡 {@code @} 後面接的是 {@code org}，不是 {@code Transactional}）。
+     * 一支專門防「靜默失效」的守衛，若自己也會靜默失效，後果比沒有這支守衛更糟。</p>
+     */
+    @Test
+    void fullyQualifiedTransactionalIsDetected() {
+        assertTrue(TRANSACTIONAL.matcher(
+                "@org.springframework.transaction.annotation.Transactional")
+            .find(),
+            "全限定名寫法的 @Transactional 沒被抓到——守衛對這種寫法完全沉默");
+
+        // 全限定名版本的 @TransactionalEventListener 仍須排除，不得因為加了字首而誤報
+        assertEquals(false, TRANSACTIONAL.matcher(
+                "@org.springframework.transaction.event.TransactionalEventListener(AFTER_COMMIT)")
+            .find());
     }
 
     /** 列出目錄下所有 .java 檔（與 {@code PackageDependencyTest} 同樣的四行，刻意不共用：兩支守衛互不依賴） */

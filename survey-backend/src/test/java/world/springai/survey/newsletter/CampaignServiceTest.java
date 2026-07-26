@@ -382,6 +382,49 @@ class CampaignServiceTest {
         verify(campaignRepository, never()).save(any(Campaign.class));
     }
 
+    /**
+     * {@code campaign.credit_cost} 現在也有上限（與 {@code AdminSettingController} 的
+     * {@code credit.premium_cost} 共用同一個常數 10000）：上限值本身必須是合法輸入，
+     * 不能把區間寫成半開而誤擋恰好等於上限的正常設定。刻意不引用生產程式的常數，
+     * 讀同一個常數的測試改壞了也不會變紅。
+     */
+    @Test
+    void publishPremiumCreditCostAtMaxAccepted() {
+        when(campaignRepository.findBySlug("premium-at-max")).thenReturn(Optional.empty());
+        ArgumentCaptor<Campaign> captor = ArgumentCaptor.forClass(Campaign.class);
+        when(campaignRepository.save(captor.capture())).thenAnswer(i -> i.getArgument(0));
+
+        CampaignService.PublishResult r = svc.publish("主旨", "免費區\n\n<!--paywall-->\n\n受限區",
+            Campaign.TIER_PREMIUM, 10000, "premium-at-max", null);
+
+        assertEquals(10000, r.creditCost());
+        assertEquals(10000, captor.getValue().getCreditCost());
+    }
+
+    /**
+     * 超過上限必須回 400，且不建立 campaign。
+     *
+     * <p><b>沒有上限的實際後果</b>：{@code campaign.credit_cost} 是
+     * {@code CreditPolicy.costOf()} 優先採用的欄位，B5 對 {@code app_setting} 的上限
+     * 完全擋不到它；打錯成 {@link Integer#MAX_VALUE} 之後，讀者會看到「解鎖需要
+     * 2147483647 點，你還差 2147483347 點」，且發布後<b>沒有任何 UI 或 API 能改價</b>
+     * （唯一手段是手動 {@code UPDATE}），是這一類輸入錯誤裡唯一無法從介面復原的。</p>
+     */
+    @Test
+    void publishPremiumCreditCostAboveMaxRejected() {
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.publish("主旨", "免費區\n\n<!--paywall-->\n\n受限區",
+                Campaign.TIER_PREMIUM, 10001, "premium-over-max", null));
+        assertEquals(400, ex.getStatusCode().value());
+
+        ResponseStatusException extreme = assertThrows(ResponseStatusException.class,
+            () -> svc.publish("主旨", "免費區\n\n<!--paywall-->\n\n受限區",
+                Campaign.TIER_PREMIUM, Integer.MAX_VALUE, "premium-extreme", null));
+        assertEquals(400, extreme.getStatusCode().value());
+
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
     /** slug 重複時回 400（與 send 共用 validateSlug，避免唯一索引以 500 的形式失敗） */
     @Test
     void publishWithDuplicateSlugRejected() {

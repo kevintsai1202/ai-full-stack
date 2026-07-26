@@ -51,8 +51,17 @@ public class AdminSettingController {
      * 數字的點數（且點數不過期、規則調整也不回收，見 {@code /r/rules} 的承諾，
      * 事後無法清乾淨）；{@code credit.premium_cost} 打錯會讓單篇成本超過任何人
      * 可能累積的餘額，等於把全站進階內容鎖死。</p>
+     *
+     * <p><b>公開給 {@code newsletter.CampaignService} 共用</b>：
+     * {@code campaign.credit_cost}（單篇文章可自訂的解鎖成本，
+     * {@code CreditPolicy.costOf()} 會優先採用）是與這裡完全同一類風險——
+     * 打錯位數會把單篇文章的解鎖成本鎖到任何讀者都不可能湊到的天文數字。
+     * 兩者共用同一個常數而非各寫一份 10000，是刻意的：它們限制的是同一件事
+     * （一位讀者手上可能出現／需要湊到的點數量級），各自維護一份遲早只會改到一邊。
+     * {@code newsletter} 匯入根 package 的型別不受套件分層限制（{@code PackageDependencyTest}
+     * 只禁止 {@code newsletter} 依賴 {@code reader}），故直接共用常數而非另立測試互相釘住。</p>
      */
-    private static final int CREDIT_MAX = 10_000;
+    public static final int CREDIT_MAX = 10_000;
 
     /**
      * VIP 預設效期的上限：十年。
@@ -82,15 +91,23 @@ public class AdminSettingController {
      * 也夾上限，就會出現「後台存了 50000、實際生效 10000」這種頁面說 A 實際做 B
      * 的落差——那正是 {@code CreditPolicy} 這一層存在的目的所要避免的。
      * 因此上限只在寫入口擋，讀取端如實反映資料庫裡的值。</p>
+     *
+     * <p>刻意不加 {@code private}：{@code AdminSettingControllerTest} 需要直接讀取
+     * 這個欄位，與 {@link #DISPLAY_DEFAULTS}、{@link #ordered()} 的 keySet 互相釘住
+     * （三者理應描述同一批可調參數，只往其中一個加鍵會讓另外兩個悄悄漏掉）。</p>
      */
-    private static final Map<String, Bound> ADJUSTABLE = Map.of(
+    static final Map<String, Bound> ADJUSTABLE = Map.of(
         AppSettingService.CREDIT_SIGNUP_GRANT, new Bound(0, CREDIT_MAX),
         AppSettingService.CREDIT_PREMIUM_COST, new Bound(1, CREDIT_MAX),
         AppSettingService.CREDIT_REFERRAL_REWARD, new Bound(0, CREDIT_MAX),
         AppSettingService.VIP_DEFAULT_DAYS, new Bound(1, VIP_MAX_DAYS));
 
-    /** 各參數在查無設定時顯示的預設值（與 CreditPolicy 的後備值一致） */
-    private static final Map<String, Integer> DISPLAY_DEFAULTS = Map.of(
+    /**
+     * 各參數在查無設定時顯示的預設值（與 {@code CreditPolicy} 的後備值一致）。
+     *
+     * <p>刻意不加 {@code private}：理由與 {@link #ADJUSTABLE} 相同。</p>
+     */
+    static final Map<String, Integer> DISPLAY_DEFAULTS = Map.of(
         AppSettingService.CREDIT_SIGNUP_GRANT, 300,
         AppSettingService.CREDIT_PREMIUM_COST, 10,
         AppSettingService.CREDIT_REFERRAL_REWARD, 100,
@@ -191,8 +208,14 @@ public class AdminSettingController {
         return currentSettings();
     }
 
-    /** 固定的參數顯示順序 */
-    private java.util.List<String> ordered() {
+    /**
+     * 固定的參數顯示順序。
+     *
+     * <p>刻意不加 {@code private}：理由與 {@link #ADJUSTABLE} 相同——
+     * 測試需要直接比對這份順序清單的 keySet 與 {@link #ADJUSTABLE}／
+     * {@link #DISPLAY_DEFAULTS} 是否一致。</p>
+     */
+    java.util.List<String> ordered() {
         return java.util.List.of(
             AppSettingService.CREDIT_SIGNUP_GRANT,
             AppSettingService.CREDIT_PREMIUM_COST,

@@ -510,7 +510,9 @@ try {
         method: 'PUT', body: JSON.stringify({ 'credit.premium_cost': String(originalPremiumCost) }),
       });
       eq(back.status, 200, '還原 credit.premium_cost 回應碼');
-      eq(back.body && back.body['credit.premium_cost'].value, originalPremiumCost, '還原後讀回的值');
+      // optional chaining：鍵不存在時 back.body?.[...]?.value 回 undefined 而非拋出，
+      // 讓 eq() 能把「還原失敗」如實記成一筆失敗，而不是被外層 catch 接住而整段跳過
+      eq(back.body?.['credit.premium_cost']?.value, originalPremiumCost, '還原後讀回的值');
       const rules = (await page('/r/rules')).body;
       check(`/r/rules 已還原為每篇 ${originalPremiumCost} 點`,
         rules.includes(`進階文章每篇 ${originalPremiumCost} 點`));

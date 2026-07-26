@@ -7,8 +7,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.server.ResponseStatusException;
 
+import world.springai.survey.reader.CreditPolicy;
+
+import java.util.LinkedHashSet;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -300,14 +304,100 @@ class AdminSettingControllerTest {
     }
 
     /**
+     * 每個參數的下限值本身必須是合法輸入（與上限側的
+     * {@link #upperBoundValueItselfIsAccepted} 對稱）。上限側原本是表格驅動，
+     * 下限側卻是逐一手寫（{@code vip.default_days=0}、{@code credit.referral_reward=-1}
+     * 這兩個組合先前完全沒有測試覆蓋過），若把區間寫成半開（{@code value <= min} 就拒）
+     * 這裡會抓到。
+     */
+    @Test
+    void lowerBoundValueItselfIsAccepted() throws Exception {
+        for (Map.Entry<String, Integer> entry : MIN_VALUES.entrySet()) {
+            mvc.perform(put("/api/admin/settings").header(KEY, "ok")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"" + entry.getKey() + "\":\"" + entry.getValue() + "\"}"))
+               .andExpect(status().isOk());
+
+            verify(settings).setAll(eq(Map.of(entry.getKey(), entry.getValue())));
+        }
+    }
+
+    /** 低於下限必須回 400，且一筆都不寫入（四個參數都要驗，不只已有測試覆蓋的那兩個） */
+    @Test
+    void belowLowerBoundIsRejected() throws Exception {
+        for (Map.Entry<String, Integer> entry : MIN_VALUES.entrySet()) {
+            mvc.perform(put("/api/admin/settings").header(KEY, "ok")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"" + entry.getKey() + "\":\"" + (entry.getValue() - 1) + "\"}"))
+               .andExpect(status().isBadRequest());
+        }
+
+        verify(settings, never()).setAll(anyMap());
+    }
+
+    /**
+     * {@code DISPLAY_DEFAULTS}（本類）與 {@code CreditPolicy} 的後備值必須是同一組數字
+     * （300 / 10 / 100 / 365）。兩處註解都說「與另一處一致」，但沒有東西保證——
+     * {@code CreditPolicy} 的常數是 package-private，本測試讀不到它，改用行為斷言：
+     * 把 {@link #settings} mock 成「查無鍵就回傳呼叫端傳入的 defaultValue」
+     * （已在 {@link #setUp} 這樣設定），此時 {@code AdminSettingController} 顯示的
+     * {@code value} 就是 {@code DISPLAY_DEFAULTS}，{@code CreditPolicy} 各 getter 的
+     * 回傳值就是它的 {@code DEFAULT_*}——兩邊分別讀的是不同常數，只是恰好透過同一個
+     * mock 的「原樣回傳 default 引數」行為浮現出來，任一邊改了數字都會讓這裡對不上。
+     */
+    @Test
+    void displayDefaultsMatchCreditPolicyFallbacks() throws Exception {
+        CreditPolicy creditPolicy = new CreditPolicy(settings);
+
+        mvc.perform(get("/api/admin/settings").header(KEY, "ok"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$['credit.signup_grant'].value").value(creditPolicy.signupGrant()))
+           .andExpect(jsonPath("$['credit.premium_cost'].value").value(creditPolicy.premiumCost()))
+           .andExpect(jsonPath("$['credit.referral_reward'].value").value(creditPolicy.referralReward()))
+           .andExpect(jsonPath("$['vip.default_days'].value").value(creditPolicy.vipDefaultDays()));
+    }
+
+    /**
+     * 三個平行結構——{@code ADJUSTABLE}（上下限）、{@code DISPLAY_DEFAULTS}（預設值）、
+     * {@code ordered()}（顯示順序）——理應描述同一批可調參數，卻是三份各自維護的
+     * 結構。只往 {@code ordered()} 加一個鍵而忘了同步 {@code ADJUSTABLE}，會在
+     * {@code currentSettings()} 對 {@code bound.min()} 呼叫時因 {@code bound} 為
+     * {@code null} 而 NPE，讓整個端點變 500；只往 {@code DISPLAY_DEFAULTS} 加鍵卻漏了
+     * {@code ordered()}，則那個鍵永遠不會出現在後台畫面——兩種都是靜默的功能缺口。
+     * 本測試釘住三者的 keySet 相等。
+     */
+    @Test
+    void adjustableDisplayDefaultsAndOrderedShareTheSameKeys() {
+        AdminSettingController controller = new AdminSettingController(guard, settings);
+
+        assertEquals(AdminSettingController.ADJUSTABLE.keySet(),
+            AdminSettingController.DISPLAY_DEFAULTS.keySet(),
+            "ADJUSTABLE 與 DISPLAY_DEFAULTS 描述的鍵不一致");
+        assertEquals(AdminSettingController.ADJUSTABLE.keySet(),
+            new LinkedHashSet<>(controller.ordered()),
+            "ADJUSTABLE 與 ordered() 描述的鍵不一致");
+    }
+
+    /**
      * 每個參數的上限（與 {@code AdminSettingController.ADJUSTABLE} 一致）。
      *
      * <p>刻意在測試裡另寫一份數字而不是讀生產程式的常數：讀同一個常數的測試
      * 恆為真，改壞了也不會變紅。</p>
      */
-    private static final Map<String, Integer> MAX_VALUES = new java.util.LinkedHashMap<>(Map.of(
+    private static final Map<String, Integer> MAX_VALUES = Map.of(
         AppSettingService.CREDIT_SIGNUP_GRANT, 10000,
         AppSettingService.CREDIT_PREMIUM_COST, 10000,
         AppSettingService.CREDIT_REFERRAL_REWARD, 10000,
-        AppSettingService.VIP_DEFAULT_DAYS, 3650));
+        AppSettingService.VIP_DEFAULT_DAYS, 3650);
+
+    /**
+     * 每個參數的下限（與 {@code AdminSettingController.ADJUSTABLE} 一致）。
+     *
+     * <p>與 {@link #MAX_VALUES} 同樣的理由，另寫一份數字而不引用生產常數。</p>
+     */
+    private static final Map<String, Integer> MIN_VALUES = Map.of(
+        AppSettingService.CREDIT_SIGNUP_GRANT, 0,
+        AppSettingService.CREDIT_PREMIUM_COST, 1,
+        AppSettingService.CREDIT_REFERRAL_REWARD, 0,
+        AppSettingService.VIP_DEFAULT_DAYS, 1);
 }

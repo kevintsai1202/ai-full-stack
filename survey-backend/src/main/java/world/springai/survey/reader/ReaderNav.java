@@ -23,11 +23,15 @@ package world.springai.survey.reader;
  * 導覽列；真的需要時必須先過 {@link HtmlTemplate#escapeHtml}。目前的實作沒有
  * 任何參數會進入輸出（{@code loggedIn} 只選分支），所以是安全的。</p>
  *
- * <p><b>已知的測試盲區</b>：沒有任何測試能阻止日後某個 controller 「順手」改回
- * 自己拼一份導覽列——只要它拼出的字串恰好也含 {@code /r/rules}，各頁的導覽測試
- * 就照樣全綠。掃描生產程式碼裡的 {@code <a href="/r/} 也不可行：paywall 的
- * 行動按鈕、規則頁提示連結本來就會出現這個字樣，會有一堆偽陽性。因此這件事
- * 只能靠 code review 把關：<b>新增讀者端頁面時，導覽列一律呼叫本類，不要自己拼。</b></p>
+ * <p><b>機械化守衛</b>：{@code ReaderNavGuardTest} 守著兩件事——① reader 套件的
+ * 生產程式碼中，除本類外不得出現 {@code <a href="/r/archive"}、
+ * {@code <a href="/r/me"}、{@code <a href="/r/login"} 這三個逐字字串；
+ * ② {@code static/reader/*.html}（{@code login.html} 與 {@code not-found.html}
+ * 除外）的 {@code <nav>} 區塊內只能有 {@code <!--NAV_LINKS-->} 佔位符、不得含
+ * {@code <a}。這兩道檢查窄到目前偽陽性為零（paywall 行動按鈕、規則頁提示連結
+ * 用的都是不同的字串），能擋住「某個 controller 順手 inline 一份導覽」與
+ * 「某個模板的 {@code <nav>} 寫死連結」這兩種最常見的回歸；<b>新增讀者端頁面時，
+ * 導覽列一律呼叫本類，不要自己拼。</b></p>
  *
  * <p>{@code /r/login} 與 404 頁刻意<b>不</b>使用本類：登入頁的導覽列若含「登入」
  * 就是連向自己，而那兩頁都是終點頁（讀者到那裡是為了完成一件事或離開），

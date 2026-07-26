@@ -263,10 +263,13 @@ try {
   eq(put.status, 200, '寫入參數回應碼');
   eq(put.body['credit.premium_cost'].value, 20, '寫入後讀回的值');
 
-  // 上限外的值必須被擋（沒有上限時 signup_grant 可被設成 21 億，
-  // 而點數不過期、規則調整也不回收，事後清不乾淨）
+  // 上限外的值必須被擋。刻意打在 credit.premium_cost 而非 credit.signup_grant：
+  // 前者已被 [6] 捕獲進 originalPremiumCost 並在 finally 還原，若上限檢查真的
+  // 被拆掉導致這筆寫入成功，finally 仍會把它救回來；若打在沒有被還原機制涵蓋的
+  // 鍵上，一旦上限失守，壞值就會真的寫進去且此腳本永遠不會還原它
+  // （而 ADMIN_BASE 可能指向任何環境，這個值會影響所有真實新讀者）。
   const tooBig = await api('/api/admin/settings', {
-    method: 'PUT', body: JSON.stringify({ 'credit.signup_grant': '2147483647' }),
+    method: 'PUT', body: JSON.stringify({ 'credit.premium_cost': '10001' }),
   });
   eq(tooBig.status, 400, '超過上限的參數應回 400');
 
