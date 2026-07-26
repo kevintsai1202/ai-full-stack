@@ -647,7 +647,11 @@ class CampaignServiceTest {
         when(campaignRepository.markRepublished(eq(21L), eq(Campaign.STATUS_UNPUBLISHED),
             eq(Campaign.STATUS_PUBLISHED), any())).thenReturn(1);
 
-        java.time.OffsetDateTime before = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
+        // 下界也要截斷到微秒：republish 內部的時間戳是 truncatedTo(MICROS)（讓寫入
+        // 資料庫的值與回傳給後台的值逐位元相同，理由見那裡的註解），所以它可以比
+        // 未截斷的 now() 早最多 1 微秒。不截斷下界會在奈秒非零時偶發失敗。
+        java.time.OffsetDateTime before = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC)
+            .truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         CampaignService.RepublishResult r = svc.republish(21L);
 
         assertEquals(21L, r.campaignId());

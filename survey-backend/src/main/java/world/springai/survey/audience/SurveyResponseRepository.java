@@ -109,6 +109,30 @@ public interface SurveyResponseRepository extends JpaRepository<SurveyResponse, 
      * <p>高可靠互動訊號：確認訂閱、登入、解鎖文章、更新個人資料。
      * 開信是低可靠訊號（信箱常封鎖圖片）但同樣會更新。</p>
      *
+     * <p><b>為什麼刻意<u>不</u>加 {@code clearAutomatically} / {@code flushAutomatically}</b>
+     * （本檔其他 {@code @Modifying} 方法都有旗標，只有這一支是裸的，那是刻意的）：</p>
+     * <ul>
+     *   <li><b>不加 {@code clearAutomatically} 是安全要求，不是省事</b>：本方法有四個
+     *       呼叫端，其中 {@code UnlockService.unlock} 在它<b>之前</b>已寫入
+     *       {@code ArticleAccess}（{@code saveAndFlush}）與 {@code CreditTxn}
+     *       （{@code save}）。若只加 {@code clearAutomatically} 而不加
+     *       {@code flushAutomatically}，那道 {@code em.clear()} 會把尚未 flush 的帳本列
+     *       <b>直接丟棄</b>，而餘額的 UPDATE 早已打進資料庫——<b>餘額扣了、帳本沒寫</b>，
+     *       直接破壞「{@code reader.credits} 恆等於 {@code sum(credit_txn)}」這條核心
+     *       不變式，且沒有任何錯誤訊息。目前 {@code CreditTxn} 是
+     *       {@code GenerationType.IDENTITY}（persist 當下即 INSERT）所以不會發生，
+     *       但那正是 {@link #updateName} 一節所說「不該把正確性寄託在主鍵策略上」。</li>
+     *   <li><b>不需要它的理由也成立</b>：本方法只寫 {@code last_engaged_at}，
+     *       而<b>沒有任何呼叫端會在同一交易內讀回這個欄位或對該 entity 呼叫 setter</b>
+     *       （{@code updateName} 只取 id，{@code unlock} 只讀 {@code reader.credits}，
+     *       {@code findOrCreate} 與 {@code SubscriptionController.confirm} 之後就結束）。
+     *       沒有「拿到過時值」的風險，也就沒有清快取的必要。</li>
+     *   <li><b>不加 {@code flushAutomatically}</b>：本方法的 WHERE 只比對 {@code email}，
+     *       不依賴同一交易內任何待寫入的變更先落地。</li>
+     * </ul>
+     * <p>要改動這組旗標之前請先讀完上面第一點：<b>單獨加 {@code clearAutomatically}
+     * 是會破壞核心不變式的改動</b>，兩個一起加才安全，而兩個都不需要。</p>
+     *
      * @return 受影響筆數；0 表示該 email 不在名單中（讀者可能尚未訂閱）
      */
     @Modifying

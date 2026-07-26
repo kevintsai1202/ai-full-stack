@@ -665,7 +665,11 @@
       const actionTd=document.createElement('td');if(c.status==='scheduled'){const editBtn=document.createElement('button');editBtn.className='btn ghost';editBtn.textContent='修改';editBtn.onclick=()=>doEditSchedule(c);const btn=document.createElement('button');btn.className='btn danger';btn.style.marginLeft='8px';btn.textContent='取消排程';btn.onclick=()=>doCancel(c.id);actionTd.append(editBtn,btn);}
       // 已發布的文章給一顆「下架」：發布後價格或內文打錯時，這是唯一不必手動改資料庫的止血手段。
       // 條件仍同時看 publishedAt：狀態為 published 而 publishedAt 為 NULL 的列是本功能之前
-      // 下架的舊資料（當時只清 published_at、沒改 status），對它按下架只會拿到 409。
+      // 下架的舊資料（當時只清 published_at、沒改 status）。對它按下架其實會成功（回 200）
+      // ——CampaignService.unpublish 只檢查 status 與 email_log，這種列兩項都過——
+      // 但那是一次語意錯誤的操作：它本來就已經下架了，「再下架一次」只會把 status
+      // 改成 unpublished，操作者卻以為自己剛剛讓一篇對外可見的文章下線。
+      // 這種列該給的是「重新上架」（見下一個分支），所以這裡不顯示下架按鈕。
       else if(c.status==='published'&&c.publishedAt){const off=document.createElement('button');off.className='btn danger';off.textContent='下架';off.onclick=()=>doUnpublish(c);actionTd.append(off);}
       // 已下架的列給一顆「重新上架」。兩種形狀都要認：status='unpublished'（現行下架的結果）
       // 與 status='published' 但 publishedAt 為 NULL（本功能之前下架的舊資料）。

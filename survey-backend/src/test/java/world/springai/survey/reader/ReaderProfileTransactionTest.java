@@ -19,8 +19,17 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 /**
- * 驗證 {@link ReaderProfileService#updateName} 的 {@code @Transactional}
- * <b>真的經過 Spring proxy</b>。
+ * <b>本測試<u>不</u>執行任何 SQL，也不驗證 {@link SurveyResponseRepository} 的任何
+ * {@code @Query}</b>——那個 repository 是 {@code @MockBean}，{@code updateName}／
+ * {@code touchEngagement} 一句都不會送到資料庫。它<b>唯一</b>驗證的事情是
+ * {@link ReaderProfileService#updateName} 的 {@code @Transactional} 真的經過 Spring proxy。
+ *
+ * <p><b>不要把它讀成 {@code updateName} 或 {@code touchEngagement} 的覆蓋</b>：
+ * 把那兩支 {@code @Modifying} 查詢改成什麼都不做，本測試仍然全綠。
+ * 兩支查詢本體的覆蓋在 {@link ReaderProfileNamePersistenceTest}
+ * （真實 PostgreSQL + {@code StatementInspector}）。
+ * {@code @SpringBootTest} 上那組真實 datasource 設定只是為了讓 context 起得來，
+ * 本測試從頭到尾沒有用它讀寫任何一列——這個組合曾經誤導過一整批工作，故此段不可刪。</p>
  *
  * <p><b>為什麼一定要一個會啟動 context 的測試</b>：
  * {@code ReaderPortalControllerTest} 用 {@code standaloneSetup} 直接 new 出 controller

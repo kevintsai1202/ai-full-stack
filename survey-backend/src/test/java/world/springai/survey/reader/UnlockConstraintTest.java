@@ -15,12 +15,26 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * 以真實 PostgreSQL 驗證扣點的兩道資料庫層防線。
+ * <b>本測試<u>不</u>執行任何 repository 方法或 {@code @Query}</b>——它沒有 Spring context、
+ * 沒有注入 {@code ReaderRepository}，全部 SQL 都是本檔<b>自己手寫</b>並用 JDBC
+ * {@code Statement} 直接送出的。因此它驗的是 <b>PostgreSQL 對這些手寫敘述的行為</b>
+ * （條件式 UPDATE 的受影響筆數語意、{@code uq_article_access} 這個 UNIQUE 約束真的存在
+ * 於 migration 中），<b>不是</b> {@code ReaderRepository.deductCredits} 這支生產查詢。
  *
- * <p><b>為什麼一定要真實資料庫</b>：{@code UnlockServiceTest} 把 repository
- * 全部 mock 掉了，所以 {@code deductCredits} 的 {@code WHERE credits >= :cost}
- * 條件與 {@code uq_article_access} 這兩道防線<b>從未被真的執行過</b>。
- * 它們是併發正確性的本體，不能只靠 mock 回傳值來「驗證」。</p>
+ * <p><b>務必不要把它讀成 {@code deductCredits} 的覆蓋</b>：它手寫的
+ * {@code UPDATE reader SET credits = credits - 10 WHERE id = ? AND credits >= 10}
+ * 與生產 JPQL 只是<b>長得像</b>。把 {@code ReaderRepository.deductCredits} 的
+ * {@code and r.credits >= :cost} 整個刪掉，本測試仍然全綠——已實測。
+ * 生產查詢本體的覆蓋在 {@link UnlockDeductionPersistenceTest}
+ * （真實 PostgreSQL + {@code @Autowired ReaderRepository}／{@code UnlockService}）。
+ * 本檔的類名與「連真資料庫」的設定曾經誤導過一整批工作，故此段不可刪。</p>
+ *
+ * <p><b>那它還有什麼價值</b>：① 釘住 migration 真的建了
+ * {@code uq_article_access UNIQUE (reader_id, campaign_id)}（若 V7 漏掉這個約束，
+ * 併發解鎖會扣兩次點，而任何走 JPA 的測試都看不出約束存不存在）；
+ * ② 釘住 UNIQUE 是複合鍵而非只看 {@code reader_id}；
+ * ③ 記錄「條件式 UPDATE 在餘額不足時回 0 列且不改值」這個資料庫層事實，
+ * 作為 {@link UnlockDeductionPersistenceTest} 的參照基準。</p>
  *
  * <p>連線資訊與 {@code MigrationSafetyTest} 相同（同一個專用測試容器），
  * 但使用獨立資料庫名稱避免兩者互相干擾。連不上時以明確中文訊息失敗，
@@ -95,11 +109,14 @@ class UnlockConstraintTest {
     }
 
     /**
-     * 餘額不足時條件式扣點必須回 0 列，且餘額完全不變。
+     * 餘額不足時，<b>手寫的</b>條件式 UPDATE 必須回 0 列且餘額完全不變。
      *
-     * <p>這是防線本體：若 WHERE 條件寫錯（或被「簡化」掉），餘額會變成負數，
-     * 而負餘額會讓 {@code credits >= cost} 永遠為假——讀者連 0 點的提示
-     * 都看不對，且已經被扣掉的點數再也拿不回來。</p>
+     * <p><b>這裡驗的是 PostgreSQL 的語意，不是 {@code deductCredits}</b>：
+     * 本方法自己組出 SQL 字串再送出，生產查詢完全沒有參與。它的用途是把
+     * 「{@code WHERE credits >= cost} 在餘額不足時回 0 列、且不會把餘額寫成負數」
+     * 這個資料庫層事實記錄下來，作為 {@link UnlockDeductionPersistenceTest}
+     * （那裡才是真的呼叫 {@code ReaderRepository.deductCredits}）的參照基準。
+     * 生產 JPQL 的 WHERE 若被刪掉，本方法<b>不會</b>變紅。</p>
      */
     @Test
     void conditionalDeductRejectsInsufficientBalance() throws SQLException {
@@ -117,7 +134,7 @@ class UnlockConstraintTest {
         }
     }
 
-    /** 餘額剛好等於成本時應扣款成功並歸零 */
+    /** 餘額剛好等於成本時，手寫的條件式 UPDATE 應成功並歸零（同上：驗資料庫，非生產查詢） */
     @Test
     void conditionalDeductAllowsExactBalance() throws SQLException {
         try (Connection c = DriverManager.getConnection(TEST_URL, USER, PASS)) {

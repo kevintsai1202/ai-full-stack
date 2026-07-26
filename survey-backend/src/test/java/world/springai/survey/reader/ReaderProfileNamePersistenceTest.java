@@ -18,6 +18,7 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -76,6 +77,17 @@ class ReaderProfileNamePersistenceTest {
     private static final String TEST_URL = "jdbc:postgresql://" + DB_HOST + ":" + DB_PORT + "/" + TEST_DB;
 
     private static final String EMAIL = "name-persist@example.com";
+    /** 旁觀者：任何時候都不該被碰到，用來抓「{@code touchEngagement} 的 WHERE 比對錯欄位」 */
+    private static final String BYSTANDER_EMAIL = "name-bystander@example.com";
+    /**
+     * 參與度時間戳的哨兵起始值。
+     *
+     * <p>seed 刻意<b>不留 NULL</b>：只斷言「更新後不是 NULL」的話，
+     * 「把值寫錯」與「根本沒更新到這一列」兩種缺陷都會溜過去。
+     * 給一個明顯屬於過去的值，才能斷言它真的被推進到「現在」。</p>
+     */
+    private static final OffsetDateTime ENGAGED_SENTINEL =
+        OffsetDateTime.parse("2020-01-01T00:00:00Z");
 
     /**
      * Hibernate 的 SQL 攔截器：把每一道實際送出的敘述記下來供斷言。
@@ -133,10 +145,20 @@ class ReaderProfileNamePersistenceTest {
     void seedAudienceRow() throws SQLException {
         try (Connection c = dataSource.getConnection();
              Statement st = c.createStatement()) {
-            st.executeUpdate("DELETE FROM survey_response WHERE email = '" + EMAIL + "'");
-            // 已確認訂閱、未退訂：這正是覆蓋風險最高的狀態
-            st.executeUpdate("INSERT INTO survey_response (email, name, consent, unsubscribed, source) "
-                + "VALUES ('" + EMAIL + "', '原本的名字', true, false, 'survey_form')");
+            st.executeUpdate("DELETE FROM survey_response WHERE email IN ('" + EMAIL + "', '"
+                + BYSTANDER_EMAIL + "')");
+            // 已確認訂閱、未退訂：這正是覆蓋風險最高的狀態。
+            // last_engaged_at 給一個明顯屬於過去的哨兵值（理由見 ENGAGED_SENTINEL）
+            st.executeUpdate("INSERT INTO survey_response "
+                + "(email, name, consent, unsubscribed, source, last_engaged_at) "
+                + "VALUES ('" + EMAIL + "', '原本的名字', true, false, 'survey_form', '"
+                + ENGAGED_SENTINEL + "')");
+            // 旁觀者：touchEngagement 的 WHERE 若失效（例如漏掉 email 條件），
+            // 整張名單的參與度時間戳會被一次刷掉，而參與度是名單評分的依據
+            st.executeUpdate("INSERT INTO survey_response "
+                + "(email, name, consent, unsubscribed, source, last_engaged_at) "
+                + "VALUES ('" + BYSTANDER_EMAIL + "', '旁觀者', true, false, 'survey_form', '"
+                + ENGAGED_SENTINEL + "')");
         }
         SqlCapture.STATEMENTS.clear();
     }
@@ -206,18 +228,50 @@ class ReaderProfileNamePersistenceTest {
             "沒有任何一道 UPDATE 碰到 name：" + audienceUpdates());
     }
 
-    /** 參與度時間戳仍必須被更新（spec §5.10：更新個人資料是高可靠互動訊號） */
+    /**
+     * ★ 參與度時間戳必須被推進到<b>這次呼叫發生的那一刻</b>，且<b>只</b>推進這一列
+     * （spec §5.10：更新個人資料是高可靠互動訊號）。
+     *
+     * <p><b>為什麼不能只斷言 non-null</b>：那個版本只抓得到「完全不做事」。
+     * {@code touchEngagement} 若把值寫錯（例如寫成建立時間、寫成常數），
+     * 或 WHERE 比對錯欄位而更新到別人的列，都會靜默通過——而參與度是名單評分與
+     * 再行銷判斷的依據，寫錯值會讓整批判斷歪掉，且不會有任何錯誤訊息。</p>
+     *
+     * <p><b>為什麼是「區間」而不是逐位元相等</b>：{@code ReaderProfileService.updateName}
+     * 內部自己呼叫 {@code OffsetDateTime.now()}，時間不是參數，測試無從指定。
+     * 這裡改用「呼叫前 ~ 呼叫後」的區間夾住它，並要求它必須離開哨兵起始值。
+     * 該路徑的<b>精確值</b>斷言在 {@code UnlockDeductionPersistenceTest}
+     * （{@code UnlockService.unlock} 的 {@code now} 是參數，可以逐位元比對）。</p>
+     */
     @Test
-    void renameStillTouchesEngagementTimestamp() throws SQLException {
+    void renameTouchesEngagementTimestampOnThatRowOnly() throws SQLException {
+        // PostgreSQL 的 TIMESTAMPTZ 只存到微秒且為四捨五入，取區間端點時往外各讓一微秒，
+        // 避免因為「寫入值被進位到界線之外」而偶發失敗（那是精度瑕疵，不是缺陷）
+        OffsetDateTime before = OffsetDateTime.now().minusNanos(1000);
+
         assertTrue(readerProfileService.updateName(EMAIL, "凱文"));
 
+        OffsetDateTime after = OffsetDateTime.now().plusNanos(1000);
+        OffsetDateTime engaged = engagedAt(EMAIL);
+        org.junit.jupiter.api.Assertions.assertNotNull(engaged, "last_engaged_at 沒有被更新");
+        assertTrue(engaged.isAfter(ENGAGED_SENTINEL),
+            "last_engaged_at 仍是哨兵起始值，等於根本沒被更新：" + engaged);
+        assertTrue(!engaged.isBefore(before) && !engaged.isAfter(after),
+            "last_engaged_at 不在這次呼叫發生的時間區間內（值被寫錯）：" + engaged
+                + " 不在 [" + before + ", " + after + "]");
+        assertEquals(ENGAGED_SENTINEL.toInstant(), engagedAt(BYSTANDER_EMAIL).toInstant(),
+            "touchEngagement 動到了別人的列：WHERE 沒有正確比對 email，"
+                + "整張名單的參與度時間戳都會被刷掉");
+    }
+
+    /** 讀某個 email 在名單中心的最後互動時間；NULL 時回 null */
+    private OffsetDateTime engagedAt(String email) throws SQLException {
         try (Connection c = dataSource.getConnection();
              Statement st = c.createStatement();
              ResultSet rs = st.executeQuery("SELECT last_engaged_at FROM survey_response "
-                 + "WHERE email = '" + EMAIL + "'")) {
+                 + "WHERE email = '" + email + "'")) {
             rs.next();
-            org.junit.jupiter.api.Assertions.assertNotNull(rs.getObject(1),
-                "last_engaged_at 沒有被更新");
+            return rs.getObject(1, OffsetDateTime.class);
         }
     }
 

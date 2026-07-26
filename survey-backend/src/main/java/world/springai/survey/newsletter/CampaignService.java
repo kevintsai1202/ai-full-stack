@@ -10,6 +10,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -473,7 +474,13 @@ public class CampaignService {
                 "此批次沒有 slug，重新上架後讀者仍然打不開（/r/news/{slug} 是唯一入口）");
         }
 
-        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        // 截斷到微秒，因為 PostgreSQL 的 TIMESTAMPTZ 只存到微秒，而 JDK 的
+        // OffsetDateTime.now() 會帶到奈秒——且 PostgreSQL 是「四捨五入」而非截斷
+        // （實測 ...558463500ns 進資料庫後變成 ...558464µs）。不截斷的話，本方法
+        // 回傳給後台的 publishedAt 與資料庫實存值最多可以差半個微秒：後台畫面顯示的
+        // 發布時間與事實不同源，而 spec 要求顯示值與實際寫入值同源。截斷之後兩者
+        // 逐位元相同，測試也可以直接比精確值而不需要容差。
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);
         // 只寫 published_at 與 status 兩欄的條件式 UPDATE；expectedStatus 用剛讀到的值，
         // WHERE 的 published_at is null 才是真正的併發防線（理由見 markRepublished）。
         int updated = campaignRepository.markRepublished(

@@ -251,16 +251,51 @@ class CampaignPublicationLifecycleTest {
             "published_at 應為上架當下的新時間而非下架前的舊值：" + after + " vs " + original);
         // 回傳給後台的時間必須就是寫進資料庫的那一個，否則畫面顯示的與事實不符。
         //
-        // 容許 1 微秒誤差，而不是直接比 Instant 也不是各自 truncate：
-        // PostgreSQL 的 TIMESTAMPTZ 只存到微秒，而 JDK 21 的 OffsetDateTime.now()
-        // 會帶到奈秒——關鍵在於 PostgreSQL 是<b>四捨五入</b>而非截斷
-        // （實測 ...558463500ns 進資料庫後變成 ...558464µs）。所以兩邊各自
-        // truncate 到微秒仍會在剛好過半的奈秒值上偶發失敗，那是測試自己的
-        // 精度瑕疵，不是程式缺陷。誤差上界是半個微秒，取 1 微秒足以涵蓋，
-        // 同時仍能抓到「回傳的時間根本不是寫進去的那一個」（那會差好幾毫秒以上）。
-        long deltaNanos = java.time.Duration
-            .between(r.publishedAt().toInstant(), after.toInstant()).abs().toNanos();
-        assertTrue(deltaNanos <= 1000,
+        // 這裡可以比精確值（不需要任何容差）：CampaignService.republish 產生時間戳時
+        // 已 truncatedTo(MICROS)。根因是「JDK 帶奈秒、PostgreSQL 只存微秒且是四捨五入
+        // 而非截斷」（實測 ...558463500ns 進資料庫後變成 ...558464µs）——那個落差原本
+        // 同時存在於 API 回應，回給後台的值與資料庫實存值真的可以差最多 500ns。
+        // 在來源處截斷之後兩者逐位元相同，所以斷言不再需要放寬。
+        assertEquals(r.publishedAt().toInstant(), after.toInstant(),
+            "回傳的發布時間與資料庫裡的不一致：" + r.publishedAt() + " vs " + after);
+        assertEquals(SLUG, r.slug());
+    }
+
+    /**
+     * ★ 重新上架必須接受<b>本功能之前</b>被下架的舊資料形狀：
+     * {@code status='published'} 但 {@code published_at IS NULL}。
+     *
+     * <p><b>為什麼不能只靠 {@code CampaignServiceTest} 那條</b>：那一條
+     * （{@code republishAcceptsLegacyRowsUnpublishedBeforeStatusExisted}）把
+     * {@link CampaignRepository} 完全 mock 掉，只驗證 service 用哪些引數呼叫了
+     * {@code markRepublished}。{@code markRepublished} 的 WHERE 是
+     * {@code c.status = :expectedStatus and c.publishedAt is null}——legacy 形狀傳進去的
+     * {@code expectedStatus} 是 {@code 'published'}，那個組合到底能不能命中一列，
+     * mock 一個字都驗不到。上一批工作的整個立論就是「mock 驗不了敘述本體」，
+     * 這裡不該自己留一條例外。</p>
+     *
+     * <p>失效後果：那些 legacy 列會永久卡住、只能靠手動 {@code UPDATE campaign} 救回來
+     * ——正是這組端點要消滅的操作模式。而後台會顯示「重新上架失敗（409）」，
+     * 操作者無從得知那是查詢形狀不合而不是自己按錯。</p>
+     */
+    @Test
+    void republishAcceptsLegacyRowWithPublishedStatusAndNullTimestamp() throws SQLException {
+        long id = campaignId();
+        // 用 raw SQL 造出本功能之前下架的形狀：只清 published_at，status 仍留在 published
+        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
+            int affected = st.executeUpdate(
+                "UPDATE campaign SET published_at = NULL WHERE id = " + id
+                    + " AND status = '" + Campaign.STATUS_PUBLISHED + "'");
+            assertEquals(1, affected, "造 legacy 形狀應影響 1 列，實際 " + affected);
+        }
+
+        CampaignService.RepublishResult r = campaignService.republish(id);
+
+        assertEquals(Campaign.STATUS_PUBLISHED, statusInDb(),
+            "legacy 列重新上架後 status 必須是 published");
+        OffsetDateTime after = publishedAtInDb();
+        assertNotNull(after, "legacy 列重新上架必須寫回 published_at，否則文章仍不可見");
+        assertEquals(r.publishedAt().toInstant(), after.toInstant(),
             "回傳的發布時間與資料庫裡的不一致：" + r.publishedAt() + " vs " + after);
         assertEquals(SLUG, r.slug());
     }

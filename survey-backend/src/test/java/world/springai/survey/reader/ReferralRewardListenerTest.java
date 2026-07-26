@@ -22,7 +22,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 驗證 ReferralRewardListener 真的會被 Spring 的事件機制觸發。
+ * <b>本測試<u>不</u>執行任何 SQL，也不驗證任何 repository 的 {@code @Query}</b>——
+ * {@link ReferralService} 整個是 {@code @MockBean}，所以 {@code addCredits}、
+ * {@code confirmByEmail}、{@code touchEngagement} 與帳本寫入一句都不會發生。
+ * 它<b>唯一</b>驗證的事情是 ReferralRewardListener 真的會被 Spring 的事件機制觸發
+ * （以及監聽器自己會吞掉下游例外）。
+ *
+ * <p><b>不要把它讀成發獎路徑的資料庫覆蓋</b>：{@code @SpringBootTest} 上那組真實
+ * datasource 設定只是為了讓 context 起得來，本測試從頭到尾沒有用它讀寫任何一列。
+ * 發獎的冪等與帳本／餘額不變式由 {@code ReferralIdempotencyTest} 守著。</p>
  *
  * <p><b>為什麼需要一個會啟動 context 的測試</b>：本計畫第一版把監聽器寫成
  * {@code @TransactionalEventListener(AFTER_COMMIT)}，而發布端

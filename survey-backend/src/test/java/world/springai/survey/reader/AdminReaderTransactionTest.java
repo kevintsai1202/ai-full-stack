@@ -21,7 +21,18 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 /**
- * 驗證 {@link AdminReaderService} 的 {@code @Transactional} <b>真的經過 Spring proxy</b>。
+ * <b>本測試<u>不</u>執行任何 SQL，也不驗證任何 repository 的 {@code @Query}</b>——
+ * {@link ReaderRepository} 與 {@link CreditTxnRepository} 全部是 {@code @MockBean}，
+ * 生產查詢一句都不會被送到資料庫。它<b>唯一</b>驗證的事情是
+ * {@link AdminReaderService} 的 {@code @Transactional} 真的經過 Spring proxy。
+ *
+ * <p><b>不要把它讀成 {@code updateVip} 或 {@code addCredits} 的覆蓋</b>：
+ * 把那兩支 {@code @Modifying} 查詢改成什麼都不做（甚至改成 {@code and 1 = 0}），
+ * 本測試仍然全綠——mock 照樣回傳被 stub 的筆數。實測確認過。那兩支查詢本體的覆蓋
+ * 在 {@link AdminVipPersistenceTest}（真實 PostgreSQL + {@code StatementInspector}）。
+ * 類名裡的 {@code AdminReader} 與 {@code @SpringBootTest} 上那組真實 datasource
+ * 設定曾經誤導過一整批工作（那組 datasource 只是為了讓 context 起得來，
+ * 本測試從頭到尾沒有用它讀寫任何一列），故此段不可刪。</p>
  *
  * <p><b>為什麼一定要一個會啟動 context 的測試</b>：
  * {@link AdminReaderControllerTest} 用 {@code standaloneSetup} 直接 new 出實例，

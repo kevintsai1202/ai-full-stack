@@ -49,9 +49,27 @@ public interface ReaderRepository extends JpaRepository<Reader, Long> {
      *
      * <p>單一 UPDATE 敘述本身即為原子操作，故呼叫端不需要額外的交易。</p>
      *
+     * <p><b>{@code flushAutomatically = true}</b>：本方法是全檔<b>唯一</b>可能在
+     * 「同一交易內、緊接同一列的 INSERT 之後」執行的 {@link Reader} 更新——
+     * {@code AdminReaderService.grantVip} 是 {@code @Transactional}，流程為
+     * 「{@code findByEmailIgnoreCase} 查不到 → {@code findOrCreateWithoutLogin}
+     * 新建（INSERT reader）→ 本方法更新同一列」。目前之所以安全，只是因為
+     * {@link Reader} 用 {@code GenerationType.IDENTITY}——persist 當下就發出 INSERT，
+     * 沒有東西留在 persistence context 裡等著被 flush。若日後為了批次效能把主鍵改成
+     * {@code SEQUENCE}，那次 INSERT 會延到提交前才送出，本 UPDATE 就會打在一列
+     * 還不存在的資料上、回 0 列，而 {@code grantVip} 對 0 列的處置是拋 404
+     * ——站方會看到「查無此讀者」，帳戶卻真的被建出來了。這段推理逐字同
+     * {@link #deductCredits} 的 {@code flushAutomatically} 說明，只是那裡是給未來的保險，
+     * 這裡是唯一真的緊接 INSERT 之後執行的一支。</p>
+     *
+     * <p><b>{@code clearAutomatically = true}</b>：理由同 {@link #touchLastLogin}——
+     * 只要 SELECT 出來的 {@link Reader} 還被 Hibernate 管理，呼叫端在交易內對它做
+     * <b>任何</b> setter，提交時的 dirty check 都會再發一次帶全欄位（含 {@code credits}）
+     * 的 UPDATE，等於繞過本方法白做工。</p>
+     *
      * @return 受影響筆數，0 表示該讀者列不存在
      */
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Transactional
     @Query("update Reader r set r.tier = :tier, r.vipExpiresAt = :expiresAt where r.id = :id")
     int updateVip(@Param("id") Long id,
@@ -122,8 +140,23 @@ public interface ReaderRepository extends JpaRepository<Reader, Long> {
      * <p>用條件式 UPDATE 而不是「讀出來改再存回」：後者在併發下會覆蓋
      * 另一筆交易剛寫入的餘額（讀到舊值 → 加 → 寫回，另一筆的變動就消失了）。
      * 這裡直接讓資料庫算 {@code credits = credits + :delta}。</p>
+     *
+     * <p><b>{@code clearAutomatically = true}</b>（與 {@link #deductCredits} 對齊）：
+     * 目前兩個呼叫端（{@code AdminReaderService.grantCredits} 與
+     * {@code ReferralService.rewardFor}）加點後都只用 {@code getId()}、也不呼叫任何
+     * setter，所以沒有現成的 bug。但兩處都在交易內留著一個<b>已經過時</b>的受管理
+     * {@link Reader}：任何日後想回傳「加點後餘額」的修改都會靜默拿到舊值（一級快取
+     * 直接命中，查詢根本不會送出——與 {@link #deductCredits} 說明的機制相同）；
+     * 而 {@code grantCredits} 的迴圈若同一個 email 出現兩次，第二次的
+     * {@code findByEmailIgnoreCase} 也會命中一級快取而拿到第一次加點前的物件。</p>
+     *
+     * <p><b>為什麼不需要 {@code flushAutomatically}</b>：兩個呼叫端在本方法之前
+     * 都沒有待 flush 的寫入——{@code rewardFor} 用的是 {@code saveAndFlush}
+     * （帳本列先寫且已 flush），{@code grantCredits} 迴圈裡的 {@link CreditTxn}
+     * 是 {@code GenerationType.IDENTITY}（persist 當下即 INSERT）。
+     * 若日後把 {@code CreditTxn} 改成 {@code SEQUENCE}，這裡要一起補上。</p>
      */
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Transactional
     @Query("update Reader r set r.credits = r.credits + :delta where r.id = :id")
     int addCredits(@Param("id") Long id, @Param("delta") int delta);
