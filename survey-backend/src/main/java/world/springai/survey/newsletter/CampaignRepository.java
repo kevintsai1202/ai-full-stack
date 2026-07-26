@@ -96,4 +96,47 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long> {
 
     /** 依 slug 查單篇文章 */
     Optional<Campaign> findBySlug(String slug);
+
+    /**
+     * 已發布 PREMIUM 文章的解鎖點數區間投影。
+     *
+     * <p>兩個 getter 都可能是 {@code null}：聚合查詢在完全沒有符合條件的列時仍會回一列，
+     * 而 {@code min}／{@code max} 於該列皆為 NULL。呼叫端必須把「兩者為 null」當成
+     * 「目前沒有任何已發布的 PREMIUM 文章」處理，而不是當成 0。</p>
+     */
+    interface PremiumCostRange {
+
+        /** 最低解鎖點數；沒有任何符合條件的文章時為 null */
+        Integer getMinCost();
+
+        /** 最高解鎖點數；沒有任何符合條件的文章時為 null */
+        Integer getMaxCost();
+    }
+
+    /**
+     * 讀者端要顯示的「每篇進階文章多少點」區間，直接取自 {@code campaign.credit_cost}。
+     *
+     * <p><b>為什麼一定要查這個欄位，不能用全域預設</b>：實際扣款走
+     * {@code CreditPolicy.costOf(campaign)}，它優先取的就是 {@code campaign.credit_cost}；
+     * 而 {@code ck_campaign_premium_cost} 與 {@code CampaignService.validateCreditCost}
+     * 都強制 PREMIUM 的 {@code credit_cost > 0}，所以 {@code costOf()} 退回全域預設的
+     * 那條分支是死碼——全域預設<b>結構性地</b>不會是任何一篇文章的實際扣款額。
+     * 頁面上的數字必須與實際生效的數字同源，這支查詢就是那個同源點。</p>
+     *
+     * <p><b>WHERE 同時要求 slug 與 publishedAt 非 NULL</b>，與
+     * {@link #findBySlugIsNotNullAndPublishedAtIsNotNullOrderByPublishedAtDesc()} 的條件一致：
+     * 區間只能反映「讀者現在真的打得開、真的會被收這個價」的文章。
+     * 少了 {@code publishedAt is not null}，已下架的文章會繼續影響區間，讀者看到一個
+     * 站上根本買不到的價格；少了 {@code slug is not null}，沒有網址可開的殘列同樣會混進來。</p>
+     *
+     * <p><b>用一次聚合查詢而非撈回全部列在 Java 端算</b>：區間只需要兩個數字，
+     * 把每一篇已發布 PREMIUM 文章的實體載進記憶體只為了取 min／max，會隨文章數線性變差。</p>
+     *
+     * @param tier 要統計的分級。刻意用參數而非在 JPQL 裡寫死 {@code 'PREMIUM'}：
+     *             JPQL 無法引用 Java 常數，寫死會讓 {@link Campaign#TIER_PREMIUM}
+     *             在 {@link Campaign} 之外多出第二個定義點。
+     */
+    @Query("select min(c.creditCost) as minCost, max(c.creditCost) as maxCost from Campaign c "
+        + "where c.tier = :tier and c.slug is not null and c.publishedAt is not null")
+    PremiumCostRange findPremiumCostRange(@Param("tier") String tier);
 }

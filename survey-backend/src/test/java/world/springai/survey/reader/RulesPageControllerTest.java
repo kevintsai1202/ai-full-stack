@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import world.springai.survey.newsletter.Campaign;
+import world.springai.survey.newsletter.CampaignRepository;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
@@ -17,27 +19,37 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 規則頁：數字必須全部來自 CreditPolicy。
+ * 規則頁：數字必須全部來自 CreditPolicy，「每篇 N 點」則必須來自實際已發布文章的區間。
  *
- * <p>測試策略刻意用「非典型數值」（77 / 33 / 55 / 111）而非真實的
+ * <p>測試策略刻意用「非典型數值」（77 / 33 / 55 / 111、區間 12–48）而非真實的
  * 300 / 10 / 100 / 365。用真實值的話，即使實作把數字寫死在 HTML 裡，
  * 測試也會通過——那種測試什麼都證明不了。</p>
+ *
+ * <p><b>{@link PremiumCostDisplay} 用真貨、只 mock 掉 {@link CampaignRepository}</b>：
+ * 若連 {@code PremiumCostDisplay} 也 mock 掉，測試就只證明了「controller 會把某個字串
+ * 貼上頁面」，證明不了那個字串來自 {@code campaign.credit_cost} 的區間查詢——
+ * 而那正是本次修正的全部目的。</p>
  */
 class RulesPageControllerTest {
 
     private CreditPolicy creditPolicy;
     private ReaderContext readerContext;
+    private CampaignRepository campaignRepository;
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
         creditPolicy = mock(CreditPolicy.class);
         readerContext = mock(ReaderContext.class);
+        campaignRepository = mock(CampaignRepository.class);
         when(readerContext.resolve(any())).thenReturn(Optional.empty());
         when(creditPolicy.signupGrant()).thenReturn(77);
         when(creditPolicy.premiumCost()).thenReturn(33);
         when(creditPolicy.referralReward()).thenReturn(55);
         when(creditPolicy.vipDefaultDays()).thenReturn(111);
+        // 預設情境：站上有已發布的 PREMIUM 文章，最便宜 12 點、最貴 48 點。
+        // 刻意與 premiumCost() 的 33 不同，才能分辨頁面到底讀了哪一個來源。
+        givenPublishedPremiumCostRange(12, 48);
         // standalone MockMvc 沒有 Spring Boot 的 WebMvcAutoConfiguration，
         // 預設的 StringHttpMessageConverter 用 ISO-8859-1，中文字會變亂碼。
         // 產品程式碼維持 MediaType.TEXT_HTML_VALUE（與套件內其他頁面一致），
@@ -45,9 +57,22 @@ class RulesPageControllerTest {
         // 真實部署時 Spring Boot 會自動註冊等效的 converter，這裡只是補上
         // standalone 環境缺少的那一層，不是多餘的樣板。
         mvc = MockMvcBuilders
-            .standaloneSetup(new RulesPageController(new HtmlTemplate(), creditPolicy, readerContext))
+            .standaloneSetup(new RulesPageController(new HtmlTemplate(), creditPolicy, readerContext,
+                new PremiumCostDisplay(campaignRepository, creditPolicy)))
             .setMessageConverters(new StringHttpMessageConverter(StandardCharsets.UTF_8))
             .build();
+    }
+
+    /**
+     * 讓區間查詢回傳指定的 min／max；兩者傳 null 代表「站上沒有任何已發布 PREMIUM 文章」
+     * （聚合查詢在零列時回一列而兩欄皆 NULL）。
+     */
+    private void givenPublishedPremiumCostRange(Integer min, Integer max) {
+        when(campaignRepository.findPremiumCostRange(Campaign.TIER_PREMIUM))
+            .thenReturn(new CampaignRepository.PremiumCostRange() {
+                @Override public Integer getMinCost() { return min; }
+                @Override public Integer getMaxCost() { return max; }
+            });
     }
 
     /** 頁面可公開存取（不需登入） */
@@ -62,10 +87,20 @@ class RulesPageControllerTest {
         mvc.perform(get("/r/rules")).andExpect(content().string(org.hamcrest.Matchers.containsString("77")));
     }
 
-    /** PREMIUM 單篇點數必須來自 CreditPolicy */
+    /**
+     * PREMIUM 單篇點數必須來自「已發布文章的實際區間」，不是全域預設。
+     *
+     * <p>{@code setUp} 讓區間查詢回 12–48、讓 {@code premiumCost()} 回 33。
+     * 若實作退回讀全域預設，頁面會出現 33 而沒有 12–48，本測試會抓到。</p>
+     */
     @Test
-    void injectsPremiumCost() throws Exception {
-        mvc.perform(get("/r/rules")).andExpect(content().string(org.hamcrest.Matchers.containsString("33")));
+    void injectsPublishedPremiumCostRange() throws Exception {
+        String html = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("目前每篇 12–48 點"),
+            "沒有顯示已發布 PREMIUM 文章的實際點數區間");
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("33"),
+            "頁面出現了全域預設 33——「每篇 N 點」的來源必須是 campaign.credit_cost，"
+                + "全域預設結構性地不會是任何一篇的實際扣款額");
     }
 
     /** 邀請獎勵必須來自 CreditPolicy */
@@ -254,22 +289,58 @@ class RulesPageControllerTest {
     }
 
     /**
-     * 規則頁的「每篇 N 點」必須標明是參考值，實際以各篇文章頁為準。
+     * 所有已發布 PREMIUM 文章價格相同時，只顯示單一數字，不得寫成「20–20 點」。
      *
-     * <p>本頁顯示的是全域預設 {@code CreditPolicy.premiumCost()}，而 paywall 與
-     * {@code UnlockService} 實際扣的是該篇自己的 {@code campaign.credit_cost}；
-     * 又因 {@code ck_campaign_premium_cost} 與 {@code validateCreditCost} 都強制
-     * PREMIUM 的 {@code credit_cost > 0}，{@code costOf()} 退回全域預設的分支是死碼——
-     * 這個數字<b>結構性地</b>不會是實際扣款額。規則頁的存在理由就是點數機制的
-     * 可信度來源，帶著結構性錯誤的數字上線比沒有規則頁更傷。</p>
+     * <p>「20–20 點」讀起來像壞掉，而它其實只是把 min／max 的實作細節漏給讀者看。
+     * 規則頁是點數機制的可信度來源，這種字會直接扣掉可信度。</p>
      */
     @Test
-    void premiumCostIsPresentedAsTypicalNotExact() throws Exception {
+    void singleCostIsNotRenderedAsARangeOfItself() throws Exception {
+        givenPublishedPremiumCostRange(20, 20);
+        String html = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("目前每篇 20 點"),
+            "min == max 時沒有收斂成單一數字");
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("20–20"),
+            "min == max 時仍寫成區間「20–20」，讀起來像壞掉");
+    }
+
+    /**
+     * 站上還沒有任何已發布 PREMIUM 文章時，退回全域預設並標明是「通常」。
+     *
+     * <p>這是<b>唯一</b>合法使用 {@code CreditPolicy.premiumCost()} 的情況：此時沒有任何
+     * 「實際扣款額」存在可供顯示，而全域預設正是後台建立下一篇 PREMIUM 時會被預填的值，
+     * 確實是讀者接下來最可能遇到的價格。用「通常」而非「目前」，因為它是預估不是事實。</p>
+     */
+    @Test
+    void fallsBackToGlobalDefaultWhenNoPublishedPremiumArticleExists() throws Exception {
+        // 聚合查詢在零列時回一列而兩欄皆 NULL
+        givenPublishedPremiumCostRange(null, null);
         String html = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("通常每篇 33 點"),
-            "沒有把全域預設標示為「通常」，讀者會以為那就是每篇的實際扣款額");
+            "沒有文章可統計時應退回全域預設，並用「通常」標示這是參考值");
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("實際點數以各篇文章頁顯示為準"),
             "沒有指出實際點數要看文章頁");
+    }
+
+    /** 不論走哪個分支，「實際點數以各篇文章頁顯示為準」都必須在（區間也不等於逐篇價格） */
+    @Test
+    void alwaysPointsReadersAtThePerArticlePrice() throws Exception {
+        String html = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("實際點數以各篇文章頁顯示為準"),
+            "顯示區間時仍必須指出實際點數要看文章頁——區間不告訴讀者某一篇要多少");
+    }
+
+    /** 佔位符必須被實際內容取代，不得讓 HTML 註解字面殘留在回應裡 */
+    @Test
+    void noTemplatePlaceholderIsLeftUnfilled() throws Exception {
+        String html = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
+        for (String placeholder : java.util.List.of(
+                "<!--NAV_LINKS-->", "<!--SIGNUP_GRANT_LINE-->", "<!--SIGNUP_GRANT_NOTE-->",
+                "<!--PREMIUM_COST_PHRASE-->", "<!--REFERRAL_REWARD_LINE-->",
+                "<!--REFERRAL_REWARD_NOTE-->", "<!--VIP_DAYS-->", "<!--LAST_UPDATED-->")) {
+            org.junit.jupiter.api.Assertions.assertFalse(html.contains(placeholder),
+                "佔位符 " + placeholder + " 不得殘留在回應中");
+        }
     }
 
     /**

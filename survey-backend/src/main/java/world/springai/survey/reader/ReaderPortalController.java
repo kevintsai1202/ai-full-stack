@@ -49,18 +49,30 @@ public class ReaderPortalController {
     private final SurveyResponseRepository surveyResponseRepository;
     private final ReferralService referralService;
     private final CreditPolicy creditPolicy;
+    /**
+     * 「進階內容每篇多少點」的片語來源。
+     *
+     * <p>刻意不用 {@link CreditPolicy#premiumCost()}：那是全域預設，而 PREMIUM 的
+     * 實際扣款一律取該篇自己的 {@code campaign.credit_cost}（{@code costOf()} 的
+     * 全域退路是死碼）。與 {@code /r/rules} 共用同一份判斷，兩頁不會各說一套。</p>
+     */
+    private final PremiumCostDisplay premiumCostDisplay;
     /** 個人資料寫入；交易邊界在它身上（見 {@link #updateProfile}） */
     private final ReaderProfileService readerProfileService;
     /** 對外公開的網域（含 scheme），組出可貼給別人的完整邀請連結時要用 */
     private final String publicBaseUrl;
 
-    /** 注入渲染、身分解析、帳本、名單中心、邀請統計、點數參數、個人資料寫入與對外網域 */
+    /**
+     * 注入渲染、身分解析、帳本、名單中心、邀請統計、點數參數、進階文章點數區間、
+     * 個人資料寫入與對外網域
+     */
     public ReaderPortalController(HtmlTemplate htmlTemplate,
                                  ReaderContext readerContext,
                                  CreditTxnRepository creditTxnRepository,
                                  SurveyResponseRepository surveyResponseRepository,
                                  ReferralService referralService,
                                  CreditPolicy creditPolicy,
+                                 PremiumCostDisplay premiumCostDisplay,
                                  ReaderProfileService readerProfileService,
                                  @Value("${app.public-base-url}") String publicBaseUrl) {
         this.htmlTemplate = htmlTemplate;
@@ -69,6 +81,7 @@ public class ReaderPortalController {
         this.surveyResponseRepository = surveyResponseRepository;
         this.referralService = referralService;
         this.creditPolicy = creditPolicy;
+        this.premiumCostDisplay = premiumCostDisplay;
         this.readerProfileService = readerProfileService;
         this.publicBaseUrl = publicBaseUrl;
     }
@@ -90,7 +103,7 @@ public class ReaderPortalController {
         // 固定傳 true：未登入者在上面就被導向登入頁了，走到這裡必然是已登入狀態
         vars.put("<!--NAV_LINKS-->", ReaderNav.links(true));
         vars.put("<!--CREDITS-->", String.valueOf(reader.getCredits()));
-        vars.put("<!--PREMIUM_COST-->", String.valueOf(creditPolicy.premiumCost()));
+        vars.put("<!--PREMIUM_COST_PHRASE-->", premiumCostDisplay.perArticlePhrase());
         vars.put("<!--EMAIL-->", HtmlTemplate.escapeHtml(reader.getEmail()));
         vars.put("<!--TIER_STATUS-->", renderTierStatus(reader));
         vars.put("<!--DISPLAY_NAME-->", HtmlTemplate.escapeHtml(displayNameOf(reader.getEmail())));

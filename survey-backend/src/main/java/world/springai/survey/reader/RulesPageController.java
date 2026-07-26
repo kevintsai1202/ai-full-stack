@@ -18,17 +18,17 @@ import java.util.Map;
  * 讀者看到的代價與實際扣的不一致——那是最傷信任的一類落差。數字一律取自
  * {@link CreditPolicy}，與 {@code /r/me} 同源。</p>
  *
- * <p><b>但它與 paywall 顯示的價格<u>不</u>同源，文案必須說清楚</b>：本頁與
- * {@code /r/me} 用的是全域預設 {@link CreditPolicy#premiumCost()}，而文章頁的
- * gate 與 {@code UnlockService} 實際扣的是 {@code CreditPolicy.costOf(campaign)}
+ * <p><b>「每篇 N 點」不取全域預設，改顯示實際區間</b>：文章頁的 gate 與
+ * {@code UnlockService} 實際扣的是 {@code CreditPolicy.costOf(campaign)}
  * ——<b>該篇自己的 {@code campaign.credit_cost}</b>。且 {@code ck_campaign_premium_cost}
  * 與 {@code CampaignService.validateCreditCost} 都強制 PREMIUM 的 {@code credit_cost > 0}，
- * 所以 {@code costOf()} 退回全域預設的那條分支是死碼：本頁顯示的數字<b>結構性地</b>
- * 不會是任何一篇文章的實際扣款額（除非數值恰好巧合）。這不是三處不同步的邊緣情況。
- * 每篇文章有自己的定價本來就是對的（已解鎖的讀者付的是當時的價，不該被全域參數
- * 追溯改價），所以修的是文案而不是行為——頁面明講「通常每篇 N 點，實際以各篇
- * 文章頁為準」。規則頁的存在理由就是點數機制的可信度來源，帶著結構性錯誤的
- * 數字上線比沒有規則頁更傷。</p>
+ * 所以 {@code costOf()} 退回 {@link CreditPolicy#premiumCost()} 的那條分支是死碼——
+ * 全域預設<b>結構性地</b>不會是任何一篇文章的實際扣款額。因此本頁與 {@code /r/me}
+ * 一律改由 {@link PremiumCostDisplay} 取「已發布 PREMIUM 文章的 {@code credit_cost}
+ * 區間」，與實際扣款同源；只有在站上還沒有任何已發布 PREMIUM 文章時才退回全域預設
+ * （那時沒有任何實際扣款額存在可顯示，詳見
+ * {@link PremiumCostDisplay#perArticlePhrase()}）。規則頁的存在理由就是點數機制的
+ * 可信度來源，帶著結構性錯誤的數字上線比沒有規則頁更傷。</p>
  *
  * <p><b>刻意不做 CMS</b>（YAGNI）：文案寫在靜態 HTML，只有數字動態注入。
  * 文案大改需要部署一次，但這頻率遠低於參數調整。不為此建
@@ -50,14 +50,18 @@ public class RulesPageController {
     private final HtmlTemplate htmlTemplate;
     private final CreditPolicy creditPolicy;
     private final ReaderContext readerContext;
+    /** 「每篇多少點」的片語來源；與 {@code /r/me} 共用同一份三分支判斷 */
+    private final PremiumCostDisplay premiumCostDisplay;
 
-    /** 注入頁面渲染、點數參數與讀者身分解析 */
+    /** 注入頁面渲染、點數參數、讀者身分解析與進階文章點數區間 */
     public RulesPageController(HtmlTemplate htmlTemplate,
                               CreditPolicy creditPolicy,
-                              ReaderContext readerContext) {
+                              ReaderContext readerContext,
+                              PremiumCostDisplay premiumCostDisplay) {
         this.htmlTemplate = htmlTemplate;
         this.creditPolicy = creditPolicy;
         this.readerContext = readerContext;
+        this.premiumCostDisplay = premiumCostDisplay;
     }
 
     /**
@@ -82,7 +86,7 @@ public class RulesPageController {
         vars.put("<!--NAV_LINKS-->", ReaderNav.links(loggedIn));
         vars.put("<!--SIGNUP_GRANT_LINE-->", signupGrantLine(signupGrant));
         vars.put("<!--SIGNUP_GRANT_NOTE-->", signupGrantNote(signupGrant));
-        vars.put("<!--PREMIUM_COST-->", String.valueOf(creditPolicy.premiumCost()));
+        vars.put("<!--PREMIUM_COST_PHRASE-->", premiumCostDisplay.perArticlePhrase());
         vars.put("<!--REFERRAL_REWARD_LINE-->", referralRewardLine(referralReward));
         vars.put("<!--REFERRAL_REWARD_NOTE-->", referralRewardNote(referralReward));
         vars.put("<!--VIP_DAYS-->", String.valueOf(creditPolicy.vipDefaultDays()));

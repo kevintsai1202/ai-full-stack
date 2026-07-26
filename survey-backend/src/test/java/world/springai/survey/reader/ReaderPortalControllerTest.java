@@ -11,6 +11,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import world.springai.survey.audience.SurveyResponse;
 import world.springai.survey.audience.SurveyResponseRepository;
+import world.springai.survey.newsletter.Campaign;
+import world.springai.survey.newsletter.CampaignRepository;
 
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
@@ -42,6 +44,7 @@ class ReaderPortalControllerTest {
     private SurveyResponseRepository surveyResponseRepository;
     private ReferralService referralService;
     private CreditPolicy creditPolicy;
+    private CampaignRepository campaignRepository;
     private MockMvc mvc;
 
     @BeforeEach
@@ -51,7 +54,11 @@ class ReaderPortalControllerTest {
         surveyResponseRepository = mock(SurveyResponseRepository.class);
         referralService = mock(ReferralService.class);
         creditPolicy = mock(CreditPolicy.class);
+        campaignRepository = mock(CampaignRepository.class);
         when(creditPolicy.premiumCost()).thenReturn(33);
+        // 預設情境：站上有已發布的 PREMIUM 文章，最便宜 12 點、最貴 48 點。
+        // 刻意與 premiumCost() 的 33 不同，才能分辨頁面到底讀了哪一個來源。
+        givenPublishedPremiumCostRange(12, 48);
         when(creditTxnRepository.findByReaderIdOrderByCreatedAtDesc(anyLong(), any(Pageable.class)))
             .thenReturn(List.of());
         when(surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc(anyString()))
@@ -71,12 +78,28 @@ class ReaderPortalControllerTest {
         mvc = MockMvcBuilders.standaloneSetup(new ReaderPortalController(
                 new HtmlTemplate(), readerContext, creditTxnRepository,
                 surveyResponseRepository, referralService, creditPolicy,
+                // PremiumCostDisplay 用真貨、只 mock 掉 CampaignRepository：把它整個 mock 掉
+                // 就只證明了「controller 會把某個字串貼上頁面」，證明不了那個字串來自
+                // campaign.credit_cost 的區間查詢——而那正是本次修正的全部目的。
+                new PremiumCostDisplay(campaignRepository, creditPolicy),
                 new ReaderProfileService(surveyResponseRepository),
                 "https://survey.example.com"))
             .setMessageConverters(
                 new StringHttpMessageConverter(StandardCharsets.UTF_8),
                 new MappingJackson2HttpMessageConverter())
             .build();
+    }
+
+    /**
+     * 讓區間查詢回傳指定的 min／max；兩者傳 null 代表「站上沒有任何已發布 PREMIUM 文章」
+     * （聚合查詢在零列時回一列而兩欄皆 NULL）。
+     */
+    private void givenPublishedPremiumCostRange(Integer min, Integer max) {
+        when(campaignRepository.findPremiumCostRange(Campaign.TIER_PREMIUM))
+            .thenReturn(new CampaignRepository.PremiumCostRange() {
+                @Override public Integer getMinCost() { return min; }
+                @Override public Integer getMaxCost() { return max; }
+            });
     }
 
     /** 建一個帶 id 與餘額的登入讀者 */
@@ -133,20 +156,60 @@ class ReaderPortalControllerTest {
     }
 
     /**
-     * 進階內容解鎖成本必須取自 {@link CreditPolicy#premiumCost()}，不可寫死。
+     * 進階內容的點數必須取自「已發布 PREMIUM 文章的實際區間查詢」，既不可寫死、
+     * 也不可用全域預設。
      *
-     * <p>破壞性驗證動機：{@code setUp} 已把 mock 值設為 33（非
-     * {@code CreditPolicy.DEFAULT_PREMIUM_COST} 的 10），若實作把
-     * {@code PREMIUM_COST} 佔位符改成寫死的 10，本測試會抓到——用真實預設值
-     * 測不出「寫死」這種最傷信任的落差（spec §5.11）。</p>
+     * <p>本測試取代舊版的 {@code showsPremiumCostFromCreditPolicyNotHardcoded}：
+     * 舊版斷言頁面顯示 {@code premiumCost()} 的 mock 值 33，但那個全域預設
+     * <b>結構性地</b>不會是任何一篇文章的實際扣款額（{@code ck_campaign_premium_cost}
+     * 與 {@code validateCreditCost} 都強制 PREMIUM 的 {@code credit_cost > 0}，
+     * {@code costOf()} 的全域退路是死碼），所以那個斷言守的是錯的東西。</p>
+     *
+     * <p>破壞性驗證動機：{@code setUp} 讓 repository 的區間查詢回 12–48、讓
+     * {@code premiumCost()} 回 33。兩個斷言各自守一件事——「有 12–48」證明數字來自
+     * repository 的區間查詢（實作若改回讀全域預設就會紅），「沒有 33」證明頁面沒有
+     * 同時印出兩個來源的數字（那會比只印一個更難判斷該信哪個）。</p>
      */
     @Test
-    void showsPremiumCostFromCreditPolicyNotHardcoded() throws Exception {
+    void showsPremiumCostRangeFromPublishedArticlesNotGlobalDefault() throws Exception {
         givenLoggedIn(reader(287));
 
         mvc.perform(get("/r/me").cookie(cookie()))
-           .andExpect(content().string(containsString("33")))
+           .andExpect(content().string(containsString("目前每篇 12–48 點")))
+           .andExpect(content().string(not(containsString("33"))))
            .andExpect(content().string(not(containsString("10 點"))));
+    }
+
+    /**
+     * 所有已發布 PREMIUM 文章價格相同時只顯示單一數字，不得寫成「20–20 點」。
+     *
+     * <p>與 {@code RulesPageControllerTest} 的同名守衛成對：三分支判斷只有一份實作
+     * （{@link PremiumCostDisplay}），但兩頁各自把片語接進不同的句子，兩邊都要釘。</p>
+     */
+    @Test
+    void singleCostIsNotRenderedAsARangeOfItself() throws Exception {
+        givenLoggedIn(reader(287));
+        givenPublishedPremiumCostRange(20, 20);
+
+        mvc.perform(get("/r/me").cookie(cookie()))
+           .andExpect(content().string(containsString("目前每篇 20 點")))
+           .andExpect(content().string(not(containsString("20–20"))));
+    }
+
+    /**
+     * 站上還沒有任何已發布 PREMIUM 文章時，退回全域預設並標明是「通常」。
+     *
+     * <p>這是唯一合法使用 {@code CreditPolicy.premiumCost()} 的情況：此時沒有任何
+     * 實際扣款額存在可供顯示。</p>
+     */
+    @Test
+    void fallsBackToGlobalDefaultWhenNoPublishedPremiumArticleExists() throws Exception {
+        givenLoggedIn(reader(287));
+        // 聚合查詢在零列時回一列而兩欄皆 NULL
+        givenPublishedPremiumCostRange(null, null);
+
+        mvc.perform(get("/r/me").cookie(cookie()))
+           .andExpect(content().string(containsString("通常每篇 33 點")));
     }
 
     /** 餘額區塊旁必須有規則頁連結（spec §5.11 的三個曝光位置之三） */
@@ -513,7 +576,7 @@ class ReaderPortalControllerTest {
             .andReturn().getResponse().getContentAsString();
 
         for (String placeholder : List.of(
-                "<!--NAV_LINKS-->", "<!--CREDITS-->", "<!--PREMIUM_COST-->",
+                "<!--NAV_LINKS-->", "<!--CREDITS-->", "<!--PREMIUM_COST_PHRASE-->",
                 "<!--EMAIL-->", "<!--TIER_STATUS-->", "<!--DISPLAY_NAME-->", "<!--TXN_LIST-->")) {
             org.junit.jupiter.api.Assertions.assertFalse(html.contains(placeholder),
                 "佔位符 " + placeholder + " 不得殘留在回應中");
@@ -664,13 +727,18 @@ class ReaderPortalControllerTest {
         }
     }
 
-    /** {@code /r/me} 的「每篇 N 點」必須與規則頁一樣標明是參考值，實際以文章頁為準 */
+    /**
+     * 不論走哪個分支，{@code /r/me} 都要指出實際點數以文章頁為準。
+     *
+     * <p>顯示區間也不例外：區間告訴讀者「大概要花多少」，但不告訴他某一篇要多少。
+     * 少了這句，讀者會以為區間的下界就是每篇的價格。</p>
+     */
     @Test
-    void mePagePresentsPremiumCostAsTypicalNotExact() throws Exception {
+    void mePageAlwaysPointsReadersAtThePerArticlePrice() throws Exception {
         givenLoggedIn(reader(300));
 
         mvc.perform(get("/r/me").cookie(cookie()))
-           .andExpect(content().string(containsString("通常每篇 33 點")))
+           .andExpect(content().string(containsString("目前每篇 12–48 點")))
            .andExpect(content().string(containsString("實際點數以各篇文章頁顯示為準")));
     }
 
