@@ -95,6 +95,20 @@ public interface ReaderRepository extends JpaRepository<Reader, Long> {
     Optional<Reader> findByReferralCode(String referralCode);
 
     /**
+     * 某位推薦人成功邀請的人數：{@code referred_by} 指向他的讀者列數。
+     *
+     * <p><b>為什麼邀請人數要數這裡，而不是數帳本裡的 REFERRAL 筆數</b>：
+     * {@code ReferralService.rewardFor} 在後台把邀請獎勵設為 0 時<b>完全不寫帳本</b>
+     * （刻意如此，避免占用冪等鍵），於是關閉獎勵期間朋友確實完成了訂閱，
+     * 邀請人的頁面卻連人數都不會動。歸因與獎勵是兩件事，計數該用歸因欄位。
+     * 完整取捨與兩者的落差見 {@code ReferralService#stats}。</p>
+     *
+     * <p>{@code referred_by} 在被邀者<b>首次登入建立帳戶</b>時寫入
+     * （見 {@code ReaderAccountService#createWithSignupGrant}），既有帳戶不回填。</p>
+     */
+    long countByReferredBy(Long referrerId);
+
+    /**
      * 加點（正數）。回傳受影響筆數，0 表示該讀者不存在。
      *
      * <p>用條件式 UPDATE 而不是「讀出來改再存回」：後者在併發下會覆蓋

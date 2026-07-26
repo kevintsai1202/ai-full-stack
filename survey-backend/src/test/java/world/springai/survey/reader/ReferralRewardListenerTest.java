@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import world.springai.survey.audience.SubscriptionConfirmedEvent;
 
 import static org.mockito.ArgumentMatchers.anyString;
@@ -65,6 +66,28 @@ class ReferralRewardListenerTest {
             .thenThrow(new RuntimeException("模擬帳本寫入失敗"));
 
         // 不應拋出：監聽器內部必須自行吞掉
+        publisher.publishEvent(new SubscriptionConfirmedEvent("invitee@example.com"));
+
+        verify(referralService).rewardFor("invitee@example.com");
+    }
+
+    /**
+     * 撞上冪等唯一索引（{@code DataIntegrityViolationException}）必須被視為
+     * 「已發過」而正常結束，不可外洩成 500。
+     *
+     * <p>這是 V9 之後<b>正常且會頻繁發生</b>的路徑：依 spec §5.4，
+     * {@code confirmByEmail} 對已確認過的人仍回報 1 列，所以每次點擊舊確認信
+     * 都會發出事件、都會撞到唯一索引。它必須是安靜的成功路徑。</p>
+     *
+     * <p>捕捉發生在<b>交易邊界之外</b>（本監聽器刻意不帶 {@code @Transactional}），
+     * 交易邊界是 {@code ReferralService.rewardFor} 自己的 proxy。真實資料庫下的
+     * 完整驗證見 {@code ReferralIdempotencyTest}。</p>
+     */
+    @Test
+    void listenerTreatsUniqueViolationAsAlreadyRewarded() {
+        when(referralService.rewardFor(anyString()))
+            .thenThrow(new DataIntegrityViolationException("uq_credit_txn_referral_note"));
+
         publisher.publishEvent(new SubscriptionConfirmedEvent("invitee@example.com"));
 
         verify(referralService).rewardFor("invitee@example.com");

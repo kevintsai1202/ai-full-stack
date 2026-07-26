@@ -132,21 +132,24 @@ public class RulesPageController {
     /**
      * 「邀請怎麼算成功」段落末句；X 為 0 時說明獎勵暫停發放，而非顯示「拿到 0 點」。
      *
-     * <p><b>0 值文案不得承諾「成功邀請仍會被記錄」</b>：程式並不保證這件事。
-     * {@code ReferralService.rewardFor} 在 {@code reward <= 0} 時直接 return、
-     * <b>完全不寫帳本</b>（刻意如此——占用了冪等鍵，日後把獎勵調回 100，
-     * 這位被邀者的獎勵就永遠拿不到了），而 {@code ReferralService.stats} 數的正是
-     * {@code credit_txn} 裡 REFERRAL 的筆數。於是舊文案會造成同一個 HTTP 回應內
-     * 自我矛盾：上半頁寫「成功邀請仍會被記錄」，下半頁的成效區塊卻顯示
-     * 「還沒有人透過你的連結完成訂閱」——即使讀者確實已經邀請成功五個人。
-     * 文案不得對行為做出程式碼不保證的承諾。</p>
+     * <p><b>0 值文案現在可以說「人數仍會計入」，但必須連條件一起說</b>：
+     * {@code ReferralService.stats} 的人數已改為數 {@code reader.referred_by}
+     * （不再數帳本筆數），而該欄位<b>在被邀者首次登入建立帳戶時才寫入</b>
+     * （{@code ReaderAccountService#createWithSignupGrant}），<b>不是</b>在他確認
+     * 訂閱的那一刻。所以只寫「成功邀請仍會被記錄」仍然是過度承諾——朋友確認了
+     * 訂閱但還沒登入的那段期間，人數確實不會成長。文案必須把「首次登入」這個
+     * 條件寫出來，讀者才不會盯著沒動的數字以為系統壞了。</p>
      *
-     * <p>機制本身（獎勵為 0 時該不該留下計數）屬 spec §5.4 的待辦，需要另一張
-     * 表或冪等鍵設計，排在下一階段；但這句話現在就在誤導讀者，先改掉。</p>
+     * <p>點數則確實暫停：{@code rewardFor} 在 {@code reward <= 0} 時完全不寫帳本
+     * （刻意如此——占用了冪等鍵，日後把獎勵調回 100，這位被邀者的獎勵就永遠
+     * 拿不到了），而「累計獲得點數」的來源正是帳本。因此文案分兩件事講：
+     * 人數會動、點數要等恢復發放。與 {@code ReaderPortalController#rewardIntro}
+     * 必須同步。</p>
      */
     private String referralRewardNote(int referralReward) {
         if (referralReward == 0) {
-            return "。目前邀請獎勵暫停發放，恢復發放後成功的邀請才會開始累計。";
+            return "。目前邀請獎勵暫停發放；朋友完成訂閱並首次登入後，仍會計入你的邀請人數，"
+                + "點數則要等恢復發放後才開始累計。";
         }
         return "，你才會拿到 " + referralReward + " 點。";
     }

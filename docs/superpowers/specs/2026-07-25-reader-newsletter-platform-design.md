@@ -377,42 +377,66 @@ credits >= campaign.credit_cost           → PARTIAL + CAN_UNLOCK（顯示解�
 - `answers` 對匯入者為 `NULL`，寫入前需初始化為空物件再放 `_ref`。
 - `_ref` 底線前綴用於區別「系統欄位」與問卷答案，問卷統計須排除底線開頭的鍵。
 - confirm 成功時讀出 `_ref` → 查推薦人 → 發 `REFERRAL` 獎勵；同時把值搬到 `reader.referred_by`（該讀者首次登入建帳戶時）。
-- 冪等：`credit_txn` 以 `(reason='REFERRAL', note=被邀者 email)` 檢查是否已發過，重複 confirm 不重複發獎。
+- 冪等：由資料庫的 `uq_credit_txn_referral_note`（V9）保證，`note` 存被邀者 email，重複 confirm 不重複發獎。
 
-> **已知風險（階段 C 審查發現，待下一個允許 migration 的階段修）**：上述冪等檢查是
-> check-then-act，而 `credit_txn` **沒有** `(reason, note)` 的唯一索引——對比
+> **已處理（V9，`fix/stage-c-followups`）**：原本的冪等是 check-then-act
+> （先 `existsByReasonAndNote` 再寫），而 `credit_txn` 沒有唯一索引——對比
 > `article_access` 有 `uq_article_access` 作為併發防線，這裡沒有對應設計。
+> 若同一封確認信的連結被**近乎同時**觸發兩次（Outlook Safe Links、Gmail 的圖片
+> 代理會對信中連結做背景 GET，與使用者本人的點擊構成真實的併發），
+> 兩個獨立交易可能都在對方提交前判讀為「未發過」而各自發獎。
 >
-> 若同一封確認信的連結被**近乎同時**觸發兩次，兩個獨立交易可能都在對方提交前
-> 判讀為「未發過」而各自發獎。這不是理論問題：Outlook Safe Links、Gmail 的圖片
-> 代理等郵件用戶端會對信中連結做背景 GET，與使用者本人的點擊構成真實的併發。
->
-> **影響範圍**：不會破壞「`reader.credits` 永遠等於 `credit_txn` 總和」這條核心
-> 不變式（兩筆帳本與兩次加點仍然一致、仍可稽核），破壞的是「同一被邀者只發一次獎」
-> 這個業務保證。損失可由後台以負值 `ADMIN_GRANT` 修正。
->
-> **修法**（需 migration，故階段 C 無法做）：
+> **已實作的修法**：
 > ```sql
 > CREATE UNIQUE INDEX uq_credit_txn_referral_note
 >     ON credit_txn (note) WHERE reason = 'REFERRAL';
 > ```
-> 並在 `save` 撞上唯一鍵時捕捉例外、視為 `ALREADY_REWARDED`。
-> **注意捕捉位置**：`ReferralService.rewardFor` 帶 `@Transactional`，在其內部捕捉
-> 約束違反後正常回傳會因 rollback-only 標記而在 commit 時改拋
-> `UnexpectedRollbackException`（與 `UnlockService` 同一個陷阱，見 §5.2）——
-> 捕捉必須發生在交易邊界之外，或改用 `saveAndFlush` 搭配呼叫端捕捉。
+> 三個實作細節都在 migration 與 javadoc 內留了理由：
+>
+> 1. **必須是部分索引**，不可寫成 `(reason, note)` 複合唯一。其他 reason 的 note
+>    本來就會重複而且是日常操作：`SIGNUP_GRANT` 的 note 對每位讀者都是同一句
+>    「首次登入初始贈點」、`READ` 的 note 是文章主旨（第二個人解鎖同一篇就重複）、
+>    `ADMIN_GRANT` 的批次加點每筆都填同一句說明。複合唯一會讓第二位讀者建不了帳。
+> 2. **`note IS NULL` 的 REFERRAL 列不受保護**（PostgreSQL 的 UNIQUE 視 NULL 互異）。
+>    這是刻意保留的殘留空隙：程式端保證 REFERRAL 一律寫入被邀者 email，
+>    由 `ReferralServiceTest.ledgerNoteIsExactlyTheInviteeEmail` 釘住那個值；
+>    在述詞裡再加 `AND note IS NOT NULL` 對唯一性語意毫無差別，只會看起來像多了保護。
+> 3. **前置檢查整個移除**（連 `CreditTxnRepository.existsByReasonAndNote` 一併刪掉），
+>    改成「直接寫、撞了才知道」。留著它會讓唯一有效的防線在絕大多數情境永遠跑不到。
+>
+> **捕捉位置（本專案已被咬過三次的陷阱）**：`rewardFor` 內部**絕不捕捉**
+> `DataIntegrityViolationException`——交易一旦被標記 rollback-only，
+> 在其內部捕捉後正常回傳會在 commit 時改拋 `UnexpectedRollbackException`
+> （與 `UnlockService` 同一個陷阱，見 §5.2）。因此：
+> `rewardFor` 改為 `@Transactional(REQUIRES_NEW)`（唯一的交易邊界就在它的 proxy 上），
+> `ReferralRewardListener` **移除 `@Transactional`** 並在交易邊界外捕捉、視為
+> `ALREADY_REWARDED`（記 INFO 不記 ERROR：舊確認信被重複點擊是常態，記 ERROR 會蓋掉真失敗），
+> 帳本寫入改用 `saveAndFlush` 讓約束違反在該行就被 repository 轉譯成
+> `DataIntegrityViolationException`。與 `UnlockController`／`UnlockService` 這一對完全同構。
+>
+> **驗證**：`ReferralIdempotencyTest`（真實 PostgreSQL、套用全部 migration、
+> `ddl-auto=validate`）直接讀 `pg_indexes` 斷言索引本體與述詞，並實跑
+> 「第二次發獎被擋下且餘額與帳本一起不變」。破壞性驗證實測：把 UNIQUE 拿掉 →
+> 餘額變 200／帳本兩筆；把捕捉點搬進 `rewardFor` →
+> 真的拋出 `UnexpectedRollbackException: Transaction silently rolled back`。
 
 > **實作偏離本節「同一交易內」的描述，原因與取捨如下**：
 >
-> 1. 實作用普通的 `@EventListener` + `@Transactional(REQUIRES_NEW)`，**不是**「同一交易內」發放獎勵。
+> 1. 實作用普通的 `@EventListener`，**不是**「同一交易內」發放獎勵。獎勵自己的交易由
+>    `ReferralService.rewardFor` 的 `@Transactional(REQUIRES_NEW)` 開；**V9 之後監聽器本身刻意不帶
+>    `@Transactional`**（原本在監聽器上），否則它的 `catch` 會落在交易邊界之內，見上面的冪等說明。
 > 2. **為什麼不能用 `@TransactionalEventListener(AFTER_COMMIT)`**（本計畫第一版寫錯，已修）：發布端 `SubscriptionController.confirm` **沒有交易**——它呼叫的 `confirmByEmail` 與 `touchEngagement` 是 repository 上各自帶 `@Transactional` 的方法，各自立即提交。`publishEvent` 被呼叫時沒有進行中的交易，而 `@TransactionalEventListener` 在無交易時**預設完全不觸發也不報錯**。結果會是「獎勵永遠不發放、日誌乾淨、測試因監聽器被 mock 而全綠」——最惡劣的靜默失效。
 > 3. 不需要同交易也已保住優先順序：確認訂閱在 publish 之前就已提交，所以發獎失敗時同意紀錄已落地。這正是要的方向——確認訂閱是不可重建的同意紀錄，推薦獎勵可由後台手動加點補救；spec 原本寫的「同一交易」會讓可補救的失敗回滾掉不可補救的資產。
 > 4. `REQUIRES_NEW` 的作用是讓獎勵的兩個寫入（加餘額、寫帳本）成為一個原子單位，**不是**為了與確認訂閱隔離（本來就已隔離）。
+>    它從監聽器移到 `rewardFor` 之後這個作用不變，還多了一個好處：交易邊界固定在 `rewardFor` 的 proxy 上，不受呼叫端有沒有交易影響。
 > 5. 例外在監聽器與發布端**雙重**吞掉：`publishEvent` 同步且例外會往上拋，若變成 500，「不論結果一律回相同的 200」這條安全性質就破了，公開端點會變成「這個 email 有沒有推薦關係」的探測器。防護不依賴任一端記得。
+>    **V9 之後兩道的職責變了**：監聽器不再是交易邊界，所以它的 `catch` 現在是真正接住的那一層；發布端那道從「唯一真正接住的層」變成縱深防禦（防任何現有或日後新增的監聽器漏出例外）。
 > 6. 代價與補救：發獎失敗會靜默損失一次獎勵，以 ERROR 記錄，後台手動加點。
 > 7. 依賴方向：事件是為了不讓 `audience` 依賴 `reader`（spec §3）。
 >
-> **邀請獎勵關成 0 時，`/r/invite` 的「已成功邀請人數」會停止成長**（階段 C 端到端驗收確認）：
+> **邀請獎勵關成 0 時，`/r/invite` 的「已成功邀請人數」會停止成長**
+> ——**已處理（B1，`fix/stage-c-followups`）**，以下保留當時的分析作為紀錄，
+> 修法與現況見本段末尾的「已實作」小節：
 > `ReferralService.stats()` 數的是該推薦人 `credit_txn` 中 `reason='REFERRAL'` 的筆數，
 > 而 `rewardFor()` 在 `creditPolicy.referralReward() <= 0` 時**完全不寫帳本**
 > （刻意設計：不佔用冪等鍵，日後把獎勵調回 100 時這位被邀者仍拿得到獎勵）。
@@ -429,12 +453,28 @@ credits >= campaign.credit_cost           → PARTIAL + CAN_UNLOCK（顯示解�
 >
 > **影響**：只有在站方主動把獎勵調成 0 時才會發生，且不影響任何帳務正確性；
 > 但它是一句對讀者的明確承諾沒有兌現。
-> **修法（需 migration，故階段 C 未做）**：邀請成效的計數來源不該與「發了多少獎」綁在一起。
-> 正解是另建歸因紀錄（或在 `credit_txn` 允許 `delta=0` 的 `REFERRAL` 列並讓
-> `stats().earnedCredits` 改為加總 delta），前者需要新表、後者需要重新檢視
-> 「帳本不放 delta=0 的無意義列」這條既有慣例。文案側已先行處理（見上），
-> 所以現在關閉邀請獎勵不會再誤導讀者；剩下的是「成效計數要不要在暫停期間仍成長」
-> 這個產品決定與它的 migration。
+>
+> **已實作（B1）**：計數來源與「發了多少獎」脫鉤，但**不需要新表也不需要新欄位**
+> ——`reader.referred_by` 早在 V7 就存在，`ReaderAccountService.findOrCreate` 也已經
+> 在建帳時填好（含排除自我邀請）。當時的分析漏看了這一點。
+>
+> - **人數**改為 `ReaderRepository.countByReferredBy(referrerId)`；
+> - **點數**仍加總 `credit_txn` 的 REFERRAL delta（帳本是稽核來源，不可用
+>   「人數 × 目前獎勵金額」推算——獎勵金額會被調整，推算值會與歷史實付金額不符）。
+>
+> **兩個數字從此會有落差，而且兩個方向都可能**，這是刻意接受的：
+> ① 獎勵暫停期間人數成長、點數不動（正是本次要修的情境）；
+> ② 被邀者**早就有 reader 帳戶**時發了獎但人數不動（`referred_by` 只在建帳當下寫入、
+> 既有帳戶不回填）。②的對象本來就不是「新帶進來的讀者」，不計入可接受，帳務仍正確。
+> 完整說明寫在 `ReferralService.stats` 的 javadoc。
+>
+> **文案再修一次（重點）**：`referred_by` 是在被邀者**首次登入**時寫入，**不是**在他
+> 點確認信時。所以「成功邀請仍會被記錄」即使在 B1 之後**仍然是過度承諾**——
+> 朋友確認了訂閱但還沒登入的那段期間，人數確實不會成長。兩處 0 值文案因此改成
+> 「目前邀請獎勵暫停發放；朋友完成訂閱**並首次登入**後，仍會計入你的邀請人數，
+> 點數則要等恢復發放後才開始累計」。兩份測試改為正面斷言：必須同時出現
+> 「暫停發放」「邀請人數」「首次登入」，並禁止「點數仍會累計」這類說法
+> （破壞性驗證：把條件句刪掉改回「成功邀請仍會被記錄」→ 測試變紅）。
 
 > **另一項必須寫進 spec 的發現**：`confirmByEmail` 的 JPQL 是 `update ... set consent = true where lower(email) = lower(:email)`，**沒有排除 `unsubscribed = true`**，而 PostgreSQL 的 UPDATE 即使值沒變也會回報 1 列。所以 `SubscriptionController` 那道 `affected > 0` 的條件，實際上只擋掉「名單裡完全沒有這個 email」——已退訂者、早已確認過的人，每次點舊連結都會發出事件。因此 `ReferralService` 的冪等檢查（`credit_txn` 的 `note` = 被邀者 email）**不是可選的加強，而是唯一真正的防重複發獎機制**，不可簡化。
 
@@ -760,7 +800,7 @@ V7/V8 migration（**含 `credit_txn`，因為首次登入即需發 300 點 `SIGN
 >
 > 1. **§5.2「`credits >= cost` → FULL + 扣點」改為「PARTIAL + `CAN_UNLOCK`，讀者按按鈕才扣」。**
 >    理由與取捨見 §5.2 第 5 點。
-> 2. **§5.4「confirm 成功的同一交易內發獎」改為事件 + `REQUIRES_NEW` 的獨立交易。**
+> 2. **§5.4「confirm 成功的同一交易內發獎」改為事件 + `REQUIRES_NEW` 的獨立交易**（V9 之後 `REQUIRES_NEW` 掛在 `ReferralService.rewardFor`，監聽器不帶 `@Transactional`）。
 >    理由見 §5.4 的偏離說明（發布端根本沒有交易，用 `@TransactionalEventListener` 會靜默不觸發）。
 > 3. **§6 的交易信保留額度由階段 D 提前至階段 C 完成**（第 2 項的「群發前檢查」部分；
 >    「補寄前檢查」仍不成立，因為補寄要到階段 E 才存在）。
@@ -772,11 +812,14 @@ V7/V8 migration（**含 `credit_txn`，因為首次登入即需發 300 點 `SIGN
 >
 > **已知風險與未完成項目**：
 >
-> - `credit_txn` 缺 `(reason, note)` 的唯一索引，邀請獎勵的冪等是 check-then-act（詳見 §5.4）。
+> - ~~`credit_txn` 缺 `(reason, note)` 的唯一索引，邀請獎勵的冪等是 check-then-act~~
+>   **（已修：V9 的部分唯一索引 `uq_credit_txn_referral_note`，捕捉點移到交易邊界外；詳見 §5.4）**
 > - `Reader` / `SurveyResponse` 部分路徑仍是整列 `save()`，可能靜默覆蓋條件式 UPDATE（詳見 §13.9；
 >   VIP 授予已修，`ReaderAccountService.findOrCreate` 的 `setLastLoginAt` 與
 >   `ReaderPortalController.updateProfile` 尚未修）。
-> - 邀請獎勵被後台關成 0 時，`/r/invite` 的「已成功邀請人數」會停止成長（詳見 §5.4）。
+> - ~~邀請獎勵被後台關成 0 時，`/r/invite` 的「已成功邀請人數」會停止成長~~
+>   **（已修：人數改數 `reader.referred_by`，不再數帳本筆數；人數在被邀者**首次登入**時成長，
+>   文案已把這個條件寫明；詳見 §5.4）**
 > - ~~**沒有「只發布到網頁、不寄送」的路徑**~~ **（已補：`POST /api/admin/campaign/publish`，見下方）**
 > - **VIP 閱讀 PREMIUM 時 `recordAccess` 會補寫 `cost=0` 的 `article_access`**（§5.2 規則 3 的既定設計），
 >   因此 **VIP 到期後，該讀者對「VIP 期間讀過的文章」仍永久免費**。這是刻意的（不追溯收費），
@@ -934,7 +977,11 @@ migration 相關測試（`MigrationSafetyTest`）需要真實的 PostgreSQL—�
 >
 > **為什麼還沒修**：`name` 是唯一由讀者自己寫入的欄位，`SurveyResponse` 的可更新欄位遠多於 `Reader`（未來還會增加），逐欄補條件式 UPDATE 只是把同一個競爭窗口切碎，不是根治；`SurveyResponse` 的根治解法是 `@Version` 樂觀鎖，**需要新增 `version` 欄位 ⇒ 需要一支 Flyway migration**，而階段 C 明文禁止新增 migration。因此這一條**確實**屬於 (B) 類，與 (A) 的延後理由不同。
 >
-> **下一個允許 migration 的階段必做**：與 §5.4 的 `uq_credit_txn_referral_note` 一併排入。屆時若只想先降低風險而不加 migration，`SurveyResponseRepository.updateName(email, name)` 條件式 UPDATE 是可接受的過渡。
+> **下一個允許 migration 的階段必做**：原本計畫與 §5.4 的 `uq_credit_txn_referral_note` 一併排入。
+> **現況（`fix/stage-c-followups`）：§5.4 的索引已隨 V9 完成，本條仍未做**——V9 的任務範圍
+> 只有邀請獎勵的冪等，加 `version` 欄位是另一件會改動 entity 對應與呼叫端錯誤處理的事，
+> 不併進同一支 migration。屆時若只想先降低風險而不加 migration，
+> `SurveyResponseRepository.updateName(email, name)` 條件式 UPDATE 是可接受的過渡。
 >
 > 已用 `grep -rn "readerRepository\.save\|surveyResponseRepository\.save" survey-backend/src/main` 掃過全庫，以上為僅有的呼叫點（含前述已排除的 INSERT 一處），無遺漏。
 

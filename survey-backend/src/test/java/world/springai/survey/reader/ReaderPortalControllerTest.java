@@ -588,28 +588,31 @@ class ReaderPortalControllerTest {
     }
 
     /**
-     * 獎勵為 0 時，{@code /r/invite} <b>不得承諾「成功邀請仍會被記錄」</b>。
+     * 獎勵為 0 時，{@code /r/invite} 的文案必須與同一頁下半部的成效區塊一致。
      *
-     * <p>{@code ReferralService.rewardFor} 在 {@code reward <= 0} 時完全不寫帳本，
-     * 而同一頁下半部的成效區塊數的正是帳本裡 REFERRAL 的筆數。舊文案會讓
-     * <b>同一個 HTTP 回應內自我矛盾</b>：上面說「成功邀請仍會被記錄」，
-     * 下面說「還沒有人透過你的連結完成訂閱」——即使讀者已成功邀請五個人。
-     * 本測試同時斷言那兩句不會並存。</p>
+     * <p>V9 之後成效人數改數 {@code reader.referred_by}，獎勵暫停期間人數會成長，
+     * 所以「仍會計入邀請人數」不再是空頭承諾，可以講；但 {@code referred_by} 是
+     * 被邀者<b>首次登入建立帳戶</b>時才寫入，因此文案必須把這個條件寫出來，
+     * 否則讀者會在朋友「已確認訂閱、還沒登入」的空窗期盯著沒動的數字以為壞了。
+     * 點數則確實暫停，不得暗示還會累積。</p>
      */
     @Test
-    void zeroRewardInviteCopyMakesNoPromiseThatInvitesAreRecorded() throws Exception {
+    void zeroRewardInviteCopyStatesExactlyWhatIsRecorded() throws Exception {
         givenLoggedIn(reader(300));
         when(creditPolicy.referralReward()).thenReturn(0);
 
         String html = mvc.perform(get("/r/invite").cookie(cookie()))
             .andReturn().getResponse().getContentAsString();
 
-        for (String promise : java.util.List.of("會被記錄", "仍會記錄", "仍會被記下", "會先記錄", "累計中")) {
-            org.junit.jupiter.api.Assertions.assertFalse(html.contains(promise),
-                "承諾了程式不保證的「" + promise + "」：獎勵為 0 時邀請不會寫進帳本，"
-                    + "同一頁的成效區塊永遠顯示 0");
-        }
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("暫停發放"));
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("邀請人數"),
+            "沒有告訴讀者人數仍會計入——那是 V9 之後真的成立的事");
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("首次登入"),
+            "承諾了程式不保證的時序：referred_by 是被邀者首次登入建帳時才寫入");
+        for (String promise : java.util.List.of("點數仍會累計", "仍會獲得點數", "仍會拿到點數", "點數照樣累計")) {
+            org.junit.jupiter.api.Assertions.assertFalse(html.contains(promise),
+                "承諾了「" + promise + "」，但獎勵為 0 時 rewardFor 根本不寫帳本");
+        }
     }
 
     /** {@code /r/me} 的「每篇 N 點」必須與規則頁一樣標明是參考值，實際以文章頁為準 */

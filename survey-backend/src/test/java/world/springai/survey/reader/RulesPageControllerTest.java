@@ -179,27 +179,37 @@ class RulesPageControllerTest {
     }
 
     /**
-     * 獎勵為 0 時，頁面<b>不得承諾「成功邀請仍會被記錄」</b>——程式不保證這件事。
+     * 獎勵為 0 時的文案必須精確：人數會計入（但要講清楚是<b>被邀者首次登入之後</b>），
+     * 點數則暫停。
      *
-     * <p>{@code ReferralService.rewardFor} 在 {@code reward <= 0} 時直接 return、
-     * 完全不寫帳本，而邀請頁的成效區塊數的正是 {@code credit_txn} 的 REFERRAL 筆數。
-     * 於是讀者會在 {@code /r/invite} 同一個回應裡看到「成功邀請仍會被記錄」與
-     * 「還沒有人透過你的連結完成訂閱」並列，即使他已經成功邀請五個人。
-     * 文案不得對行為做出程式碼不保證的承諾。</p>
+     * <p>V9 之後 {@code ReferralService.stats} 的人數改數 {@code reader.referred_by}，
+     * 所以「成功邀請仍會被計入人數」這件事第一次真的成立，文案可以講。
+     * 但 {@code referred_by} 是在被邀者<b>首次登入建立帳戶</b>時才寫入，
+     * 不是在他點確認信的那一刻——只寫「成功邀請仍會被記錄」仍然是承諾了
+     * 程式不保證的時序（朋友確認了訂閱但還沒登入時，人數確實不會動）。
+     * 因此本測試要求文案同時具備三件事：說明暫停發放、寫出「首次登入」這個條件、
+     * 不承諾暫停期間點數還會累積。</p>
      *
-     * <p>刻意用「記錄／記下／累計中」這類承諾字眼做黑名單，而不是比對整句：
-     * 換句話說也不行，換掉的必須是那個承諾本身。</p>
+     * <p>破壞性驗證：把文案改回「目前邀請獎勵暫停發放，成功邀請仍會被記錄」
+     * （少了首次登入的條件）→ 本測試變紅。</p>
      */
     @Test
-    void zeroRewardCopyMakesNoPromiseThatInvitesAreRecorded() throws Exception {
+    void zeroRewardCopyStatesExactlyWhatIsRecorded() throws Exception {
         when(creditPolicy.referralReward()).thenReturn(0);
         String html = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
-        for (String promise : java.util.List.of("會被記錄", "仍會記錄", "仍會被記下", "會先記錄", "累計中")) {
-            org.junit.jupiter.api.Assertions.assertFalse(html.contains(promise),
-                "獎勵為 0 時承諾了程式不保證的「" + promise + "」：邀請不會寫進帳本，成效頁永遠是 0");
-        }
+
         // 仍要說明目前的狀態，不能靠整段刪掉來「通過」
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("暫停發放"));
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("邀請人數"),
+            "沒有告訴讀者人數仍會計入——那是 V9 之後真的成立的事，不說反而低估了行為");
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("首次登入"),
+            "承諾了程式不保證的時序：referred_by 是被邀者首次登入建帳時才寫入，"
+                + "只說「成功邀請就會被記錄」會讓讀者盯著還沒成長的數字以為壞了");
+        // 暫停期間點數確實不會累積，這些說法一律不成立
+        for (String promise : java.util.List.of("點數仍會累計", "仍會獲得點數", "仍會拿到點數", "點數照樣累計")) {
+            org.junit.jupiter.api.Assertions.assertFalse(html.contains(promise),
+                "獎勵為 0 時承諾了「" + promise + "」，但 rewardFor 根本不寫帳本");
+        }
     }
 
     /**

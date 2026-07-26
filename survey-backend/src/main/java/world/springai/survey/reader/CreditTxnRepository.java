@@ -21,14 +21,10 @@ public interface CreditTxnRepository extends JpaRepository<CreditTxn, Long> {
      */
     List<CreditTxn> findByReaderIdOrderByCreatedAtDesc(Long readerId, Pageable pageable);
 
-    /**
-     * 是否已有這筆原因與註記的交易——邀請獎勵的冪等鍵。
-     *
-     * <p>note 存的是被邀者 email，所以「同一個被邀者只發一次獎」由此保證。
-     * 重複點擊確認信、退訂後再確認，都不會重複發獎。</p>
-     */
-    boolean existsByReasonAndNote(String reason, String note);
+    // 刻意沒有 existsByReasonAndNote：邀請獎勵的冪等曾經靠它做 check-then-act，
+    // 現在改由資料庫的 uq_credit_txn_referral_note（V9）保證。留著一個
+    // 「查有沒有發過」的方法會邀請日後有人把那條競態重新加回來，故一併移除。
 
-    /** 某讀者某類交易的明細（新到舊）；邀請成效統計使用 */
+    /** 某讀者某類交易的明細（新到舊）；邀請成效的「累計獲得點數」使用 */
     List<CreditTxn> findByReaderIdAndReasonOrderByCreatedAtDesc(Long readerId, String reason);
 }
