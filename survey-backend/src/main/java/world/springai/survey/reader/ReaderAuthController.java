@@ -61,10 +61,31 @@ public class ReaderAuthController {
             Map.of("<!--PAGE_TITLE-->", "登入｜凱文大叔的電子報"));
     }
 
-    /** 訂閱入口頁 */
+    /**
+     * 訂閱入口頁。
+     *
+     * <p><b>為什麼要解析 session cookie</b>：這頁的導覽列原本寫死在
+     * {@code index.html} 裡，已登入的讀者回到首頁仍看到「登入」——點下去會再寄
+     * 一封 magic link 給早就登入的人。改由 {@link ReaderNav} 依登入狀態渲染。</p>
+     *
+     * <p><b>代價</b>：回應內容從此依 cookie 而異，因此必須改回
+     * {@code ResponseEntity} 並帶 {@code private, no-store} + {@code Vary: Cookie}
+     * ——與 {@code /r/archive}、{@code /r/rules} 同一套慣例。這頁是站台的公開
+     * 入口，理論上最適合被共享快取，但它在此之前也沒有任何 {@code Cache-Control}
+     * （Spring 對 {@code String} 回傳值不加標頭），所以實際上沒有失去既有的快取
+     * 效益；反之，少了這兩個標頭才是真正的風險：CDN 可能把某位登入者的導覽列
+     * （含「我的帳戶」）快取下來餵給匿名訪客。</p>
+     */
     @GetMapping(value = "/r/", produces = MediaType.TEXT_HTML_VALUE)
-    public String indexPage() {
-        return htmlTemplate.render("static/reader/index.html", Map.of());
+    public ResponseEntity<String> indexPage(
+            @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
+        boolean loggedIn = readerContext.resolve(sessionCookie).isPresent();
+        String html = htmlTemplate.render("static/reader/index.html",
+            Map.of("<!--NAV_LINKS-->", ReaderNav.links(loggedIn)));
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+            .header(HttpHeaders.VARY, HttpHeaders.COOKIE)
+            .body(html);
     }
 
     /**

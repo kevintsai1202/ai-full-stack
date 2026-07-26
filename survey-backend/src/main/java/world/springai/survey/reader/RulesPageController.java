@@ -79,7 +79,7 @@ public class RulesPageController {
         int referralReward = creditPolicy.referralReward();
 
         Map<String, String> vars = new HashMap<>();
-        vars.put("<!--NAV_LINKS-->", navLinks(loggedIn));
+        vars.put("<!--NAV_LINKS-->", ReaderNav.links(loggedIn));
         vars.put("<!--SIGNUP_GRANT_LINE-->", signupGrantLine(signupGrant));
         vars.put("<!--SIGNUP_GRANT_NOTE-->", signupGrantNote(signupGrant));
         vars.put("<!--PREMIUM_COST-->", String.valueOf(creditPolicy.premiumCost()));
@@ -94,14 +94,6 @@ public class RulesPageController {
             .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
             .header(HttpHeaders.VARY, HttpHeaders.COOKIE)
             .body(htmlTemplate.render("static/reader/rules.html", vars));
-    }
-
-    /** 依登入狀態顯示不同的導覽連結 */
-    private String navLinks(boolean loggedIn) {
-        if (loggedIn) {
-            return "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/me\">我的帳戶</a>";
-        }
-        return "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/login\">登入</a>";
     }
 
     /** 「首次登入送 X 點」列項文案；X 為 0 時改用不荒謬的說法（關閉贈點是合法營運設定） */

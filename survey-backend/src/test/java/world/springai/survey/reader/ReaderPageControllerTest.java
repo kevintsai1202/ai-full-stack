@@ -356,6 +356,46 @@ class ReaderPageControllerTest {
         assertFalse(loggedIn.contains("/r/login"), "已登入時導覽列不得再含登入連結");
     }
 
+    /**
+     * 導覽列的規則頁連結（{@code ReaderNav} 產生的形式）。
+     *
+     * <p>刻意在測試裡另寫一份字串而不引用 {@code ReaderNav} 的常數：讀同一份
+     * 實作的斷言恆為真，把連結刪掉也不會變紅。斷言整個 {@code <a>} 標籤而不是
+     * 只比對 {@code "/r/rules"}——paywall 的提示連結（{@code >看遊戲規則<}）
+     * 也含這個路徑，只比對路徑會讓文章頁的斷言在導覽列少了這一項時仍然通過。</p>
+     */
+    private static final String NAV_RULES_LINK = "<a href=\"/r/rules\">遊戲規則</a>";
+
+    /**
+     * 歷史列表與文章頁的導覽列都必須含規則頁連結，登入與否都要有。
+     *
+     * <p>規則頁是點數機制的可信度來源（spec §5.11），在此之前它不在任何一份
+     * 導覽列裡，「還沒撞到付費牆的人」永遠不會知道有這一頁。</p>
+     */
+    @Test
+    void navContainsRulesLinkOnBothPages() throws Exception {
+        when(campaignRepository.findBySlugIsNotNullAndPublishedAtIsNotNullOrderByPublishedAtDesc())
+            .thenReturn(List.of(gatedArticle(Campaign.TIER_BASIC, 0)));
+        when(campaignRepository.findBySlug("test-article"))
+            .thenReturn(Optional.of(gatedArticle(Campaign.TIER_BASIC, 0)));
+        stubDecision(AccessDecisionService.Access.FULL, AccessDecisionService.Reason.BASIC_OPEN, 0);
+
+        for (boolean loggedIn : new boolean[] {false, true}) {
+            when(readerContext.resolve(any())).thenReturn(loggedIn
+                ? Optional.of(new ReaderContext.Current(reader(Reader.TIER_FREE, 300), true))
+                : Optional.empty());
+
+            String archive = mvc.perform(get("/r/archive")).andReturn().getResponse().getContentAsString();
+            assertTrue(archive.contains(NAV_RULES_LINK),
+                "/r/archive 的導覽列少了遊戲規則連結（loggedIn=" + loggedIn + "）");
+
+            String article = mvc.perform(get("/r/news/test-article"))
+                .andReturn().getResponse().getContentAsString();
+            assertTrue(article.contains(NAV_RULES_LINK),
+                "/r/news/{slug} 的導覽列少了遊戲規則連結（loggedIn=" + loggedIn + "）");
+        }
+    }
+
     /** archive 只列已發布文章 */
     @Test
     void archiveListsPublishedArticles() throws Exception {

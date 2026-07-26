@@ -87,7 +87,8 @@ public class ReaderPortalController {
         Reader reader = current.get().reader();
 
         Map<String, String> vars = new HashMap<>();
-        vars.put("<!--NAV_LINKS-->", "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/invite\">我的邀請</a>");
+        // 固定傳 true：未登入者在上面就被導向登入頁了，走到這裡必然是已登入狀態
+        vars.put("<!--NAV_LINKS-->", ReaderNav.links(true));
         vars.put("<!--CREDITS-->", String.valueOf(reader.getCredits()));
         vars.put("<!--PREMIUM_COST-->", String.valueOf(creditPolicy.premiumCost()));
         vars.put("<!--EMAIL-->", HtmlTemplate.escapeHtml(reader.getEmail()));
@@ -114,7 +115,8 @@ public class ReaderPortalController {
         int reward = creditPolicy.referralReward();
 
         Map<String, String> vars = new HashMap<>();
-        vars.put("<!--NAV_LINKS-->", "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/me\">我的帳戶</a>");
+        // 固定傳 true：未登入者在上面就被導向登入頁了，走到這裡必然是已登入狀態
+        vars.put("<!--NAV_LINKS-->", ReaderNav.links(true));
         vars.put("<!--REWARD_INTRO-->", rewardIntro(reward));
         // 完整網址：讀者要把它貼給別人，相對路徑沒有用
         vars.put("<!--INVITE_LINK-->",

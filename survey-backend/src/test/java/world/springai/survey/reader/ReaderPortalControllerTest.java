@@ -737,4 +737,48 @@ class ReaderPortalControllerTest {
                 "佔位符 " + placeholder + " 不得殘留在回應中");
         }
     }
+
+    /**
+     * 導覽列的四個連結（{@code ReaderNav} 產生的形式）。
+     *
+     * <p>刻意在測試裡另寫一份字串而不引用 {@code ReaderNav} 的常數：讀同一份
+     * 實作的斷言恆為真，把連結刪掉也不會變紅。比對整個 {@code <a>} 標籤而不是
+     * 只比對路徑，這樣「導覽列少了某一項、但頁面內文剛好也連向同一個路徑」
+     * 不會讓斷言假通過。</p>
+     */
+    private static final String NAV_ARCHIVE = "<a href=\"/r/archive\">歷史內容</a>";
+    private static final String NAV_RULES = "<a href=\"/r/rules\">遊戲規則</a>";
+    private static final String NAV_ME = "<a href=\"/r/me\">我的帳戶</a>";
+    private static final String NAV_INVITE = "<a href=\"/r/invite\">我的邀請</a>";
+    private static final String NAV_LOGIN = "<a href=\"/r/login\">登入</a>";
+
+    /**
+     * {@code /r/me} 與 {@code /r/invite} 的導覽列必須是完整的登入版本。
+     *
+     * <p>這兩頁在此之前各自拼了一份不同的導覽列（{@code /r/me} 只連「我的邀請」、
+     * {@code /r/invite} 只連「我的帳戶」），而且兩份都沒有測試守著，於是
+     * 「登入後看得到哪些功能」在兩頁之間不一致，規則頁也兩邊都連不到。</p>
+     *
+     * <p><b>雙向斷言</b>：除了要有四個登入版連結，還要<b>沒有</b>「登入」連結
+     * ——只驗前者的話，把 {@code ReaderNav} 改成無條件回傳「登入版 + 登入」
+     * （即完全不看登入狀態）仍會全綠。這兩頁只有登入者到得了（未登入會被
+     * 導向登入頁，見 {@link #anonymousIsRedirectedToLoginWithRedirectBack}），
+     * 出現「登入」連結就是導覽列沒有反映登入狀態。</p>
+     */
+    @Test
+    void navIsTheSharedLoggedInSetOnBothPages() throws Exception {
+        givenLoggedIn(reader(300));
+
+        for (String path : List.of("/r/me", "/r/invite")) {
+            String html = mvc.perform(get(path).cookie(cookie()))
+                .andReturn().getResponse().getContentAsString();
+
+            for (String link : List.of(NAV_ARCHIVE, NAV_RULES, NAV_ME, NAV_INVITE)) {
+                org.junit.jupiter.api.Assertions.assertTrue(html.contains(link),
+                    path + " 的導覽列少了 " + link);
+            }
+            org.junit.jupiter.api.Assertions.assertFalse(html.contains(NAV_LOGIN),
+                path + " 只有登入者到得了，導覽列不該出現登入連結");
+        }
+    }
 }

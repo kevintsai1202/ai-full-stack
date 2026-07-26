@@ -83,7 +83,7 @@ public class ReaderPageController {
             .orElse(Collections.emptySet());
 
         String html = htmlTemplate.render("static/reader/archive.html", Map.of(
-            "<!--NAV_LINKS-->", navLinks(current.isPresent()),
+            "<!--NAV_LINKS-->", ReaderNav.links(current.isPresent()),
             "<!--ARTICLE_LIST-->", renderArticleList(articles, unlocked)));
 
         // 同一個 URL 的內容會因 reader_session cookie 而異（登入者看到已解鎖標記），
@@ -138,7 +138,7 @@ public class ReaderPageController {
         vars.put("<!--ARTICLE_TITLE-->", HtmlTemplate.escapeHtml(campaign.getSubject()));
         vars.put("<!--ARTICLE_META-->", renderMeta(campaign));
         vars.put("<!--ARTICLE_CONTENT-->", contentHtml); // 已是渲染後的 HTML，不可再跳脫
-        vars.put("<!--NAV_LINKS-->", navLinks(current.isPresent()));
+        vars.put("<!--NAV_LINKS-->", ReaderNav.links(current.isPresent()));
         // 只有「未取得全文且該文章真的有受限區」時才需要 paywall 區塊
         boolean gateRendered = !full && split.hasGate();
         vars.put("<!--GATE_BLOCK-->", gateRendered ? renderGate(decision, campaign, slug) : "");
@@ -197,14 +197,6 @@ public class ReaderPageController {
             .header(HttpHeaders.CONTENT_TYPE, "text/html;charset=UTF-8")
             .header(HttpHeaders.CACHE_CONTROL, "no-store")
             .body(html);
-    }
-
-    /** 依登入狀態顯示不同的導覽連結 */
-    private String navLinks(boolean loggedIn) {
-        if (loggedIn) {
-            return "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/me\">我的帳戶</a>";
-        }
-        return "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/login\">登入</a>";
     }
 
     /** 渲染 archive 的文章列表；列表不輸出任何內文，日後若要加摘要，必須取自 split(...).freeMarkdown() */

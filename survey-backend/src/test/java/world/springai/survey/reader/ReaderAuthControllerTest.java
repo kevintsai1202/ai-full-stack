@@ -203,4 +203,89 @@ class ReaderAuthControllerTest {
            .andExpect(status().isOk())
            .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML));
     }
+
+    /**
+     * 導覽列的連結（{@code ReaderNav} 產生的形式）。
+     *
+     * <p>刻意在測試裡另寫一份字串而不引用 {@code ReaderNav} 的常數：讀同一份
+     * 實作的斷言恆為真，把連結刪掉也不會變紅。比對整個 {@code <a>} 標籤而不是
+     * 只比對路徑——{@code index.html} 的內文本來就有一句「看遊戲規則」連向
+     * {@code /r/rules}，只比對路徑會讓導覽列少了這一項時仍然通過。</p>
+     */
+    private static final String NAV_RULES = "<a href=\"/r/rules\">遊戲規則</a>";
+    private static final String NAV_ME = "<a href=\"/r/me\">我的帳戶</a>";
+    private static final String NAV_LOGIN = "<a href=\"/r/login\">登入</a>";
+
+    /**
+     * {@code /r/} 首頁的導覽列必須反映登入狀態。
+     *
+     * <p>這頁的導覽列原本<b>寫死在 index.html 裡</b>，已登入的讀者回到首頁仍看到
+     * 「登入」——點下去會再寄一封 magic link 給早就登入的人。兩個方向都要驗：
+     * 只驗未登入分支的話，把渲染改成無條件輸出未登入版本仍會全綠。</p>
+     */
+    @Test
+    void indexNavReflectsLoginState() throws Exception {
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+
+        String anonymous = mvc.perform(get("/r/"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(anonymous.contains(NAV_LOGIN),
+            "未登入時首頁導覽列應含登入連結");
+        org.junit.jupiter.api.Assertions.assertFalse(anonymous.contains(NAV_ME),
+            "未登入時首頁導覽列不得含我的帳戶連結");
+
+        when(readerContext.resolve(anyString()))
+            .thenReturn(Optional.of(new ReaderContext.Current(reader(), true)));
+        String jwt = sessionService.issueJwt(1L, OffsetDateTime.now());
+
+        String loggedIn = mvc.perform(get("/r/").cookie(
+                new jakarta.servlet.http.Cookie(ReaderSessionService.COOKIE_NAME, jwt)))
+            .andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(loggedIn.contains(NAV_ME),
+            "已登入時首頁導覽列應含我的帳戶連結");
+        org.junit.jupiter.api.Assertions.assertFalse(loggedIn.contains(NAV_LOGIN),
+            "已登入時首頁導覽列不得再含登入連結——點下去會再寄一封 magic link");
+    }
+
+    /** 首頁導覽列必須含規則頁連結（點數機制的可信度來源，spec §5.11） */
+    @Test
+    void indexNavContainsRulesLink() throws Exception {
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+
+        mvc.perform(get("/r/"))
+           .andExpect(content().string(org.hamcrest.Matchers.containsString(NAV_RULES)));
+    }
+
+    /**
+     * 首頁的導覽列既然依 cookie 而異，就必須帶上不可共享快取的標頭。
+     *
+     * <p>少了它們，CDN／反向代理可能把某位登入者的導覽列（含「我的帳戶」）
+     * 快取下來餵給匿名訪客。與 {@code /r/archive}、{@code /r/rules} 同一套慣例。</p>
+     */
+    @Test
+    void indexIsNotSharedCacheable() throws Exception {
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+
+        var response = mvc.perform(get("/r/"))
+            .andExpect(header().string("Cache-Control", "private, no-store"))
+            .andReturn().getResponse();
+
+        // CORS 設定也會為 Vary 加上 Origin 等值（沿用 ReaderPageControllerTest 的做法），
+        // 因此逐一檢查是否含 Cookie，而不是斷言整個標頭等於 "Cookie"
+        org.junit.jupiter.api.Assertions.assertTrue(
+            response.getHeaders(org.springframework.http.HttpHeaders.VARY).stream()
+                .anyMatch(v -> v.contains(org.springframework.http.HttpHeaders.COOKIE)),
+            "Vary 標頭必須包含 Cookie，否則共享快取無法區分登入者與匿名訪客的導覽列");
+    }
+
+    /** 首頁不得殘留未被替換的佔位符 */
+    @Test
+    void indexHasNoUnfilledPlaceholder() throws Exception {
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+
+        String html = mvc.perform(get("/r/")).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("<!--NAV_LINKS-->"),
+            "佔位符 <!--NAV_LINKS--> 不得殘留在回應中");
+    }
 }

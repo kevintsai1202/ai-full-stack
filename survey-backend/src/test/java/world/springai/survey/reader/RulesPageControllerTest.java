@@ -150,6 +150,42 @@ class RulesPageControllerTest {
     }
 
     /**
+     * 導覽列必須含規則頁連結，登入與否都要有。
+     *
+     * <p>規則頁是點數機制的可信度來源（spec §5.11），在此之前它<b>不在任何一份
+     * 導覽列裡</b>，讀者只能從 paywall 或頁內文字連結進去——也就是「還沒撞到
+     * 付費牆的人」永遠不會知道有這一頁。這個斷言在五個讀者頁各有一份，
+     * 是刻意的重複：每一頁都必須能獨立證明自己有這條連結。</p>
+     *
+     * <p>斷言整個 {@code <a>} 標籤而不是只斷言 {@code "/r/rules"}：規則頁本身
+     * 的內文與 paywall 的提示連結（{@code >看遊戲規則<}）也含這個路徑，
+     * 只比對路徑會讓斷言在導覽列少了這一項時仍然通過。</p>
+     */
+    @Test
+    void navContainsRulesLinkForBothLoginStates() throws Exception {
+        String anonymous = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(anonymous.contains(NAV_RULES_LINK),
+            "未登入的導覽列少了遊戲規則連結");
+
+        Reader loggedInReader = new Reader("user@example.com", "CODE1234");
+        loggedInReader.setId(1L);
+        when(readerContext.resolve(any()))
+            .thenReturn(Optional.of(new ReaderContext.Current(loggedInReader, true)));
+
+        String loggedIn = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(loggedIn.contains(NAV_RULES_LINK),
+            "已登入的導覽列少了遊戲規則連結");
+    }
+
+    /**
+     * 導覽列的規則頁連結（{@code ReaderNav} 產生的形式）。
+     *
+     * <p>刻意在測試裡另寫一份字串，不引用 {@code ReaderNav} 的常數：
+     * 讀同一份實作的斷言恆為真，把連結刪掉也不會變紅。</p>
+     */
+    private static final String NAV_RULES_LINK = "<a href=\"/r/rules\">遊戲規則</a>";
+
+    /**
      * 首次登入贈點為 0 時（合法的「關閉贈點」營運設定），頁面不得出現
      * 「送 0 點」這種讀起來像系統故障的文案，須改用講得通的說法。
      *
