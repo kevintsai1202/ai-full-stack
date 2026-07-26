@@ -186,7 +186,9 @@ public class CampaignService {
         campaign.setStatus(finalStatus(scheduled, accepted, failed));
         campaignRepository.save(campaign);
 
-        // 本批已消耗額度，讓下一次查詢重新向外部取數（理由見 MailQuotaService.invalidate）
+        // 本批已消耗額度，讓下一次查詢重新向外部取數（理由見 MailQuotaService.invalidate）。
+        // 注意：主要保證已改由 QuotaAwareMailSender 提供（寄信成功即失效，不靠呼叫端記得）；
+        // 這裡保留顯式呼叫，讓「整批全部寄送失敗」等 delegate 未成功回傳的情形也重新取數。
         mailQuotaService.invalidate();
 
         return new SendResult(campaignId, recipients.size(), accepted, failed, skippedForQuota);

@@ -312,4 +312,55 @@ class InviteServiceTest {
         verify(mailSender).send(anyString(), anyString(), html.capture());
         assertTrue(!html.getValue().contains("AI 賦能全端開發"), "不應以新課程宣傳為主軸");
     }
+
+    /**
+     * 邀請信寄完後，寄信額度快取必須失效。
+     *
+     * <p><b>這條測試存在的理由</b>：額度是每 60 秒才重查一次的外部快照，寄出後不做
+     * 本地扣減。邀請信單批可達 500 封（{@code MailQuotaService.BATCH_CAP}），
+     * 寄完若不讓快取失效，管理者 60 秒內切到電子報分頁按發送時，
+     * {@code current()} 回的是這 500 封寄出<b>之前</b>的數字，群發照原數放行——
+     * 保留給登入信的額度被吃光，讀者收不到 magic link（spec §6）。</p>
+     *
+     * <p>刻意以 {@link world.springai.survey.mail.QuotaAwareMailSender} 包住 stub 的
+     * 寄信實作，走與正式 bean 相同的組裝方式（見 {@code MailConfig}）：
+     * 驗的是「邀請信這條路徑上，寄完後快取確實失效」，而不是裝飾器自身的行為
+     * （後者由 {@code QuotaAwareMailSenderTest} 負責）。</p>
+     */
+    @Test
+    void sendingInvitesInvalidatesMailQuotaCache() {
+        world.springai.survey.mail.MailQuotaService quota =
+            mock(world.springai.survey.mail.MailQuotaService.class);
+        InviteService wired = new InviteService(repository,
+            new world.springai.survey.mail.QuotaAwareMailSender(mailSender, quota),
+            emailLogRepository, templateRepository, linkBuilder);
+        when(repository.findBySourceAndConsentFalseAndUnsubscribedFalse("exam"))
+            .thenReturn(List.of(pending("a@example.com"), pending("b@example.com")));
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        wired.sendInvites("exam", null);
+
+        verify(quota, org.mockito.Mockito.atLeastOnce()).invalidate();
+    }
+
+    /** 補送提醒同樣會實際寄出信件，寄完後也必須讓額度快取失效（理由同上一條） */
+    @Test
+    void sendingRemindersInvalidatesMailQuotaCache() {
+        world.springai.survey.mail.MailQuotaService quota =
+            mock(world.springai.survey.mail.MailQuotaService.class);
+        InviteService wired = new InviteService(repository,
+            new world.springai.survey.mail.QuotaAwareMailSender(mailSender, quota),
+            emailLogRepository, templateRepository, linkBuilder);
+        java.time.OffsetDateTime old = java.time.OffsetDateTime.now().minusDays(5);
+        when(repository.findBySourceAndConsentFalseAndUnsubscribedFalse("exam"))
+            .thenReturn(List.of(pending("a@x.com")));
+        when(emailLogRepository.findByTypeAndStatus("invite", "sent"))
+            .thenReturn(List.of(inviteLog("a@x.com", "invite", old)));
+        when(emailLogRepository.findByTypeAndStatus("invite_reminder", "sent")).thenReturn(List.of());
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        wired.sendReminders("exam", null);
+
+        verify(quota, org.mockito.Mockito.atLeastOnce()).invalidate();
+    }
 }

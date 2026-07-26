@@ -121,10 +121,11 @@ async function verifyBrowser() {
     // 因此攻擊者能自己決定這個字串）。用 route 攔截塞入兩種 payload，不寫進真實資料庫。
     //
     // payload A：`<img onerror>` —— 針對「innerHTML 完全沒跳脫」。
-    // payload B：`" onmouseover="…` —— 針對「用 esc() 拼 innerHTML」。esc() 是
-    //            textContent→innerHTML，只跳脫 & < >，**不跳脫雙引號**，所以
-    //            data-email="${esc(email)}" 這種屬性位置仍可被跳出並注入事件處理器。
-    //            這正是不能拼字串、必須用 textContent 建 DOM 的理由。
+    // payload B：`" onmouseover="…` —— 針對「用轉義函式拼 innerHTML」。舊版 esc()
+    //            是 textContent→innerHTML，只跳脫 & < >，**不跳脫雙引號**，所以
+    //            data-email="…" 這種屬性位置仍可被跳出並注入事件處理器。現已改名為
+    //            escText() 並補上引號跳脫，但這條回歸仍要留著——正解是不拼字串、
+    //            用 textContent 建 DOM，而這條驗的正是那件事沒有退化。
     for (const [label, evilEmail] of [
       ['標籤注入', '"><img src=x onerror=window.__xss=1>@example.invalid'],
       ['屬性注入', 'a" onmouseover="window.__xss=1" data-x="@example.invalid'],
@@ -162,6 +163,12 @@ async function verifyBrowser() {
 }
 
 let originalPremiumCost = null;
+/**
+ * 是否真的執行過 [4] 批次加點。
+ * finally 的補償加點原本無條件執行：try 區塊若在 [4] 之前就拋錯（例如服務中途重啟），
+ * 補償仍然扣 7 點，每一次失敗執行都讓測試讀者的餘額往下漂 7 點。
+ */
+let granted = false;
 try {
   // ---- 7. 未授權必須被擋（先做：避免後面任何步驟意外用到無金鑰路徑） ----
   console.log('\n[0] 未帶金鑰的後台端點');
@@ -208,6 +215,8 @@ try {
     method: 'POST', body: JSON.stringify({ emails: [T1, T2], delta: GRANT_DELTA, note: grantNote }),
   });
   eq(grant.status, 200, '批次加點回應碼');
+  // 只要端點回了 200，帳本就可能已經寫入，補償就必須執行（即使 granted < 2）
+  if (grant.status === 200) granted = true;
   eq(grant.body.granted, 2, '成功筆數');
   eq(grant.body.failed, 0, '失敗筆數');
 
@@ -261,13 +270,27 @@ try {
       const restored = await (await fetch(BASE + '/r/rules')).text();
       has(restored, `進階文章每篇 ${originalPremiumCost} 點`, '/r/rules 已還原為原始點數');
     }
-    await api('/api/admin/readers/vip?email=' + encodeURIComponent(T1), { method: 'DELETE' });
-    await api('/api/admin/readers/vip?email=' + encodeURIComponent(T2), { method: 'DELETE' });
+    // 還原步驟的回傳值一律檢查並計入 failures。
+    // api() 對非 2xx 不拋錯（回 {status, body}），先前這裡完全不看回傳值就直接印
+    //「已還原」——補償加點若回 granted:0/failed:2，腳本照樣 exit 0，
+    // 而下一次執行的起始餘額已經偏移。假通過比沒有還原更糟：它讓偏移無聲累積。
+    for (const email of [T1, T2]) {
+      const del = await api('/api/admin/readers/vip?email=' + encodeURIComponent(email), { method: 'DELETE' });
+      // 404 代表這位讀者本來就沒有帳戶（前面的步驟沒跑到），同樣是「已無 VIP」的合格終態
+      ok([200, 404].includes(del.status), `還原：取消 VIP 回應碼 ${del.status}（接受 200/404）`);
+    }
     // 帳本只增不改，還原餘額靠補償性負數加點而非刪除歷史列
-    await api('/api/admin/readers/credits', {
-      method: 'POST',
-      body: JSON.stringify({ emails: [T1, T2], delta: -GRANT_DELTA, note: 'verify-admin-reader 還原' }),
-    });
+    if (granted) {
+      const back = await api('/api/admin/readers/credits', {
+        method: 'POST',
+        body: JSON.stringify({ emails: [T1, T2], delta: -GRANT_DELTA, note: 'verify-admin-reader 還原' }),
+      });
+      eq(back.status, 200, '還原：補償加點回應碼');
+      eq(back.body && back.body.granted, 2, '還原：補償加點成功筆數');
+      eq(back.body && back.body.failed, 0, '還原：補償加點失敗筆數');
+    } else {
+      console.log('OK   還原：本次未執行批次加點，略過補償（避免餘額往下漂）');
+    }
     console.log('OK   測試資料已還原（VIP 取消、點數補償歸零；帳本列依設計保留）');
   } catch (e) {
     fail('還原測試資料失敗：' + (e.stack || e.message));

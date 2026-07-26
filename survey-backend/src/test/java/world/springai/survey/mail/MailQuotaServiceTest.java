@@ -171,17 +171,27 @@ class MailQuotaServiceTest {
         server.verify();
     }
 
-    /** fallback 路徑也要扣除保留額度（不能只在成功偵測時才保留） */
+    /**
+     * fallback 路徑也要扣除保留額度（不能只在成功偵測時才保留）。
+     *
+     * <p><b>數字刻意選成 60／30</b>：fallback 路徑上有兩個機制會壓低行銷可用量
+     * ——「減去 reserve」與 {@link MailQuotaService#FALLBACK_MARKETING_CAP}（50）。
+     * 若用 100／50，兩者都會算出 50，任一被改壞這條測試都照樣綠燈，
+     * 等於兩個保護互相遮蔽。60−30=30 小於 cap，於是這條測試只會因為
+     * 「減去 reserve」被改壞而變紅；cap 的收斂另由
+     * {@link #fallbackMarketingRemainingIsCappedConservatively} 覆蓋。</p>
+     */
     @Test
     void fallbackQuotaAlsoReservesTransactional() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        MailQuotaService service = new MailQuotaService(builder, "", 100, 50);
+        MailQuotaService service = new MailQuotaService(builder, "", 60, 30);
 
         MailQuotaService.Quota q = service.current();
 
         assertEquals("fallback", q.source());
-        assertEquals(50, q.marketingRemaining());
+        assertEquals(60, q.remaining(), "顯示用的剩餘量仍照設定值");
+        assertEquals(30, q.marketingRemaining(), "行銷可用量必須是 60−30，而非被 cap 夾成 50");
         server.verify();
     }
 
@@ -213,19 +223,30 @@ class MailQuotaServiceTest {
      * <p>{@code MAIL_TRANSACTIONAL_RESERVE=-500}（打錯正負號，或誤以為負數代表
      * 「不保留」）若原樣採用，{@code remaining - reserve} 會算成 1000 -(-500) = 1500，
      * 保留機制反過來授權群發超額寄出 500 封——比完全沒有保留機制更糟。</p>
+     *
+     * <p><b>刻意走「偵測成功」路徑</b>：fallback 路徑上有
+     * {@link MailQuotaService#FALLBACK_MARKETING_CAP} 兜底，就算放大也會立刻被夾成 50，
+     * 「不得反向放大」這件事在那條路徑上根本驗不到——測試會因為另一個保護而綠燈，
+     * 正是它自己要防的那種互相遮蔽。偵測成功路徑沒有 cap，放大會原樣顯現：
+     * remaining=48800、reserve=−500 時，若少了建構子的 {@code Math.max(0, …)}，
+     * marketingRemaining 會是 49300，下面的等值斷言立刻變紅。</p>
      */
     @Test
     void negativeReserveIsClampedToZero() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        // fallback 額度 1000、保留 -500：若不夾到 0，行銷可用量會變成 1500
-        MailQuotaService service = new MailQuotaService(builder, "", 1000, -500);
+        // 偵測成功、月剩餘 48800，保留 -500：若不夾到 0，行銷可用量會變成 49300
+        MailQuotaService service = new MailQuotaService(builder, "sk-test", 100, -500);
+
+        server.expect(requestTo("https://api.zeabur.com/graphql"))
+              .andRespond(withSuccess(PRO_RESPONSE, APPLICATION_JSON));
 
         MailQuotaService.Quota q = service.current();
 
         assertEquals(0, q.reserve(), "負的保留額度必須被視為 0");
-        assertTrue(q.marketingRemaining() <= q.remaining(),
-            "行銷可用量不得大於剩餘額度：" + q.marketingRemaining() + " > " + q.remaining());
+        assertEquals(48800, q.remaining());
+        assertEquals(q.remaining(), q.marketingRemaining(),
+            "負的保留額度不得反向放大行銷可用量：" + q.marketingRemaining() + " vs " + q.remaining());
         server.verify();
     }
 

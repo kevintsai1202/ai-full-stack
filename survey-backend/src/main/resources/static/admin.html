@@ -235,11 +235,34 @@
   /** 取得目前分頁保存的管理金鑰。 */
   function getKey(){return sessionStorage.getItem(KEY)||'';}
 
-  /** 統一呼叫受保護 API；401 時立即清除資料並回到金鑰閘門。 */
+  /**
+   * 從錯誤回應的 body 取出可讀原因。
+   *
+   * Spring 的 ResponseStatusException 會把 reason 放在 message（本專案的
+   * ApiExceptionHandler）或 detail（ProblemDetail 預設格式），兩者都要看。
+   * 取不到就回空字串，由呼叫端退回「HTTP <status>」。
+   */
+  async function errorReason(res){
+    try{
+      const text=await res.text();
+      if(!text)return '';
+      try{const j=JSON.parse(text);return String(j.message||j.detail||j.error||'').trim();}
+      catch{return text.length<=200?text.trim():'';}
+    }catch{return '';}
+  }
+
+  /**
+   * 統一呼叫受保護 API；401 時立即清除資料並回到金鑰閘門。
+   *
+   * 非 2xx 一律先讀 body 取原因再拋：後台的 400 幾乎都是「使用者必須知道原因
+   * 才能修正」的錯（slug 已被使用／加點說明請縮短至 200 字以內／不是可調參數：x
+   * ／VIP 天數必須大於 0）。只顯示「HTTP 400」等於把可修正的錯變成死路——
+   * 管理者第二次發送忘了改 slug，只會反覆重按同一顆按鈕。
+   */
   async function api(path,opts={}){
     const res=await fetch(path,{...opts,headers:{'Content-Type':'application/json','X-Admin-Key':getKey(),...(opts.headers||{})}});
     if(res.status===401){sessionStorage.removeItem(KEY);surveyRows=[];showGate('金鑰無效，請重新輸入');throw new Error('401');}
-    if(!res.ok)throw new Error('HTTP '+res.status);
+    if(!res.ok){const reason=await errorReason(res);throw new Error(reason||('HTTP '+res.status));}
     const ct=res.headers.get('content-type')||'';
     return ct.includes('application/json')?res.json():res.text();
   }
@@ -278,8 +301,12 @@
     $('#art-tier').addEventListener('change',e=>{
       const hint=$('#tier-hint');
       if(e.target.value==='PREMIUM'){
-        hint.textContent='PREMIUM 目前只能發布到網頁、不能寄送（信件折疊功能於階段 D 實作）。'
-          +'請先以 BASIC 寄送，或設好 slug 後只發布不寄送。';
+        // 文案必須與後端行為一致：發送卡片只有一顆按鈕、一律打 /api/admin/campaign/send，
+        // 而該端點對 PREMIUM 無條件回 400（與有沒有設 slug 無關）。舊文案寫「設好 slug
+        // 後只發布不寄送」，照著做只會拿到「發送失敗」——頁面承諾了一條不存在的路徑。
+        hint.textContent='PREMIUM 內容本階段無法透過後台發布：發送會被拒絕（400），'
+          +'且目前沒有「只發布到網頁、不寄送」的獨立路徑（信件折疊於階段 D 實作）。'
+          +'現在請改用 BASIC 寄送。';
         hint.className='warn';
       }else{
         hint.textContent='設了 slug 才會出現在 /r/archive 與單篇頁面。';
@@ -356,15 +383,15 @@
       ['UTM 歸因',countUtm(rows)]
     ];
     // 單列長條：名稱＋比例條＋數量（百分比以總回應數為分母；複選題各項百分比可合計超過 100%）
-    const bar=(label,count,max)=>`<div class="r"><span class="l">${esc(label)}</span><span class="t"><i style="width:${(count/max*100).toFixed(1)}%"></i></span><span class="v">${count}（${rows.length?Math.round(count/rows.length*100):0}%）</span></div>`;
+    const bar=(label,count,max)=>`<div class="r"><span class="l">${escText(label)}</span><span class="t"><i style="width:${(count/max*100).toFixed(1)}%"></i></span><span class="v">${count}（${rows.length?Math.round(count/rows.length*100):0}%）</span></div>`;
     const sectionHtml=sections.map(([title,entries])=>{
-      if(!entries.length)return `<section class="sec"><h2>${esc(title)}</h2><p class="empty">尚無資料</p></section>`;
+      if(!entries.length)return `<section class="sec"><h2>${escText(title)}</h2><p class="empty">尚無資料</p></section>`;
       const max=Math.max(...entries.map(([,count])=>count),1);
-      return `<section class="sec"><h2>${esc(title)}</h2>${entries.map(([label,count])=>bar(label,count,max)).join('')}</section>`;
+      return `<section class="sec"><h2>${escText(title)}</h2>${entries.map(([label,count])=>bar(label,count,max)).join('')}</section>`;
     }).join('');
     const suggestionRows=rows.filter(row=>String(answer(row,'suggestion')||'').trim());
     const suggestionHtml=suggestionRows.length
-      ?suggestionRows.map(row=>`<div class="sug"><p>${esc(answer(row,'suggestion'))}</p><small>${esc([row.name||'未具名',row.role||'未填身分',formatDate(row.createdAt)].join(' · '))}</small></div>`).join('')
+      ?suggestionRows.map(row=>`<div class="sug"><p>${escText(answer(row,'suggestion'))}</p><small>${escText([row.name||'未具名',row.role||'未填身分',formatDate(row.createdAt)].join(' · '))}</small></div>`).join('')
       :'<p class="empty">目前沒有自由填寫建議</p>';
     return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>問卷統計報告 · AI 賦能全端開發</title><style>
       @page{size:A4;margin:14mm}
@@ -385,8 +412,8 @@
       .sug p{margin:0;white-space:pre-wrap}.sug small{color:#5c6b7d}
       .empty{color:#5c6b7d}footer{margin-top:14px;color:#8a97a5;font-size:10px;text-align:center}
     </style></head><body>
-      <header><h1>問卷統計報告 · AI 賦能全端開發</h1><div class="meta">產生時間：${esc(new Date().toLocaleString('zh-TW'))}　·　資料期間：${esc(range)}</div></header>
-      <div class="kpis">${kpis.map(([label,value])=>`<div class="kpi"><span>${esc(label)}</span><b>${esc(String(value))}</b></div>`).join('')}</div>
+      <header><h1>問卷統計報告 · AI 賦能全端開發</h1><div class="meta">產生時間：${escText(new Date().toLocaleString('zh-TW'))}　·　資料期間：${escText(range)}</div></header>
+      <div class="kpis">${kpis.map(([label,value])=>`<div class="kpi"><span>${escText(label)}</span><b>${escText(String(value))}</b></div>`).join('')}</div>
       ${sectionHtml}
       <section class="sec"><h2>全部自由填寫建議（${suggestionRows.length} 則）</h2>${suggestionHtml}</section>
       <footer>本報告由課程管理後台產生，僅供內部使用，請勿對外散布。</footer>
@@ -444,7 +471,11 @@
     // 欄位 max 收斂到單批安全上限；既有輸入值超過上限時一併下修，避免送出後被後端截掉
     limitInput.max=batchMax;
     if(parseInt(limitInput.value,10)>batchMax)limitInput.value=batchMax;
-    label.textContent=`單次上限（剩餘 ${q.remaining} 封，單批上限 ${batchMax}）`;
+    // 邀請信／補送提醒是「二次確認」信，語意上屬交易信，後端不套 marketingRemaining，
+    // 因此這裡的上限用未扣 reserve 的 batchMax。同一畫面的 #quota-info 講的是行銷群發
+    // 的可用量，兩個數字語意不同，不標明會被讀成同一件事而以為哪邊算錯了。
+    label.textContent=`單次上限（剩餘 ${q.remaining} 封，單批上限 ${batchMax}；`
+      +`邀請信屬確認信，不受 ${marketingReserve()} 封交易信保留額度限制）`;
     // 三個數字的關係必須一起顯示：後端擋信用的是「行銷可用」而非「總剩餘」，
     // 只顯示總剩餘會讓管理者以為還能寄那麼多，實際卻被靜默截斷。
     const marketing=`　│　剩餘額度 ${q.remaining} 封（保留 ${marketingReserve()} 封給登入信等交易信，行銷可用 ${marketingRemaining()} 封）`;
@@ -527,6 +558,21 @@
     const slug=$('#art-slug').value.trim(),cost=$('#art-cost').value.trim();
     return {tier:$('#art-tier').value,creditCost:cost?Number(cost):null,slug:slug||null};
   }
+  /**
+   * 發布欄位的啟用／停用（「修改排程」模式用）。
+   *
+   * reschedule 端點不接受發布欄位（RescheduleRequest 沒有 slug/tier/creditCost），
+   * 若讓欄位維持可編輯，管理者改了 slug 按「更新排程」會看到「排程已更新」，
+   * 而那三個欄位其實原封不動——頁面說改了、實際沒改，是最傷信任的一種。
+   * 所以直接停用並明說，而不是靜默丟棄。
+   */
+  function setPublishFieldsEnabled(enabled){
+    ['#art-slug','#art-tier','#art-cost'].forEach(sel=>{$(sel).disabled=!enabled;});
+    const hint=$('#tier-hint');
+    if(!enabled){hint.textContent='修改排程不會變更發布設定（slug／分級／解鎖點數），故已停用這三個欄位。';hint.className='warn';}
+    // 還原時觸發 change，讓分級提示由既有監聽器依目前 tier 重算（PREMIUM 有專屬警語）
+    else $('#art-tier').dispatchEvent(new Event('change'));
+  }
   async function doSend(){const m=$('#send-msg');m.className='msg';if(!$('#subject').value.trim()){m.className='msg err';m.textContent='請填主旨';return;}const count=$('#rcount').textContent,editing=editingCampaignId!=null,isSched=editing||mode()==='schedule';let scheduledAt=null;if(isSched){const value=$('#sched').value;if(!value){m.className='msg err';m.textContent='請選排程時間';return;}scheduledAt=new Date(value).toISOString();}
     const notice=truncationNotice(count);
     if(!confirm((editing?`確定更新批次 #${editingCampaignId} 的排程（取消舊排程信並以新內容重排給 ${count} 人）？`:`確定要${isSched?'排程':'立即'}發送給 ${count} 人嗎？`)+notice))return;
@@ -543,6 +589,9 @@
       }else{
         r=await api('/api/admin/campaign/send',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,filter,mode:mode(),scheduledAt,...publishFields()})});
         m.className=r.skippedForQuota>0?'msg err':'msg ok';m.textContent=sendResultMessage(`已${isSched?'排程':'送出'}`,r);
+        // slug 在 campaign 表有 UNIQUE 約束：留著上一封的值，下一封必定撞 400
+        //「slug 已被使用」。成功送出後清空，讓「一次一篇」成為預設行為。
+        $('#art-slug').value='';
       }
       doHistory();doQuota(); // 寄送後已用額度改變，重新偵測（後端也已讓快取失效）
     }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent=(editing?'更新排程失敗：':'發送失敗：')+e.message;}}
@@ -559,9 +608,9 @@
   /** 把 UTC ISO 時間轉為 datetime-local 需要的本地「YYYY-MM-DDTHH:mm」格式。 */
   function toLocalInput(iso){const d=new Date(iso);if(Number.isNaN(d.getTime()))return '';const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;}
   /** 把指定排程批次的內容回填到發送編輯區，進入「修改排程」模式。 */
-  function doEditSchedule(c){switchView('campaign');$('#subject').value=c.subject||'';$('#markdown').value=c.markdown||'';$('#role').value=c.filterRole||'';$('#interest').value=c.filterInterest||'';const scheduleRadio=document.querySelector('input[name=mode][value=schedule]');scheduleRadio.checked=true;$('#sched').disabled=false;$('#sched').value=toLocalInput(c.scheduledAt);editingCampaignId=c.id;$('#send-btn').textContent='更新排程';const m=$('#send-msg');m.className='msg';m.textContent=`修改中：批次 #${c.id}，改好時間或內容後按「更新排程」。`;doCount();doPreview();$('#send-btn').scrollIntoView({behavior:'smooth',block:'center'});}
+  function doEditSchedule(c){switchView('campaign');setPublishFieldsEnabled(false);$('#subject').value=c.subject||'';$('#markdown').value=c.markdown||'';$('#role').value=c.filterRole||'';$('#interest').value=c.filterInterest||'';const scheduleRadio=document.querySelector('input[name=mode][value=schedule]');scheduleRadio.checked=true;$('#sched').disabled=false;$('#sched').value=toLocalInput(c.scheduledAt);editingCampaignId=c.id;$('#send-btn').textContent='更新排程';const m=$('#send-msg');m.className='msg';m.textContent=`修改中：批次 #${c.id}，改好時間或內容後按「更新排程」。`;doCount();doPreview();$('#send-btn').scrollIntoView({behavior:'smooth',block:'center'});}
   /** 離開「修改排程」模式，還原發送按鈕與狀態。 */
-  function exitEditMode(){editingCampaignId=null;$('#send-btn').textContent='發送';}
+  function exitEditMode(){editingCampaignId=null;$('#send-btn').textContent='發送';setPublishFieldsEnabled(true);}
   /** 載入邀請記錄與成效統計（invitedCount 已寄、confirmedCount 已確認、pendingCount 待邀請）。 */
   async function doInviteOverview(){try{const source=$('#invite-source').value,o=await api('/api/admin/invites?source='+encodeURIComponent(source));
       $('#invite-stats').textContent=`已寄邀請 ${o.invitedCount} 人 ・ 已補送提醒 ${o.remindedCount} 人 ・ 已確認訂閱 ${o.confirmedCount} 人 ・ 待邀請 ${o.pendingCount} 人（來源：${sourceLabel(source)}）`;
@@ -605,8 +654,19 @@
       doInviteOverview();doQuota(); // 寄送後已用額度改變，重新偵測
     }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='邀請寄送失敗：'+e.message;}}
     finally{$('#invite-send-btn').disabled=false;}}
-  /** 轉義電子報歷史欄位，避免插入 HTML。 */
-  function esc(value){const div=document.createElement('div');div.textContent=value==null?'':String(value);return div.innerHTML;}
+  /**
+   * 轉義字串以嵌入 HTML **文字位置**（元素內容），供 buildReportHtml 拼報表用。
+   *
+   * 命名刻意帶 Text：textContent→innerHTML 只跳脫 & < >，舊版（名為 esc）因此在
+   * data-email="…" 這類**屬性位置**仍可被雙引號跳出並注入事件處理器。
+   * 這裡另外補上 " 與 ' 的跳脫（讓屬性位置也安全），同時把名稱改成 escText，
+   * 讓「只保證文字位置」這件事在呼叫端就看得見——下一個想用在屬性上的人，
+   * 會先看到名字而不是先踩到洞。屬性位置的正解仍是 setAttribute／textContent。
+   */
+  function escText(value){
+    const div=document.createElement('div');div.textContent=value==null?'':String(value);
+    return div.innerHTML.replaceAll('"','&quot;').replaceAll("'",'&#39;');
+  }
 
   // ===== 讀者管理 =====
 
@@ -705,12 +765,19 @@
 
   // ===== 參數設定 =====
 
-  /** 各參數的中文標籤與說明 */
+  /**
+   * 各參數的中文標籤、說明與下限。
+   *
+   * 下限必須與後端一致（CreditPolicy 的夾擠與 AdminSettingController 的驗證）：
+   * premium_cost / vip.default_days 為 0 會造成權限外洩，後端拒絕（400）；
+   * signup_grant / referral_reward 的 0 是合法的「關閉贈點」。
+   * 前端帶上 input.min 只是讓使用者在送出前就被擋，不取代後端驗證。
+   */
   const SETTING_LABELS={
-    'credit.signup_grant':['初始贈點','首次登入時發放；設 0 可關閉贈點'],
-    'credit.premium_cost':['進階文章單篇點數','文章可個別覆寫；此為預設值，最小 1'],
-    'credit.referral_reward':['邀請成功獎勵','被邀者點確認信後發放；設 0 可關閉'],
-    'vip.default_days':['VIP 預設效期（天）','授予 VIP 時未指定天數就用這個值']
+    'credit.signup_grant':['初始贈點','首次登入時發放；設 0 可關閉贈點',0],
+    'credit.premium_cost':['進階文章單篇點數','文章可個別覆寫；此為預設值，最小 1',1],
+    'credit.referral_reward':['邀請成功獎勵','被邀者點確認信後發放；設 0 可關閉',0],
+    'vip.default_days':['VIP 預設效期（天）','授予 VIP 時未指定天數就用這個值，最小 1',1]
   };
 
   /** 載入參數並產生輸入欄位（以 DOM API 建構，不拼 innerHTML） */
@@ -719,10 +786,11 @@
       const values=await api('/api/admin/settings');
       const root=$('#settings-fields');root.replaceChildren();
       Object.entries(values).forEach(([k,v])=>{
-        const [label,hint]=SETTING_LABELS[k]||[k,''];
+        const [label,hint,min]=SETTING_LABELS[k]||[k,'',0];
         const box=document.createElement('div');box.style.marginBottom='14px';
         const lab=document.createElement('label');lab.htmlFor='set-'+k;lab.textContent=label;
         const input=document.createElement('input');input.type='number';input.id='set-'+k;input.dataset.key=k;input.value=v;
+        input.min=String(min ?? 0);
         const p=document.createElement('p');p.className='hint';p.textContent=hint;
         box.append(lab,input,p);root.append(box);
       });
