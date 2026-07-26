@@ -70,6 +70,11 @@ class AccessDecisionServiceTest {
         return r;
     }
 
+    /** 建立一位已確認訂閱、非 VIP 的一般讀者，供 CAN_UNLOCK 相關測試沿用 */
+    private Reader subscribedReader() {
+        return reader(Reader.TIER_FREE, 0);
+    }
+
     /** 未登入：一律 PARTIAL，即使文章是 BASIC */
     @Test
     void notLoggedInGetsPartial() {
@@ -329,5 +334,127 @@ class AccessDecisionServiceTest {
 
         assertEquals(AccessDecisionService.Access.PARTIAL, d.access(),
             "tier 為 null 不得被當成 BASIC 全文開放");
+    }
+
+    /** 餘額剛好等於成本 → 可解鎖（不是直接 FULL） */
+    @Test
+    void enoughCreditsYieldsCanUnlockNotFull() {
+        Reader reader = subscribedReader();
+        reader.setCredits(10);
+
+        AccessDecisionService.Decision decision =
+            service.decide(reader, true, article(Campaign.TIER_PREMIUM, 10), NOW);
+
+        // 關鍵：仍是 PARTIAL。受限區在讀者按下解鎖前不得進入回應。
+        assertEquals(AccessDecisionService.Access.PARTIAL, decision.access());
+        assertEquals(AccessDecisionService.Reason.CAN_UNLOCK, decision.reason());
+        assertEquals(0, decision.shortfall());
+    }
+
+    /** 餘額超過成本同樣是可解鎖 */
+    @Test
+    void moreThanEnoughCreditsYieldsCanUnlock() {
+        Reader reader = subscribedReader();
+        reader.setCredits(300);
+
+        AccessDecisionService.Decision decision =
+            service.decide(reader, true, article(Campaign.TIER_PREMIUM, 10), NOW);
+
+        assertEquals(AccessDecisionService.Reason.CAN_UNLOCK, decision.reason());
+    }
+
+    /** 餘額少 1 點 → 需要更多點數，並回報差額 */
+    @Test
+    void oneCreditShortYieldsNeedsCreditsWithShortfall() {
+        Reader reader = subscribedReader();
+        reader.setCredits(9);
+
+        AccessDecisionService.Decision decision =
+            service.decide(reader, true, article(Campaign.TIER_PREMIUM, 10), NOW);
+
+        assertEquals(AccessDecisionService.Access.PARTIAL, decision.access());
+        assertEquals(AccessDecisionService.Reason.NEEDS_CREDITS, decision.reason());
+        assertEquals(1, decision.shortfall());
+    }
+
+    /** 零餘額的差額等於全額成本 */
+    @Test
+    void zeroCreditsShortfallEqualsFullCost() {
+        Reader reader = subscribedReader();
+        reader.setCredits(0);
+
+        AccessDecisionService.Decision decision =
+            service.decide(reader, true, article(Campaign.TIER_PREMIUM, 10), NOW);
+
+        assertEquals(10, decision.shortfall());
+    }
+
+    /**
+     * 已解鎖優先於可解鎖：不可讓已付過點的讀者再看到解鎖按鈕。
+     *
+     * <p>順序錯了不會扣兩次點（UnlockService 的 exists 檢查會擋），
+     * 但讀者會看到一個「再花 10 點解鎖」的按鈕，那是嚴重的信任問題。</p>
+     */
+    @Test
+    void alreadyUnlockedWinsOverCanUnlock() {
+        Reader reader = subscribedReader();
+        reader.setCredits(300);
+        when(articleAccessRepository.existsByReaderIdAndCampaignId(anyLong(), anyLong())).thenReturn(true);
+
+        AccessDecisionService.Decision decision =
+            service.decide(reader, true, article(Campaign.TIER_PREMIUM, 10), NOW);
+
+        assertEquals(AccessDecisionService.Access.FULL, decision.access());
+        assertEquals(AccessDecisionService.Reason.ALREADY_UNLOCKED, decision.reason());
+    }
+
+    /** VIP 優先於可解鎖：VIP 不該被要求付點 */
+    @Test
+    void vipWinsOverCanUnlock() {
+        Reader vip = subscribedReader();
+        vip.setCredits(300);
+        vip.setTier(Reader.TIER_VIP);
+        vip.setVipExpiresAt(NOW.plusDays(30));
+
+        AccessDecisionService.Decision decision =
+            service.decide(vip, true, article(Campaign.TIER_PREMIUM, 10), NOW);
+
+        assertEquals(AccessDecisionService.Reason.VIP, decision.reason());
+    }
+
+    /** 未確認訂閱者即使餘額充足也不可解鎖 */
+    @Test
+    void unsubscribedReaderCannotUnlockEvenWithCredits() {
+        Reader reader = subscribedReader();
+        reader.setCredits(300);
+
+        AccessDecisionService.Decision decision =
+            service.decide(reader, false, article(Campaign.TIER_PREMIUM, 10), NOW);
+
+        assertEquals(AccessDecisionService.Reason.NOT_SUBSCRIBED, decision.reason());
+    }
+
+    /** 未發布的文章即使餘額充足也不可解鎖 */
+    @Test
+    void unpublishedArticleNeverOffersUnlock() {
+        Reader reader = subscribedReader();
+        reader.setCredits(300);
+
+        AccessDecisionService.Decision decision =
+            service.decide(reader, true, unpublishedArticle(Campaign.TIER_PREMIUM, 10), NOW);
+
+        assertEquals(AccessDecisionService.Reason.NOT_PUBLISHED, decision.reason());
+    }
+
+    /** CAN_UNLOCK 不得寫入 article_access——那會變成沒扣點的免費解鎖 */
+    @Test
+    void recordAccessIgnoresCanUnlock() {
+        Reader reader = subscribedReader();
+        AccessDecisionService.Decision canUnlock = new AccessDecisionService.Decision(
+            AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.CAN_UNLOCK, 0);
+
+        service.recordAccess(reader, article(Campaign.TIER_PREMIUM, 10), canUnlock);
+
+        verify(articleAccessRepository, never()).save(any());
     }
 }

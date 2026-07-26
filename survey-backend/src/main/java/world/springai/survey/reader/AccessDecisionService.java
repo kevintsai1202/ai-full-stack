@@ -17,8 +17,9 @@ import java.time.OffsetDateTime;
  * 決策規則裡的描述略有不同：行為相同，但決策可獨立測試，且不會因為
  * decide() 被呼叫多次而重複寫入。</p>
  *
- * <p><b>階段 B 範圍</b>：扣點路徑尚未接上，PREMIUM 對非 VIP 一律 PARTIAL。
- * shortfall 已回傳正確值供前端顯示，實際扣點是階段 C 的工作。</p>
+ * <p><b>階段 C 行為</b>：PREMIUM 對非 VIP、餘額足夠時回傳 {@link Reason#CAN_UNLOCK}，
+ * 代表「可解鎖但尚未扣點」——{@code access} 仍是 {@link Access#PARTIAL}，讀者需按下
+ * 解鎖按鈕才會實際扣點。實際扣點由 {@link UnlockService} 負責，本方法維持純函式。</p>
  */
 @Service
 public class AccessDecisionService {
@@ -43,6 +44,8 @@ public class AccessDecisionService {
         VIP,
         /** 先前已解鎖 */
         ALREADY_UNLOCKED,
+        /** 餘額足夠，等待讀者確認是否要花點數解鎖 */
+        CAN_UNLOCK,
         /** 需要點數才能解鎖 */
         NEEDS_CREDITS,
         /** 文章尚未發布 */
@@ -99,10 +102,17 @@ public class AccessDecisionService {
             return new Decision(Access.FULL, Reason.ALREADY_UNLOCKED, 0);
         }
 
-        // 階段 B：不扣點，一律回 PARTIAL 並附上還差幾點（階段 C 會在此接上扣點路徑）
         int cost = resolveCost(campaign);
-        int shortfall = Math.max(0, cost - reader.getCredits());
-        return new Decision(Access.PARTIAL, Reason.NEEDS_CREDITS, shortfall);
+        // 餘額足夠時仍回 PARTIAL——受限區在讀者按下解鎖前不得進入回應。
+        //
+        // 這裡刻意偏離 spec §5.2 規則表的「credits >= cost → FULL + 扣點」：
+        // 讀者從電子報連結點進來就被無感扣點，會被感受為未經同意的收費，
+        // 而整套點數機制的可信度是 spec §5.11 的核心訴求。改為「顯示成本 →
+        // 讀者按下按鈕 → 扣點」，誤點成本為 0。實際扣點在 UnlockService。
+        if (reader.getCredits() >= cost) {
+            return new Decision(Access.PARTIAL, Reason.CAN_UNLOCK, 0);
+        }
+        return new Decision(Access.PARTIAL, Reason.NEEDS_CREDITS, cost - reader.getCredits());
     }
 
     /**
@@ -113,7 +123,7 @@ public class AccessDecisionService {
      * 若對 BASIC_OPEN 也寫入，會出現「文章以 BASIC 發布時被讀者讀過 → 後台
      * 改為 PREMIUM → 該讀者再訪時因 ALREADY_UNLOCKED 永久免費看到全文」的
      * 升級漏洞。此行為與設計文件 §5.2 一致——spec 只在 VIP 分支補寫。
-     * 階段 C 接上付費解鎖後，會再加上「本次扣點解鎖」的寫入情況。</p>
+     * 付費解鎖的寫入由 {@link UnlockService} 負責，本方法仍只處理 VIP。</p>
      *
      * <p>並發下這裡是 check-then-act：兩個分頁同時通過 exists 檢查、
      * 都嘗試 INSERT 是常見情況，第二筆會撞上 uq_article_access。
