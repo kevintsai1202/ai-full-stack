@@ -342,8 +342,16 @@ public class CampaignService {
      * 已經付點解鎖的讀者，他們的授權紀錄與帳本必須完整保留。理由有兩層——
      * ① 核心不變式「{@code reader.credits} 恆等於 {@code credit_txn} 總和」要求帳本只增不改，
      * 刪掉扣點紀錄會讓餘額與帳本永久對不上；② {@code article_access} 是「這個人已經買過這篇」
-     * 的憑證，重新發布後仍應有效，否則讀者會被要求為同一篇文章付第二次。
+     * 的憑證，{@link #republish 重新上架}後仍應有效，否則讀者會被要求為同一篇文章付第二次
+     * （{@code AccessDecisionService.decide} 查 {@code article_access} 得到
+     * {@code ALREADY_UNLOCKED}，該查詢只看 {@code reader_id} 與 {@code campaign_id}，
+     * 與發布狀態無關，所以只要這一列不被刪，憑證自然續存）。
      * 下架只改「這篇現在對外可見嗎」這一個事實，不改任何已發生的交易。</p>
+     *
+     * <p><b>{@code status} 一併改成 {@link Campaign#STATUS_UNPUBLISHED}</b>：
+     * 留在 {@code published} 會讓後台只能靠 {@code publishedAt} 是否為 null 反推，
+     * pill 也繼續顯示 {@code published}；而且沒有那個狀態值就沒有
+     * {@link #republish} 的守門依據。{@code status} 在 V4 是純 TEXT，無需 migration。</p>
      *
      * @return 下架結果；找不到列回 404，狀態不符或已寄過信回 409
      */
@@ -362,17 +370,123 @@ public class CampaignService {
         }
         String slug = campaign.getSlug();
 
-        // 只寫 published_at 一欄的條件式 UPDATE（不用 save(entity) 整列寫回，理由見
-        // CampaignRepository.clearPublishedAt 的註解）。回傳 0 代表狀態在讀取後被改掉。
-        int updated = campaignRepository.clearPublishedAt(campaignId, Campaign.STATUS_PUBLISHED);
+        // 只寫 published_at 與 status 兩欄的條件式 UPDATE（不用 save(entity) 整列寫回，
+        // 理由見 CampaignRepository.markUnpublished 的註解）。回傳 0 代表狀態在讀取後被改掉。
+        int updated = campaignRepository.markUnpublished(
+            campaignId, Campaign.STATUS_PUBLISHED, Campaign.STATUS_UNPUBLISHED);
         if (updated == 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                 "下架失敗：此批次的狀態在處理期間已被變更，請重新載入後再試");
         }
 
-        log.info("下架文章：campaignId={} slug={}（published_at 設為 NULL，未動 article_access 與 credit_txn）",
-            campaignId, slug);
+        log.info("下架文章：campaignId={} slug={}（published_at 設為 NULL、status 改為 {}，"
+                + "未動 article_access 與 credit_txn）",
+            campaignId, slug, Campaign.STATUS_UNPUBLISHED);
         return new UnpublishResult(campaignId, slug);
+    }
+
+    /**
+     * 重新上架結果。
+     *
+     * @param campaignId  被重新上架的批次 id
+     * @param slug        文章 slug
+     * @param publishedAt 新的發布時間（一律為當下，理由見 {@link #republish}）
+     * @param url         文章公開網址，讓管理者按完按鈕直接點開驗證
+     */
+    public record RepublishResult(Long campaignId, String slug, OffsetDateTime publishedAt, String url) {}
+
+    /**
+     * 重新上架（撤回下架）：把 {@code published_at} 設回當下、{@code status} 改回
+     * {@link Campaign#STATUS_PUBLISHED}，文章重新出現在 {@code /r/archive} 與
+     * {@code /r/news/{slug}}。
+     *
+     * <p><b>為什麼需要這條路徑</b>：{@link #unpublish} 原本是單向門。{@code slug} 有
+     * UNIQUE 約束、被下架的那一列仍佔著它，所以「用同一個 slug 重發一次」必定 400
+     * （{@link #validateSlug} 的「slug 已被使用」）。於是下架之後只剩兩個選擇：
+     * 改用新 slug（舊連結全部失效，而 slug 就是對外網址），或手動
+     * {@code UPDATE campaign}——後者正是下架端點宣稱要消滅的操作模式。
+     * 下架的正當用途本來就是「先止血、改完再放回去」，缺了放回去的那一半，
+     * 操作者會傾向不敢下架。</p>
+     *
+     * <p><b>{@code published_at} 用「當下」而非沿用原本的值</b>，理由有三，
+     * 且刻意接受「archive 的排序會變動」這個代價：
+     * ① 這個欄位在程式裡的唯一語意是「從什麼時候起對外可見」——
+     *    下架期間它<b>確實不可見</b>，填回舊時間等於宣稱從未中斷過；
+     * ② {@code /r/archive} 以它排序、文章頁以它顯示日期，沿用舊值會讓文章
+     *    悄悄插回列表深處，已經滑過那個日期的讀者永遠不會發現它回來了——
+     *    而會被下架又上架的文章，正是內容或價格被改過、最需要被看見的那些；
+     * ③ 「保留原始日期」的需求可以靠不下架來達成（下架是止血手段，不是編輯流程），
+     *    但「讓讀者知道它回來了」沒有別的達成方式。
+     * 沒有任何授權判斷依賴 {@code published_at} 的<b>具體值</b>
+     * （{@code AccessDecisionService} 只看 {@code isPublished()}，即是否為 NULL），
+     * 所以改時間戳不影響任何人的解鎖狀態或帳務。</p>
+     *
+     * <p><b>守門與 {@link #unpublish} 對稱</b>：只接受「目前對外不可見」的列。
+     * 判斷寫成兩種形狀的聯集，因為在本次改動之前下架只清 {@code published_at}
+     * 而<b>沒有</b>改 {@code status}，那時被下架的列長成
+     * {@code status='published'} + {@code published_at IS NULL}。若只認
+     * {@code status='unpublished'}，那些列會永久卡住、只能手動 SQL 救——
+     * 正是這條端點要消滅的東西。兩種形狀都以「{@code published_at IS NULL}」
+     * 為共同前提，所以已經在線上可見的文章不可能誤入。</p>
+     *
+     * <p><b>不檢查 {@code email_log}</b>：{@link #unpublish} 已拒絕寄過信的列，
+     * 所以能走到這裡的列不可能有寄送記錄；再檢查一次會是永遠跑不到的死碼，
+     * 讓人誤以為多了一層保護。而且方向上也不需要——寄過信的顧慮是
+     * 「已收到信的讀者點到 404」，重新上架正是在解決那件事。</p>
+     *
+     * <p><b>不刪列、不動 {@code article_access}、不動 {@code credit_txn}、也不碰點數</b>：
+     * 與 {@link #unpublish} 完全一致。下架期間已解鎖者的憑證原封不動保留，
+     * 重新上架後他們<b>不需要、也不會</b>被要求再付一次
+     * （{@code AccessDecisionService} 查到 {@code article_access} 即回
+     * {@code ALREADY_UNLOCKED} → FULL）。本方法只寫 campaign 一列的兩個欄位，
+     * 核心不變式「{@code reader.credits} 恆等於 {@code credit_txn} 總和」不受影響。</p>
+     *
+     * <p><b>受限內容不會因此外洩</b>：重新上架只讓文章重新可被開啟，
+     * 受限區是否進入 HTTP 回應仍由 {@code ReaderPageController} 依
+     * {@code AccessDecisionService} 的判定逐次決定（tier／VIP／已解鎖／餘額），
+     * 與發布狀態是兩件獨立的事。</p>
+     *
+     * <p>單一 UPDATE 敘述本身即為原子操作，故不需要 {@code @Transactional}。</p>
+     *
+     * @return 重新上架結果；找不到列回 404，狀態不符或已可見回 409
+     */
+    public RepublishResult republish(Long campaignId) {
+        Campaign campaign = campaignRepository.findById(campaignId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到此批次"));
+
+        String status = campaign.getStatus();
+        boolean unpublishedRow = Campaign.STATUS_UNPUBLISHED.equals(status);
+        // 本次改動之前被下架的列：status 還留在 published，只有 published_at 被清空
+        boolean legacyUnpublishedRow = Campaign.STATUS_PUBLISHED.equals(status)
+            && campaign.getPublishedAt() == null;
+        if (!unpublishedRow && !legacyUnpublishedRow) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "只能重新上架已下架的文章；此批次狀態為 " + status
+                    + (campaign.isPublished() ? "、且目前已對外可見" : "")
+                    + "（寄送批次沒有「網頁發布」這件事可以復原）");
+        }
+        // slug 是 /r/news/{slug} 的唯一入口。沒有它，重新上架後 archive 查詢
+        // （findBySlugIsNotNull...）也撈不到這一列，後台卻會顯示「已重新上架」——
+        // 一次完全靜默的空操作。這種列只可能來自手動 SQL，仍要明確拒絕。
+        if (campaign.getSlug() == null || campaign.getSlug().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "此批次沒有 slug，重新上架後讀者仍然打不開（/r/news/{slug} 是唯一入口）");
+        }
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        // 只寫 published_at 與 status 兩欄的條件式 UPDATE；expectedStatus 用剛讀到的值，
+        // WHERE 的 published_at is null 才是真正的併發防線（理由見 markRepublished）。
+        int updated = campaignRepository.markRepublished(
+            campaignId, status, Campaign.STATUS_PUBLISHED, now);
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "重新上架失敗：此批次的狀態在處理期間已被變更（可能已被另一個請求上架），"
+                    + "請重新載入後再試");
+        }
+
+        log.info("重新上架文章：campaignId={} slug={} publishedAt={}（未動 article_access 與 credit_txn，"
+                + "已解鎖者無需再付）", campaignId, campaign.getSlug(), now);
+        return new RepublishResult(campaignId, campaign.getSlug(), now, articleUrl(campaign.getSlug()));
     }
 
     /**

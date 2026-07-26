@@ -514,20 +514,29 @@ class CampaignServiceTest {
      * {@code save(entity)} 的 UPDATE 會帶上所有可更新欄位（subject／markdown／tier／
      * credit_cost／統計…），把 SELECT 當下的整列快照寫回去，靜默覆蓋這段期間別的請求
      * 對同一列的變更。本專案已有兩個 Critical 源於整列寫回。把實作改成 {@code save(campaign)}
-     * 之後，這裡的 {@code verify(clearPublishedAt)} 與 {@code never()).save} 兩條都會變紅。</p>
+     * 之後，這裡的 {@code verify(markUnpublished)} 與 {@code never()).save} 兩條都會變紅。</p>
+     *
+     * <p><b>{@code status} 必須一併改成 {@code unpublished}</b>：留在 {@code published}
+     * 會讓後台只能靠 {@code publishedAt} 是否為 null 反推，pill 也繼續顯示
+     * {@code published}——畫面說已發布、事實是讀者看不到；而且沒有那個狀態值就沒有
+     * 重新上架的守門依據。把第三個引數改回 {@code STATUS_PUBLISHED}（或把 status
+     * 從 UPDATE 敘述裡拿掉）→ 這裡的 stub 不再匹配而回 0，實作會走進「狀態已被變更」
+     * 的 409 分支，本測試立刻變紅。</p>
      */
     @Test
     void unpublishClearsPublishedAtWithConditionalUpdate() {
         Campaign c = publishedCampaign("to-unpublish");
         when(campaignRepository.findById(7L)).thenReturn(Optional.of(c));
         when(emailLogRepository.countByCampaignId(7L)).thenReturn(0L);
-        when(campaignRepository.clearPublishedAt(7L, Campaign.STATUS_PUBLISHED)).thenReturn(1);
+        when(campaignRepository.markUnpublished(
+            7L, Campaign.STATUS_PUBLISHED, Campaign.STATUS_UNPUBLISHED)).thenReturn(1);
 
         CampaignService.UnpublishResult r = svc.unpublish(7L);
 
         assertEquals(7L, r.campaignId());
         assertEquals("to-unpublish", r.slug());
-        verify(campaignRepository).clearPublishedAt(7L, Campaign.STATUS_PUBLISHED);
+        verify(campaignRepository).markUnpublished(
+            7L, Campaign.STATUS_PUBLISHED, Campaign.STATUS_UNPUBLISHED);
         // ★ 不得整列寫回
         verify(campaignRepository, never()).save(any(Campaign.class));
         // ★ 不刪列：已解鎖者的 article_access 以 campaign_id 指向這一列，刪了就毀掉他們的憑證
@@ -555,7 +564,7 @@ class CampaignServiceTest {
                 () -> svc.unpublish(11L), "狀態 " + status + " 不該可下架");
             assertEquals(409, ex.getStatusCode().value(), status);
         }
-        verify(campaignRepository, never()).clearPublishedAt(any(), any());
+        verify(campaignRepository, never()).markUnpublished(any(), any(), any());
         verify(campaignRepository, never()).save(any(Campaign.class));
     }
 
@@ -577,7 +586,7 @@ class CampaignServiceTest {
         assertEquals(409, ex.getStatusCode().value());
         assertTrue(ex.getReason() != null && ex.getReason().contains("寄送記錄"), ex.getReason());
 
-        verify(campaignRepository, never()).clearPublishedAt(any(), any());
+        verify(campaignRepository, never()).markUnpublished(any(), any(), any());
         verify(campaignRepository, never()).save(any(Campaign.class));
     }
 
@@ -602,11 +611,211 @@ class CampaignServiceTest {
         Campaign c = publishedCampaign("race");
         when(campaignRepository.findById(13L)).thenReturn(Optional.of(c));
         when(emailLogRepository.countByCampaignId(13L)).thenReturn(0L);
-        when(campaignRepository.clearPublishedAt(13L, Campaign.STATUS_PUBLISHED)).thenReturn(0);
+        when(campaignRepository.markUnpublished(
+            13L, Campaign.STATUS_PUBLISHED, Campaign.STATUS_UNPUBLISHED)).thenReturn(0);
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
             () -> svc.unpublish(13L));
         assertEquals(409, ex.getStatusCode().value());
+    }
+
+    // ── 重新上架（撤回下架）────────────────────────────────────────────────
+
+    /** 建一個已下架（status=unpublished、publishedAt=NULL）的假 campaign */
+    private Campaign unpublishedCampaign(String slug) {
+        Campaign c = new Campaign("主旨", "內文", null, null, null,
+            Campaign.MODE_PUBLISH, null, 0, Campaign.STATUS_UNPUBLISHED);
+        c.setSlug(slug);
+        return c;
+    }
+
+    /**
+     * ★ 重新上架成功：走<b>只寫 published_at 與 status 兩欄</b>的條件式 UPDATE，
+     * 不用 {@code save(entity)} 整列寫回，也不動 {@code article_access} 與 {@code credit_txn}。
+     *
+     * <p>發布時間一律取當下（不沿用下架前的舊值）：{@code published_at} 的語意是
+     * 「從什麼時候起對外可見」，下架期間確實不可見；而 {@code /r/archive} 以它排序，
+     * 沿用舊值會讓文章悄悄插回列表深處，沒有讀者會發現它回來了。</p>
+     *
+     * <p>把實作改成 {@code save(campaign)} 之後，{@code verify(markRepublished)} 與
+     * {@code never()).save} 兩條都會變紅。</p>
+     */
+    @Test
+    void republishRestoresPublicationWithConditionalUpdate() {
+        Campaign c = unpublishedCampaign("to-republish");
+        when(campaignRepository.findById(21L)).thenReturn(Optional.of(c));
+        when(campaignRepository.markRepublished(eq(21L), eq(Campaign.STATUS_UNPUBLISHED),
+            eq(Campaign.STATUS_PUBLISHED), any())).thenReturn(1);
+
+        java.time.OffsetDateTime before = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
+        CampaignService.RepublishResult r = svc.republish(21L);
+
+        assertEquals(21L, r.campaignId());
+        assertEquals("to-republish", r.slug());
+        assertEquals("https://news.example.com/r/news/to-republish", r.url());
+        // 發布時間是「當下」而非下架前的舊值
+        assertNotNull(r.publishedAt());
+        assertTrue(!r.publishedAt().isBefore(before), "publishedAt 應為呼叫當下的時間：" + r.publishedAt());
+
+        // 傳給資料庫的時間必須與回傳給後台的是同一個值，否則畫面顯示的與實際寫入的不同
+        ArgumentCaptor<java.time.OffsetDateTime> at =
+            ArgumentCaptor.forClass(java.time.OffsetDateTime.class);
+        verify(campaignRepository).markRepublished(eq(21L), eq(Campaign.STATUS_UNPUBLISHED),
+            eq(Campaign.STATUS_PUBLISHED), at.capture());
+        assertEquals(r.publishedAt(), at.getValue());
+
+        // ★ 不得整列寫回
+        verify(campaignRepository, never()).save(any(Campaign.class));
+        // ★ 不刪列、不動寄送記錄（重新上架只改「這篇現在對外可見嗎」這一個事實）
+        verify(campaignRepository, never()).delete(any(Campaign.class));
+        verify(campaignRepository, never()).deleteById(any());
+        verify(emailLogRepository, never()).save(any(EmailLog.class));
+        // ★ 不寄任何信：重新上架是網頁狀態的變更，不是重新發送
+        verify(mailSender, never()).sendBatch(anyList());
+        verify(mailSender, never()).schedule(any(), any());
+    }
+
+    /**
+     * ★ 重新上架只接受「目前對外不可見」的列；其餘狀態一律 409 且不執行任何 UPDATE。
+     *
+     * <p>涵蓋兩類必須被拒絕的列：① 寄送批次（{@code sent}／{@code scheduled}／
+     * {@code failed}／{@code cancelled}）——它們沒有「網頁發布」這件事可以復原，
+     * 用這條端點去改它們等於混淆兩種語意；② <b>已經對外可見</b>的 {@code published}
+     * 列——對它重新上架會用一個新的時間戳覆蓋掉原本的發布時間，文章無聲跳到
+     * archive 最上面，而操作者以為自己什麼都沒改。</p>
+     *
+     * <p>把狀態守門拿掉（或只保留「不是 published 就放行」這種反向寫法），
+     * 本測試立刻變紅。</p>
+     */
+    @Test
+    void republishRejectsRowsThatAreNotUnpublished() {
+        for (String status : List.of("sent", "scheduled", "failed", "cancelled")) {
+            Campaign c = new Campaign("主旨", "內文", null, null, null, "now", null, 1, status);
+            c.setSlug("some-" + status);
+            when(campaignRepository.findById(22L)).thenReturn(Optional.of(c));
+
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> svc.republish(22L), "狀態 " + status + " 不該可重新上架");
+            assertEquals(409, ex.getStatusCode().value(), status);
+        }
+
+        // 已經對外可見的 published 列同樣要拒絕
+        when(campaignRepository.findById(22L)).thenReturn(Optional.of(publishedCampaign("already-live")));
+        ResponseStatusException visible = assertThrows(ResponseStatusException.class,
+            () -> svc.republish(22L), "已對外可見的文章不該可重新上架");
+        assertEquals(409, visible.getStatusCode().value());
+        assertTrue(visible.getReason() != null && visible.getReason().contains("已對外可見"),
+            visible.getReason());
+
+        verify(campaignRepository, never()).markRepublished(any(), any(), any(), any());
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
+    /**
+     * 本功能之前被下架的舊資料（{@code status='published'} 但 {@code published_at} 為 NULL）
+     * 仍可重新上架。
+     *
+     * <p>上一版的下架只清 {@code published_at}、<b>沒有</b>改 {@code status}。若守門只認
+     * {@code status='unpublished'}，那些列會永久卡住——只能手動 {@code UPDATE campaign}，
+     * 正是這條端點要消滅的操作模式。共同前提是 {@code published_at IS NULL}，
+     * 所以線上可見的文章不會誤入（由上一條測試釘住）。</p>
+     */
+    @Test
+    void republishAcceptsLegacyRowsUnpublishedBeforeStatusExisted() {
+        Campaign legacy = publishedCampaign("legacy-unpublished");
+        legacy.setPublishedAt(null); // 舊版下架的形狀：status 仍是 published
+        when(campaignRepository.findById(23L)).thenReturn(Optional.of(legacy));
+        when(campaignRepository.markRepublished(eq(23L), eq(Campaign.STATUS_PUBLISHED),
+            eq(Campaign.STATUS_PUBLISHED), any())).thenReturn(1);
+
+        CampaignService.RepublishResult r = svc.republish(23L);
+
+        assertEquals("legacy-unpublished", r.slug());
+        // expectedStatus 必須是「剛剛讀到的那個狀態」，否則 WHERE 對不上而白做工
+        verify(campaignRepository).markRepublished(eq(23L), eq(Campaign.STATUS_PUBLISHED),
+            eq(Campaign.STATUS_PUBLISHED), any());
+    }
+
+    /** 找不到批次回 404（而非讓 Optional.get() 以 500 失敗） */
+    @Test
+    void republishUnknownCampaignReturns404() {
+        when(campaignRepository.findById(998L)).thenReturn(Optional.empty());
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.republish(998L));
+        assertEquals(404, ex.getStatusCode().value());
+    }
+
+    /**
+     * 沒有 slug 的列不可重新上架：回 409 而不是「成功」。
+     *
+     * <p>{@code /r/news/{slug}} 是文章的唯一入口，archive 查詢也要求 slug 非 NULL。
+     * 放行等於後台顯示「已重新上架」而讀者哪裡都看不到它——一次完全靜默的空操作。</p>
+     */
+    @Test
+    void republishRejectsRowWithoutSlug() {
+        Campaign noSlug = unpublishedCampaign(null);
+        when(campaignRepository.findById(24L)).thenReturn(Optional.of(noSlug));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.republish(24L));
+        assertEquals(409, ex.getStatusCode().value());
+        assertTrue(ex.getReason() != null && ex.getReason().contains("slug"), ex.getReason());
+        verify(campaignRepository, never()).markRepublished(any(), any(), any(), any());
+    }
+
+    /**
+     * 條件式 UPDATE 影響 0 列（別的請求先上架了）→ 回 409，不假裝成功。
+     *
+     * <p>正確性來自受影響筆數。若把回傳值丟掉不看，後台會顯示「已重新上架」
+     * 並附上網址，而那個時間戳其實沒寫進去。</p>
+     */
+    @Test
+    void republishReportsConflictWhenNoRowUpdated() {
+        Campaign c = unpublishedCampaign("race-back");
+        when(campaignRepository.findById(25L)).thenReturn(Optional.of(c));
+        when(campaignRepository.markRepublished(eq(25L), any(), any(), any())).thenReturn(0);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.republish(25L));
+        assertEquals(409, ex.getStatusCode().value());
+    }
+
+    /**
+     * ★ 下架與重新上架都不得碰點數或帳本。
+     *
+     * <p>核心不變式是「{@code reader.credits} 恆等於 {@code credit_txn} 總和」，
+     * 而帳本只增不改。這一對端點改的是「這篇現在對外可見嗎」，
+     * 對任何讀者的餘額與已解鎖憑證都不該有副作用——{@code CampaignService} 連
+     * {@code ReaderRepository} 與 {@code CreditTxnRepository} 都沒有注入
+     * （{@code newsletter} 不得 import {@code reader}，由 {@code PackageDependencyTest}
+     * 守著），所以這裡改為釘住「整條路徑只碰 campaign 那一列的發布欄位」。</p>
+     */
+    @Test
+    void unpublishAndRepublishTouchOnlyThePublicationColumns() {
+        Campaign c = publishedCampaign("round-trip");
+        when(campaignRepository.findById(31L)).thenReturn(Optional.of(c));
+        when(emailLogRepository.countByCampaignId(31L)).thenReturn(0L);
+        when(campaignRepository.markUnpublished(
+            31L, Campaign.STATUS_PUBLISHED, Campaign.STATUS_UNPUBLISHED)).thenReturn(1);
+        svc.unpublish(31L);
+
+        Campaign back = unpublishedCampaign("round-trip");
+        when(campaignRepository.findById(31L)).thenReturn(Optional.of(back));
+        when(campaignRepository.markRepublished(eq(31L), eq(Campaign.STATUS_UNPUBLISHED),
+            eq(Campaign.STATUS_PUBLISHED), any())).thenReturn(1);
+        svc.republish(31L);
+
+        // 全程只有兩道條件式 UPDATE，沒有整列寫回、沒有刪列、沒有寄信
+        verify(campaignRepository, never()).save(any(Campaign.class));
+        verify(campaignRepository, never()).delete(any(Campaign.class));
+        verify(campaignRepository, never()).deleteById(any());
+        verify(emailLogRepository, never()).save(any(EmailLog.class));
+        verify(mailSender, never()).sendBatch(anyList());
+        verify(mailSender, never()).schedule(any(), any());
+        verify(mailSender, never()).send(any(), any(), any());
+        // 額度快取也不該被動：這一對端點完全不寄信，沒有消耗任何額度
+        verify(mailQuotaService, never()).invalidate();
     }
 
     /**

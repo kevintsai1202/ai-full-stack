@@ -13,7 +13,13 @@ import java.util.Optional;
 public interface CampaignRepository extends JpaRepository<Campaign, Long> {
 
     /**
-     * 下架：只把 {@code published_at} 設回 NULL 的條件式 UPDATE（{@code isPublished()} 立刻為 false）。
+     * 下架：只寫 {@code published_at}（設回 NULL）與 {@code status} 兩欄的條件式 UPDATE。
+     *
+     * <p>{@code published_at} 為 NULL 讓 {@code isPublished()} 立刻為 false（文章從
+     * {@code /r/archive} 與 {@code /r/news/{slug}} 消失）；{@code status} 一併改成
+     * {@link Campaign#STATUS_UNPUBLISHED}，否則後台只能靠「{@code publishedAt} 是不是
+     * null」反推，而歷史列表的 pill 會繼續顯示 {@code published}——畫面說已發布、
+     * 事實是讀者看不到。它同時是重新上架端點唯一的守門依據。</p>
      *
      * <p><b>為什麼不能用 {@code save(campaign)}</b>：{@link Campaign} 沒有 {@code @Version}
      * 也沒有 {@code @DynamicUpdate}，Hibernate 的 UPDATE 會帶上<b>所有</b>可更新欄位——
@@ -32,12 +38,47 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long> {
      * 之後對它做任何 setter，提交時的 dirty check 都會再發一次帶全欄位的 UPDATE，
      * 等於繞過本方法白做工。</p>
      *
+     * @param newStatus 要寫入的新狀態。刻意用參數而非在 JPQL 裡寫死字串常值：
+     *                  JPQL 無法引用 Java 常數，寫死會讓 {@code 'unpublished'} 這個值
+     *                  在 {@link Campaign} 之外多出第二個定義點，改一邊漏一邊。
      * @return 受影響筆數，0 表示該列不存在或狀態已不是 expectedStatus
      */
     @Modifying(clearAutomatically = true)
     @Transactional
-    @Query("update Campaign c set c.publishedAt = null where c.id = :id and c.status = :expectedStatus")
-    int clearPublishedAt(@Param("id") Long id, @Param("expectedStatus") String expectedStatus);
+    @Query("update Campaign c set c.publishedAt = null, c.status = :newStatus "
+        + "where c.id = :id and c.status = :expectedStatus")
+    int markUnpublished(@Param("id") Long id,
+                        @Param("expectedStatus") String expectedStatus,
+                        @Param("newStatus") String newStatus);
+
+    /**
+     * 重新上架：只寫 {@code published_at} 與 {@code status} 兩欄的條件式 UPDATE，
+     * 與 {@link #markUnpublished} 對稱。
+     *
+     * <p><b>WHERE 帶 {@code publishedAt is null} 是真正的併發防線</b>：它直接表達
+     * 「這一列目前對外不可見」這個前提。只比對 {@code status} 是不夠的——狀態相同
+     * 而 {@code published_at} 已被別的請求填回去時，本 UPDATE 會用一個新的時間戳
+     * 覆蓋掉那次發布，且沒有任何錯誤。正確性來自受影響筆數。</p>
+     *
+     * <p><b>不重用 {@link #markUnpublished}</b>（例如把 publishedAt 也做成參數）：
+     * 那會產生一支「可把任意 campaign 改成任意發布狀態」的通用方法，
+     * 兩個方向各自的守門條件（{@code expectedStatus} 與 {@code published_at is null}）
+     * 也就無處可放。兩支各自封閉的方法比一支通用方法安全。</p>
+     *
+     * <p><b>不碰其他任何欄位</b>：{@code markdown}／{@code tier}／{@code credit_cost}
+     * 都維持下架前的值，重新上架不是「重新發布一篇新文章」。
+     * {@code clearAutomatically} 的理由同 {@link #markUnpublished}。</p>
+     *
+     * @return 受影響筆數，0 表示該列不存在、狀態已變、或已被別的請求重新上架
+     */
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query("update Campaign c set c.publishedAt = :publishedAt, c.status = :newStatus "
+        + "where c.id = :id and c.status = :expectedStatus and c.publishedAt is null")
+    int markRepublished(@Param("id") Long id,
+                        @Param("expectedStatus") String expectedStatus,
+                        @Param("newStatus") String newStatus,
+                        @Param("publishedAt") java.time.OffsetDateTime publishedAt);
 
     /** 依建立時間新到舊列出（歷史頁用） */
     List<Campaign> findAllByOrderByCreatedAtDesc();

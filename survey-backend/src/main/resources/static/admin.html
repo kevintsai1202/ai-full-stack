@@ -32,7 +32,7 @@
   .full{grid-column:1/-1}.filters{display:grid;grid-template-columns:minmax(240px,2fr) repeat(5,minmax(120px,1fr));gap:10px;margin:12px 0}.filters label{margin:0}.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px;max-height:680px}
   table{width:100%;border-collapse:separate;border-spacing:0;font-size:.84rem}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;min-width:110px;max-width:300px;overflow-wrap:anywhere}
   th{position:sticky;top:0;background:#edf5f4;z-index:2;white-space:nowrap}tbody tr:hover{background:#f4fbfa}.empty{color:var(--muted);padding:20px;text-align:center}
-  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.76rem;font-weight:700}.pill.scheduled{background:var(--accent-soft);color:var(--accent-deep)}.pill.sent{background:#dcfce7;color:#166534}.pill.sending{background:#fff2cc;color:#92580a}.pill.failed{background:#fde8e8;color:var(--danger)}.pill.cancelled{background:var(--surface-2);color:var(--muted)}.pill.published{background:#e0e7ff;color:#3730a3}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.76rem;font-weight:700}.pill.scheduled{background:var(--accent-soft);color:var(--accent-deep)}.pill.sent{background:#dcfce7;color:#166534}.pill.sending{background:#fff2cc;color:#92580a}.pill.failed{background:#fde8e8;color:var(--danger)}.pill.cancelled{background:var(--surface-2);color:var(--muted)}.pill.published{background:#e0e7ff;color:#3730a3}.pill.unpublished{background:var(--surface-2);color:var(--muted)}
   .suggestions{display:grid;gap:10px}.suggestion{border-left:4px solid var(--accent);background:#f7fbfb;border-radius:0 8px 8px 0;padding:12px 14px}.suggestion p{margin:0;white-space:pre-wrap}.suggestion small{display:block;color:var(--muted);margin-top:5px}
   @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.chart-grid{grid-template-columns:1fr}.full{grid-column:auto}.filters{grid-template-columns:1fr 1fr}.wrap{padding-inline:14px}}
   @media(max-width:520px){.kpis,.filters{grid-template-columns:1fr}.bar-row{grid-template-columns:minmax(95px,1.2fr) 2fr 44px}}
@@ -664,10 +664,13 @@
       tr.append(statusTd,cell(c.mode==='publish'?'—（未寄送）':c.acceptedCount+'/'+c.failedCount));
       const actionTd=document.createElement('td');if(c.status==='scheduled'){const editBtn=document.createElement('button');editBtn.className='btn ghost';editBtn.textContent='修改';editBtn.onclick=()=>doEditSchedule(c);const btn=document.createElement('button');btn.className='btn danger';btn.style.marginLeft='8px';btn.textContent='取消排程';btn.onclick=()=>doCancel(c.id);actionTd.append(editBtn,btn);}
       // 已發布的文章給一顆「下架」：發布後價格或內文打錯時，這是唯一不必手動改資料庫的止血手段。
-      // 條件同時看 publishedAt：下架只把它設為 NULL（status 仍是 published），
-      // 若只看 status，已下架的列會留著一顆按了也沒事發生的按鈕，讀不出來到底下架了沒。
+      // 條件仍同時看 publishedAt：狀態為 published 而 publishedAt 為 NULL 的列是本功能之前
+      // 下架的舊資料（當時只清 published_at、沒改 status），對它按下架只會拿到 409。
       else if(c.status==='published'&&c.publishedAt){const off=document.createElement('button');off.className='btn danger';off.textContent='下架';off.onclick=()=>doUnpublish(c);actionTd.append(off);}
-      else if(c.status==='published'){const note=document.createElement('small');note.style.color='var(--muted)';note.textContent='已下架（不在 /r/archive）';actionTd.append(note);}
+      // 已下架的列給一顆「重新上架」。兩種形狀都要認：status='unpublished'（現行下架的結果）
+      // 與 status='published' 但 publishedAt 為 NULL（本功能之前下架的舊資料）。
+      // 後者若不給按鈕，那些列就只能靠手動 SQL 救回來——正是這組端點要消滅的操作模式。
+      else if(c.status==='unpublished'||c.status==='published'){const on=document.createElement('button');on.className='btn';on.textContent='重新上架';on.onclick=()=>doRepublish(c);actionTd.append(on);}
       tr.append(actionTd);body.append(tr);});}catch(e){/* 401 已由 api 處理，其餘維持既有畫面。 */}}
   /** 取消指定的電子報排程。 */
   async function doCancel(id){if(!confirm('確定取消此排程？'))return;try{const r=await api('/api/admin/campaigns/'+id+'/schedule',{method:'DELETE'});alert(`已取消 ${r.cancelled} 封，失敗 ${r.failed}`);if(editingCampaignId===id)exitEditMode();doHistory();}catch(e){if(e.message!=='401')alert('取消失敗：'+e.message);}}
@@ -683,6 +686,19 @@
     try{const r=await api('/api/admin/campaigns/'+c.id+'/publication',{method:'DELETE'});
       alert(`已下架批次 #${r.campaignId}${r.slug?`（${r.slug}）`:''}`);doHistory();}
     catch(e){if(e.message!=='401')alert('下架失敗：'+e.message);}
+  }
+  /**
+   * 重新上架已下架的文章（POST /api/admin/campaigns/{id}/publication）。
+   *
+   * 確認訊息刻意寫明「發布時間會更新為現在」——這是使用者最可能沒預期到的副作用：
+   * 文章會回到 /r/archive 的最上面而不是原本的位置（理由見 CampaignService.republish）。
+   * 也寫明「已解鎖的讀者不必再付一次」，因為 article_access 全程沒被動過。
+   */
+  async function doRepublish(c){
+    if(!confirm(`確定重新上架「${c.subject}」（批次 #${c.id}）？\n文章會重新出現在 /r/archive 與 /r/news/${c.slug||''}。\n發布時間會更新為現在（會排在歷史內容最上面），內容與解鎖點數維持原樣。\n下架期間已解鎖的讀者不必再付一次。`))return;
+    try{const r=await api('/api/admin/campaigns/'+c.id+'/publication',{method:'POST'});
+      alert(`已重新上架批次 #${r.campaignId}（${r.slug}）：\n${r.url}`);doHistory();}
+    catch(e){if(e.message!=='401')alert('重新上架失敗：'+e.message);}
   }
   /** 把 UTC ISO 時間轉為 datetime-local 需要的本地「YYYY-MM-DDTHH:mm」格式。 */
   function toLocalInput(iso){const d=new Date(iso);if(Number.isNaN(d.getTime()))return '';const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;}

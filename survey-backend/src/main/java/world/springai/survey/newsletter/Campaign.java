@@ -39,6 +39,26 @@ public class Campaign {
      */
     public static final String STATUS_PUBLISHED = "published";
 
+    /**
+     * 狀態：已下架（曾經發布到網頁，目前對外不可見）。
+     *
+     * <p><b>為什麼需要一個新的狀態值</b>：下架原本只把 {@code published_at} 設回 NULL，
+     * {@code status} 仍留在 {@code published}。於是後台只能靠「{@code publishedAt} 是不是
+     * null」反推，歷史列表的 pill 照樣顯示 {@code published}——畫面說這篇是已發布，
+     * 事實是讀者看不到。更嚴重的是沒有任何重新上架的路徑：{@code slug} 有 UNIQUE 約束、
+     * 那一列還佔著它，所以同 slug 重發必定 400，只能改用新 slug 或手動
+     * {@code UPDATE campaign}——而手動 UPDATE 正是下架端點宣稱要消滅的操作模式。</p>
+     *
+     * <p><b>為什麼不需要 migration</b>：{@code campaign.status} 在 V4 定義為純
+     * {@code TEXT}，沒有列舉約束也沒有 CHECK（{@code mode} 同理，見
+     * {@link #MODE_PUBLISH}）。新增一個值只是新增一個字串，資料庫結構不變。</p>
+     *
+     * <p><b>不是「刪除」也不是「草稿」</b>：這一列的 {@code article_access} 與
+     * {@code credit_txn} 完整保留，重新上架後已解鎖者仍然有效（見
+     * {@code CampaignService#unpublish} 與 {@code #republish}）。</p>
+     */
+    public static final String STATUS_UNPUBLISHED = "unpublished";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

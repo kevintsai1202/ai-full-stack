@@ -184,6 +184,37 @@ public class AdminCampaignController {
     }
 
     /**
+     * 重新上架（撤回下架）指定批次：把 {@code published_at} 設回當下、{@code status} 改回
+     * {@code published}，文章重新出現在 {@code /r/archive} 與 {@code /r/news/{slug}}，
+     * 需提供有效金鑰。
+     *
+     * <p><b>為什麼需要它</b>：下架原本是單向門。{@code slug} 有 UNIQUE 約束、被下架的
+     * 那一列仍佔著它，所以同 slug 重發必定 400；下架之後只能改用新 slug（對外網址全部
+     * 失效）或手動 {@code UPDATE campaign}——後者正是這一組端點要消滅的操作模式。</p>
+     *
+     * <p><b>方法用 POST、路徑與下架相同</b>：受詞是同一個「已發布狀態」資源，
+     * {@code POST} 建立它、{@code DELETE} 移除它。這比另開一個 {@code /republish}
+     * 路徑更能表達「兩者是同一件事的兩個方向」，也與
+     * {@code /api/admin/campaigns/{id}/schedule} 的既有慣例一致。</p>
+     *
+     * <p><b>沒有 request body</b>：這條端點<b>只能</b>把文章放回去，不能順手改內容、
+     * 價格或發布時間。允許帶欄位會讓它變成一條「可改任意欄位」的後門，而那會讓
+     * 「已解鎖的讀者付的價格」與「文章現在的價格」永久對不起來。發布時間一律取當下
+     * （理由見 {@code CampaignService.republish}）。</p>
+     *
+     * <p>限制條件（狀態不符、已對外可見、沒有 slug → 409）由 service 層判斷。
+     * <b>不動 {@code article_access} 與 {@code credit_txn}</b>：下架期間已解鎖者的憑證
+     * 原封不動，重新上架後不會被要求再付一次。</p>
+     */
+    @PostMapping("/api/admin/campaigns/{id}/publication")
+    public CampaignService.RepublishResult republish(
+            @RequestHeader(value = KEY_HEADER, required = false) String key,
+            @PathVariable Long id) {
+        guard.verify(key);
+        return campaignService.republish(id);
+    }
+
+    /**
      * 解析發布時間（ISO-8601）；格式錯誤回 400 而非讓例外以 500 洩漏。
      *
      * <p>send 與 publish 共用同一份解析，避免兩條路徑各自實作而對同一個輸入

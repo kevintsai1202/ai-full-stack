@@ -370,6 +370,70 @@ class AdminCampaignControllerTest {
     }
 
     /**
+     * ★ 重新上架：<b>無金鑰一律 401</b>，且完全不呼叫 CampaignService。
+     *
+     * <p>它會讓文章重新出現在 /r/archive 與單篇頁，權限等級與發布／下架相同。
+     * 每個後台端點都必須有自己的未授權測試——漏一個就是那一個功能對外全開。
+     * 把 {@code guard.verify(key)} 拿掉，本測試（與下一條錯誤金鑰）立刻變紅。</p>
+     */
+    @Test
+    void republishWithoutKeyReturns401() throws Exception {
+        mvc.perform(post("/api/admin/campaigns/9/publication"))
+           .andExpect(status().isUnauthorized());
+        org.mockito.Mockito.verifyNoInteractions(campaignService);
+    }
+
+    /** 重新上架：金鑰錯誤同樣 401（固定時間比對由 AdminKeyGuard 負責） */
+    @Test
+    void republishWithWrongKeyReturns401() throws Exception {
+        mvc.perform(post("/api/admin/campaigns/9/publication").header("X-Admin-Key", "wrong-key"))
+           .andExpect(status().isUnauthorized());
+        org.mockito.Mockito.verifyNoInteractions(campaignService);
+    }
+
+    /**
+     * 重新上架：有金鑰時委派 CampaignService.republish，回傳新的發布時間與公開網址。
+     *
+     * <p>回應帶 url 是刻意的：管理者按完按鈕就能直接點開，確認文章真的回來了、
+     * 而且 paywall 仍如預期（與 publish 端點同一個理由）。</p>
+     */
+    @Test
+    void republishDelegatesToService() throws Exception {
+        when(campaignService.republish(9L)).thenReturn(new CampaignService.RepublishResult(
+            9L, "premium-post", java.time.OffsetDateTime.parse("2026-07-26T04:00:00Z"),
+            "https://news.example.com/r/news/premium-post"));
+
+        mvc.perform(post("/api/admin/campaigns/9/publication").header("X-Admin-Key", "test-key"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.campaignId").value(9))
+           .andExpect(jsonPath("$.slug").value("premium-post"))
+           .andExpect(jsonPath("$.url").value("https://news.example.com/r/news/premium-post"));
+    }
+
+    /**
+     * 重新上架端點<b>不接受任何請求本文欄位</b>：它只能把文章放回去。
+     *
+     * <p>帶著一份「想順手改內容與價格」的 JSON 進來時，那些欄位必須被完全忽略
+     * ——service 收到的只有 id。允許改欄位會讓這條端點變成一條可改任意欄位的後門，
+     * 而那會讓「已解鎖的讀者付的價格」與「文章現在的價格」永久對不起來。</p>
+     */
+    @Test
+    void republishIgnoresAnyRequestBody() throws Exception {
+        when(campaignService.republish(9L)).thenReturn(new CampaignService.RepublishResult(
+            9L, "premium-post", java.time.OffsetDateTime.parse("2026-07-26T04:00:00Z"),
+            "https://news.example.com/r/news/premium-post"));
+
+        mvc.perform(post("/api/admin/campaigns/9/publication").header("X-Admin-Key", "test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"creditCost\":1,\"markdown\":\"竄改\",\"publishedAt\":\"2020-01-01T00:00:00Z\"}"))
+           .andExpect(status().isOk());
+
+        // 只有 id 被傳下去，沒有任何其他多載或欄位
+        org.mockito.Mockito.verify(campaignService).republish(9L);
+        org.mockito.Mockito.verifyNoMoreInteractions(campaignService);
+    }
+
+    /**
      * ★ 後台 400 的<b>原因</b>必須出現在回應本文裡（{@code ProblemDetail.detail}）。
      *
      * <p><b>為什麼要單獨釘住</b>：Spring Boot 預設 {@code server.error.include-message=never}，
