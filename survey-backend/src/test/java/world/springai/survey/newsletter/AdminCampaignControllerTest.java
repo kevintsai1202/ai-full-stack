@@ -42,6 +42,7 @@ class AdminCampaignControllerTest {
         999999999L, 0L, 999999999L,
         50000L, 1000L, 49000L,
         49000L, 500L,
+        50L, 48950L, 500L,
         true, "2026-07-26T00:00:00Z", "2026-07-28T16:18:35Z");
 
     /** 每個測試都先給定額度偵測結果（控制器的 limit 收斂會用到） */
@@ -158,7 +159,7 @@ class AdminCampaignControllerTest {
     void sendNowReturnsSummary() throws Exception {
         when(campaignService.send(eq("主旨"), eq("內文"), any(), any(), eq("now"), any(),
                 any(), any(), any(), any()))
-            .thenReturn(new CampaignService.SendResult(7L, 3, 3, 0));
+            .thenReturn(new CampaignService.SendResult(7L, 3, 3, 0, 0));
         mvc.perform(post("/api/admin/campaign/send").header("X-Admin-Key", "test-key")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"subject\":\"主旨\",\"markdown\":\"內文\",\"mode\":\"now\"}"))
@@ -172,7 +173,7 @@ class AdminCampaignControllerTest {
     void sendWithPublishFieldsDelegatesAllFields() throws Exception {
         when(campaignService.send(eq("主旨"), eq("內文"), any(), any(), eq("now"), any(),
                 eq("PREMIUM"), eq(10), eq("hello-world"), any()))
-            .thenReturn(new CampaignService.SendResult(8L, 1, 1, 0));
+            .thenReturn(new CampaignService.SendResult(8L, 1, 1, 0, 0));
         mvc.perform(post("/api/admin/campaign/send").header("X-Admin-Key", "test-key")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"subject\":\"主旨\",\"markdown\":\"內文\",\"mode\":\"now\","

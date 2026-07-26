@@ -54,6 +54,14 @@ public class MailQuotaService {
     private final String zeaburToken;
     /** 偵測失敗時採用的保守額度（封） */
     private final long fallbackQuota;
+    /**
+     * 保留給交易信的額度（封）。
+     *
+     * <p>登入信、確認信、歡迎信不受此限制——它們正是 reserve 的使用者。
+     * 這個數字存在的理由：群發把額度用到 0 時，讀者就收不到 magic link，
+     * 那不是「信少寄一封」，而是整個讀者端登不進去（spec §6）。</p>
+     */
+    private final long transactionalReserve;
 
     /** 快取的查詢結果與寫入時間（null 表示尚未查過或已失效） */
     private final AtomicReference<Cached> cache = new AtomicReference<>();
@@ -68,21 +76,27 @@ public class MailQuotaService {
      * @param status     ZSend 帳號健康狀態（healthy / suspended…），fallback 時為 unknown
      * @param remaining  可用剩餘封數 = min(日剩餘, 月剩餘)
      * @param batchMax   後台單次操作允許的最大封數 = min(remaining, {@link #BATCH_CAP})
+     * @param reserve            保留給交易信的額度
+     * @param marketingRemaining 可用於行銷信的量 = max(0, remaining - reserve)
+     * @param marketingBatchMax  行銷信單批上限 = min(marketingRemaining, BATCH_CAP)
      */
     public record Quota(String source, String status,
                         long dailyQuota, long dailySent, long dailyRemaining,
                         long monthlyQuota, long monthlySent, long monthlyRemaining,
                         long remaining, long batchMax,
+                        long reserve, long marketingRemaining, long marketingBatchMax,
                         boolean overageBillingEnabled,
                         String quotaResetAt, String monthlyResetAt) {}
 
-    /** 注入 HTTP 客戶端建構器、Zeabur 帳號 token 與偵測失敗時的保守額度 */
+    /** 注入 HTTP 客戶端建構器、Zeabur 帳號 token、偵測失敗時的保守額度與交易信保留額度 */
     public MailQuotaService(RestClient.Builder builder,
                             @Value("${app.mail.zeabur-token:}") String zeaburToken,
-                            @Value("${app.mail.fallback-quota:100}") long fallbackQuota) {
+                            @Value("${app.mail.fallback-quota:100}") long fallbackQuota,
+                            @Value("${app.mail.transactional-reserve:50}") long transactionalReserve) {
         this.client = builder.baseUrl("https://api.zeabur.com").build();
         this.zeaburToken = zeaburToken;
         this.fallbackQuota = fallbackQuota;
+        this.transactionalReserve = transactionalReserve;
     }
 
     /**
@@ -134,22 +148,37 @@ public class MailQuotaService {
         long monthlyRemaining = Math.max(0, monthlyQuota - monthlySent);
         // Pro 方案的 dailyQuota 近似無限（999999999），真正天花板通常是月額度，故取兩者較小值
         long remaining = Math.min(dailyRemaining, monthlyRemaining);
+        long[] marketing = marketingLimits(remaining);
 
         return new Quota("zeabur", str(s.get("status")),
             dailyQuota, dailySent, dailyRemaining,
             monthlyQuota, monthlySent, monthlyRemaining,
             remaining, Math.min(remaining, BATCH_CAP),
+            transactionalReserve, marketing[0], marketing[1],
             Boolean.TRUE.equals(s.get("overageBillingEnabled")),
             str(s.get("quotaResetAt")), str(s.get("monthlyResetAt")));
     }
 
     /** 偵測不可用時的保守額度：日／月皆以 fallbackQuota 計，已寄量未知以 0 計 */
     private Quota fallback() {
+        long[] marketing = marketingLimits(fallbackQuota);
         return new Quota("fallback", "unknown",
             fallbackQuota, 0, fallbackQuota,
             fallbackQuota, 0, fallbackQuota,
             fallbackQuota, Math.min(fallbackQuota, BATCH_CAP),
+            transactionalReserve, marketing[0], marketing[1],
             false, null, null);
+    }
+
+    /** 依剩餘額度算出行銷可用量與單批上限（扣除交易信保留額度） */
+    private long[] marketingLimits(long remaining) {
+        long marketingRemaining = Math.max(0, remaining - transactionalReserve);
+        return new long[] { marketingRemaining, Math.min(marketingRemaining, BATCH_CAP) };
+    }
+
+    /** 保留給交易信的額度（封），供後台顯示「為什麼行銷可用量只剩這麼多」 */
+    public long reserve() {
+        return transactionalReserve;
     }
 
     /** 安全轉 Map（非 Map 回 null，避免 GraphQL 回應結構變動時炸出 ClassCastException） */

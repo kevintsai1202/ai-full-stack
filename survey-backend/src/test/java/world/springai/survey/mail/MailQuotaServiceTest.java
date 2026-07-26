@@ -31,7 +31,7 @@ class MailQuotaServiceTest {
     void detectsQuotaFromZeabur() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        MailQuotaService service = new MailQuotaService(builder, "sk-test", 100);
+        MailQuotaService service = new MailQuotaService(builder, "sk-test", 100, 0);
 
         server.expect(requestTo("https://api.zeabur.com/graphql"))
               .andExpect(method(POST))
@@ -58,7 +58,7 @@ class MailQuotaServiceTest {
     void fallsBackWhenTokenMissing() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        MailQuotaService service = new MailQuotaService(builder, "", 100);
+        MailQuotaService service = new MailQuotaService(builder, "", 100, 0);
 
         MailQuotaService.Quota q = service.current();
 
@@ -74,7 +74,7 @@ class MailQuotaServiceTest {
     void fallsBackWhenApiFails() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        MailQuotaService service = new MailQuotaService(builder, "sk-test", 80);
+        MailQuotaService service = new MailQuotaService(builder, "sk-test", 80, 0);
 
         server.expect(requestTo("https://api.zeabur.com/graphql")).andRespond(withServerError());
 
@@ -90,7 +90,7 @@ class MailQuotaServiceTest {
     void remainingNeverGoesNegative() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        MailQuotaService service = new MailQuotaService(builder, "sk-test", 100);
+        MailQuotaService service = new MailQuotaService(builder, "sk-test", 100, 0);
 
         server.expect(requestTo("https://api.zeabur.com/graphql"))
               .andRespond(withSuccess("""
@@ -105,5 +105,94 @@ class MailQuotaServiceTest {
         assertEquals(0, q.remaining());
         assertEquals(0, q.batchMax());
         server.verify();
+    }
+
+    /** 月額度剩 120 封的回應，用於保留額度的計算測試 */
+    private static final String LOW_QUOTA_RESPONSE = """
+        {"data":{"getZSendUserStatus":{"status":"healthy",\
+        "dailyQuota":999999999,"dailySent":0,"quotaResetAt":"2026-07-26T00:00:00Z",\
+        "monthlyQuota":50000,"monthlySent":49880,"monthlyResetAt":"2026-07-28T16:18:35Z",\
+        "quotaType":"both","overageBillingEnabled":false}}}""";
+
+    /**
+     * 行銷可用量 = 剩餘額度 - 保留額度。
+     *
+     * <p>保留額度是給登入信、確認信、歡迎信的。若群發把額度用到 0，
+     * 讀者就收不到 magic link——那不是「信少寄一封」，而是整個讀者端
+     * 登不進去（spec §6）。</p>
+     */
+    @Test
+    void marketingRemainingSubtractsReserve() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        MailQuotaService service = new MailQuotaService(builder, "sk-test", 100, 50);
+
+        server.expect(requestTo("https://api.zeabur.com/graphql"))
+              .andRespond(withSuccess(LOW_QUOTA_RESPONSE, APPLICATION_JSON));
+
+        MailQuotaService.Quota q = service.current();
+
+        assertEquals(120, q.remaining());
+        assertEquals(50, q.reserve());
+        assertEquals(70, q.marketingRemaining());
+        server.verify();
+    }
+
+    /** 剩餘額度低於保留額度時，行銷可用量為 0 而非負數 */
+    @Test
+    void marketingRemainingNeverGoesNegative() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        // fallback 額度 30、保留 50 → 行銷可用量應為 0，不可是 -20
+        MailQuotaService service = new MailQuotaService(builder, "", 30, 50);
+
+        MailQuotaService.Quota q = service.current();
+
+        assertEquals(0, q.marketingRemaining());
+        assertEquals(0, q.marketingBatchMax());
+    }
+
+    /** 行銷單批上限同時受 BATCH_CAP 與行銷可用量限制 */
+    @Test
+    void marketingBatchMaxRespectsBothCaps() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        MailQuotaService service = new MailQuotaService(builder, "sk-test", 100, 50);
+
+        server.expect(requestTo("https://api.zeabur.com/graphql"))
+              .andRespond(withSuccess(PRO_RESPONSE, APPLICATION_JSON));
+
+        MailQuotaService.Quota q = service.current();
+
+        // 剩餘 48800 − 保留 50 = 48750，但單批仍收斂到 BATCH_CAP
+        assertEquals(48750, q.marketingRemaining());
+        assertEquals(MailQuotaService.BATCH_CAP, q.marketingBatchMax());
+        server.verify();
+    }
+
+    /** fallback 路徑也要扣除保留額度（不能只在成功偵測時才保留） */
+    @Test
+    void fallbackQuotaAlsoReservesTransactional() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        MailQuotaService service = new MailQuotaService(builder, "", 100, 50);
+
+        MailQuotaService.Quota q = service.current();
+
+        assertEquals("fallback", q.source());
+        assertEquals(50, q.marketingRemaining());
+        server.verify();
+    }
+
+    /** 保留額度設為 0 時，行銷可用量等於剩餘額度（等同關閉此機制） */
+    @Test
+    void zeroReserveMeansNoRestriction() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        MailQuotaService service = new MailQuotaService(builder, "", 100, 0);
+
+        MailQuotaService.Quota q = service.current();
+
+        assertEquals(q.remaining(), q.marketingRemaining());
     }
 }

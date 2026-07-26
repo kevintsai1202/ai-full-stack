@@ -19,6 +19,7 @@ import world.springai.survey.audience.SubscriptionLinkBuilder;
 import world.springai.survey.mail.EmailLog;
 import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.EmailTemplate;
+import world.springai.survey.mail.MailQuotaService;
 import world.springai.survey.mail.MailSender;
 
 /** 電子報發送：渲染內文、組個人化退訂連結、立即(batch)/排程(schedule) 發送、記錄 campaign 與 email_log */
@@ -37,6 +38,7 @@ public class CampaignService {
     private final MarkdownRenderer markdownRenderer;
     private final EmailTemplate emailTemplate;
     private final SubscriptionLinkBuilder linkBuilder; // 退訂連結組裝的唯一擁有者
+    private final MailQuotaService mailQuotaService;
 
     public CampaignService(MailSender mailSender,
                            RecipientService recipientService,
@@ -44,7 +46,8 @@ public class CampaignService {
                            EmailLogRepository emailLogRepository,
                            MarkdownRenderer markdownRenderer,
                            EmailTemplate emailTemplate,
-                           SubscriptionLinkBuilder linkBuilder) {
+                           SubscriptionLinkBuilder linkBuilder,
+                           MailQuotaService mailQuotaService) {
         this.mailSender = mailSender;
         this.recipientService = recipientService;
         this.campaignRepository = campaignRepository;
@@ -52,10 +55,16 @@ public class CampaignService {
         this.markdownRenderer = markdownRenderer;
         this.emailTemplate = emailTemplate;
         this.linkBuilder = linkBuilder;
+        this.mailQuotaService = mailQuotaService;
     }
 
-    /** 發送結果摘要 */
-    public record SendResult(Long campaignId, int recipientCount, int accepted, int failed) {}
+    /**
+     * 發送結果摘要。
+     *
+     * @param skippedForQuota 因保留交易信額度而未寄出的人數；> 0 時後台必須顯示原因
+     */
+    public record SendResult(Long campaignId, int recipientCount, int accepted, int failed,
+                             int skippedForQuota) {}
 
     /** 預覽：把 markdown 渲染並套外框（用示意退訂連結） */
     public String preview(String subject, String markdown) {
@@ -116,6 +125,27 @@ public class CampaignService {
 
         // 取得收件人清單
         List<String> recipients = recipientService.recipients(role, interest);
+
+        // 保留交易信額度（spec §6）：群發不得吃掉登入信與確認信的可用量，
+        // 否則讀者收不到 magic link 就整個登不進讀者端。
+        MailQuotaService.Quota quota = mailQuotaService.current();
+        int skippedForQuota = 0;
+        if (quota.marketingRemaining() <= 0) {
+            // 完全沒有行銷可用量時直接拒絕，而不是寄 0 封後回報成功——
+            // 後者會讓後台顯示「已發送」而實際上沒人收到。
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "行銷可用額度為 0（剩餘 " + quota.remaining() + " 封已全數保留給登入信等交易信）。"
+                    + "請等額度重置後再發送。");
+        }
+        if (recipients.size() > quota.marketingRemaining()) {
+            // 縮減批量而非全部拒絕：先寄一部分，剩下的下次再寄。
+            // 縮減量必須回報，否則「已發送」會被誤解成全部寄出。
+            skippedForQuota = (int) (recipients.size() - quota.marketingRemaining());
+            recipients = recipients.subList(0, (int) quota.marketingRemaining());
+            log.warn("群發縮減批量：原 {} 人，因保留 {} 封交易信額度而只寄 {} 人",
+                recipients.size() + skippedForQuota, quota.reserve(), recipients.size());
+        }
+
         // 渲染 markdown 為 HTML 內文
         String bodyHtml = markdownRenderer.toHtml(markdown);
         boolean scheduled = "schedule".equals(mode);
@@ -170,7 +200,7 @@ public class CampaignService {
         campaign.setStatus(finalStatus(scheduled, accepted, failed));
         campaignRepository.save(campaign);
 
-        return new SendResult(campaignId, recipients.size(), accepted, failed);
+        return new SendResult(campaignId, recipients.size(), accepted, failed, skippedForQuota);
     }
 
     /** 取消某 campaign 的所有排程信 */
@@ -213,6 +243,22 @@ public class CampaignService {
 
         // 2. 以新篩選當下重查名單、渲染新內文並重排
         List<String> recipients = recipientService.recipients(role, interest);
+
+        // 保留交易信額度（spec §6）：重排仍會實際寄出信件，同 send() 的理由。
+        MailQuotaService.Quota quota = mailQuotaService.current();
+        int skippedForQuota = 0;
+        if (quota.marketingRemaining() <= 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "行銷可用額度為 0（剩餘 " + quota.remaining() + " 封已全數保留給登入信等交易信）。"
+                    + "請等額度重置後再發送。");
+        }
+        if (recipients.size() > quota.marketingRemaining()) {
+            skippedForQuota = (int) (recipients.size() - quota.marketingRemaining());
+            recipients = recipients.subList(0, (int) quota.marketingRemaining());
+            log.warn("重排縮減批量：原 {} 人，因保留 {} 封交易信額度而只寄 {} 人",
+                recipients.size() + skippedForQuota, quota.reserve(), recipients.size());
+        }
+
         String bodyHtml = markdownRenderer.toHtml(markdown);
         int[] rc = scheduleAll(campaignId, subject, bodyHtml, recipients, scheduledAt);
 
@@ -229,7 +275,7 @@ public class CampaignService {
         campaign.setStatus(finalStatus(true, rc[0], rc[1]));
         campaignRepository.save(campaign);
 
-        return new SendResult(campaignId, recipients.size(), rc[0], rc[1]);
+        return new SendResult(campaignId, recipients.size(), rc[0], rc[1], skippedForQuota);
     }
 
     /**

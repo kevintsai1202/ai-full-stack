@@ -563,9 +563,11 @@ sunset   ← 已寄期數 >= 淘汰門檻(12) 且 last_engaged_at 為 NULL 或�
 3. 登入信、確認信、歡迎信不受 reserve 限制（它們就是 reserve 的使用者）。
 4. 登入信送出失敗時，前端明確告知「登入信寄送失敗，請稍後再試」，不要顯示成功假象。
 
-> **階段 B 的實際狀態（誠實記錄）**：只有第 1 項與第 4 項完成。設定鍵 `app.mail.transactional-reserve` 已存在，但**沒有任何程式讀取它**——第 2 項的額度扣減檢查未實作（它需要動群發邏輯，屬階段 D 的範圍）。
+> **階段 C 的實際狀態（誠實記錄）**：四項全部完成（第 2 項原規劃在階段 D，依使用者決定提前至階段 C 完成，見 Task 13）。`MailQuotaService.current()` 回傳的 `Quota` 新增 `reserve`／`marketingRemaining`／`marketingBatchMax` 三個欄位，`marketingRemaining = max(0, 剩餘額度 - reserve)`；`reserve` 讀自 `app.mail.transactional-reserve`（預設 50 封），不再是「存在但沒人讀」的死設定。
 >
-> 這意味著「群發吃光額度導致讀者無法登入」這個本節自稱的「產品級故障」風險，**從階段 B 上線那天就成立**，而不是階段 D 才成立。緩解方式是上線初期避免大量群發，或在階段 C 提前補上第 2 項。**不要因為設定鍵已存在就以為防護已就緒。**
+> `CampaignService.send()` 與 `reschedule()` 在取得收件人清單後、建立／更新 campaign 之前檢查此值：`marketingRemaining <= 0` 時整批拒絕並回 409（不寄 0 封後回報成功）；收件人數超過 `marketingRemaining` 時縮減批量，縮減人數以 `SendResult.skippedForQuota` 回報，且 `campaign.recipientCount` 記錄的是**實際寄送人數**（供階段 E 補寄算差集使用）。登入信、確認信、歡迎信完全不受此檢查影響——它們走的是 `LoginMailService` 等既有路徑，未經過 `CampaignService`。
+>
+> 「群發吃光額度導致讀者無法登入」這個風險，在階段 B 上線至階段 C 這段期間確實成立過；階段 C 已補上防護，之後群發最多把行銷可用量用到 0，交易信仍有 reserve 保底。
 
 ## 7. 後台新增功能
 
@@ -673,7 +675,7 @@ V7/V8 migration（**含 `credit_txn`，因為首次登入即需發 300 點 `SIGN
 接上 `AccessDecisionService` 的扣點路徑（`article_access` + 條件式 UPDATE）、後台手動／批次加點、VIP 授予、邀請碼與 confirm 時發獎、`/r/me`、`/r/invite`、`/r/rules`。**規則頁與 PREMIUM 發布能力必須同一階段上線**——先有付費牆而後有規則說明，讀者體驗上是本末倒置。
 
 **階段 D：內容製作升級**（功能區 7）
-MinIO 服務與上傳、後台插圖 UI、發送依 tier 分組、`vip_full_in_mail`、交易信保留額度。
+MinIO 服務與上傳、後台插圖 UI、發送依 tier 分組、`vip_full_in_mail`。（交易信保留額度原規劃在此階段，已提前至階段 C 完成，見 §6。）
 
 **階段 E：寄送追蹤**（功能區 5、6）
 補寄（差集 + 冪等）、開信像素與 HMAC、開信報表、名單匯入 UI。

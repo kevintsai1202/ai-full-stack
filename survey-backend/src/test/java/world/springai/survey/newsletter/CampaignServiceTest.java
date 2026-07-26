@@ -2,6 +2,7 @@ package world.springai.survey.newsletter;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
@@ -13,6 +14,7 @@ import world.springai.survey.audience.SubscriptionLinkBuilder;
 import world.springai.survey.mail.EmailLog;
 import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.EmailTemplate;
+import world.springai.survey.mail.MailQuotaService;
 import world.springai.survey.mail.MailSender;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -21,7 +23,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -40,10 +44,28 @@ class CampaignServiceTest {
     // 連結格式已由 SubscriptionLinkBuilderTest 鎖住，這裡只 stub 固定回傳值以驗證
     // 「每封信帶上該收件人的個人化連結」，不重複斷言連結字串本身的正確性
     private final SubscriptionLinkBuilder linkBuilder = mock(SubscriptionLinkBuilder.class);
+    private final MailQuotaService mailQuotaService = mock(MailQuotaService.class);
 
     private final CampaignService svc = new CampaignService(
         mailSender, recipientService, campaignRepository, emailLogRepository,
-        markdownRenderer, emailTemplate, linkBuilder);
+        markdownRenderer, emailTemplate, linkBuilder, mailQuotaService);
+
+    {
+        // 除非測試特別 stub 更小的量，否則額度視為充足——避免所有既有發送測試
+        // 都在額度檢查處撞到 NPE 或被誤判為額度不足
+        when(mailQuotaService.current()).thenReturn(quotaWithMarketing(10000));
+    }
+
+    /** 建一個只關心 marketingRemaining 的 Quota；其餘欄位給合理但無關的值 */
+    private MailQuotaService.Quota quotaWithMarketing(long marketingRemaining) {
+        long remaining = marketingRemaining + 50;
+        return new MailQuotaService.Quota("zeabur", "healthy",
+            999999999L, 0, 999999999L,
+            50000, 0, remaining,
+            remaining, Math.min(remaining, 500),
+            50, marketingRemaining, Math.min(marketingRemaining, 500),
+            false, null, null);
+    }
 
     /** 立即發送：呼叫 sendBatch，每封 html 含該收件人的退訂連結，campaign 記為 sent、accepted=2 */
     @Test
@@ -279,5 +301,63 @@ class CampaignServiceTest {
         assertEquals(400, ex.getStatusCode().value());
         verify(mailSender, never()).schedule(any(), any());
         verify(mailSender, never()).cancelScheduled(any());
+    }
+
+    // ===================== 交易信保留額度（spec §6） =====================
+
+    /**
+     * 行銷可用量為 0 時拒絕發送並回 409。
+     *
+     * <p>不可寄 0 封後回報成功——那會讓後台顯示「已發送」而實際上沒人收到。</p>
+     */
+    @Test
+    void sendIsRejectedWhenNoMarketingQuota() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@b.com", "c@b.com"));
+        when(mailQuotaService.current()).thenReturn(quotaWithMarketing(0));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.send("主旨", "# 內容", null, null, "now", null));
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+        // 一封都不能寄出
+        verify(mailSender, never()).send(anyString(), anyString(), anyString());
+    }
+
+    /**
+     * 收件人多於行銷可用量時縮減批量並回報縮減數。
+     *
+     * <p>`recipientCount` 必須是**實際寄送人數**而非原始人數：階段 E 的補寄
+     * 會用它算差集，記成原始人數會讓被縮減的人被判定為「已寄但失敗」。</p>
+     */
+    @Test
+    void sendTruncatesToMarketingQuotaAndReportsSkipped() {
+        when(recipientService.recipients(null, null))
+            .thenReturn(List.of("a@b.com", "b@b.com", "c@b.com", "d@b.com", "e@b.com"));
+        when(mailQuotaService.current()).thenReturn(quotaWithMarketing(2));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(mailSender.sendBatch(anyList())).thenReturn("job-1");
+
+        CampaignService.SendResult result = svc.send("主旨", "# 內容", null, null, "now", null);
+
+        assertEquals(2, result.recipientCount(), "只應寄送額度允許的人數");
+        assertEquals(3, result.skippedForQuota(), "縮減數必須回報，否則會被誤解為全部寄出");
+
+        ArgumentCaptor<Campaign> saved = ArgumentCaptor.forClass(Campaign.class);
+        verify(campaignRepository, atLeastOnce()).save(saved.capture());
+        assertEquals(2, saved.getValue().getRecipientCount(), "應記錄實際寄送人數，供補寄算差集");
+    }
+
+    /** 額度充足時行為與原本完全相同，skippedForQuota 為 0 */
+    @Test
+    void sendIsUnchangedWhenQuotaIsAmple() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@b.com", "c@b.com"));
+        when(mailQuotaService.current()).thenReturn(quotaWithMarketing(1000));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(mailSender.sendBatch(anyList())).thenReturn("job-1");
+
+        CampaignService.SendResult result = svc.send("主旨", "# 內容", null, null, "now", null);
+
+        assertEquals(2, result.recipientCount());
+        assertEquals(0, result.skippedForQuota());
     }
 }
