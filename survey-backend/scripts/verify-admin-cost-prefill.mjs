@@ -249,6 +249,41 @@ const main = async () => {
     await page.waitForTimeout(300);
     check('沒有未捕捉的頁面錯誤', errors.length === 0, errors.join('；'));
 
+    console.log('\n[8] 發布成功訊息附上「另寄 BASIC 通知信」的操作指引（C3）');
+    // 這條同時是相容性守衛：verify-publish-endpoint.mjs 的 --browser 階段對
+    // #send-msg 斷言的是 includes('已發布') 與 includes('/r/news/{slug}')，
+    // 兩者都必須在追加指引之後仍然成立。
+    const PUB_SLUG = 'prefill-verify-slug';
+    const PUB_URL = `https://example.invalid/r/news/${PUB_SLUG}`;
+    await page.route('**/api/admin/campaign/publish', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ campaignId: 4242, tier: 'PREMIUM', creditCost: 37, url: PUB_URL }),
+      }));
+    // doPublish 用 confirm() 二次確認；不接受對話框的話流程會停住
+    page.on('dialog', d => d.accept());
+    await page.fill('#subject', '預填驗收用主旨');
+    await page.fill('#markdown', '免費區\n\n<!--paywall-->\n\n受限區');
+    await page.fill('#art-slug', PUB_SLUG);
+    await page.selectOption('#art-tier', 'PREMIUM');
+    await page.fill('#art-cost', '37');
+    await page.click('#publish-btn');
+    await page.waitForFunction(
+      () => document.querySelector('#send-msg')?.textContent?.includes('已發布'),
+      null, { timeout: 10000 });
+    const pubMsg = await page.textContent('#send-msg');
+    check('相容性：訊息仍含「已發布」（verify-publish-endpoint 的斷言）',
+      pubMsg.includes('已發布'));
+    check('相容性：訊息仍含文章公開網址（verify-publish-endpoint 的斷言）',
+      pubMsg.includes(`/r/news/${PUB_SLUG}`));
+    check('★ 明講訂閱者不會自動收到通知',
+      pubMsg.includes('訂閱者不會自動收到通知'), pubMsg);
+    check('★ 指引另寄一封 BASIC 通知信',
+      pubMsg.includes('BASIC 通知信'), pubMsg);
+    check('★ 警告受限內容不要貼進信裡',
+      pubMsg.includes('受限內容不要貼進信裡'), pubMsg);
+
   } finally {
     try { await browser.close(); } catch (e) { console.log(`  ! 關閉瀏覽器失敗：${e.message}`); }
     await site.close();

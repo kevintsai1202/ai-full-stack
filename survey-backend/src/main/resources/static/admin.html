@@ -652,6 +652,18 @@
       const link=document.createElement('a');
       link.href=r.url;link.textContent=r.url;link.target='_blank';link.rel='noopener';
       m.append(link);
+      // 「只發布不寄送」名副其實：訂閱者不會收到任何通知，文章就靜靜躺在網頁上。
+      // 這是階段 D 的信件折疊完成前唯一能發布 PREMIUM 的路徑，所以要主動告知，
+      // 否則操作者會以為發布等於通知，等著看開信率。
+      // 通知信必須是 BASIC：PREMIUM 走寄送會讓 markdownRenderer.toHtml(markdown)
+      // 把受限區完整渲染給所有收件人，paywall 形同虛設（send 端點對 PREMIUM 回 400
+      // 就是為了擋這件事）。上面那條連結可直接複製進通知信。
+      const notice=document.createElement('p');
+      notice.className='hint';notice.style.margin='8px 0 0';
+      notice.textContent='訂閱者不會自動收到通知。想通知的話，另外建一篇 BASIC 通知信'
+        +'（內文放摘要與上面這條文章連結即可，受限內容不要貼進信裡——PREMIUM 寄送'
+        +'會把受限區完整寄給所有收件人）。';
+      m.append(notice);
       // slug 在 campaign 表有 UNIQUE 約束：留著上一篇的值，下一篇必定撞 400「slug 已被使用」
       $('#art-slug').value='';
       doHistory();
