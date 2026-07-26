@@ -42,6 +42,22 @@ public class UnlockService {
     }
 
     /**
+     * 本服務刻意 fail-closed 的出口專用例外型別（未發布／非 PREMIUM／讀者不存在／
+     * 併發扣款影響 0 列）。
+     *
+     * <p>與泛用的 {@link IllegalStateException} 區分開，是為了讓
+     * {@link UnlockController} 只捕捉「這幾個明確已知、未扣點」的狀態、
+     * 轉成 409，而不會把 JPA／交易基礎設施或日後誤用某個 API 拋出的
+     * 其他 {@code IllegalStateException} 一併吞成 409——那類才是真正的
+     * 伺服器故障，必須讓它照常變成 500 才會被監控看到。</p>
+     */
+    public static class UnlockUnavailableException extends IllegalStateException {
+        public UnlockUnavailableException(String message) {
+            super(message);
+        }
+    }
+
+    /**
      * 解鎖結果。
      *
      * @param outcome 結果
@@ -93,7 +109,7 @@ public class UnlockService {
      * {@code UnexpectedRollbackException}——呼叫端收到一個看起來毫無關聯的錯誤。
      * 捕捉必須發生在交易邊界<b>之外</b>。</p>
      *
-     * @throws IllegalStateException           讀者不存在、文章未發布或非 PREMIUM、併發扣款失敗
+     * @throws UnlockUnavailableException      讀者不存在、文章未發布或非 PREMIUM、併發扣款失敗
      * @throws org.springframework.dao.DataIntegrityViolationException 併發解鎖撞上 UNIQUE
      */
     @Transactional
@@ -101,18 +117,18 @@ public class UnlockService {
         // 扣點是不可逆的寫入，不完全信任呼叫端已做過授權判斷。
         // 草稿被解鎖 → 讀者付了點數卻看到未完成的內容，而點數已經扣掉。
         if (!campaign.isPublished()) {
-            throw new IllegalStateException("文章尚未發布，不可解鎖：id=" + campaign.getId());
+            throw new UnlockUnavailableException("文章尚未發布，不可解鎖：id=" + campaign.getId());
         }
         // 只有精確等於 PREMIUM 才允許扣點。fail-closed 方向：tier 打錯字時
         // 寧可拒絕解鎖（讀者仍看得到免費區、能回報問題），也不要對一篇
         // 判斷不明的文章扣點。BASIC 對訂閱者本來就免費，扣點是純粹的損失。
         if (!Campaign.TIER_PREMIUM.equals(campaign.getTier())) {
-            throw new IllegalStateException(
+            throw new UnlockUnavailableException(
                 "只有 PREMIUM 文章需要解鎖，tier=" + campaign.getTier());
         }
 
         Reader reader = readerRepository.findById(readerId)
-            .orElseThrow(() -> new IllegalStateException("讀者不存在：id=" + readerId));
+            .orElseThrow(() -> new UnlockUnavailableException("讀者不存在：id=" + readerId));
 
         int cost = creditPolicy.costOf(campaign);
 
@@ -131,7 +147,7 @@ public class UnlockService {
         if (deducted == 0) {
             // 不可回報成 INSUFFICIENT_CREDITS：餘額檢查方才已通過，
             // 這是真正的併發衝突，靜默處理會把問題藏起來。
-            throw new IllegalStateException(
+            throw new UnlockUnavailableException(
                 "扣點失敗（併發衝突）：reader=" + readerId + " cost=" + cost);
         }
 

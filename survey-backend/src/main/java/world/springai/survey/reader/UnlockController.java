@@ -14,7 +14,9 @@ import world.springai.survey.newsletter.Campaign;
 import world.springai.survey.newsletter.CampaignRepository;
 
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -112,7 +114,14 @@ public class UnlockController {
             // （解鎖按鈕只在 CAN_UNLOCK 時渲染），會走到的都是直接打端點的
             // 呼叫端，讓它明確收到衝突比靜默成功更容易發現問題。
             // 回應只說「這篇不需要解鎖」與自己的餘額，不含任何他人資訊。
-            case BASIC_OPEN, VIP -> ResponseEntity.status(HttpStatus.CONFLICT)
+            //
+            // BASIC_OPEN 不附 cost：這篇文章本來就是 0 點成本，附上
+            // resolveCost() 的下限保護值（見 CreditPolicy）只會是一個無意義的
+            // 數字，任何顯示 cost 的呼叫端都會誤標成「這篇要 10 點」。
+            // VIP 則保留 cost：「這篇原本要 N 點、你因 VIP 免費」是有意義的資訊。
+            case BASIC_OPEN -> ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(notRequiredBodyNoCost(reader));
+            case VIP -> ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(notRequiredBody(campaign, reader));
             case ALREADY_UNLOCKED, CAN_UNLOCK, NEEDS_CREDITS -> performUnlock(campaign, reader);
         };
@@ -125,6 +134,13 @@ public class UnlockController {
      * @param reader   已登入且已確認訂閱的讀者（session 快照，餘額可能已過時）
      */
     private ResponseEntity<Map<String, Object>> performUnlock(Campaign campaign, Reader reader) {
+        // 這條路只會在 decide() 回傳 ALREADY_UNLOCKED / CAN_UNLOCK / NEEDS_CREDITS
+        // 時被呼叫，而這三個 reason 依 AccessDecisionService.decide() 的判斷順序
+        // （NOT_LOGGED_IN 排在最前面）保證 reader 非 null。若日後有人调整
+        // decide() 的順序把某個不需登入的 reason 提到 NOT_LOGGED_IN 之前，
+        // 這裡會用明確的 NPE 訊息擋下，而不是在 reader.getId() 得到一個
+        // 難以定位的 NullPointerException。
+        Objects.requireNonNull(reader, "reader 不可為 null：呼叫端須保證非 NOT_LOGGED_IN 時已登入");
         try {
             UnlockService.Result result =
                 unlockService.unlock(reader.getId(), campaign, OffsetDateTime.now());
@@ -142,15 +158,17 @@ public class UnlockController {
                 UnlockService.Outcome.ALREADY_UNLOCKED.name(),
                 accessDecisionService.resolveCost(campaign),
                 currentCredits(reader)));
-        } catch (IllegalStateException e) {
+        } catch (UnlockService.UnlockUnavailableException e) {
             // UnlockService 的 fail-closed 出口（併發扣款失敗、讀者不存在、
             // tier 非 PREMIUM）。這些狀態未扣點，但不是伺服器故障，回 500 會
             // 讓內部訊息（含讀者 id 與 tier）進到 ERROR log 與錯誤頁。
             //
-            // 刻意用 try/catch 而不是在 ApiExceptionHandler 加全域 handler：
-            // IllegalStateException 是 JDK 通用例外，全域轉 409 會把其他端點
-            // 真正的程式錯誤（例如誤用某個 API 而拋出的 IllegalStateException）
-            // 一併偽裝成正常的業務衝突，遮蔽真實故障。範圍限制在這個端點內。
+            // 只捕捉這個專用子型別，而不是泛用的 IllegalStateException：
+            // 後者是 JDK 通用例外，範圍過寬的 catch 會把 unlockService.unlock(...)
+            // 呼叫樹裡任何來源的 ISE（JPA／交易基礎設施、日後在 service 內
+            // 新增的誤用 API 程式）都吞成 409，讓真正壞掉的扣點路徑長期無人
+            // 發現。收窄到 UnlockUnavailableException 之後，其餘 ISE 會照原樣
+            // 往上拋成 500，讓監控看得到。
             log.warn("解鎖被拒（fail-closed）：slug={} reader={}",
                 campaign.getSlug(), reader.getId(), e);
             return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -159,9 +177,31 @@ public class UnlockController {
         }
     }
 
-    /** 「這篇不需要解鎖」的回應內容：維持與成功回應相同的三個欄位形狀 */
+    /**
+     * 「這篇不需要解鎖」的回應內容（VIP 分支用）：維持與成功回應相同的三個欄位形狀。
+     *
+     * <p>只在 VIP／ALREADY_UNLOCKED／CAN_UNLOCK／NEEDS_CREDITS 這幾個
+     * 非 NOT_LOGGED_IN 的 reason 下被呼叫，reader 依 decide() 的判斷順序
+     * 保證非 null，此處用 requireNonNull 讓契約被破壞時錯在正確的地方。</p>
+     */
     private Map<String, Object> notRequiredBody(Campaign campaign, Reader reader) {
+        Objects.requireNonNull(reader, "reader 不可為 null：呼叫端須保證非 NOT_LOGGED_IN 時已登入");
         return body("NOT_REQUIRED", accessDecisionService.resolveCost(campaign), currentCredits(reader));
+    }
+
+    /**
+     * 「這篇不需要解鎖」的回應內容（BASIC_OPEN 分支用）：不帶 cost 欄位。
+     *
+     * <p>BASIC 文章的解鎖成本本來就是 0，{@link AccessDecisionService#resolveCost}
+     * 會退回 PREMIUM 的下限保護值（見 {@code CreditPolicy}），對這個分支而言
+     * 那是一個無意義的數字，因此刻意不輸出 cost，而不是沿用 {@link #notRequiredBody}。</p>
+     */
+    private Map<String, Object> notRequiredBodyNoCost(Reader reader) {
+        Objects.requireNonNull(reader, "reader 不可為 null：呼叫端須保證非 NOT_LOGGED_IN 時已登入");
+        Map<String, Object> body = new HashMap<>();
+        body.put("outcome", "NOT_REQUIRED");
+        body.put("credits", currentCredits(reader));
+        return body;
     }
 
     /** 統一的回應形狀：{@code outcome} / {@code cost} / {@code credits} */

@@ -258,6 +258,12 @@ console.log('\n[9] BASIC 文章 POST 解鎖端點（不得回 500）');
   check('outcome 為 NOT_REQUIRED', data?.outcome === 'NOT_REQUIRED', JSON.stringify(data));
   check('未寫入任何扣點帳本',
     sql(`SELECT count(*) FROM credit_txn WHERE reader_id = ${readerId};`) === '0');
+
+  // 清掉這篇僅供本步驟使用的 BASIC 測試文章：留著會讓 /r/archive 從此多一篇
+  // 「端到端 BASIC 測試文章」，混進其他人工驗證時看到的畫面。
+  // SLUG（PREMIUM 那篇）本來就會被下一次重跑的 upsert 覆蓋內容，不需要清；
+  // BASIC_SLUG 這篇整個只在這一步用得到，故直接刪除整列。
+  sql(`DELETE FROM campaign WHERE slug = '${BASIC_SLUG}';`);
 }
 
 // 10. 真實瀏覽器：確認解鎖按鈕的前端腳本真的能跑（HTTP 斷言驗不到 JS）

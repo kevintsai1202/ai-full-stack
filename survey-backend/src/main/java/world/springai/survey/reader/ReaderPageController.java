@@ -230,7 +230,13 @@ public class ReaderPageController {
                 "解鎖需要 " + cost + " 點，你還差 " + decision.shortfall() + " 點。"
                     + "邀請朋友訂閱可以獲得點數。",
                 "<a class=\"btn\" href=\"/r/invite\">看我的邀請連結</a>" + rulesHint());
-            default -> "";
+            // 窮舉列出而非 default -> ""：這個方法只在 !full 時被呼叫（見呼叫端
+            // gateRendered 的判斷），這幾個 reason 代表「本來就不需要顯示
+            // paywall」的情況，理論上不會在此出現，仍需明列而不是 default，
+            // 是為了與 UnlockController 的 switch 一致——那裡刻意不寫 default，
+            // 讓日後 Reason 新增值時兩處都編譯失敗，而不是這裡靜默吞成空字串，
+            // 讓讀者拿到一篇被截斷、卻完全沒有 paywall 說明的文章。
+            case BASIC_OPEN, VIP, ALREADY_UNLOCKED, NOT_PUBLISHED -> "";
         };
     }
 
@@ -267,6 +273,20 @@ public class ReaderPageController {
                 unlockMsg.className = 'msg show err';
                 unlockBtn.disabled = false;
                 return;
+              }
+              if (res.status === 409) {
+                const conflict = await res.json();
+                if (conflict.outcome === 'NOT_REQUIRED') {
+                  // 這篇文章的授權狀態在按下按鈕之前就已改變（例如另一個分頁
+                  // 取得 VIP、或後台把這篇改成 BASIC），實際狀態是「本來就
+                  // 看得到全文」，不是失敗。重新載入讓 server 依最新授權狀態
+                  // 重新渲染即可，不解除 disabled——理由與下方 UNLOCKED 分支
+                  // 相同：reload 生效前的空窗期若按鈕可再按，會多打一次端點。
+                  location.reload();
+                  return;
+                }
+                // 其餘 409（UNLOCK_UNAVAILABLE）維持原本的錯誤訊息語意。
+                throw new Error('unlock failed');
               }
               if (!res.ok) { throw new Error('unlock failed'); }
               const data = await res.json();

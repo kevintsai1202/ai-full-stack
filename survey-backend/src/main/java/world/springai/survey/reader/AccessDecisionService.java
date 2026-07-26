@@ -74,6 +74,16 @@ public class AccessDecisionService {
     /**
      * 判定該讀者對該文章的可讀範圍。純函式，不產生任何寫入。
      *
+     * <p><b>不變式（呼叫端可依賴）</b>：回傳的 {@link Decision#reason()} 不是
+     * {@link Reason#NOT_LOGGED_IN} 時，呼叫端可假定 {@code reader} 非 null——
+     * 本方法把 {@code reader == null} 的檢查排在所有其他分支之前（見下方實作），
+     * 因此除了 NOT_LOGGED_IN 以外的任何 reason 都必然是在 reader 非 null 的
+     * 分支中產生。日後修改本方法的判斷順序時，若把某個不需登入即可觸發的
+     * reason（例如未來的 BASIC_OPEN 開放給匿名者）提到這個 null 檢查之前，
+     * 會破壞這條不變式，呼叫端（如 {@code UnlockController}）對 reader 的
+     * 假設會直接 NPE——這是刻意的：錯要錯在被打破的那一刻，而不是靜默通過
+     * 後在下游某處出現難以定位的 NullPointerException。</p>
+     *
      * @param reader     讀者；null 表示未登入
      * @param subscribed 是否為已確認訂閱者（由名單中心提供，不從 reader 推導）
      */

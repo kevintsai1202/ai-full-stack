@@ -2,6 +2,7 @@ package world.springai.survey.reader;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -13,12 +14,16 @@ import world.springai.survey.newsletter.CampaignRepository;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -121,17 +126,35 @@ class UnlockControllerTest {
            .andExpect(jsonPath("$.credits").value(290));
     }
 
-    /** 未登入回 401，且絕不呼叫解鎖 */
+    /**
+     * 未登入回 401，且絕不呼叫解鎖。
+     *
+     * <p>審查發現：只驗 HTTP 狀態碼證明不了 controller 真的把「未登入」餵給
+     * decide()——把 {@code subscribed} 寫死成 {@code true} 這 12 個測試仍然全綠，
+     * 因為 reason 完全由 mock 決定。這裡額外用 {@link ArgumentCaptor} 斷言
+     * 傳給 {@code decide()} 的 reader 為 null、subscribed 為 false，仿照
+     * {@code ReaderPageControllerTest} 已有的先例。</p>
+     */
     @Test
     void anonymousRequestIsRejected() throws Exception {
         when(readerContext.resolve(any())).thenReturn(Optional.empty());
-        when(campaignRepository.findBySlug("my-post")).thenReturn(Optional.of(article()));
+        Campaign campaign = article();
+        when(campaignRepository.findBySlug("my-post")).thenReturn(Optional.of(campaign));
         givenDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
 
         mvc.perform(post("/api/reader/unlock/my-post"))
            .andExpect(status().isUnauthorized());
 
         verify(unlockService, never()).unlock(anyLong(), any(), any());
+
+        ArgumentCaptor<Reader> readerCaptor = ArgumentCaptor.forClass(Reader.class);
+        ArgumentCaptor<Boolean> subscribedCaptor = ArgumentCaptor.forClass(Boolean.class);
+        ArgumentCaptor<Campaign> campaignCaptor = ArgumentCaptor.forClass(Campaign.class);
+        verify(accessDecisionService, times(1))
+            .decide(readerCaptor.capture(), subscribedCaptor.capture(), campaignCaptor.capture(), any());
+        assertNull(readerCaptor.getValue(), "未登入時傳給 decide() 的 reader 必須是 null");
+        assertFalse(subscribedCaptor.getValue(), "未登入時傳給 decide() 的 subscribed 必須是 false");
+        assertSame(campaign, campaignCaptor.getValue(), "傳給 decide() 的必須是 findBySlug 查回來的那一篇");
     }
 
     /**
@@ -143,15 +166,29 @@ class UnlockControllerTest {
      */
     @Test
     void loggedInButUnsubscribedIsRejected() throws Exception {
+        Reader loggedInReader = newReader(300);
         when(readerContext.resolve(anyString()))
-            .thenReturn(Optional.of(new ReaderContext.Current(newReader(300), false)));
-        when(campaignRepository.findBySlug("my-post")).thenReturn(Optional.of(article()));
+            .thenReturn(Optional.of(new ReaderContext.Current(loggedInReader, false)));
+        Campaign campaign = article();
+        when(campaignRepository.findBySlug("my-post")).thenReturn(Optional.of(campaign));
         givenDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_SUBSCRIBED, 0);
 
         mvc.perform(postUnlock("my-post"))
            .andExpect(status().isForbidden());
 
         verify(unlockService, never()).unlock(anyLong(), any(), any());
+
+        // 同上：斷言傳給 decide() 的正是 ReaderContext 給的那個讀者物件、
+        // subscribed 為 false，而不是只驗 HTTP 狀態碼。
+        ArgumentCaptor<Reader> readerCaptor = ArgumentCaptor.forClass(Reader.class);
+        ArgumentCaptor<Boolean> subscribedCaptor = ArgumentCaptor.forClass(Boolean.class);
+        ArgumentCaptor<Campaign> campaignCaptor = ArgumentCaptor.forClass(Campaign.class);
+        verify(accessDecisionService, times(1))
+            .decide(readerCaptor.capture(), subscribedCaptor.capture(), campaignCaptor.capture(), any());
+        assertSame(loggedInReader, readerCaptor.getValue(),
+            "傳給 decide() 的 reader 必須是 ReaderContext.Current 提供的那個物件");
+        assertFalse(subscribedCaptor.getValue(), "已登入但未確認訂閱時 subscribed 必須是 false");
+        assertSame(campaign, campaignCaptor.getValue(), "傳給 decide() 的必須是 findBySlug 查回來的那一篇");
     }
 
     /** 找不到文章回 404，且絕不呼叫解鎖 */
@@ -201,6 +238,8 @@ class UnlockControllerTest {
         mvc.perform(postUnlock("my-post"))
            .andExpect(status().isConflict())
            .andExpect(jsonPath("$.outcome").value("NOT_REQUIRED"))
+           // VIP 分支保留 cost：「這篇原本要 N 點、你因 VIP 免費」是有意義的資訊。
+           .andExpect(jsonPath("$.cost").value(COST))
            // 回應的餘額必須是資料庫的權威值，不是寫死的 0，也不是 session 快照
            .andExpect(jsonPath("$.credits").value(DB_CREDITS));
 
@@ -208,11 +247,16 @@ class UnlockControllerTest {
     }
 
     /**
-     * BASIC 文章不需要解鎖，回 409 而不是 500。
+     * BASIC 文章不需要解鎖，回 409 而不是 500，且回應不帶無意義的 cost。
      *
      * <p>沒有這條分派，請求會往下走進 UnlockService 撞上 fail-closed 的
-     * IllegalStateException（未扣點，這部分正確），但對呼叫端呈現為
-     * 500 + ERROR log，而正確語意只是「這篇不需要解鎖」。</p>
+     * {@code UnlockUnavailableException}（未扣點，這部分正確），但對呼叫端
+     * 呈現為 500 + ERROR log，而正確語意只是「這篇不需要解鎖」。</p>
+     *
+     * <p>BASIC 文章 {@code credit_cost = 0}，{@link AccessDecisionService#resolveCost}
+     * 對 0 會退回 PREMIUM 的下限保護值（見 {@code CreditPolicy}）——若這裡仍然
+     * 輸出 cost，任何呼叫端拿 cost 顯示都會對一篇免費文章標示出一個無意義的
+     * 點數，因此斷言 cost 欄位完全不存在。</p>
      */
     @Test
     void basicArticleNeedsNoUnlock() throws Exception {
@@ -225,6 +269,7 @@ class UnlockControllerTest {
         mvc.perform(postUnlock("my-post"))
            .andExpect(status().isConflict())
            .andExpect(jsonPath("$.outcome").value("NOT_REQUIRED"))
+           .andExpect(jsonPath("$.cost").doesNotExist())
            .andExpect(jsonPath("$.credits").value(DB_CREDITS));
 
         verify(unlockService, never()).unlock(anyLong(), any(), any());
@@ -296,8 +341,11 @@ class UnlockControllerTest {
     /**
      * service 的 fail-closed 出口（併發扣款失敗等）回 409，不是 500。
      *
-     * <p>IllegalStateException 的訊息含讀者 id 與 tier，讓它變成 500 會把
-     * 內部狀態寫進 ERROR log 與錯誤頁；而這其實不是伺服器故障，未扣點。</p>
+     * <p>{@code UnlockUnavailableException} 的訊息含讀者 id 與 tier，讓它
+     * 變成 500 會把內部狀態寫進 ERROR log 與錯誤頁；而這其實不是伺服器故障，
+     * 未扣點。刻意用 {@code UnlockService.UnlockUnavailableException}（而不是
+     * 泛用的 {@code IllegalStateException}）拋出，證明 controller 只認這個
+     * 專用子型別。</p>
      */
     @Test
     void failClosedIllegalStateBecomesConflictNotServerError() throws Exception {
@@ -305,12 +353,44 @@ class UnlockControllerTest {
         when(campaignRepository.findBySlug("my-post")).thenReturn(Optional.of(article()));
         givenDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.CAN_UNLOCK, 0);
         when(unlockService.unlock(anyLong(), any(), any()))
-            .thenThrow(new IllegalStateException("扣點失敗（併發衝突）：reader=3 cost=10"));
+            .thenThrow(new UnlockService.UnlockUnavailableException("扣點失敗（併發衝突）：reader=3 cost=10"));
 
         mvc.perform(postUnlock("my-post"))
            .andExpect(status().isConflict())
            .andExpect(jsonPath("$.outcome").value("UNLOCK_UNAVAILABLE"))
            .andExpect(jsonPath("$.credits").value(DB_CREDITS));
+    }
+
+    /**
+     * <b>Important B 的破壞性驗證</b>：非 {@code UnlockUnavailableException} 的泛用
+     * {@code IllegalStateException}（模擬 JPA／交易基礎設施的真實故障，或日後在
+     * service 內誤用某個 API 而拋出的例外）必須讓 500 照常外洩，不可被本端點
+     * 吞成 409。
+     *
+     * <p>捕捉範圍收窄到 {@code UnlockUnavailableException} 之後，這類例外不再
+     * 被 controller 捕捉，會直接從 {@code mvc.perform(...)} 拋出（standalone
+     * MockMvc 沒有為泛用 RuntimeException 註冊 handler，等同於在真實容器中
+     * 變成 500）。若日後有人把 catch 改回 {@code catch (IllegalStateException)}，
+     * 這裡會因為呼叫端不再拋出例外（改成正常回傳 409）而變紅。</p>
+     */
+    @Test
+    void infraIllegalStateExceptionIsNotSwallowedAsConflict() throws Exception {
+        givenLoggedInSubscriber();
+        when(campaignRepository.findBySlug("my-post")).thenReturn(Optional.of(article()));
+        givenDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.CAN_UNLOCK, 0);
+        when(unlockService.unlock(anyLong(), any(), any()))
+            .thenThrow(new IllegalStateException("infra"));
+
+        Exception thrown = org.junit.jupiter.api.Assertions.assertThrows(Exception.class,
+            () -> mvc.perform(postUnlock("my-post")));
+        Throwable root = thrown;
+        while (root.getCause() != null && !(root instanceof IllegalStateException)) {
+            root = root.getCause();
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(root instanceof IllegalStateException,
+            "應是未被捕捉、往外拋的 IllegalStateException");
+        org.junit.jupiter.api.Assertions.assertFalse(root instanceof UnlockService.UnlockUnavailableException,
+            "本測試模擬的是非 UnlockUnavailableException 的泛用 ISE，不該被 controller 捕捉成 409");
     }
 
     /**
