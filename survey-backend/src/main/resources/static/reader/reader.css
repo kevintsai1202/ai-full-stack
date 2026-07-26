@@ -93,3 +93,19 @@ input[type=email] { width:100%; padding:12px 14px; border:1px solid var(--border
    曾經存在的 button.btn:disabled 規則反而因 specificity (0,2,1) > (0,2,0)
    蓋掉 cursor:not-allowed，讓 index.html／login.html 的送出按鈕在
    disabled 時游標變回 default。 */
+
+/* 規則頁的連續卡片：拉開間距讓每個問題成為視覺單位 */
+.wrap .card + .card {
+  margin-top: 16px;
+}
+
+.card h2 {
+  font-size: 1.05rem;
+  margin: 0 0 10px;
+}
+
+.card ul {
+  margin: 10px 0 0;
+  padding-left: 1.3em;
+  line-height: 1.9;
+}
