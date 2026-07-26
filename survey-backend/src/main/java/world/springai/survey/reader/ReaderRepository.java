@@ -39,8 +39,15 @@ public interface ReaderRepository extends JpaRepository<Reader, Long> {
      * 呼叫端已經讀過餘額並判斷足夠，但在「讀取」與「扣款」之間，
      * 同一讀者的另一個請求可能已經扣走點數。把條件放進 SQL 讓資料庫
      * 以單一原子操作決定成敗——正確性來自受影響筆數，不是來自先前的檢查。</p>
+     *
+     * <p><b>{@code clearAutomatically = true} 不可省略</b>：JPA 的一級快取會讓
+     * 同一交易內、扣款後再對同一 id 呼叫 {@code findById} 直接命中快取，
+     * 拿回扣款「之前」載入的舊 {@code Reader} 物件，完全不會重新查詢資料庫。
+     * 少了這個設定，呼叫端想在扣款後讀取最新餘額（見
+     * {@link UnlockService#unlock}）會靜默失敗——查詢照樣執行、
+     * Hibernate 卻直接回傳快取物件，看起來像是修好了，實際上餘額仍是舊的。</p>
      */
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Transactional
     @Query("update Reader r set r.credits = r.credits - :cost where r.id = :id and r.credits >= :cost")
     int deductCredits(@Param("id") Long id, @Param("cost") int cost);

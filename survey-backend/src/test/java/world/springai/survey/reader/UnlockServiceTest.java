@@ -58,18 +58,39 @@ class UnlockServiceTest {
         return c;
     }
 
-    /** 讓資料庫中的讀者有指定餘額 */
-    private void givenReaderWithCredits(int credits) {
+    /** 建一個指定餘額的讀者物件 */
+    private Reader readerWithCredits(int credits) {
         Reader reader = new Reader("r@b.com", "CODE1234");
         ReflectionTestUtils.setField(reader, "id", READER_ID);
         reader.setCredits(credits);
-        when(readerRepository.findById(READER_ID)).thenReturn(Optional.of(reader));
+        return reader;
     }
 
-    /** 正常路徑：扣點、寫帳本、寫解鎖紀錄、更新參與度 */
+    /**
+     * 讓 findById 一律回傳同一個指定餘額的讀者物件。
+     *
+     * <p>unlock() 現在會呼叫兩次 findById（扣款前讀一次、扣款後重讀一次
+     * 取得權威餘額），這裡兩次都回傳同一顆餘額不變的物件，模擬「扣款期間
+     * 沒有其他交易介入」的一般情境。若要模擬扣款期間餘額被別的交易改動，
+     * 請改用 {@code when(...).thenReturn(a, b)} 讓兩次呼叫回傳不同物件
+     * （見 {@code returnedCreditsComeFromPostDeductionReread}）。</p>
+     */
+    private void givenReaderWithCredits(int credits) {
+        when(readerRepository.findById(READER_ID)).thenReturn(Optional.of(readerWithCredits(credits)));
+    }
+
+    /**
+     * 正常路徑：扣點、寫帳本、寫解鎖紀錄、更新參與度。
+     *
+     * <p>findById 被模擬成扣款前後兩次呼叫：第一次回傳扣款前的 300，
+     * 第二次回傳資料庫實際扣款後的 290——對應真實環境中
+     * {@code deductCredits} 的 {@code clearAutomatically = true} 讓第二次
+     * 查詢真的重新命中資料庫，而不是回傳同一顆舊物件。</p>
+     */
     @Test
     void unlocksAndDeductsCredits() {
-        givenReaderWithCredits(300);
+        when(readerRepository.findById(READER_ID))
+            .thenReturn(Optional.of(readerWithCredits(300)), Optional.of(readerWithCredits(290)));
         when(articleAccessRepository.existsByReaderIdAndCampaignId(READER_ID, CAMPAIGN_ID)).thenReturn(false);
         when(readerRepository.deductCredits(READER_ID, 10)).thenReturn(1);
 
@@ -82,6 +103,28 @@ class UnlockServiceTest {
         verify(articleAccessRepository).saveAndFlush(any(ArticleAccess.class));
         verify(creditTxnRepository).save(any(CreditTxn.class));
         verify(surveyResponseRepository).touchEngagement(anyString(), any());
+    }
+
+    /**
+     * 回傳的餘額必須來自扣款後的重新查詢，不是扣款前快照的算術結果。
+     *
+     * <p>刻意讓 300 - 10 = 290（算術結果）與重新讀取的 250（模擬扣款期間
+     * 有另一筆交易，例如同時到達的推薦獎勵加點，動過同一讀者的餘額）
+     * 不同，這樣測試才能區分兩種實作：若把 UnlockService 改回
+     * {@code reader.getCredits() - cost} 的記憶體算術，這裡會斷言失敗
+     * （回傳 290 而非 250）。</p>
+     */
+    @Test
+    void returnedCreditsComeFromPostDeductionReread() {
+        when(readerRepository.findById(READER_ID))
+            .thenReturn(Optional.of(readerWithCredits(300)), Optional.of(readerWithCredits(250)));
+        when(articleAccessRepository.existsByReaderIdAndCampaignId(READER_ID, CAMPAIGN_ID)).thenReturn(false);
+        when(readerRepository.deductCredits(READER_ID, 10)).thenReturn(1);
+
+        UnlockService.Result result = service.unlock(READER_ID, article(), NOW);
+
+        assertEquals(UnlockService.Outcome.UNLOCKED, result.outcome());
+        assertEquals(250, result.credits());
     }
 
     /**
@@ -166,26 +209,6 @@ class UnlockServiceTest {
     }
 
     /**
-     * 餘額判斷必須用資料庫的即時值，不可信任呼叫端傳入的物件。
-     *
-     * <p>呼叫端的 Reader 來自 session cookie 解析，可能是幾分鐘前的快照。
-     * 若用它判斷餘額，讀者在另一個分頁扣過點之後，這裡會用舊餘額放行，
-     * 最後靠條件式 UPDATE 才擋下——那條防線應該留給真正的併發，
-     * 而不是被當成常態的餘額檢查。這個測試以「傳入 id 而非 Reader」
-     * 的簽章從介面層面保證這件事。</p>
-     */
-    @Test
-    void readsCreditsFromDatabaseNotFromCaller() {
-        givenReaderWithCredits(5);
-        when(articleAccessRepository.existsByReaderIdAndCampaignId(anyLong(), anyLong())).thenReturn(false);
-
-        UnlockService.Result result = service.unlock(READER_ID, article(), NOW);
-
-        assertEquals(UnlockService.Outcome.INSUFFICIENT_CREDITS, result.outcome());
-        verify(readerRepository).findById(READER_ID);
-    }
-
-    /**
      * 條件式扣款回 0 列（併發下餘額已被扣走）必須拋例外讓交易回滾。
      *
      * <p>不可回報 INSUFFICIENT_CREDITS 了事：此時餘額檢查已經通過，
@@ -265,6 +288,28 @@ class UnlockServiceTest {
         basic.setTier(Campaign.TIER_BASIC);
 
         assertThrows(IllegalStateException.class, () -> service.unlock(READER_ID, basic, NOW));
+        verify(readerRepository, never()).deductCredits(anyLong(), anyInt());
+    }
+
+    /**
+     * 非精確 PREMIUM 的 tier（打錯字、大小寫錯誤、多餘空白）一律拒絕解鎖。
+     *
+     * <p>擋的判斷式是「{@code tier} 不精確等於 {@code PREMIUM}」，不是
+     * 「{@code tier} 等於 {@code BASIC}」——這兩者只在合法值集合
+     * {BASIC, PREMIUM} 內等價。若實作被誤寫成後者（只擋 BASIC、放行任何
+     * 非 BASIC 值），{@link #basicArticleCannotBeUnlocked} 仍然是綠的，
+     * 因為它從未測過 BASIC 以外的異常值——真正暴露這個方向錯誤的正是
+     * 這裡的小寫 "premium"。這與階段 B 抓到的一個 Critical 同源：當時
+     * {@code !campaign.isPremium()} 讓小寫 tier 的文章被誤判為 BASIC
+     * 而全文外洩。方向是 fail-closed：tier 判斷不明時寧可拒絕解鎖。</p>
+     */
+    @Test
+    void unknownTierCannotBeUnlocked() {
+        givenReaderWithCredits(300);
+        Campaign unknownTier = article();
+        unknownTier.setTier("premium");
+
+        assertThrows(IllegalStateException.class, () -> service.unlock(READER_ID, unknownTier, NOW));
         verify(readerRepository, never()).deductCredits(anyLong(), anyInt());
     }
 }

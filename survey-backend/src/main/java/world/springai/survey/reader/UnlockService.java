@@ -74,7 +74,17 @@ public class UnlockService {
      *
      * <p><b>參數刻意收 {@code readerId} 而非 {@code Reader}</b>：呼叫端的 Reader
      * 來自 session cookie 解析，餘額可能是幾分鐘前的快照。餘額判斷必須用
-     * 交易內的即時值，用簽章保證呼叫端無法把舊餘額餵進來。</p>
+     * 交易內的即時值，用簽章保證呼叫端無法把舊餘額餵進來——介面設計層面
+     * 就杜絕了「傳入舊餘額」這條路，不需要額外測試去證明呼叫端做不到
+     * 一件簽章本身就不允許的事。</p>
+     *
+     * <p><b>回傳的 {@code Result.credits} 一律是扣款後重新讀取的權威值</b>，
+     * 不是用扣款前的快照做記憶體算術（{@code reader.getCredits() - cost}）。
+     * 兩者在單機無併發時結果相同，但 {@code findById} 與
+     * {@link ReaderRepository#deductCredits} 之間若有另一筆交易改動了
+     * 同一讀者的餘額（例如同時到達的推薦獎勵加點、另一篇文章的併發解鎖），
+     * 記憶體算術就會回傳與資料庫不符的數字——而 spec §5.11 明訂規則頁、
+     * {@code /r/me} 與 paywall 提示三處顯示的點數必須與實際扣點同源。</p>
      *
      * <p><b>UNIQUE 撞擊不在此捕捉</b>，而是往外拋給 controller 處理。
      * 原因是 Spring 的交易語意：一旦 {@code saveAndFlush} 觸發
@@ -133,7 +143,19 @@ public class UnlockService {
         // 解鎖是高可靠的參與度訊號（spec §5.10）
         surveyResponseRepository.touchEngagement(reader.getEmail(), now);
 
+        // 扣款後重新讀取權威餘額，而不是用扣款前的快照做 reader.getCredits() - cost。
+        // 兩者在單機無併發時相同，但 findById 與 deductCredits 之間若有另一筆交易
+        // 改動同一讀者的餘額（同時到達的推薦獎勵加點、另一篇文章的併發解鎖），
+        // 記憶體算術就會回傳與資料庫不符的數字，讓頁面顯示的餘額與實際不一致
+        // （spec §5.11 明訂三處顯示的點數必須與實際扣點同源）。
+        //
+        // deductCredits 帶 clearAutomatically = true，所以這次 findById 會真的
+        // 重新查詢；少了那個設定，一級快取會回傳同一個舊物件而使本段失效。
+        int remaining = readerRepository.findById(readerId)
+            .map(Reader::getCredits)
+            .orElseThrow(() -> new IllegalStateException("扣款後讀不到讀者：id=" + readerId));
+
         log.info("讀者 id={} 以 {} 點解鎖文章 id={}", readerId, cost, campaign.getId());
-        return new Result(Outcome.UNLOCKED, cost, reader.getCredits() - cost);
+        return new Result(Outcome.UNLOCKED, cost, remaining);
     }
 }
