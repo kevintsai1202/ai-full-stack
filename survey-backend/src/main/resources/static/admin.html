@@ -22,6 +22,7 @@
   textarea{min-height:180px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.row{display:flex;gap:12px;flex-wrap:wrap}.row>div{flex:1;min-width:160px}
   .btn{padding:10px 16px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:800;cursor:pointer;font-size:.92rem;white-space:nowrap}
   .btn:hover{background:var(--accent-deep)}.btn:disabled{opacity:.55;cursor:not-allowed}.btn.ghost{background:var(--surface-2);color:var(--accent-deep)}.btn.danger{background:var(--danger)}
+  .form-row{display:flex;gap:10px;align-items:center;margin-bottom:12px}.form-row input{flex:1}
   .actions{display:flex;gap:8px;flex-wrap:wrap}.count{font-weight:800;color:var(--accent-deep);font-size:1.1rem}iframe.preview{width:100%;height:360px;border:1px solid var(--border);border-radius:8px;background:#fff}
   .msg{margin-top:12px;padding:10px 12px;border-radius:8px;display:none}.msg.ok{display:block;background:var(--accent-soft);color:var(--accent-deep)}.msg.err{display:block;background:#fde8e8;color:var(--danger)}
   .gate{position:fixed;inset:0;background:rgba(16,32,51,.66);display:flex;align-items:center;justify-content:center;z-index:50}.gate .box{background:#fff;border-radius:var(--r);padding:28px;max-width:400px;width:90%;box-shadow:0 24px 70px rgba(0,0,0,.22)}
@@ -57,6 +58,8 @@
   <nav class="tabs" aria-label="管理功能">
     <button class="tab active" id="tab-analytics" data-view="analytics">問卷分析</button>
     <button class="tab" id="tab-campaign" data-view="campaign">電子報寄送</button>
+    <button class="tab" id="tab-readers" data-view="readers">讀者管理</button>
+    <button class="tab" id="tab-settings" data-view="settings">參數設定</button>
   </nav>
 
   <section class="view" id="analytics-view">
@@ -102,7 +105,17 @@
     <div class="card"><h2>② 預覽</h2><iframe class="preview" id="preview" title="預覽"></iframe></div>
     <div class="card"><h2>③ 發送對象</h2><div class="row"><div><label for="role">身分（不限留空）</label><select id="role"><option value="">不限</option></select></div><div><label for="interest">想學主題（不限留空）</label><select id="interest"><option value="">不限</option></select></div></div><p style="margin:14px 0 0">將寄給 <span class="count" id="rcount">—</span> 人　<button class="btn ghost" id="rcount-btn">更新人數</button></p><p class="hint" id="rsample"></p><p class="hint" id="quota-info">額度偵測中…</p><p class="warn" id="quota-warn" hidden></p></div>
     <div class="card"><h2>④ 測試寄送（寄給自己）</h2><div class="row"><div><input type="email" id="test-to" placeholder="your@email.com"></div><div style="flex:0"><button class="btn ghost" id="test-btn">寄測試信</button></div></div><div class="msg" id="test-msg"></div></div>
-    <div class="card"><h2>⑤ 發送</h2><div class="row" style="align-items:center"><div style="flex:0"><label style="display:inline;font-weight:400"><input type="radio" name="mode" value="now" checked> 立即發送</label><label style="display:inline;font-weight:400;margin-left:14px"><input type="radio" name="mode" value="schedule"> 排程</label></div><div><input type="datetime-local" id="sched" disabled></div></div><button class="btn" id="send-btn" style="margin-top:14px">發送</button><div class="msg" id="send-msg"></div></div>
+    <div class="card"><h2>⑤ 發送</h2><div class="row" style="align-items:center"><div style="flex:0"><label style="display:inline;font-weight:400"><input type="radio" name="mode" value="now" checked> 立即發送</label><label style="display:inline;font-weight:400;margin-left:14px"><input type="radio" name="mode" value="schedule"> 排程</label></div><div><input type="datetime-local" id="sched" disabled></div></div>
+      <div class="row" style="margin-top:14px">
+        <div><label for="art-slug">網址代稱 slug（留空則不發布到網頁）</label>
+          <input type="text" id="art-slug" placeholder="my-first-post"></div>
+        <div><label for="art-tier">分級</label>
+          <select id="art-tier"><option value="BASIC">BASIC（訂閱者免費）</option><option value="PREMIUM">PREMIUM（需點數）</option></select></div>
+        <div><label for="art-cost">解鎖點數（PREMIUM 用，留空用預設）</label>
+          <input type="number" id="art-cost" min="1" placeholder="10"></div>
+      </div>
+      <p class="hint" id="tier-hint">設了 slug 才會出現在 /r/archive 與單篇頁面。</p>
+      <button class="btn" id="send-btn" style="margin-top:14px">發送</button><div class="msg" id="send-msg"></div></div>
     <div class="card"><h2>⑥ 寄送歷史　<button class="btn ghost" id="hist-btn">重新整理</button></h2><div class="table-wrap"><table id="hist"><thead><tr><th>主旨</th><th>模式</th><th>時間</th><th>狀態</th><th>成功/失敗</th><th></th></tr></thead><tbody></tbody></table></div></div>
     <div class="card"><h2>⑦ 邀請信（二次確認）　<button class="btn ghost" id="invite-refresh">重新整理</button></h2>
       <p class="hint">對匯入的待確認名單寄「訂閱確認」邀請信；已寄過的人會自動跳過，點確認連結後才進入可寄送名單。</p>
@@ -127,6 +140,71 @@
       </details>
       <p style="margin:14px 0 8px" id="invite-stats" class="hint">統計載入中…</p>
       <div class="table-wrap"><table id="invite-log"><thead><tr><th>Email</th><th>類型</th><th>狀態</th><th>時間</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="view" id="readers-view" hidden>
+    <div class="card">
+      <h2>搜尋讀者</h2>
+      <div class="form-row">
+        <input type="text" id="reader-q" placeholder="輸入 email 片段">
+        <button class="btn" id="reader-search-btn">搜尋</button>
+      </div>
+      <div class="table-wrap">
+        <table id="reader-table">
+          <thead><tr><th>Email</th><th>方案</th><th>VIP 到期</th><th>點數</th><th>最後登入</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="msg" id="reader-msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>授予 VIP</h2>
+      <div class="row">
+        <div><label for="vip-email">Email</label><input type="email" id="vip-email" placeholder="reader@example.com"></div>
+        <div><label for="vip-days">效期（天）</label><input type="number" id="vip-days" min="1" placeholder="留空用預設"></div>
+      </div>
+      <button class="btn" id="vip-grant-btn" style="margin-top:12px">授予 VIP</button>
+      <p class="hint">尚未登入過的 email 也可以先設定，系統會自動建立帳戶。</p>
+      <div class="msg" id="vip-msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>加點（可批次）</h2>
+      <label for="grant-emails">Email 清單（一行一筆）</label>
+      <textarea id="grant-emails" rows="5" placeholder="student1@example.com&#10;student2@example.com"></textarea>
+      <div class="row">
+        <div><label for="grant-delta">點數（負數為扣點）</label><input type="number" id="grant-delta" value="100"></div>
+        <div><label for="grant-note">說明（必填，供對帳）</label><input type="text" id="grant-note" placeholder="2026 春季班學員"></div>
+      </div>
+      <button class="btn" id="grant-btn" style="margin-top:12px">送出加點</button>
+      <div class="msg" id="grant-msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>點數帳本查詢</h2>
+      <div class="form-row">
+        <input type="email" id="ledger-email" placeholder="reader@example.com">
+        <button class="btn ghost" id="ledger-btn">查詢</button>
+      </div>
+      <div class="table-wrap">
+        <table id="ledger-table">
+          <thead><tr><th>時間</th><th>變動</th><th>原因</th><th>說明</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="msg" id="ledger-msg"></div>
+    </div>
+  </section>
+
+  <section class="view" id="settings-view" hidden>
+    <div class="card">
+      <h2>可調參數</h2>
+      <p class="hint">改完立即生效，不需重新部署。讀者端的規則頁、我的帳戶與解鎖提示都會同步顯示新數字。</p>
+      <div id="settings-fields"></div>
+      <button class="btn" id="settings-save-btn" style="margin-top:14px">儲存</button>
+      <div class="msg" id="settings-msg"></div>
     </div>
   </section>
 </main>
@@ -172,8 +250,8 @@
   /** 通過授權後才顯示管理頁面。 */
   function showApp(){$('#gate').style.display='none';$('#app').hidden=false;}
 
-  /** 切換問卷分析與電子報頁籤。 */
-  function switchView(name){document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!==name+'-view');document.querySelectorAll('.tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.view===name));if(name==='analytics'&&!analyticsLoaded)loadAnalytics();}
+  /** 切換分頁（問卷分析／電子報／讀者管理／參數設定）；參數設定首次進入時才載入欄位。 */
+  function switchView(name){document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!==name+'-view');document.querySelectorAll('.tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.view===name));if(name==='analytics'&&!analyticsLoaded)loadAnalytics();if(name==='settings'&&!loadSettings.done)loadSettings();}
 
   /** 把固定選項填入下拉選單。 */
   function fillSelect(selector,items){const el=$(selector);items.forEach(value=>{const option=document.createElement('option');option.value=value;option.textContent=value;el.appendChild(option);});}
@@ -190,6 +268,24 @@
     $('#invite-refresh').onclick=()=>{doInviteOverview();doQuota();};$('#invite-source').onchange=doInviteOverview;$('#invite-send-btn').onclick=doSendInvites;$('#invite-remind-btn').onclick=doSendReminders;
     $('#invite-tpl').addEventListener('toggle',()=>{if($('#invite-tpl').open)loadInviteTemplate();});$('#tpl-preview-btn').onclick=previewInviteTemplate;$('#tpl-save-btn').onclick=saveInviteTemplate;
     document.querySelectorAll('input[name=mode]').forEach(radio=>radio.onchange=()=>{$('#sched').disabled=mode()!=='schedule';});
+    // 讀者管理與參數設定
+    $('#reader-search-btn').onclick=searchReaders;$('#vip-grant-btn').onclick=grantVip;$('#grant-btn').onclick=grantCredits;$('#ledger-btn').onclick=loadLedger;$('#settings-save-btn').onclick=saveSettings;
+    $('#reader-q').addEventListener('keydown',e=>{if(e.key==='Enter')searchReaders();});
+    $('#ledger-email').addEventListener('keydown',e=>{if(e.key==='Enter')loadLedger();});
+    // 階段 D 才會實作「信件內只寄免費區」的折疊。在那之前，PREMIUM 文章若寄出
+    // 會把受限區完整寄進信箱，paywall 形同虛設，故後端有守門（回 400）。
+    // 這裡先在 UI 說明，避免使用者選了 PREMIUM 才撞到 400。
+    $('#art-tier').addEventListener('change',e=>{
+      const hint=$('#tier-hint');
+      if(e.target.value==='PREMIUM'){
+        hint.textContent='PREMIUM 目前只能發布到網頁、不能寄送（信件折疊功能於階段 D 實作）。'
+          +'請先以 BASIC 寄送，或設好 slug 後只發布不寄送。';
+        hint.className='warn';
+      }else{
+        hint.textContent='設了 slug 才會出現在 /r/archive 與單篇頁面。';
+        hint.className='hint';
+      }
+    });
     buildRawHeader();doQuota();doCount();doHistory();doInviteOverview();switchView('analytics');
   }
 
@@ -349,18 +445,37 @@
     limitInput.max=batchMax;
     if(parseInt(limitInput.value,10)>batchMax)limitInput.value=batchMax;
     label.textContent=`單次上限（剩餘 ${q.remaining} 封，單批上限 ${batchMax}）`;
+    // 三個數字的關係必須一起顯示：後端擋信用的是「行銷可用」而非「總剩餘」，
+    // 只顯示總剩餘會讓管理者以為還能寄那麼多，實際卻被靜默截斷。
+    const marketing=`　│　剩餘額度 ${q.remaining} 封（保留 ${marketingReserve()} 封給登入信等交易信，行銷可用 ${marketingRemaining()} 封）`;
     if(q.source==='fallback'){
-      info.textContent=`未偵測到 Zeabur 額度（未設定 ZEABUR_API_TOKEN），暫以 ${q.remaining} 封為上限。`;
+      info.textContent=`未偵測到 Zeabur 額度（未設定 ZEABUR_API_TOKEN），暫以 ${q.remaining} 封為上限。`+marketing;
     }else{
       // 日額度在付費方案下近似無限，僅在它確實比月剩餘更緊時才顯示，避免誤導
       const daily=q.dailyRemaining<q.monthlyRemaining?`　今日剩餘 ${q.dailyRemaining} 封${resetAt(q.quotaResetAt)}`:'';
-      info.textContent=`本期額度 ${q.monthlyQuota} 封，已寄 ${q.monthlySent}，剩餘 ${q.monthlyRemaining}${resetAt(q.monthlyResetAt)}${daily}`;
+      info.textContent=`本期額度 ${q.monthlyQuota} 封，已寄 ${q.monthlySent}，剩餘 ${q.monthlyRemaining}${resetAt(q.monthlyResetAt)}${daily}`+marketing;
     }
     renderQuotaWarn();
   }
   /**
-   * 依「收件人數 vs 剩餘額度」顯示超量警告。
-   * 超量後果取決於帳號是否開啟超量計費：開啟則轉為計費、未開啟則超量部分寄送失敗。
+   * 群發實際可用的額度（封）。
+   * 後端 CampaignService 用 marketingRemaining 決定要不要截斷，前端一律以同一個數字判斷；
+   * 舊版回應沒有這個欄位時退回 remaining - reserve，再退回 remaining（永不回 undefined，
+   * 否則任何比較都會是 false，警告就永遠不出現／永遠出現）。
+   */
+  function marketingRemaining(){
+    if(!mailQuota)return 0;
+    if(typeof mailQuota.marketingRemaining==='number')return mailQuota.marketingRemaining;
+    return Math.max(0,mailQuota.remaining-marketingReserve());
+  }
+  /** 保留給交易信的額度（封）；舊版回應缺欄位時以 0 計 */
+  function marketingReserve(){return mailQuota&&typeof mailQuota.reserve==='number'?mailQuota.reserve:0;}
+  /**
+   * 依「收件人數 vs 行銷可用額度」顯示超量警告。
+   *
+   * 門檻刻意用 marketingRemaining 而非 remaining：後端擋信用的就是這個數字。
+   * 若拿 remaining 比較，remaining=260／reserve=50／收件 250 的情境下前端不會有任何警告，
+   * 後端卻靜默截斷到 210，管理者會以為 250 人都收到了。
    */
   function renderQuotaWarn(){
     const warn=$('#quota-warn'),count=parseInt($('#rcount').textContent,10);
@@ -368,11 +483,13 @@
     if(mailQuota.status&&mailQuota.status!=='healthy'&&mailQuota.status!=='unknown'){
       warn.hidden=false;warn.textContent=`⚠️ ZSend 帳號狀態為 ${mailQuota.status}，寄送可能被拒絕。`;return;
     }
-    warn.hidden=count<=mailQuota.remaining;
+    const usable=marketingRemaining();
+    warn.hidden=count<=usable;
     if(!warn.hidden){
-      warn.textContent=mailQuota.overageBillingEnabled
-        ?`⚠️ 收件人數 ${count} 超過剩餘額度 ${mailQuota.remaining} 封，超量部分將以超量計費寄出。`
-        :`⚠️ 收件人數 ${count} 超過剩餘額度 ${mailQuota.remaining} 封，超量部分會寄送失敗。`;
+      // 後端會截斷而非超量寄出，所以這裡講的是「誰不會收到」，不是「會不會被計費」
+      warn.textContent=`⚠️ 收件人數 ${count} 超過行銷可用額度 ${usable} 封`
+        +`（總剩餘 ${mailQuota.remaining} 封，其中 ${marketingReserve()} 封保留給登入信等交易信）。`
+        +`送出後只會寄給前 ${usable} 人，其餘 ${count-usable} 人本次不會收到。`;
     }
   }
   /** 更新電子報收件人數與樣本。 */
@@ -380,8 +497,39 @@
   /** 寄送電子報測試信給指定信箱。 */
   async function doTest(){const m=$('#test-msg');m.className='msg';const to=$('#test-to').value.trim();if(!to){m.className='msg err';m.textContent='請填測試信箱';return;}try{await api('/api/admin/campaign/test',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,to})});m.className='msg ok';m.textContent='測試信已寄給 '+to;}catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='測試寄送失敗：'+e.message;}}}
   /** 確認後立即發送、排程電子報，或在修改模式下更新既有排程。 */
+  /**
+   * 送出前的截斷預告：收件人數超過行銷可用額度時，後端會靜默截斷，
+   * 因此確認框必須先講清楚「有幾個人不會收到」，而不是等送出後才在結果訊息裡補說。
+   * 回傳附加在確認文字後的說明；不會截斷時回空字串。
+   */
+  function truncationNotice(count){
+    const n=parseInt(count,10);
+    if(!mailQuota||Number.isNaN(n))return '';
+    const usable=marketingRemaining();
+    if(n<=usable)return '';
+    return `\n\n注意：行銷可用額度只剩 ${usable} 封（保留 ${marketingReserve()} 封給登入信等交易信），`
+      +`其中 ${n-usable} 人本次不會寄出。`;
+  }
+  /**
+   * 依 SendResult 組結果訊息；skippedForQuota > 0 時必須明講有多少人未寄出與原因。
+   * 後端回的 recipientCount 是「實際寄送人數」，只顯示它會讓管理者以為原本就只有這些人。
+   */
+  function sendResultMessage(prefix,r){
+    let text=`${prefix}：收件 ${r.recipientCount}、成功 ${r.accepted}、失敗 ${r.failed}`;
+    if(r.skippedForQuota>0){
+      text+=`；另有 ${r.skippedForQuota} 人未寄出——為保留 ${marketingReserve()} 封交易信（登入／確認信）額度，`
+        +`本次只寄了 ${r.recipientCount} 人。請等額度重置後再寄給其餘 ${r.skippedForQuota} 人。`;
+    }
+    return text;
+  }
+  /** 組發布欄位（slug / tier / creditCost）；未填 slug 時仍會帶 tier，讓後端守門負責把關。 */
+  function publishFields(){
+    const slug=$('#art-slug').value.trim(),cost=$('#art-cost').value.trim();
+    return {tier:$('#art-tier').value,creditCost:cost?Number(cost):null,slug:slug||null};
+  }
   async function doSend(){const m=$('#send-msg');m.className='msg';if(!$('#subject').value.trim()){m.className='msg err';m.textContent='請填主旨';return;}const count=$('#rcount').textContent,editing=editingCampaignId!=null,isSched=editing||mode()==='schedule';let scheduledAt=null;if(isSched){const value=$('#sched').value;if(!value){m.className='msg err';m.textContent='請選排程時間';return;}scheduledAt=new Date(value).toISOString();}
-    if(!confirm(editing?`確定更新批次 #${editingCampaignId} 的排程（取消舊排程信並以新內容重排給 ${count} 人）？`:`確定要${isSched?'排程':'立即'}發送給 ${count} 人嗎？`))return;
+    const notice=truncationNotice(count);
+    if(!confirm((editing?`確定更新批次 #${editingCampaignId} 的排程（取消舊排程信並以新內容重排給 ${count} 人）？`:`確定要${isSched?'排程':'立即'}發送給 ${count} 人嗎？`)+notice))return;
     $('#send-btn').disabled=true;
     try{
       const filter={role:$('#role').value||null,interest:$('#interest').value||null};
@@ -389,13 +537,14 @@
       if(editing){
         // 修改模式：呼叫 reschedule 端點（後端會先取消舊排程信再重排）
         r=await api('/api/admin/campaigns/'+editingCampaignId+'/schedule',{method:'PUT',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,filter,scheduledAt})});
-        m.className='msg ok';m.textContent=`排程已更新：收件 ${r.recipientCount}、成功 ${r.accepted}、失敗 ${r.failed}`;
+        // 被略過的人一樣要看得見，故用紅色訊息而非「已完成」的綠色
+        m.className=r.skippedForQuota>0?'msg err':'msg ok';m.textContent=sendResultMessage('排程已更新',r);
         exitEditMode();
       }else{
-        r=await api('/api/admin/campaign/send',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,filter,mode:mode(),scheduledAt})});
-        m.className='msg ok';m.textContent=`已${isSched?'排程':'送出'}：收件 ${r.recipientCount}、成功 ${r.accepted}、失敗 ${r.failed}`;
+        r=await api('/api/admin/campaign/send',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,filter,mode:mode(),scheduledAt,...publishFields()})});
+        m.className=r.skippedForQuota>0?'msg err':'msg ok';m.textContent=sendResultMessage(`已${isSched?'排程':'送出'}`,r);
       }
-      doHistory();
+      doHistory();doQuota(); // 寄送後已用額度改變，重新偵測（後端也已讓快取失效）
     }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent=(editing?'更新排程失敗：':'發送失敗：')+e.message;}}
     finally{$('#send-btn').disabled=false;}}
   /** 建立單一表格儲存格，內容一律以 textContent 寫入避免 XSS。 */
@@ -458,6 +607,139 @@
     finally{$('#invite-send-btn').disabled=false;}}
   /** 轉義電子報歷史欄位，避免插入 HTML。 */
   function esc(value){const div=document.createElement('div');div.textContent=value==null?'':String(value);return div.innerHTML;}
+
+  // ===== 讀者管理 =====
+
+  /**
+   * 統一的訊息顯示：ok=true 顯示成功樣式、false 顯示錯誤樣式。
+   * 一律以 textContent 寫入——後台會顯示讀者 email、帳本 note 等使用者可控內容。
+   */
+  function showMsg(id,text,ok){const el=document.getElementById(id);el.className='msg '+(ok?'ok':'err');el.textContent=text;}
+
+  /** 取 ISO 字串的日期部分（前 10 碼）；空值回退字 */
+  function isoDate(value,fallback){return value?String(value).slice(0,10):fallback;}
+
+  /**
+   * 搜尋讀者並渲染表格。
+   * 每一格都用 textContent（cell()）寫入：email 與顯示名稱是使用者可控內容，
+   * 用字串拼 innerHTML 會讓一個惡意 email 在後台頁面上執行腳本。
+   */
+  async function searchReaders(){
+    const q=$('#reader-q').value.trim();
+    if(!q){return;}
+    try{
+      const rows=await api('/api/admin/readers?q='+encodeURIComponent(q));
+      const tbody=$('#reader-table tbody');tbody.textContent='';
+      rows.forEach(r=>{
+        const tr=document.createElement('tr');
+        tr.append(cell(r.email),cell(r.vipActive?'VIP':'一般'),cell(isoDate(r.vipExpiresAt,'—')),
+          cell(r.credits),cell(isoDate(r.lastLoginAt,'未登入')));
+        const actionTd=document.createElement('td');
+        if(r.vipActive){
+          const btn=document.createElement('button');btn.className='btn ghost';btn.textContent='取消 VIP';
+          // 直接綁 closure 而非 data-email 屬性：屬性要另外處理引號跳脫，閉包沒有這個風險
+          btn.onclick=()=>revokeVip(r.email);
+          actionTd.append(btn);
+        }
+        tr.append(actionTd);tbody.append(tr);
+      });
+      if(!rows.length){const tr=document.createElement('tr'),td=cell('查無符合的讀者');td.colSpan=6;tr.append(td);tbody.append(tr);}
+      showMsg('reader-msg',`找到 ${rows.length} 位讀者。`,true);
+    }catch(e){if(e.message!=='401')showMsg('reader-msg','搜尋失敗：'+e.message,false);}
+  }
+
+  /** 取消某位讀者的 VIP（不刪讀者列，只改等級與到期日） */
+  async function revokeVip(email){
+    if(!confirm(`確定要取消 ${email} 的 VIP？`)){return;}
+    try{
+      await api('/api/admin/readers/vip?email='+encodeURIComponent(email),{method:'DELETE'});
+      showMsg('reader-msg','已取消 VIP。',true);
+      await searchReaders();
+    }catch(e){if(e.message!=='401')showMsg('reader-msg','取消失敗：'+e.message,false);}
+  }
+
+  /** 授予 VIP；未填天數時由後端套用參數設定的預設效期 */
+  async function grantVip(){
+    const email=$('#vip-email').value.trim(),days=$('#vip-days').value.trim();
+    if(!email){showMsg('vip-msg','請輸入 email。',false);return;}
+    try{
+      const body={email};
+      if(days){body.days=Number(days);}
+      const r=await api('/api/admin/readers/vip',{method:'POST',body:JSON.stringify(body)});
+      showMsg('vip-msg',`已授予 VIP，到期日 ${isoDate(r.vipExpiresAt,'無')}。`,true);
+    }catch(e){if(e.message!=='401')showMsg('vip-msg','授予失敗：'+e.message,false);}
+  }
+
+  /** 批次加點（逐筆獨立成敗，後端回成功／失敗筆數與失敗清單） */
+  async function grantCredits(){
+    const emails=$('#grant-emails').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    const delta=Number($('#grant-delta').value),note=$('#grant-note').value.trim();
+    if(!emails.length){showMsg('grant-msg','請至少輸入一個 email。',false);return;}
+    if(!delta){showMsg('grant-msg','點數變動不得為 0。',false);return;}
+    if(!note){showMsg('grant-msg','請填寫說明（供日後對帳）。',false);return;}
+    if(!confirm(`確定要對 ${emails.length} 位讀者${delta>=0?'加':'扣'} ${Math.abs(delta)} 點？`)){return;}
+    try{
+      const r=await api('/api/admin/readers/credits',{method:'POST',body:JSON.stringify({emails,delta,note})});
+      const failedNote=r.failed>0?`，失敗 ${r.failed} 筆：${r.failedEmails.join(', ')}`:'';
+      showMsg('grant-msg',`成功 ${r.granted} 筆${failedNote}`,r.failed===0);
+    }catch(e){if(e.message!=='401')showMsg('grant-msg','加點失敗：'+e.message,false);}
+  }
+
+  /** 查詢某位讀者的點數帳本（note 可能含使用者輸入，一律 textContent） */
+  async function loadLedger(){
+    const email=$('#ledger-email').value.trim();
+    if(!email){return;}
+    try{
+      const rows=await api('/api/admin/readers/ledger?email='+encodeURIComponent(email));
+      const tbody=$('#ledger-table tbody');tbody.textContent='';
+      rows.forEach(t=>{
+        const tr=document.createElement('tr');
+        tr.append(cell(t.createdAt?String(t.createdAt).slice(0,16).replace('T',' '):''),
+          cell((t.delta>=0?'+':'')+t.delta),cell(t.reason),cell(t.note||''));
+        tbody.append(tr);
+      });
+      if(!rows.length){const tr=document.createElement('tr'),td=cell('此讀者尚無交易紀錄');td.colSpan=4;tr.append(td);tbody.append(tr);}
+      showMsg('ledger-msg',`共 ${rows.length} 筆交易。`,true);
+    }catch(e){if(e.message!=='401')showMsg('ledger-msg','查詢失敗：'+e.message,false);}
+  }
+
+  // ===== 參數設定 =====
+
+  /** 各參數的中文標籤與說明 */
+  const SETTING_LABELS={
+    'credit.signup_grant':['初始贈點','首次登入時發放；設 0 可關閉贈點'],
+    'credit.premium_cost':['進階文章單篇點數','文章可個別覆寫；此為預設值，最小 1'],
+    'credit.referral_reward':['邀請成功獎勵','被邀者點確認信後發放；設 0 可關閉'],
+    'vip.default_days':['VIP 預設效期（天）','授予 VIP 時未指定天數就用這個值']
+  };
+
+  /** 載入參數並產生輸入欄位（以 DOM API 建構，不拼 innerHTML） */
+  async function loadSettings(){
+    try{
+      const values=await api('/api/admin/settings');
+      const root=$('#settings-fields');root.replaceChildren();
+      Object.entries(values).forEach(([k,v])=>{
+        const [label,hint]=SETTING_LABELS[k]||[k,''];
+        const box=document.createElement('div');box.style.marginBottom='14px';
+        const lab=document.createElement('label');lab.htmlFor='set-'+k;lab.textContent=label;
+        const input=document.createElement('input');input.type='number';input.id='set-'+k;input.dataset.key=k;input.value=v;
+        const p=document.createElement('p');p.className='hint';p.textContent=hint;
+        box.append(lab,input,p);root.append(box);
+      });
+      loadSettings.done=true;
+    }catch(e){if(e.message!=='401')showMsg('settings-msg','載入失敗：'+e.message,false);}
+  }
+
+  /** 儲存參數（一次送出全部欄位；後端先全部驗證再全部寫入） */
+  async function saveSettings(){
+    const payload={};
+    document.querySelectorAll('#settings-fields input[data-key]').forEach(input=>{payload[input.dataset.key]=input.value;});
+    if(!Object.keys(payload).length){showMsg('settings-msg','參數尚未載入，請重新整理頁面。',false);return;}
+    try{
+      await api('/api/admin/settings',{method:'PUT',body:JSON.stringify(payload)});
+      showMsg('settings-msg','已儲存，立即生效。',true);
+    }catch(e){if(e.message!=='401')showMsg('settings-msg','儲存失敗：'+e.message,false);}
+  }
 
   $('#gate-btn').onclick=async()=>{sessionStorage.setItem(KEY,$('#gate-key').value.trim());try{await api('/api/admin/survey');showApp();init();}catch(error){/* 401 已由 api 顯示閘門。 */}};
   $('#gate-key').addEventListener('keydown',event=>{if(event.key==='Enter')$('#gate-btn').click();});
