@@ -40,6 +40,13 @@ public class CampaignService {
     private final EmailTemplate emailTemplate;
     private final SubscriptionLinkBuilder linkBuilder; // 退訂連結組裝的唯一擁有者
     private final MailQuotaService mailQuotaService;
+    /**
+     * 受限區切分器：發布 PREMIUM 前用來確認「這篇真的有受限區」。
+     *
+     * <p>與讀者端渲染共用<b>同一份</b>切分實作（同套件、無跨層依賴），
+     * 才能保證「後台認定有 gate」與「讀者頁真的渲染 gate」是同一個判斷。</p>
+     */
+    private final ContentSplitter contentSplitter;
     /** 對外網址前綴，用於回傳文章公開網址；全專案唯一設定來源 app.public-base-url */
     private final String publicBaseUrl;
 
@@ -51,7 +58,9 @@ public class CampaignService {
                            EmailTemplate emailTemplate,
                            SubscriptionLinkBuilder linkBuilder,
                            MailQuotaService mailQuotaService,
+                           ContentSplitter contentSplitter,
                            @Value("${app.public-base-url}") String publicBaseUrl) {
+        this.contentSplitter = contentSplitter;
         this.publicBaseUrl = publicBaseUrl;
         this.mailSender = mailSender;
         this.recipientService = recipientService;
@@ -263,6 +272,21 @@ public class CampaignService {
         String normalizedTier = validateTier(tier);
         int normalizedCreditCost = validateCreditCost(normalizedTier, creditCost);
         String normalizedSlug = validateSlug(slug);
+
+        // ★ PREMIUM 必須真的有受限區（含一行 <!--paywall--> 標記），否則頁面標示「進階／解鎖 N 點」
+        // 而 ContentSplitter 無標記時把全文都當免費區 —— 未登入訪客直接拿到整篇全文，一點都不用付。
+        // 而且沒有任何回饋管道會揭露這件事：不寄信所以沒有寄送統計，credit_txn 永遠不會有這篇的 READ，
+        // 看起來就像「沒人想解鎖」。讀者端「無標記就不收費、不渲染 gate」是刻意且有測試的設計，
+        // 所以缺陷不在渲染層 —— 這個新入口是 PREMIUM 唯一的建立路徑，也是唯一能攔的地方。
+        // 一律 400 而不只是警告：「PREMIUM 但沒有受限區」沒有任何合法用途。
+        // 注意：此檢查只在 publish；send() 對 PREMIUM 本來就無條件 400，不需要（也不該）重複。
+        if (Campaign.TIER_PREMIUM.equals(normalizedTier)
+                && !contentSplitter.split(markdown).hasGate()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "PREMIUM 內容必須含一行 " + ContentSplitter.PAYWALL_MARKER
+                    + " 標記，否則整篇都是免費區（標記需完全小寫）");
+        }
+
         OffsetDateTime normalizedPublishedAt = resolvePublishedAt(normalizedSlug, publishedAt);
 
         // bodyHtml 刻意留 null：那是「信件版內文」，這條路徑沒有信件版。
@@ -281,6 +305,74 @@ public class CampaignService {
             campaign.getId(), normalizedSlug, normalizedTier, normalizedCreditCost);
         return new PublishResult(campaign.getId(), normalizedSlug, normalizedTier,
             normalizedCreditCost, normalizedPublishedAt, articleUrl(normalizedSlug));
+    }
+
+    /**
+     * 下架結果。
+     *
+     * @param campaignId 被下架的批次 id
+     * @param slug       被下架的文章 slug（供後台訊息顯示是哪一篇）
+     */
+    public record UnpublishResult(Long campaignId, String slug) {}
+
+    /**
+     * 下架（撤回發布）：把 {@code published_at} 設回 NULL，讓文章從 {@code /r/archive}
+     * 與 {@code /r/news/{slug}} 消失（{@code isPublished()} 立刻為 false）。
+     *
+     * <p><b>為什麼需要這條路徑</b>：{@link #publish} 之後沒有任何修改、改價或下架的手段——
+     * {@link #reschedule} 因 {@code status != 'scheduled'} 回 409、{@link #cancelSchedule}
+     * 是 no-op、{@link #send} 只能建新列、slug 有 UNIQUE 所以連「用同一個 slug 重發一次」
+     * 都會 400。唯一的修復手段是手動 {@code UPDATE campaign}，正是 publish 端點宣稱要
+     * 消滅的操作模式。而傷害是立即的（錢）：把解鎖點數打成 1200（本意 12）或內文貼漏一段，
+     * 空窗期內讀者會以錯價解鎖，{@code credit_txn} 留下真實且<b>不可撤銷</b>的扣點紀錄。</p>
+     *
+     * <p><b>刻意只做「止血」而不是完整 CRUD</b>：下架後操作者可以刪掉那筆（或用新 slug）
+     * 重新發布，比在這裡開一條「可改任意欄位」的路徑安全得多——那條路徑會讓
+     * 「已解鎖的讀者付的價格」與「文章現在的價格」永久對不起來。</p>
+     *
+     * <p><b>只允許 {@code status='published'}</b>：其他狀態的列是寄送批次
+     * （{@code sent}／{@code scheduled}／{@code failed}…），下架它們等於用一條
+     * 「撤回網頁發布」的端點去改寄送紀錄的語意，回 409 並說明理由。</p>
+     *
+     * <p><b>只允許 {@code email_log} 為空的列</b>：有寄送記錄代表這篇已經寄進讀者信箱，
+     * 信裡的連結指向 {@code /r/news/{slug}}；下架會讓已收到信的讀者點到 404。
+     * 對他們來說那是「站方寄了一封連結壞掉的信」，同樣回 409。</p>
+     *
+     * <p><b>不刪列、不動 {@code article_access}、不動 {@code credit_txn}</b>：
+     * 已經付點解鎖的讀者，他們的授權紀錄與帳本必須完整保留。理由有兩層——
+     * ① 核心不變式「{@code reader.credits} 恆等於 {@code credit_txn} 總和」要求帳本只增不改，
+     * 刪掉扣點紀錄會讓餘額與帳本永久對不上；② {@code article_access} 是「這個人已經買過這篇」
+     * 的憑證，重新發布後仍應有效，否則讀者會被要求為同一篇文章付第二次。
+     * 下架只改「這篇現在對外可見嗎」這一個事實，不改任何已發生的交易。</p>
+     *
+     * @return 下架結果；找不到列回 404，狀態不符或已寄過信回 409
+     */
+    public UnpublishResult unpublish(Long campaignId) {
+        Campaign campaign = campaignRepository.findById(campaignId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到此批次"));
+        if (!Campaign.STATUS_PUBLISHED.equals(campaign.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "只能下架狀態為 " + Campaign.STATUS_PUBLISHED + " 的文章；此批次狀態為 "
+                    + campaign.getStatus() + "（寄送批次請用取消排程，不要用下架改寄送紀錄的語意）");
+        }
+        if (emailLogRepository.countByCampaignId(campaignId) > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "此批次已有寄送記錄，不可下架：信件裡的連結指向 /r/news/{slug}，"
+                    + "下架會讓已收到信的讀者點到 404");
+        }
+        String slug = campaign.getSlug();
+
+        // 只寫 published_at 一欄的條件式 UPDATE（不用 save(entity) 整列寫回，理由見
+        // CampaignRepository.clearPublishedAt 的註解）。回傳 0 代表狀態在讀取後被改掉。
+        int updated = campaignRepository.clearPublishedAt(campaignId, Campaign.STATUS_PUBLISHED);
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "下架失敗：此批次的狀態在處理期間已被變更，請重新載入後再試");
+        }
+
+        log.info("下架文章：campaignId={} slug={}（published_at 設為 NULL，未動 article_access 與 credit_txn）",
+            campaignId, slug);
+        return new UnpublishResult(campaignId, slug);
     }
 
     /**

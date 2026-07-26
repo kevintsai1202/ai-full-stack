@@ -333,6 +333,42 @@ class AdminCampaignControllerTest {
         org.mockito.Mockito.verifyNoInteractions(campaignService);
     }
 
+    /**
+     * ★ 下架：<b>無金鑰一律 401</b>，且完全不呼叫 CampaignService。
+     *
+     * <p>下架會讓文章從 /r/archive 與單篇頁消失，權限等級與發布相同。
+     * 把 {@code guard.verify(key)} 拿掉，本測試（與下一條錯誤金鑰）立刻變紅。</p>
+     */
+    @Test
+    void unpublishWithoutKeyReturns401() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .delete("/api/admin/campaigns/9/publication"))
+           .andExpect(status().isUnauthorized());
+        org.mockito.Mockito.verifyNoInteractions(campaignService);
+    }
+
+    /** 下架：金鑰錯誤同樣 401（固定時間比對由 AdminKeyGuard 負責） */
+    @Test
+    void unpublishWithWrongKeyReturns401() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .delete("/api/admin/campaigns/9/publication").header("X-Admin-Key", "wrong-key"))
+           .andExpect(status().isUnauthorized());
+        org.mockito.Mockito.verifyNoInteractions(campaignService);
+    }
+
+    /** 下架：有金鑰時委派 CampaignService.unpublish 並回傳被下架的批次與 slug */
+    @Test
+    void unpublishDelegatesToService() throws Exception {
+        when(campaignService.unpublish(9L))
+            .thenReturn(new CampaignService.UnpublishResult(9L, "premium-post"));
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .delete("/api/admin/campaigns/9/publication").header("X-Admin-Key", "test-key"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.campaignId").value(9))
+           .andExpect(jsonPath("$.slug").value("premium-post"));
+    }
+
     /** 發送：publishedAt 格式錯誤回 400，且不呼叫 CampaignService */
     @Test
     void sendWithInvalidPublishedAtReturns400() throws Exception {

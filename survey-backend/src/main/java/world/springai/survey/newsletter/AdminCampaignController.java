@@ -158,6 +158,32 @@ public class AdminCampaignController {
     }
 
     /**
+     * 下架（撤回發布）指定批次：把 {@code published_at} 設回 NULL，讓文章從
+     * {@code /r/archive} 與 {@code /r/news/{slug}} 消失，需提供有效金鑰。
+     *
+     * <p><b>為什麼需要它</b>：{@code POST /api/admin/campaign/publish} 發布後，既有的
+     * reschedule（要求 {@code status='scheduled'}）／cancelSchedule（no-op）／send（只能建新列）
+     * 全都碰不到已發布的文章，slug 的 UNIQUE 又讓「同 slug 重發」必定 400——唯一的
+     * 修復手段是手動 {@code UPDATE campaign}，正是 publish 端點宣稱要消滅的操作模式。
+     * 解鎖點數打錯（12 打成 1200）時，空窗期內每一位解鎖的讀者都留下不可撤銷的扣點紀錄。</p>
+     *
+     * <p><b>路徑用 {@code /publication} 而非 {@code /publish}</b>：DELETE 的受詞是那個
+     * 「已發布狀態」這個資源，與 {@code DELETE /api/admin/campaigns/{id}/schedule}
+     * （受詞是排程）的既有慣例一致。<b>不刪除 campaign 那一列</b>，也不動
+     * {@code article_access} 與 {@code credit_txn}（理由見 {@code CampaignService.unpublish}）。</p>
+     *
+     * <p>限制條件（狀態非 published、或已有寄送記錄 → 409）由 service 層判斷，
+     * 那裡是唯一持有 campaign 與 email_log 的地方。</p>
+     */
+    @DeleteMapping("/api/admin/campaigns/{id}/publication")
+    public CampaignService.UnpublishResult unpublish(
+            @RequestHeader(value = KEY_HEADER, required = false) String key,
+            @PathVariable Long id) {
+        guard.verify(key);
+        return campaignService.unpublish(id);
+    }
+
+    /**
      * 解析發布時間（ISO-8601）；格式錯誤回 400 而非讓例外以 500 洩漏。
      *
      * <p>send 與 publish 共用同一份解析，避免兩條路徑各自實作而對同一個輸入

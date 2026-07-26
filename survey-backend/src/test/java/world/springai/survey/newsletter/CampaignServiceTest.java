@@ -45,10 +45,13 @@ class CampaignServiceTest {
     // 「每封信帶上該收件人的個人化連結」，不重複斷言連結字串本身的正確性
     private final SubscriptionLinkBuilder linkBuilder = mock(SubscriptionLinkBuilder.class);
     private final MailQuotaService mailQuotaService = mock(MailQuotaService.class);
+    // 用真實實作而非 mock：發布守門要問的正是「讀者端會不會渲染 gate」，
+    // 而那個判斷就是這個類別。mock 掉就只是在驗自己的假設。
+    private final ContentSplitter contentSplitter = new ContentSplitter();
 
     private final CampaignService svc = new CampaignService(
         mailSender, recipientService, campaignRepository, emailLogRepository,
-        markdownRenderer, emailTemplate, linkBuilder, mailQuotaService,
+        markdownRenderer, emailTemplate, linkBuilder, mailQuotaService, contentSplitter,
         "https://news.example.com");
 
     {
@@ -423,7 +426,7 @@ class CampaignServiceTest {
     void publishUrlHandlesTrailingSlashInBaseUrl() {
         CampaignService withSlash = new CampaignService(
             mailSender, recipientService, campaignRepository, emailLogRepository,
-            markdownRenderer, emailTemplate, linkBuilder, mailQuotaService,
+            markdownRenderer, emailTemplate, linkBuilder, mailQuotaService, contentSplitter,
             "https://news.example.com/");
         when(campaignRepository.findBySlug("slash")).thenReturn(Optional.empty());
         when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
@@ -432,6 +435,178 @@ class CampaignServiceTest {
             Campaign.TIER_BASIC, null, "slash", null);
 
         assertEquals("https://news.example.com/r/news/slash", r.url());
+    }
+
+    /**
+     * ★ PREMIUM 沒有 {@code <!--paywall-->} 標記必須回 400，且一列都不寫入。
+     *
+     * <p>這是「頁面說 PREMIUM 12 點、實際做免費全開」的唯一入口守門。無標記時
+     * {@link ContentSplitter} 把全文都當免費區，於是 {@code /r/archive} 依
+     * {@code isPremium()} 掛上「進階」標籤、單篇頁顯示「解鎖 12 點」，而未登入訪客
+     * 直接拿到整篇全文、一點都不用付。<b>而且沒有任何回饋管道會揭露它</b>：不寄信所以
+     * 沒有寄送統計，{@code credit_txn} 永遠不會有這篇的 READ，看起來就像「沒人想解鎖」。</p>
+     *
+     * <p>讀者端「無標記就不收費、不渲染 gate」是刻意且有測試的設計
+     * （{@code ReaderPageControllerTest.premiumWithoutPaywallMarkerRendersNeitherGateNorScript}），
+     * 所以缺陷不在渲染層——publish 是 PREMIUM 唯一的建立路徑，也是唯一能攔的地方。
+     * 把 CampaignService.publish 裡的這道檢查刪掉，本測試立刻變紅。</p>
+     *
+     * <p>大小寫變體一併驗：{@code ContentSplitter.isMarkerLine} 是大小寫敏感的
+     * {@code contentEquals}，把標記打成 {@code <!--PAYWALL-->} 與整行忘記貼是<b>同一個</b>
+     * 失效（都沒有受限區），而前者是操作者最容易犯、最不容易自己看出來的那一種。</p>
+     */
+    @Test
+    void publishPremiumWithoutPaywallMarkerRejected() {
+        when(campaignRepository.findBySlug("premium-no-marker")).thenReturn(Optional.empty());
+        when(campaignRepository.findBySlug("premium-upper-marker")).thenReturn(Optional.empty());
+
+        // ① 整行忘了貼標記
+        ResponseStatusException missing = assertThrows(ResponseStatusException.class,
+            () -> svc.publish("主旨", "# 標題\n\n全篇都是內容，沒有任何標記",
+                Campaign.TIER_PREMIUM, 12, "premium-no-marker", null));
+        assertEquals(400, missing.getStatusCode().value());
+        assertTrue(missing.getReason() != null && missing.getReason().contains("paywall"),
+            missing.getReason());
+
+        // ② 標記打成大寫（ContentSplitter 是大小寫敏感的精確比對）
+        ResponseStatusException wrongCase = assertThrows(ResponseStatusException.class,
+            () -> svc.publish("主旨", "免費區\n\n<!--PAYWALL-->\n\n本該收費的內容",
+                Campaign.TIER_PREMIUM, 12, "premium-upper-marker", null));
+        assertEquals(400, wrongCase.getStatusCode().value());
+
+        // 標示為付費卻全篇免費的文章，一列都不得寫進資料庫
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
+    /**
+     * 這道守門只加在 PREMIUM：BASIC 沒有標記是完全正常的（整篇免費就是它的意思）。
+     *
+     * <p>若誤把檢查寫成「所有 tier 都必須有標記」，一般免費文章會全部發不出去——
+     * 那會讓人為了發文而亂加標記，反而製造出「BASIC 卻有受限區」的怪資料。</p>
+     */
+    @Test
+    void publishBasicWithoutPaywallMarkerAllowed() {
+        when(campaignRepository.findBySlug("basic-no-marker")).thenReturn(Optional.empty());
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+
+        CampaignService.PublishResult r = svc.publish("主旨", "整篇都是免費內容",
+            Campaign.TIER_BASIC, null, "basic-no-marker", null);
+
+        assertEquals(Campaign.TIER_BASIC, r.tier());
+        assertEquals(0, r.creditCost());
+    }
+
+    // ── 下架（撤回發布）───────────────────────────────────────────────────
+
+    /** 建一個已發布、狀態為 published 的假 campaign（下架測試共用） */
+    private Campaign publishedCampaign(String slug) {
+        Campaign c = new Campaign("主旨", "內文", null, null, null,
+            Campaign.MODE_PUBLISH, null, 0, Campaign.STATUS_PUBLISHED);
+        c.setSlug(slug);
+        c.setPublishedAt(java.time.OffsetDateTime.parse("2026-07-25T04:00:00Z"));
+        return c;
+    }
+
+    /**
+     * ★ 下架成功：走<b>只寫 published_at 一欄</b>的條件式 UPDATE，不用 save(entity) 整列寫回。
+     *
+     * <p>{@link Campaign} 沒有 {@code @Version} 也沒有 {@code @DynamicUpdate}，
+     * {@code save(entity)} 的 UPDATE 會帶上所有可更新欄位（subject／markdown／tier／
+     * credit_cost／統計…），把 SELECT 當下的整列快照寫回去，靜默覆蓋這段期間別的請求
+     * 對同一列的變更。本專案已有兩個 Critical 源於整列寫回。把實作改成 {@code save(campaign)}
+     * 之後，這裡的 {@code verify(clearPublishedAt)} 與 {@code never()).save} 兩條都會變紅。</p>
+     */
+    @Test
+    void unpublishClearsPublishedAtWithConditionalUpdate() {
+        Campaign c = publishedCampaign("to-unpublish");
+        when(campaignRepository.findById(7L)).thenReturn(Optional.of(c));
+        when(emailLogRepository.countByCampaignId(7L)).thenReturn(0L);
+        when(campaignRepository.clearPublishedAt(7L, Campaign.STATUS_PUBLISHED)).thenReturn(1);
+
+        CampaignService.UnpublishResult r = svc.unpublish(7L);
+
+        assertEquals(7L, r.campaignId());
+        assertEquals("to-unpublish", r.slug());
+        verify(campaignRepository).clearPublishedAt(7L, Campaign.STATUS_PUBLISHED);
+        // ★ 不得整列寫回
+        verify(campaignRepository, never()).save(any(Campaign.class));
+        // ★ 不刪列：已解鎖者的 article_access 以 campaign_id 指向這一列，刪了就毀掉他們的憑證
+        verify(campaignRepository, never()).delete(any(Campaign.class));
+        verify(campaignRepository, never()).deleteById(any());
+        // ★ 不動帳本、不動寄送記錄（下架只改「這篇現在對外可見嗎」這一個事實）
+        verify(emailLogRepository, never()).save(any(EmailLog.class));
+    }
+
+    /**
+     * 下架只允許 {@code status='published'}；其他狀態回 409 且不執行任何 UPDATE。
+     *
+     * <p>{@code sent}／{@code scheduled}／{@code failed} 的列是寄送批次，
+     * 用一條「撤回網頁發布」的端點去改它們等於混淆兩種語意。
+     * 把狀態檢查拿掉後，本測試（三個狀態全驗）立刻變紅。</p>
+     */
+    @Test
+    void unpublishRejectsNonPublishedStatus() {
+        for (String status : List.of("sent", "scheduled", "failed")) {
+            Campaign c = new Campaign("主旨", "內文", null, null, null, "now", null, 1, status);
+            c.setSlug("some-" + status);
+            when(campaignRepository.findById(11L)).thenReturn(Optional.of(c));
+
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> svc.unpublish(11L), "狀態 " + status + " 不該可下架");
+            assertEquals(409, ex.getStatusCode().value(), status);
+        }
+        verify(campaignRepository, never()).clearPublishedAt(any(), any());
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
+    /**
+     * ★ 寄過信的列不可下架：回 409 且不執行任何 UPDATE。
+     *
+     * <p>有 {@code email_log} 代表這篇已經寄進讀者信箱，信裡的連結指向
+     * {@code /r/news/{slug}}；下架會讓已收到信的讀者點到 404——對他們來說那是
+     * 「站方寄了一封連結壞掉的信」。把 email_log 檢查拿掉，本測試立刻變紅。</p>
+     */
+    @Test
+    void unpublishRejectsCampaignWithEmailLog() {
+        Campaign c = publishedCampaign("already-mailed");
+        when(campaignRepository.findById(12L)).thenReturn(Optional.of(c));
+        when(emailLogRepository.countByCampaignId(12L)).thenReturn(3L);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.unpublish(12L));
+        assertEquals(409, ex.getStatusCode().value());
+        assertTrue(ex.getReason() != null && ex.getReason().contains("寄送記錄"), ex.getReason());
+
+        verify(campaignRepository, never()).clearPublishedAt(any(), any());
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
+    /** 找不到批次回 404（而非讓 Optional.get() 以 500 失敗） */
+    @Test
+    void unpublishUnknownCampaignReturns404() {
+        when(campaignRepository.findById(999L)).thenReturn(Optional.empty());
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.unpublish(999L));
+        assertEquals(404, ex.getStatusCode().value());
+    }
+
+    /**
+     * 條件式 UPDATE 影響 0 列（狀態在讀取後被別的請求改掉）→ 回 409，不假裝成功。
+     *
+     * <p>正確性來自受影響筆數，不是來自先前的狀態檢查。若把回傳值丟掉不看，
+     * 後台會顯示「已下架」而文章仍在 /r/archive 上——頁面說下架了、實際沒下架。</p>
+     */
+    @Test
+    void unpublishReportsConflictWhenNoRowUpdated() {
+        Campaign c = publishedCampaign("race");
+        when(campaignRepository.findById(13L)).thenReturn(Optional.of(c));
+        when(emailLogRepository.countByCampaignId(13L)).thenReturn(0L);
+        when(campaignRepository.clearPublishedAt(13L, Campaign.STATUS_PUBLISHED)).thenReturn(0);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.unpublish(13L));
+        assertEquals(409, ex.getStatusCode().value());
     }
 
     /**

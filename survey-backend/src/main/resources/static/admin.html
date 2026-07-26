@@ -317,6 +317,10 @@
         hint.className='hint';
       }
     });
+    // 分級提示的文案只有一份真相（上面那個 change 監聽器）。首次載入必須主動觸發一次，
+    // 否則使用者只要沒動過分級下拉（BASIC 是預設值，最常見的情形）就永遠看不到現行提示，
+    // 停在 HTML 裡那句寫死的舊文案上。與其把字串複製一份到 HTML，不如讓它自己算一次。
+    $('#art-tier').dispatchEvent(new Event('change'));
     buildRawHeader();doQuota();doCount();doHistory();doInviteOverview();switchView('analytics');
   }
 
@@ -644,7 +648,10 @@
       $('#art-slug').value='';
       doHistory();
     }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='發布失敗：'+e.message;}}
-    finally{$('#publish-btn').disabled=false;}
+    // 不可無條件解鎖：await 期間使用者可能已切到歷史列表按「修改」，
+    // 那會呼叫 setPublishFieldsEnabled(false) 停用三個發布欄位與本按鈕。
+    // 無條件 disabled=false 會蓋掉那個停用，留下「欄位停用（=舊批次值）但按鈕可按」的狀態。
+    finally{$('#publish-btn').disabled = editingCampaignId != null;}
   }
   /** 建立單一表格儲存格，內容一律以 textContent 寫入避免 XSS。 */
   function cell(text){const td=document.createElement('td');td.textContent=text==null?'':String(text);return td;}
@@ -655,9 +662,28 @@
       // 「只發布不寄送」的紀錄沒有寄送行為：成功/失敗顯示 0/0 會被讀成「寄了 0 封的失敗群發」，
       // 與事實（根本沒打算寄信）相反，故改為明確標示未寄送。
       tr.append(statusTd,cell(c.mode==='publish'?'—（未寄送）':c.acceptedCount+'/'+c.failedCount));
-      const actionTd=document.createElement('td');if(c.status==='scheduled'){const editBtn=document.createElement('button');editBtn.className='btn ghost';editBtn.textContent='修改';editBtn.onclick=()=>doEditSchedule(c);const btn=document.createElement('button');btn.className='btn danger';btn.style.marginLeft='8px';btn.textContent='取消排程';btn.onclick=()=>doCancel(c.id);actionTd.append(editBtn,btn);}tr.append(actionTd);body.append(tr);});}catch(e){/* 401 已由 api 處理，其餘維持既有畫面。 */}}
+      const actionTd=document.createElement('td');if(c.status==='scheduled'){const editBtn=document.createElement('button');editBtn.className='btn ghost';editBtn.textContent='修改';editBtn.onclick=()=>doEditSchedule(c);const btn=document.createElement('button');btn.className='btn danger';btn.style.marginLeft='8px';btn.textContent='取消排程';btn.onclick=()=>doCancel(c.id);actionTd.append(editBtn,btn);}
+      // 已發布的文章給一顆「下架」：發布後價格或內文打錯時，這是唯一不必手動改資料庫的止血手段。
+      // 條件同時看 publishedAt：下架只把它設為 NULL（status 仍是 published），
+      // 若只看 status，已下架的列會留著一顆按了也沒事發生的按鈕，讀不出來到底下架了沒。
+      else if(c.status==='published'&&c.publishedAt){const off=document.createElement('button');off.className='btn danger';off.textContent='下架';off.onclick=()=>doUnpublish(c);actionTd.append(off);}
+      else if(c.status==='published'){const note=document.createElement('small');note.style.color='var(--muted)';note.textContent='已下架（不在 /r/archive）';actionTd.append(note);}
+      tr.append(actionTd);body.append(tr);});}catch(e){/* 401 已由 api 處理，其餘維持既有畫面。 */}}
   /** 取消指定的電子報排程。 */
   async function doCancel(id){if(!confirm('確定取消此排程？'))return;try{const r=await api('/api/admin/campaigns/'+id+'/schedule',{method:'DELETE'});alert(`已取消 ${r.cancelled} 封，失敗 ${r.failed}`);if(editingCampaignId===id)exitEditMode();doHistory();}catch(e){if(e.message!=='401')alert('取消失敗：'+e.message);}}
+  /**
+   * 下架已發布的文章（DELETE /api/admin/campaigns/{id}/publication）。
+   *
+   * 確認訊息刻意寫明「已解鎖的讀者不會被退點、紀錄也保留」——下架不動 credit_txn 與
+   * article_access（帳本只增不改；已買過的人重新發布後仍有效），操作者必須知道
+   * 它止的是「繼續有人以錯價解鎖」的血，不是把已發生的交易撤回。
+   */
+  async function doUnpublish(c){
+    if(!confirm(`確定下架「${c.subject}」（批次 #${c.id}）？\n文章會從 /r/archive 與 /r/news/${c.slug||''} 消失。\n已解鎖的讀者不會被退點，其解鎖紀錄保留（重新發布後仍有效）。`))return;
+    try{const r=await api('/api/admin/campaigns/'+c.id+'/publication',{method:'DELETE'});
+      alert(`已下架批次 #${r.campaignId}${r.slug?`（${r.slug}）`:''}`);doHistory();}
+    catch(e){if(e.message!=='401')alert('下架失敗：'+e.message);}
+  }
   /** 把 UTC ISO 時間轉為 datetime-local 需要的本地「YYYY-MM-DDTHH:mm」格式。 */
   function toLocalInput(iso){const d=new Date(iso);if(Number.isNaN(d.getTime()))return '';const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;}
   /** 把指定排程批次的內容回填到發送編輯區，進入「修改排程」模式。 */

@@ -14,6 +14,11 @@
 //   ⑦ 後台歷史列表不把它顯示成失敗的群發（mode=publish、status=published、寄送統計全 0）
 //   ⑧ 守門仍在：同一篇 PREMIUM 用 /api/admin/campaign/send 寄送必須被拒（400）
 //   ⑨ 缺 slug 回 400、未帶金鑰回 401、重複 slug 回 400
+//   ⑩ PREMIUM 缺 <!--paywall--> 標記（含大小寫打錯）一律 400——否則頁面說「解鎖 N 點」
+//      而 ContentSplitter 把全文當免費區，未登入訪客整篇免費拿走
+//   ⑪ 下架（DELETE /api/admin/campaigns/{id}/publication）：從 archive 與單篇頁消失，
+//      但已解鎖者的 article_access 與 credit_txn 完整保留（帳本只增不改）；
+//      未帶金鑰 401、狀態非 published 回 409、已寄過信回 409
 //
 // 用法（需服務已啟動；預設連本機 8080 與 docker 容器 survey-test-db）：
 //   $env:ADMIN_API_KEY="<金鑰>"; node survey-backend/scripts/verify-publish-endpoint.mjs
@@ -74,6 +79,8 @@ const FREE = 'PUBLISH_E2E_FREE_INTRO';
 /** 受限區哨兵：出現在不該出現的回應裡就是外洩 */
 const GATED = 'PUBLISH_E2E_SENTINEL_GATED';
 const COST = 12;
+/** 瀏覽器模式那篇的主旨（歷史列表要靠它找到對應的列來按「下架」） */
+const UI_SUBJECT = '只發布不寄送（後台 UI）';
 /** markdown：以 <!--paywall--> 切開免費區與受限區 */
 const MARKDOWN = `# ${SUBJECT}\n\n${FREE}\n\n<!--paywall-->\n\n${GATED}\n`;
 
@@ -255,6 +262,27 @@ try {
     });
     eq(badTier.status, 400, '★ 未知 tier（打錯字）的回應碼');
 
+    // ★ PREMIUM 卻沒有 <!--paywall--> 標記：頁面會標示「進階／解鎖 N 點」而
+    // ContentSplitter 把全文都當免費區，未登入訪客直接拿到整篇。必須在入口擋下。
+    const noMarker = await admin('/api/admin/campaign/publish', {
+      method: 'POST',
+      body: JSON.stringify({
+        subject: SUBJECT, markdown: `# ${SUBJECT}\n\n${FREE}\n\n${GATED}\n`,
+        tier: 'PREMIUM', creditCost: COST, slug: SLUG,
+      }),
+    });
+    eq(noMarker.status, 400, '★ PREMIUM 缺 <!--paywall--> 標記的回應碼');
+
+    // 大小寫打錯（ContentSplitter 是大小寫敏感的精確比對）等同沒有受限區
+    const upperMarker = await admin('/api/admin/campaign/publish', {
+      method: 'POST',
+      body: JSON.stringify({
+        subject: SUBJECT, markdown: `${FREE}\n\n<!--PAYWALL-->\n\n${GATED}\n`,
+        tier: 'PREMIUM', creditCost: COST, slug: SLUG,
+      }),
+    });
+    eq(upperMarker.status, 400, '★ PREMIUM 標記打成大寫的回應碼');
+
     const zeroCost = await admin('/api/admin/campaign/publish', {
       method: 'POST',
       body: JSON.stringify({ subject: SUBJECT, markdown: MARKDOWN, tier: 'PREMIUM', creditCost: 0, slug: SLUG }),
@@ -356,6 +384,12 @@ try {
   eq(login.status, 302, 'magic link 回應碼');
   check('取得 reader_session cookie', !!login.cookie);
   const cookie = login.cookie;
+  // cookie 為 null 時必須中止：後續請求會以「匿名」身分發出，
+  // 而本階段最核心的哨兵「★ 回應本文完全不含受限段落」對匿名訪客「必然」通過——
+  // 它本來要驗的性質（已登入、餘額足夠、尚未解鎖時仍不外洩）完全沒被驗到。
+  // 整體不會假通過（上面那條 cookie 斷言已經是紅的），但讓失敗原因保持單一，
+  // 而不是連帶產生一堆看起來通過、實際上什麼都沒驗的誤導綠字。
+  if (!cookie) throw new Error('取不到 reader_session cookie，中止後續讀者階段（避免以匿名身分產生誤導的通過）');
 
   // 餘額由後台加點補足（走正式端點，帳本會有對應的一筆，不破壞不變式）
   const balanceBefore = Number(sql(
@@ -445,12 +479,111 @@ try {
     }
   }
 
-  // ── [11] 瀏覽器模式（選用）───────────────────────────────────────────
+  // ── [11] 下架（撤回發布）：DELETE /api/admin/campaigns/{id}/publication ──
+  //
+  // 這是「發布後打錯價格／貼漏內文」時唯一不必手動改資料庫的止血手段。
+  // 最關鍵的性質是它「只改可見性，不動已發生的交易」：
+  // 已解鎖的讀者其 article_access 與 credit_txn 必須完整留著（重新發布後仍有效），
+  // 否則核心不變式「餘額 == 帳本總和」會被破壞，讀者也會被要求為同一篇付第二次。
+  console.log('\n[11] 下架（只改可見性，不動 article_access 與 credit_txn）');
+  {
+    const basicId = sql(`SELECT id FROM campaign WHERE slug = ${quote(BASIC_SLUG)};`).trim();
+
+    // ① 權限：未帶金鑰一律 401（下架讓文章從 archive 消失，權限等級與發布相同）
+    const noKey = await admin(`/api/admin/campaigns/${basicId}/publication`, { method: 'DELETE' }, null);
+    eq(noKey.status, 401, '★ 未帶 X-Admin-Key 下架的回應碼');
+    eq(sql(`SELECT published_at IS NOT NULL FROM campaign WHERE slug = ${quote(BASIC_SLUG)};`), 't',
+      '★ 未授權的下架請求沒有生效');
+
+    // ② 不存在的批次回 404（而非 500）
+    const missing = await admin('/api/admin/campaigns/99999999/publication', { method: 'DELETE' });
+    eq(missing.status, 404, '不存在的批次回應碼');
+
+    // ③ 寄過信的列不可下架：信裡的連結指向 /r/news/{slug}，下架會讓收信人點到 404。
+    //    用 SQL 在 BASIC 那篇（沒有任何讀者解鎖過）上臨時插一筆寄送記錄再刪掉，
+    //    比真的寄一封信安全（本腳本全程不寄信）。
+    sql(`INSERT INTO email_log (recipient, subject, type, provider_message_id, status, campaign_id)
+         VALUES (${quote('publish-log@example.invalid')}, ${quote(SUBJECT)}, 'campaign', 'noop', 'sent', ${basicId});`);
+    const mailed = await admin(`/api/admin/campaigns/${basicId}/publication`, { method: 'DELETE' });
+    eq(mailed.status, 409, '★ 已寄過信的批次下架回應碼（不可讓收信人點到 404）');
+    eq(sql(`SELECT published_at IS NOT NULL FROM campaign WHERE slug = ${quote(BASIC_SLUG)};`), 't',
+      '★ 被 409 擋下時 published_at 未被改動');
+    sql(`DELETE FROM email_log WHERE campaign_id = ${basicId} AND recipient = ${quote('publish-log@example.invalid')};`);
+    eq(sql(`SELECT count(*) FROM email_log WHERE campaign_id = ${basicId};`), 0, '還原：移除臨時寄送記錄');
+
+    // ④ 狀態不是 published 的列不可下架（那些是寄送批次，語意不同）。
+    //    同樣用 SQL 在自己的 fixture 上臨時改狀態再改回，避免真的寄一批信。
+    sql(`UPDATE campaign SET status = 'sent' WHERE slug = ${quote(BASIC_SLUG)};`);
+    const wrongStatus = await admin(`/api/admin/campaigns/${basicId}/publication`, { method: 'DELETE' });
+    eq(wrongStatus.status, 409, '★ 狀態非 published 的批次下架回應碼');
+    eq(sql(`SELECT published_at IS NOT NULL FROM campaign WHERE slug = ${quote(BASIC_SLUG)};`), 't',
+      '★ 被 409 擋下時 published_at 未被改動');
+    sql(`UPDATE campaign SET status = 'published' WHERE slug = ${quote(BASIC_SLUG)};`);
+    eq(sql(`SELECT status FROM campaign WHERE slug = ${quote(BASIC_SLUG)};`), 'published',
+      '還原：BASIC 那篇的狀態');
+
+    // ⑤ 成功下架 PREMIUM 那篇（第 [7] 階段已有一位讀者付 COST 點解鎖過它）
+    const accessBefore = sql(`SELECT count(*) FROM article_access WHERE campaign_id = ${campaignId};`);
+    const txnBefore = sql(`SELECT count(*) FROM credit_txn t JOIN reader r ON r.id = t.reader_id
+                            WHERE lower(r.email) = ${quote(READER_EMAIL)};`);
+    eq(accessBefore, 1, '下架前：解鎖者的 article_access 筆數');
+
+    const off = await admin(`/api/admin/campaigns/${campaignId}/publication`, { method: 'DELETE' });
+    eq(off.status, 200, '★ 下架回應碼');
+    eq(off.body && off.body.campaignId, campaignId, '回應 campaignId');
+    eq(off.body && off.body.slug, SLUG, '回應 slug');
+
+    // 可見性：published_at 變 NULL，兩個讀者端入口立刻都看不到
+    eq(sql(`SELECT published_at IS NULL FROM campaign WHERE slug = ${quote(SLUG)};`), 't',
+      '★ campaign.published_at 已設為 NULL');
+    eq(sql(`SELECT count(*) FROM campaign WHERE slug = ${quote(SLUG)};`), 1,
+      '★ campaign 那一列仍存在（下架不刪列）');
+    const single = await page(`/r/news/${SLUG}`);
+    eq(single.res.status, 404, '★ /r/news/{slug} 下架後回應碼');
+    check('★ 下架後單篇頁不含受限段落', !single.body.includes(GATED));
+    const archive = await page('/r/archive');
+    check(`★ /r/archive 不再列出這篇（/r/news/${SLUG}）`, !archive.body.includes(`/r/news/${SLUG}`));
+    check('★ archive 不含任何受限段落', !archive.body.includes(GATED));
+
+    // ★ 已發生的交易完全不受影響（帳本只增不改；已買過的人重新發布後仍有效）
+    eq(sql(`SELECT count(*) FROM article_access WHERE campaign_id = ${campaignId};`), accessBefore,
+      '★ 下架後 article_access 筆數不變（已解鎖者的憑證保留）');
+    eq(sql(`SELECT count(*) FROM credit_txn t JOIN reader r ON r.id = t.reader_id
+             WHERE lower(r.email) = ${quote(READER_EMAIL)};`), txnBefore,
+      '★ 下架後 credit_txn 筆數不變（帳本只增不改）');
+    eq(sql(`SELECT count(*) FROM credit_txn t JOIN reader r ON r.id = t.reader_id
+             WHERE lower(r.email) = ${quote(READER_EMAIL)}
+               AND t.reason = 'READ' AND t.delta = ${-COST};`), 1,
+      '★ 那筆 READ 扣點紀錄仍在（不得因下架而退點或刪除）');
+    checkLedgerInvariant('下架後測試讀者', READER_EMAIL);
+
+    // 其餘欄位一個都不能被動到——條件式 UPDATE 只寫 published_at 一欄；
+    // 若改成 save(entity) 整列寫回，這裡驗的是「沒有資料遺失」，
+    // 而併發覆蓋的性質由 CampaignServiceTest 的 verify(clearPublishedAt) 守著。
+    const after = sql(`SELECT subject, tier, credit_cost, mode, status, slug
+                         FROM campaign WHERE slug = ${quote(SLUG)};`).split('|');
+    eq(after[0], SUBJECT, '下架後 subject 不變');
+    eq(after[1], 'PREMIUM', '下架後 tier 不變');
+    eq(after[2], COST, '下架後 credit_cost 不變');
+    eq(after[3], 'publish', '下架後 mode 不變');
+    eq(after[4], 'published', '下架後 status 不變（下架只改 published_at 一欄）');
+
+    // ⑥ 下架後 slug 仍被那一列佔用，所以「同 slug 重新發布」依舊回 400——
+    //    這是刻意的：重新上架應該是把 published_at 設回來（或改用新 slug），
+    //    不是再建一列造成兩篇同名文章。此處只記錄事實，不主張它是好體驗。
+    const rePublish = await admin('/api/admin/campaign/publish', {
+      method: 'POST',
+      body: JSON.stringify({ subject: SUBJECT, markdown: MARKDOWN, tier: 'PREMIUM', creditCost: COST, slug: SLUG }),
+    });
+    eq(rePublish.status, 400, '下架後同 slug 重新發布仍回 400（slug 仍被那一列佔用）');
+  }
+
+  // ── [12] 瀏覽器模式（選用）───────────────────────────────────────────
   if (WITH_BROWSER) {
-    console.log('\n[11] 真實瀏覽器：後台按「只發布不寄送」→ 讀者頁 paywall');
+    console.log('\n[12] 真實瀏覽器：後台按「只發布不寄送」→ 讀者頁 paywall → 下架');
     await runBrowserStage();
   } else {
-    console.log('\n[11] 真實瀏覽器（略過，加 --browser 啟用）');
+    console.log('\n[12] 真實瀏覽器（略過，加 --browser 啟用）');
   }
 } catch (e) {
   check('腳本執行未中斷', false, e.stack || e.message);
@@ -538,7 +671,7 @@ async function runBrowserStage() {
     await page2.waitForSelector('.tab[data-view="campaign"]', { state: 'visible', timeout: 15000 });
     await page2.click('.tab[data-view="campaign"]');
 
-    await page2.fill('#subject', '只發布不寄送（後台 UI）');
+    await page2.fill('#subject', UI_SUBJECT);
     await page2.fill('#markdown', `${FREE}\n\n<!--paywall-->\n\n${uiGated}\n`);
     await page2.fill('#art-slug', uiSlug);
     await page2.selectOption('#art-tier', 'PREMIUM');
@@ -565,8 +698,36 @@ async function runBrowserStage() {
     const html = await anon.content();
     check('★ 未登入者在瀏覽器拿到的 HTML 不含受限段落', !html.includes(uiGated));
     check('看得到免費區', html.includes(FREE));
+
+    // 後台那顆「下架」按鈕：HTTP 斷言看不到 JS——按鈕沒接上事件、或 doUnpublish
+    // 打錯路徑，HTTP 層完全驗不出來。這裡走真實點擊，確認它真的會下架。
+    await page2.click('#hist-btn');
+    const row = page2.locator('#hist tbody tr', { hasText: UI_SUBJECT }).first();
+    await row.waitFor({ state: 'visible', timeout: 15000 });
+    await row.getByRole('button', { name: '下架' }).click();
+    // 成功後 doHistory() 重繪，那一列的動作欄從按鈕換成「已下架」說明。
+    // 等不到就記為失敗（而不是讓例外冒出去變成籠統的「腳本執行中斷」）
+    let uiUnpublished = true;
+    try {
+      await page2.waitForFunction(
+        subject => Array.from(document.querySelectorAll('#hist tbody tr'))
+          .some(tr => tr.textContent.includes(subject) && tr.textContent.includes('已下架')),
+        UI_SUBJECT, { timeout: 15000 });
+    } catch (e) {
+      uiUnpublished = false;
+    }
+    check('★ 後台「下架」按鈕真的生效（列表改顯示「已下架」）', uiUnpublished,
+      '按下「下架」後歷史列表沒有出現「已下架」');
+    eq(sql(`SELECT published_at IS NULL FROM campaign WHERE slug = ${quote(uiSlug)};`), 't',
+      '★ 下架後 published_at 為 NULL');
+    await anon.goto(`${BASE}/r/news/${uiSlug}`, { waitUntil: 'domcontentloaded' });
+    const gone = await anon.content();
+    check('★ 下架後未登入者開單篇頁看不到內容', !gone.includes(uiGated) && !gone.includes(FREE));
   } finally {
-    await browser.close();
+    // close() 的失敗不可以吃掉後面的清理：Windows 上 chromium 行程殘留時它會拋錯，
+    // 一旦讓例外冒出去，下面的刪除與那條還原斷言全部不執行，
+    // 帶 PREMIUM 哨兵的測試文章就留在 /r/archive 污染下一次人工檢查。
+    try { await browser.close(); } catch (e) { console.log(`  ! 關閉瀏覽器失敗（不影響清理）：${e.message}`); }
     // 這篇只在瀏覽器模式用得到，留著會讓 /r/archive 多一篇無關文章
     sql(`DELETE FROM article_access
           WHERE campaign_id IN (SELECT id FROM campaign WHERE slug = ${quote(uiSlug)});`);
