@@ -66,7 +66,8 @@ class ReaderPortalControllerTest {
         // 預設 converter 列表，若只放 String converter，JSON 請求會直接被拒（415）。
         mvc = MockMvcBuilders.standaloneSetup(new ReaderPortalController(
                 new HtmlTemplate(), readerContext, creditTxnRepository,
-                surveyResponseRepository, referralService, creditPolicy))
+                surveyResponseRepository, referralService, creditPolicy,
+                "https://survey.example.com"))
             .setMessageConverters(
                 new StringHttpMessageConverter(StandardCharsets.UTF_8),
                 new MappingJackson2HttpMessageConverter())
@@ -494,6 +495,152 @@ class ReaderPortalControllerTest {
         for (String placeholder : List.of(
                 "<!--NAV_LINKS-->", "<!--CREDITS-->", "<!--PREMIUM_COST-->",
                 "<!--EMAIL-->", "<!--TIER_STATUS-->", "<!--DISPLAY_NAME-->", "<!--TXN_LIST-->")) {
+            org.junit.jupiter.api.Assertions.assertFalse(html.contains(placeholder),
+                "佔位符 " + placeholder + " 不得殘留在回應中");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // /r/invite：我的邀請
+    // ------------------------------------------------------------------
+
+    /** 未登入導向登入頁並帶回跳目標 */
+    @Test
+    void anonymousInviteRedirectsToLogin() throws Exception {
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+
+        mvc.perform(get("/r/invite"))
+           .andExpect(status().isFound())
+           .andExpect(header().string("Location", "/r/login?redirect=/r/invite"));
+    }
+
+    /** 顯示完整的邀請連結（含 ?ref= 與讀者自己的邀請碼） */
+    @Test
+    void showsFullInviteLinkWithReferralCode() throws Exception {
+        givenLoggedIn(reader(300));
+
+        mvc.perform(get("/r/invite").cookie(cookie()))
+           .andExpect(status().isOk())
+           .andExpect(content().string(containsString("https://survey.example.com/r/?ref=CODE1234")));
+    }
+
+    /** 顯示邀請成效：人數與累計點數 */
+    @Test
+    void showsReferralStats() throws Exception {
+        givenLoggedIn(reader(300));
+        when(referralService.stats(READER_ID))
+            .thenReturn(new ReferralService.ReferralStats(3, 300));
+
+        String html = mvc.perform(get("/r/invite").cookie(cookie()))
+            .andReturn().getResponse().getContentAsString();
+
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("3"));
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("300"));
+    }
+
+    /**
+     * 每位獎勵點數必須來自 {@link CreditPolicy#referralReward()}，不可寫死。
+     *
+     * <p>破壞性驗證動機：把 mock 值設成 55（非 {@code DEFAULT_REFERRAL_REWARD}
+     * 的 100，也非 0），若實作把 REWARD 佔位符改成寫死常數，本測試會抓到。</p>
+     */
+    @Test
+    void rewardPerInviteComesFromPolicy() throws Exception {
+        givenLoggedIn(reader(300));
+        when(creditPolicy.referralReward()).thenReturn(55);
+
+        mvc.perform(get("/r/invite").cookie(cookie()))
+           .andExpect(content().string(containsString("55")));
+    }
+
+    /** 尚無成功邀請時顯示鼓勵性空狀態，而不是「0 人」的冷數字 */
+    @Test
+    void showsEmptyStateWithNoInvites() throws Exception {
+        givenLoggedIn(reader(300));
+        when(referralService.stats(READER_ID))
+            .thenReturn(new ReferralService.ReferralStats(0, 0));
+
+        mvc.perform(get("/r/invite").cookie(cookie()))
+           .andExpect(content().string(containsString("還沒有人")));
+    }
+
+    /**
+     * 獎勵為 0（後台關閉邀請獎勵）時，文案不得出現「拿到 0 點」這種讀起來像
+     * 故障的字，必須改用講得通的說法，並沿用規則頁（{@code /r/rules}）
+     * 「依值切換整段文字」的慣例。
+     *
+     * <p>破壞性驗證動機：若實作把 REWARD 佔位符原樣套進固定句型
+     * （「你會拿到 0 點」），本測試會抓到「拿到 0 點」這個具體字串。</p>
+     */
+    @Test
+    void rewardIntroDoesNotSayZeroPointsWhenRewardIsZero() throws Exception {
+        givenLoggedIn(reader(300));
+        when(creditPolicy.referralReward()).thenReturn(0);
+
+        mvc.perform(get("/r/invite").cookie(cookie()))
+           .andExpect(content().string(not(containsString("拿到 0 點"))))
+           .andExpect(content().string(containsString("暫停發放")));
+    }
+
+    /**
+     * 必須說明「被邀者點確認信才算成功」。
+     *
+     * <p>spec §5.4 明訂先講清楚以避免爭議：讀者分享了連結、朋友也訂閱了，
+     * 但點數沒進來——若頁面沒事先說明，那就是一次客訴。</p>
+     */
+    @Test
+    void explainsConfirmationRequirement() throws Exception {
+        givenLoggedIn(reader(300));
+
+        mvc.perform(get("/r/invite").cookie(cookie()))
+           .andExpect(content().string(containsString("確認信")));
+    }
+
+    /** 邀請頁同樣不可被共享快取（含個人邀請碼） */
+    @Test
+    void invitePageIsNeverSharedCached() throws Exception {
+        givenLoggedIn(reader(300));
+
+        mvc.perform(get("/r/invite").cookie(cookie()))
+           .andExpect(header().string("Cache-Control", "private, no-store"))
+           .andExpect(header().string("Vary", "Cookie"));
+    }
+
+    /**
+     * 個資防線：/r/invite 只能顯示彙總數字，絕不能出現任何被邀者的 email
+     * （即使 local part）。{@link ReferralService.ReferralStats} 本身不帶
+     * email，此測試釘住這個契約，避免日後有人「順手」改成直接查帳本明細
+     * 並把 note（存的是被邀者 email）顯示出來。
+     */
+    @Test
+    void neverLeaksInviteeEmail() throws Exception {
+        givenLoggedIn(reader(300));
+        when(referralService.stats(READER_ID))
+            .thenReturn(new ReferralService.ReferralStats(1, 100));
+        when(creditTxnRepository.findByReaderIdOrderByCreatedAtDesc(anyLong(), any(Pageable.class)))
+            .thenReturn(List.of(new CreditTxn(READER_ID, 100, CreditTxn.REASON_REFERRAL, null, "friend@example.com")));
+
+        String html = mvc.perform(get("/r/invite").cookie(cookie()))
+            .andReturn().getResponse().getContentAsString();
+
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("friend@example.com"), "不得洩漏完整 email");
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("friend"), "連 local part 都不得洩漏");
+    }
+
+    /**
+     * 頁面模板的佔位符一定要被實際內容取代；漏 put 任何一個都會讓 HTML 注解
+     * 字面殘留在回應裡。
+     */
+    @Test
+    void inviteNoTemplatePlaceholderIsLeftUnfilled() throws Exception {
+        givenLoggedIn(reader(300));
+
+        String html = mvc.perform(get("/r/invite").cookie(cookie()))
+            .andReturn().getResponse().getContentAsString();
+
+        for (String placeholder : List.of(
+                "<!--NAV_LINKS-->", "<!--REWARD_INTRO-->", "<!--INVITE_LINK-->",
+                "<!--REFERRAL_CODE-->", "<!--STATS_BLOCK-->")) {
             org.junit.jupiter.api.Assertions.assertFalse(html.contains(placeholder),
                 "佔位符 " + placeholder + " 不得殘留在回應中");
         }

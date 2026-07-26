@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>我的邀請｜凱文大叔的電子報</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/r/reader.css">
+</head>
+<body>
+<header class="site-head">
+  <div class="site-head-inner">
+    <a class="brand" href="/r/">凱文大叔的電子報</a>
+    <nav><!--NAV_LINKS--></nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <h1 style="font-size:1.5rem">我的邀請</h1>
+  <p style="color:var(--muted)"><!--REWARD_INTRO--></p>
+
+  <div class="card">
+    <h2>你的邀請連結</h2>
+    <div class="form-row">
+      <input type="text" id="invite-link" value="<!--INVITE_LINK-->" readonly>
+      <button class="btn" id="copy-btn">複製</button>
+    </div>
+    <div class="msg" id="copy-msg"></div>
+    <p style="color:var(--muted);font-size:.9rem;margin-top:12px">
+      邀請碼：<strong><!--REFERRAL_CODE--></strong>
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>邀請成效</h2>
+    <!--STATS_BLOCK-->
+  </div>
+
+  <div class="card">
+    <h2>怎麼算成功？</h2>
+    <p>對方用你的連結填了 email 之後，<strong>還要點開自己信箱裡的確認信</strong>，才算一次成功邀請。</p>
+    <p style="color:var(--muted);font-size:.92rem">這樣設計是為了避免有人填假 email 刷點數。若朋友說已經訂閱但你的點數沒增加，通常是確認信還沒點——請他找一下信箱（有時會在促銷或垃圾郵件匣）。</p>
+    <p style="margin-top:12px"><a href="/r/rules">看完整遊戲規則</a></p>
+  </div>
+</div>
+
+<script>
+  // 複製邀請連結；navigator.clipboard 在非 HTTPS 環境不可用，故保留 select 退路
+  const copyBtn = document.getElementById('copy-btn');
+  const linkInput = document.getElementById('invite-link');
+  const copyMsg = document.getElementById('copy-msg');
+
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(linkInput.value);
+      copyMsg.textContent = '已複製到剪貼簿。';
+      copyMsg.className = 'msg show ok';
+    } catch (e) {
+      // 退路：選取起來讓使用者自己按 Ctrl+C
+      linkInput.select();
+      copyMsg.textContent = '請按 Ctrl+C 複製。';
+      copyMsg.className = 'msg show';
+    }
+  });
+</script>
+</body>
+</html>

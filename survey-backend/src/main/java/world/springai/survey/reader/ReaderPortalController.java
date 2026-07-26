@@ -1,5 +1,6 @@
 package world.springai.survey.reader;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -52,20 +53,24 @@ public class ReaderPortalController {
     private final SurveyResponseRepository surveyResponseRepository;
     private final ReferralService referralService;
     private final CreditPolicy creditPolicy;
+    /** 對外公開的網域（含 scheme），組出可貼給別人的完整邀請連結時要用 */
+    private final String publicBaseUrl;
 
-    /** 注入渲染、身分解析、帳本、名單中心、邀請統計與點數參數 */
+    /** 注入渲染、身分解析、帳本、名單中心、邀請統計、點數參數與對外網域 */
     public ReaderPortalController(HtmlTemplate htmlTemplate,
                                  ReaderContext readerContext,
                                  CreditTxnRepository creditTxnRepository,
                                  SurveyResponseRepository surveyResponseRepository,
                                  ReferralService referralService,
-                                 CreditPolicy creditPolicy) {
+                                 CreditPolicy creditPolicy,
+                                 @Value("${app.public-base-url}") String publicBaseUrl) {
         this.htmlTemplate = htmlTemplate;
         this.readerContext = readerContext;
         this.creditTxnRepository = creditTxnRepository;
         this.surveyResponseRepository = surveyResponseRepository;
         this.referralService = referralService;
         this.creditPolicy = creditPolicy;
+        this.publicBaseUrl = publicBaseUrl;
     }
 
     /** 個人資料更新請求；目前只開放顯示名稱 */
@@ -82,8 +87,6 @@ public class ReaderPortalController {
         Reader reader = current.get().reader();
 
         Map<String, String> vars = new HashMap<>();
-        // 「我的邀請」(/r/invite) 要到下一個任務才會實作，這裡先保留連結入口，
-        // 暫時會是預期中的 404（延續規則頁任務的慣例，待該任務完成後移除本註解）
         vars.put("<!--NAV_LINKS-->", "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/invite\">我的邀請</a>");
         vars.put("<!--CREDITS-->", String.valueOf(reader.getCredits()));
         vars.put("<!--PREMIUM_COST-->", String.valueOf(creditPolicy.premiumCost()));
@@ -96,6 +99,65 @@ public class ReaderPortalController {
             creditTxnRepository.findByReaderIdOrderByCreatedAtDesc(reader.getId(), PageRequest.of(0, TXN_DISPLAY_LIMIT))));
 
         return privatePage(htmlTemplate.render("static/reader/me.html", vars));
+    }
+
+    /** 我的邀請：邀請連結、邀請碼與成效 */
+    @GetMapping(value = "/r/invite", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> invite(
+            @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
+        Optional<ReaderContext.Current> current = readerContext.resolve(sessionCookie);
+        if (current.isEmpty()) {
+            return redirectToLogin("/r/invite");
+        }
+        Reader reader = current.get().reader();
+        ReferralService.ReferralStats stats = referralService.stats(reader.getId());
+        int reward = creditPolicy.referralReward();
+
+        Map<String, String> vars = new HashMap<>();
+        vars.put("<!--NAV_LINKS-->", "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/me\">我的帳戶</a>");
+        vars.put("<!--REWARD_INTRO-->", rewardIntro(reward));
+        // 完整網址：讀者要把它貼給別人，相對路徑沒有用
+        vars.put("<!--INVITE_LINK-->",
+            HtmlTemplate.escapeHtml(publicBaseUrl + "/r/?ref=" + reader.getReferralCode()));
+        vars.put("<!--REFERRAL_CODE-->", HtmlTemplate.escapeHtml(reader.getReferralCode()));
+        vars.put("<!--STATS_BLOCK-->", renderStats(stats));
+
+        return privatePage(htmlTemplate.render("static/reader/invite.html", vars));
+    }
+
+    /**
+     * 「邀請說明」段落文案；獎勵為 0 時改用不荒謬的說法，而不是「拿到 0 點」。
+     *
+     * <p>沿用 {@link RulesPageController#referralRewardNote} 的慣例：{@code
+     * CreditPolicy#referralReward()} 的下限刻意是 0（關閉邀請獎勵是合法的營運
+     * 設定），若整段文案原樣套用數字，讀者會看到「你會拿到 0 點」這種讀起來像
+     * 故障的字。</p>
+     */
+    private String rewardIntro(int reward) {
+        if (reward == 0) {
+            return "把連結分享給可能有興趣的人。目前邀請獎勵暫停發放，成功邀請仍會被記錄。";
+        }
+        return "把連結分享給可能有興趣的人。對方確認訂閱後，你會拿到 " + reward + " 點。";
+    }
+
+    /**
+     * 渲染邀請成效。
+     *
+     * <p>零邀請時給鼓勵性的空狀態而非「0 人 / 0 點」——冷數字讀起來像
+     * 失敗提示，而這頁的目的是讓人想去分享。</p>
+     *
+     * <p>只顯示彙總數字：{@link ReferralService.ReferralStats} 本身不帶被邀者
+     * email 或任何可辨識資訊，邀請碼是可公開分享的連結，透過它訂閱的陌生人
+     * 與邀請人彼此並不認識，此頁不得洩漏對方身分。</p>
+     */
+    private String renderStats(ReferralService.ReferralStats stats) {
+        if (stats.invitedCount() == 0) {
+            return "<p class=\"empty\">還沒有人透過你的連結完成訂閱。分享出去試試看？</p>";
+        }
+        return """
+            <p class="balance">%d 人</p>
+            <p style="color:var(--muted);font-size:.92rem">累計獲得 %d 點</p>
+            """.formatted(stats.invitedCount(), stats.earnedCredits());
     }
 
     /**
