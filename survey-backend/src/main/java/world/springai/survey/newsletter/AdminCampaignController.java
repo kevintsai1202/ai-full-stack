@@ -124,18 +124,54 @@ public class AdminCampaignController {
             }
         }
 
-        // 解析發布時間（ISO-8601），格式錯誤回 400 而非讓例外以 500 洩漏
-        Instant publishedAt = null;
-        if (req.publishedAt() != null) {
-            try {
-                publishedAt = Instant.parse(req.publishedAt());
-            } catch (java.time.format.DateTimeParseException e) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "publishedAt 格式錯誤");
-            }
-        }
-
         return campaignService.send(req.subject(), req.markdown(), role, interest, req.mode(), scheduledAt,
-            req.tier(), req.creditCost(), req.slug(), publishedAt);
+            req.tier(), req.creditCost(), req.slug(), parsePublishedAt(req.publishedAt()));
+    }
+
+    /**
+     * 只發布不寄送的請求：主旨、markdown 內文、分級、解鎖點數、網址代稱、發布時間。
+     *
+     * <p>沒有 filter／mode／scheduledAt——這條路徑不寄信，收件人篩選與寄送模式毫無意義。
+     * slug 為<b>必填</b>（與 {@link SendRequest} 不同），缺少時由 CampaignService 回 400。</p>
+     */
+    public record PublishRequest(String subject, String markdown, String tier, Integer creditCost,
+                                 String slug, String publishedAt) {}
+
+    /**
+     * 只把文章發布到網頁（{@code /r/news/{slug}} 與 {@code /r/archive}），<b>完全不寄信</b>，
+     * 需提供有效金鑰。
+     *
+     * <p><b>與 {@code /api/admin/campaign/send} 的差異與存在理由</b>：send 對 PREMIUM
+     * 無條件回 400（階段 D 的信件折疊未完成前必要的守門），於是 PREMIUM 文章原本
+     * 只能手動寫資料庫才能上線。這條端點不寄信，因此沒有「信件端外流付費內容」的
+     * 風險，PREMIUM 可以放行——這是它存在的全部目的。</p>
+     *
+     * <p>回應含文章公開網址，方便管理者按完按鈕直接點開驗證 paywall 是否如預期。</p>
+     */
+    @PostMapping("/api/admin/campaign/publish")
+    public CampaignService.PublishResult publish(
+            @RequestHeader(value = KEY_HEADER, required = false) String key,
+            @RequestBody PublishRequest req) {
+        guard.verify(key);
+        return campaignService.publish(req.subject(), req.markdown(), req.tier(), req.creditCost(),
+            req.slug(), parsePublishedAt(req.publishedAt()));
+    }
+
+    /**
+     * 解析發布時間（ISO-8601）；格式錯誤回 400 而非讓例外以 500 洩漏。
+     *
+     * <p>send 與 publish 共用同一份解析，避免兩條路徑各自實作而對同一個輸入
+     * 給出不同的錯誤碼。</p>
+     */
+    private Instant parsePublishedAt(String publishedAt) {
+        if (publishedAt == null) {
+            return null;
+        }
+        try {
+            return Instant.parse(publishedAt);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "publishedAt 格式錯誤");
+        }
     }
 
     /**

@@ -16,8 +16,11 @@
 // 未解鎖），所以可以連續重跑而不必手動清資料。
 //
 // 兩個環境限制與對應做法：
-//  1. 沒有「發布文章」的 admin API（AdminCampaignController 只管寄送），
-//     所以測試文章直接以 SQL upsert 進 campaign 表。
+//  1. 測試文章直接以 SQL upsert 進 campaign 表，不走 admin API。
+//     （2026-07-26 起已有 POST /api/admin/campaign/publish 可以只發布不寄送，
+//      但那條端點對重複 slug 回 400，無法 upsert；本腳本要的是「每次重跑都回到
+//      同一個已知起點」，SQL upsert 才辦得到。該端點本身的驗收見
+//      verify-publish-endpoint.mjs。）
 //  2. magic link 的明文 token 只存在於寄出的信裡（DB 只有 SHA-256 雜湊），
 //     腳本無法「收信」完成登入。因此改為用與應用相同的
 //     app.reader.jwt-secret 自行簽出 reader_session JWT——驗的是解鎖流程，

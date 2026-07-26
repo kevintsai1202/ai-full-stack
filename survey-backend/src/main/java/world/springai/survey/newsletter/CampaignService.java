@@ -2,6 +2,7 @@ package world.springai.survey.newsletter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -39,6 +40,8 @@ public class CampaignService {
     private final EmailTemplate emailTemplate;
     private final SubscriptionLinkBuilder linkBuilder; // 退訂連結組裝的唯一擁有者
     private final MailQuotaService mailQuotaService;
+    /** 對外網址前綴，用於回傳文章公開網址；全專案唯一設定來源 app.public-base-url */
+    private final String publicBaseUrl;
 
     public CampaignService(MailSender mailSender,
                            RecipientService recipientService,
@@ -47,7 +50,9 @@ public class CampaignService {
                            MarkdownRenderer markdownRenderer,
                            EmailTemplate emailTemplate,
                            SubscriptionLinkBuilder linkBuilder,
-                           MailQuotaService mailQuotaService) {
+                           MailQuotaService mailQuotaService,
+                           @Value("${app.public-base-url}") String publicBaseUrl) {
+        this.publicBaseUrl = publicBaseUrl;
         this.mailSender = mailSender;
         this.recipientService = recipientService;
         this.campaignRepository = campaignRepository;
@@ -192,6 +197,104 @@ public class CampaignService {
         mailQuotaService.invalidate();
 
         return new SendResult(campaignId, recipients.size(), accepted, failed, skippedForQuota);
+    }
+
+    /**
+     * 發布結果。
+     *
+     * <p>刻意不重用 {@link SendResult}：那個 record 的每一個欄位（recipientCount／
+     * accepted／failed／skippedForQuota）在這條路徑上都恆為 0，回傳它只會讓後台
+     * 與 API 使用者以為「這是一次寄了 0 封的群發」。這裡改為只回傳真正發生的事實，
+     * 並附上文章公開網址讓管理者能立刻點開驗證。</p>
+     *
+     * @param url 文章公開網址（{@code {app.public-base-url}/r/news/{slug}}）
+     */
+    public record PublishResult(Long campaignId, String slug, String tier, int creditCost,
+                                OffsetDateTime publishedAt, String url) {}
+
+    /**
+     * 只發布到網頁、<b>完全不寄送任何信件</b>。
+     *
+     * <p><b>為什麼需要這條路徑</b>：{@link #send} 對非 BASIC 的 tier 無條件回 400，
+     * 因為階段 D 的信件折疊（依 tier 產生折疊版內文）尚未實作，PREMIUM 內容一旦寄出
+     * 就會把受限區完整送進<b>所有</b>收件人的信箱。那個守門是正確的，但副作用是
+     * PREMIUM 文章連 API 都沒有建立路徑，只剩手動 {@code INSERT INTO campaign}——
+     * 整套點數機制沒有任何操作人員能讓它跑起來。</p>
+     *
+     * <p><b>為什麼 PREMIUM 在這裡可以放行</b>：不寄信就沒有「信件端外流付費內容」
+     * 這個風險。網頁端的受限區由 {@code ReaderPageController} 依授權結果決定是否
+     * 渲染（未授權時受限區不進入 HTTP 回應），paywall 在這條路徑上完整成立。</p>
+     *
+     * <p><b>與 {@link #send} 的根本差異</b>：本方法<b>不呼叫 {@code mailSender} 的任何方法，
+     * 也不走 {@code applyMarketingQuota}</b>——不寄信就不該佔用（更不該吃掉）
+     * 交易信的保留額度，也不需要讓 {@code MailQuotaService} 的快取失效。</p>
+     *
+     * <p><b>不碰點數與帳本</b>：本方法只寫入 {@code campaign} 一列，
+     * 不觸及 {@code reader.credits} 或 {@code credit_txn}，故核心不變式
+     * 「餘額 == 帳本總和」不受影響。</p>
+     *
+     * <p>單一交易只有一次 {@code save()}，無外部呼叫，故不需要 {@code @Transactional}
+     * （理由與 {@link #send} 不同：那裡是「不能回滾」，這裡是「沒有東西要協調」）。</p>
+     *
+     * @param slug        <b>必填</b>。沒有 slug 的「純網頁文章」讀者永遠打不開
+     *                    （{@code /r/news/{slug}} 是唯一入口），寫進資料庫等於消失；
+     *                    {@link #send} 的 slug 可省略是因為那條路徑主要目的是寄信。
+     * @param publishedAt 省略時視為立即發布（沿用 {@link #resolvePublishedAt}）
+     */
+    public PublishResult publish(String subject, String markdown, String tier, Integer creditCost,
+                                 String slug, Instant publishedAt) {
+        // 主旨與內文在 campaign 表皆為 NOT NULL；提前擋下以回 400 而非讓寫入以 500 失敗
+        if (subject == null || subject.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "subject 為必填");
+        }
+        if (markdown == null || markdown.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "markdown 為必填");
+        }
+        // slug 對這條端點是必填（理由見 javadoc）；空白字串也視為未填，
+        // 否則會被 validateSlug 當成格式錯誤而回一個誤導的原因
+        if (slug == null || slug.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "slug 為必填：沒有 slug 的文章沒有 /r/news/{slug} 網址，讀者永遠打不開");
+        }
+
+        // 驗證與正規化重用 send() 的同一份實作（validateTier / validateCreditCost /
+        // validateSlug / resolvePublishedAt），不複寫第二份——同一概念兩份實作
+        // 遲早只會被改一邊，而漏改的那一邊就是漏洞。
+        String normalizedTier = validateTier(tier);
+        int normalizedCreditCost = validateCreditCost(normalizedTier, creditCost);
+        String normalizedSlug = validateSlug(slug);
+        OffsetDateTime normalizedPublishedAt = resolvePublishedAt(normalizedSlug, publishedAt);
+
+        // bodyHtml 刻意留 null：那是「信件版內文」，這條路徑沒有信件版。
+        // 存一份全文 HTML 進去只會成為階段 D 實作折疊時的現成外洩來源
+        // （拿 bodyHtml 直接寄出就等於寄出受限區）；網頁端渲染讀的是 markdown
+        // 再經 ContentSplitter 切分，與 bodyHtml 無關。
+        Campaign campaign = new Campaign(subject, markdown, null, null, null,
+            Campaign.MODE_PUBLISH, null, 0, Campaign.STATUS_PUBLISHED);
+        campaign.setTier(normalizedTier);
+        campaign.setCreditCost(normalizedCreditCost);
+        campaign.setSlug(normalizedSlug);
+        campaign.setPublishedAt(normalizedPublishedAt);
+        campaign = campaignRepository.save(campaign);
+
+        log.info("只發布不寄送：campaignId={} slug={} tier={} creditCost={}",
+            campaign.getId(), normalizedSlug, normalizedTier, normalizedCreditCost);
+        return new PublishResult(campaign.getId(), normalizedSlug, normalizedTier,
+            normalizedCreditCost, normalizedPublishedAt, articleUrl(normalizedSlug));
+    }
+
+    /**
+     * 組文章公開網址。
+     *
+     * <p>設定值可能帶結尾斜線（環境變數由人填），去掉後再串接，
+     * 避免產生 {@code https://host//r/news/x} 這種在某些反向代理下會 404 的網址。</p>
+     */
+    private String articleUrl(String slug) {
+        String base = publicBaseUrl == null ? "" : publicBaseUrl.trim();
+        while (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        return base + "/r/news/" + slug;
     }
 
     /** 取消某 campaign 的所有排程信 */

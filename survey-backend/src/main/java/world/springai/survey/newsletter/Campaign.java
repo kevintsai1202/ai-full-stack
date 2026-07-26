@@ -19,6 +19,26 @@ public class Campaign {
     /** 進階內容：需點數解鎖或 VIP 身分 */
     public static final String TIER_PREMIUM = "PREMIUM";
 
+    /**
+     * 模式：只發布到網頁、完全不寄信。
+     *
+     * <p>與既有的 {@code now}／{@code schedule} 併列於同一個 {@code mode} 欄位
+     * （資料庫沒有列舉約束，是自由文字）。刻意用一個「不是寄送模式」的新值而非
+     * 沿用 {@code now}：後台歷史列表直接顯示 {@code mode}，若沿用 {@code now}，
+     * 這筆紀錄會被讀成「立即群發但只寄了 0 封」——那是一次失敗的群發，
+     * 與事實（根本沒打算寄信）完全相反。</p>
+     */
+    public static final String MODE_PUBLISH = "publish";
+
+    /**
+     * 狀態：已發布到網頁。
+     *
+     * <p>同樣刻意不重用 {@code sent}／{@code failed}：沒有寄出任何信，說 sent 是謊；
+     * 而 {@code failed}（{@code finalStatus} 對 accepted=0 的判斷）會讓管理者以為
+     * 寄送出了問題而去重送。</p>
+     */
+    public static final String STATUS_PUBLISHED = "published";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

@@ -632,7 +632,7 @@ sunset   ← 已寄期數 >= 淘汰門檻(12) 且 last_engaged_at 為 NULL 或�
 >
 > **第 3 項的分類仍然成立**：登入信、確認信、歡迎信不受 reserve 限制——它們走 `LoginMailService` 等既有路徑，既不經過 `CampaignService` 也不經過 `AdminCampaignController.clampLimit()`。「不受 reserve 限制」指的是「不被扣掉 reserve 之後的可用量所限」，也就是它們可以動用 reserve；本次改動只約束行銷側（群發、邀請信、提醒信），與這條分類沒有衝突。
 >
-> 目前狀態：`CampaignService.send()`／`reschedule()`、`POST /api/admin/campaign/invite`、`POST /api/admin/campaign/invite/remind` 三條會實際寄出行銷信的路徑都已受 reserve 保護；「補寄」前檢查仍待階段 E（功能本身尚不存在）。
+> 目前狀態：`CampaignService.send()`／`reschedule()`、`POST /api/admin/campaign/invite`、`POST /api/admin/campaign/invite/remind` 三條會實際寄出行銷信的路徑都已受 reserve 保護；「補寄」前檢查仍待階段 E（功能本身尚不存在）。`POST /api/admin/campaign/publish`（只發布不寄送）**不在此清單內且刻意如此**：它一封信都不寄，因此完全不查也不消耗任何額度——若誤加上額度檢查，行銷額度用盡時會讓一篇根本不寄信的文章因為「額度不足」而發不出去。
 
 ## 7. 後台新增功能
 
@@ -777,10 +777,7 @@ V7/V8 migration（**含 `credit_txn`，因為首次登入即需發 300 點 `SIGN
 >   VIP 授予已修，`ReaderAccountService.findOrCreate` 的 `setLastLoginAt` 與
 >   `ReaderPortalController.updateProfile` 尚未修）。
 > - 邀請獎勵被後台關成 0 時，`/r/invite` 的「已成功邀請人數」會停止成長（詳見 §5.4）。
-> - **沒有「只發布到網頁、不寄送」的路徑**：`/api/admin/campaign/send` 對 PREMIUM 無條件回 400
->   （階段 D 的信件折疊完成前必要的守門），而 `campaign` 同時是「發送批次」與「文章」。
->   目前 PREMIUM 文章只能直接寫資料庫發布——端到端驗收腳本正是這樣建測試文章的。
->   這是階段 C 交付範圍中**唯一沒有後台 UI 的能力**，必須誠實記錄，不可視為已完成。
+> - ~~**沒有「只發布到網頁、不寄送」的路徑**~~ **（已補：`POST /api/admin/campaign/publish`，見下方）**
 > - **VIP 閱讀 PREMIUM 時 `recordAccess` 會補寫 `cost=0` 的 `article_access`**（§5.2 規則 3 的既定設計），
 >   因此 **VIP 到期後，該讀者對「VIP 期間讀過的文章」仍永久免費**。這是刻意的（不追溯收費），
 >   但沒有寫進規則頁；若日後 VIP 改為付費訂閱，這條要先想清楚。
@@ -794,6 +791,58 @@ V7/V8 migration（**含 `credit_txn`，因為首次登入即需發 300 點 `SIGN
 >   ② `verify-admin.mjs` 用頂層 `import 'playwright'`，沒有其他腳本都有的全域安裝退路，
 >   在本專案（`survey-backend` 無 `node_modules`）一律 `ERR_MODULE_NOT_FOUND`——
 >   這支腳本目前跑不起來，等於一段驗證長期沒在執行。建議把 `loadPlaywright()` 抽成共用模組。
+
+> #### 階段 C 補件：`POST /api/admin/campaign/publish`（只發布不寄送，2026-07-26）
+>
+> **它解掉的問題**：階段 C 交付了一整套點數機制（扣點解鎖、`CAN_UNLOCK` 的 paywall gate、
+> 規則頁、我的帳戶、後台讀者管理），但 `CampaignService.send()` 對非 BASIC 的 tier 無條件回 400
+> ——那個守門是正確的（階段 D 的信件折疊完成前，PREMIUM 一旦寄出就會把受限區送進**所有**
+> 收件人的信箱）。副作用是 PREMIUM 文章連 API 都沒有建立路徑，只剩手動 `INSERT INTO campaign`，
+> 於是整批點數功能在合併後**沒有任何操作人員能讓它跑起來**。這條端點就是解法：
+> 建立並發布一篇文章到網頁、完全不寄信；因為不寄信，就沒有「信件端外流付費內容」的問題，
+> 所以 PREMIUM 可以放行。
+>
+> **必須分清楚的兩件事（不美化）**：
+>
+> | 能力 | 狀態 |
+> |---|---|
+> | PREMIUM **發布到網頁**（`/r/news/{slug}`、`/r/archive`，含 paywall） | ✅ 已可用，有後台 UI |
+> | PREMIUM **寄送給訂閱者** | ❌ 仍不可用，待階段 D 的信件折疊（`foldedHtml`） |
+>
+> `/api/admin/campaign/send` 對 PREMIUM 的 400 守門**維持原樣**，`reschedule` 的同款守門也維持原樣。
+>
+> **設計決定與理由**：
+>
+> - **`slug` 對這條端點是必填**（`send` 的 slug 是選填）。沒有 slug 的「純網頁文章」沒有
+>   `/r/news/{slug}` 網址，讀者永遠打不開——寫進資料庫等於消失。缺 slug 回 400。
+> - **不呼叫 `mailSender` 的任何方法，也不走 `applyMarketingQuota`**。不寄信就不該佔用
+>   （更不該吃掉）交易信的保留額度，也不需要讓 `MailQuotaService` 的快取失效。
+>   單元測試對 `sendBatch(List)`／`schedule`／`send(3 args)` **三個**方法都驗 `never()`
+>   ——只驗其中一個會讓另外兩條路徑的回歸靜默通過（這個錯誤在階段 C 出現過）。
+> - **新增 `mode='publish'` 與 `status='published'`**（`campaign.mode`／`status` 是自由文字，
+>   沒有列舉約束，故不需要 migration）。刻意不重用既有值：沿用 `now` 會讓後台歷史列表
+>   把這筆讀成「立即群發但只寄了 0 封」，而 `finalStatus` 對 `accepted=0` 會判成 `failed`
+>   ——管理者會以為寄送出了問題而去重送。後台歷史列表的「成功/失敗」欄位對
+>   `mode='publish'` 顯示「—（未寄送）」而非 `0/0`。
+> - **`body_html` 留 `NULL`**。那是「信件版內文」，這條路徑沒有信件版；存一份全文 HTML
+>   進去只會成為階段 D 實作折疊時的現成外洩來源。網頁端渲染讀的是 **`markdown`**，
+>   再經 `ContentSplitter` 依 `<!--paywall-->` 切分（見 §5.3），與 `body_html` 無關。
+> - **驗證與正規化重用 `send` 的同一份實作**（`validateTier`／`validateCreditCost`／
+>   `validateSlug`／`resolvePublishedAt`），不複寫第二份。
+> - **回應帶文章公開網址**（`${app.public-base-url}/r/news/{slug}`），讓管理者按完按鈕
+>   能直接點開驗證 paywall。`publicBaseUrl` 沿用全專案唯一的設定來源。
+> - **不碰點數與帳本**：只寫入 `campaign` 一列，核心不變式「餘額 == `credit_txn` 總和」不受影響。
+>
+> **驗收**：`survey-backend/scripts/verify-publish-endpoint.mjs`（可重跑、`--browser` 走真實
+> Chromium 按後台那顆按鈕）。驗到：發布 PREMIUM → 未登入者的 HTTP 回應本文不含受限段落
+> → 已登入且餘額足夠仍不含受限段落且看到解鎖按鈕 → 解鎖扣點、受限段落出現、`credit_txn`
+> 有一筆 `READ` → 餘額 == 帳本總和 → 文章出現在 `/r/archive` → 後台歷史列表不呈現為失敗群發
+> → 同一篇走 `send` 端點仍回 400。連續執行兩次皆全綠（含 `--browser`）。
+>
+> **仍未解的相關問題**：`campaign` 這張表同時是「發送批次」與「文章」，
+> 這條端點沒有改變那個事實，只是為「純文章」的用途補上了一條誠實的入口。
+> 未寄送的文章之後若要補寄（階段 E），仍需要一條「以既有 campaign 為內容來源寄送」的路徑——
+> 目前沒有，而且它一樣要等階段 D 的折疊完成才能對 PREMIUM 開放。
 
 **階段 D：內容製作升級**（功能區 7）
 MinIO 服務與上傳、後台插圖 UI、發送依 tier 分組、`vip_full_in_mail`。（交易信保留額度原規劃在此階段，已提前至階段 C 完成，見 §6。）

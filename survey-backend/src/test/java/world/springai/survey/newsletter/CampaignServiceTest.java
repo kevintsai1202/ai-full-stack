@@ -19,6 +19,7 @@ import world.springai.survey.mail.MailSender;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -47,7 +48,8 @@ class CampaignServiceTest {
 
     private final CampaignService svc = new CampaignService(
         mailSender, recipientService, campaignRepository, emailLogRepository,
-        markdownRenderer, emailTemplate, linkBuilder, mailQuotaService);
+        markdownRenderer, emailTemplate, linkBuilder, mailQuotaService,
+        "https://news.example.com");
 
     {
         // 除非測試特別 stub 更小的量，否則額度視為充足——避免所有既有發送測試
@@ -264,6 +266,172 @@ class CampaignServiceTest {
         assertEquals(0, saved.getCreditCost());
         assertEquals("my-post", saved.getSlug());
         assertEquals(publishedAt, saved.getPublishedAt().toInstant());
+    }
+
+    // ── 只發布不寄送（publish）────────────────────────────────────────────
+
+    /**
+     * 只發布不寄送的核心性質：PREMIUM 可以放行，且<b>一封信都不能寄</b>。
+     *
+     * <p>這條端點存在的全部理由就是讓 PREMIUM 有一條後台路徑；而它敢放行 PREMIUM
+     * 的唯一根據是「不寄信 ⇒ 沒有信件端外洩」。因此 mailSender 的<b>三個</b>寄送方法
+     * 都要驗 never()：立即群發走 {@code sendBatch(List)}、排程走 {@code schedule}、
+     * 單封測試信走 {@code send(3 args)}。只驗其中一個會讓另外兩條路徑的回歸靜默通過。</p>
+     */
+    @Test
+    void publishPremiumCreatesArticleWithoutSendingAnyMail() {
+        when(campaignRepository.findBySlug("premium-web-only")).thenReturn(Optional.empty());
+        ArgumentCaptor<Campaign> captor = ArgumentCaptor.forClass(Campaign.class);
+        when(campaignRepository.save(captor.capture())).thenAnswer(i -> i.getArgument(0));
+        Instant publishedAt = Instant.parse("2026-07-25T04:00:00Z");
+
+        CampaignService.PublishResult r = svc.publish("主旨", "免費區\n\n<!--paywall-->\n\n受限區",
+            Campaign.TIER_PREMIUM, 10, "premium-web-only", publishedAt);
+
+        assertEquals(Campaign.TIER_PREMIUM, r.tier());
+        assertEquals(10, r.creditCost());
+        assertEquals("premium-web-only", r.slug());
+        assertEquals(publishedAt, r.publishedAt().toInstant());
+        assertEquals("https://news.example.com/r/news/premium-web-only", r.url());
+
+        Campaign saved = captor.getValue();
+        assertEquals(Campaign.TIER_PREMIUM, saved.getTier());
+        assertEquals(10, saved.getCreditCost());
+        assertEquals("premium-web-only", saved.getSlug());
+        assertNotNull(saved.getPublishedAt());
+        // 網頁端渲染讀的是 markdown（經 ContentSplitter 切分），必須完整落地
+        assertTrue(saved.getMarkdown().contains("<!--paywall-->"), saved.getMarkdown());
+        assertTrue(saved.getMarkdown().contains("受限區"));
+        // bodyHtml 是「信件版內文」；這條路徑沒有信件版，存全文只會成為階段 D 的外洩來源
+        assertNull(saved.getBodyHtml());
+        // 不得被後台歷史列表讀成「一次寄了 0 封的失敗群發」
+        assertEquals(Campaign.MODE_PUBLISH, saved.getMode());
+        assertEquals(Campaign.STATUS_PUBLISHED, saved.getStatus());
+        assertEquals(0, saved.getRecipientCount());
+
+        // ★ 一封信都不能寄（三種寄送方法全驗）
+        verify(mailSender, never()).sendBatch(anyList());
+        verify(mailSender, never()).schedule(any(), any());
+        verify(mailSender, never()).send(any(), any(), any());
+        // 沒有收件人查詢：這條路徑不需要名單
+        verify(recipientService, never()).recipients(any(), any());
+    }
+
+    /**
+     * 不消耗任何寄信額度：既不查行銷可用量，也不讓額度快取失效。
+     *
+     * <p>若這條端點誤用了 {@code applyMarketingQuota}，行銷可用量為 0 時會回 409——
+     * 一篇「根本不寄信」的文章會因為額度用盡而發不出去，那是完全無關的失敗理由。</p>
+     */
+    @Test
+    void publishDoesNotTouchMailQuota() {
+        when(campaignRepository.findBySlug("no-quota")).thenReturn(Optional.empty());
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+
+        svc.publish("主旨", "內文", Campaign.TIER_BASIC, null, "no-quota", null);
+
+        verify(mailQuotaService, never()).current();
+        verify(mailQuotaService, never()).invalidate();
+        verify(emailLogRepository, never()).save(any(EmailLog.class));
+    }
+
+    /**
+     * slug 對這條端點是<b>必填</b>：缺 slug 回 400，且不寫入任何 campaign。
+     *
+     * <p>沒有 slug 的「純網頁文章」沒有 {@code /r/news/{slug}} 網址，讀者永遠打不開，
+     * 寫進資料庫等於消失。把 slug 改成選填，本測試變紅。</p>
+     */
+    @Test
+    void publishWithoutSlugRejected() {
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.publish("主旨", "內文", Campaign.TIER_PREMIUM, 10, null, null));
+        assertEquals(400, ex.getStatusCode().value());
+
+        // 空白字串同樣視為未填（否則會落到 validateSlug 而回一個誤導的「格式錯誤」）
+        ResponseStatusException blank = assertThrows(ResponseStatusException.class,
+            () -> svc.publish("主旨", "內文", Campaign.TIER_PREMIUM, 10, "   ", null));
+        assertEquals(400, blank.getStatusCode().value());
+
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
+    /**
+     * tier 判斷 fail-closed：未知 tier 必須被拒絕，不得放行。
+     *
+     * <p>資料庫沒有 tier 白名單約束。若這裡改成 fail-open（未知 tier 當成
+     * 可發布），一個打錯字的 {@code PREMIUN} 會讓 {@code AccessDecisionService}
+     * 走進階規則、卻以 {@code credit_cost=0} 落地——付費內容全面免費外洩。</p>
+     */
+    @Test
+    void publishWithUnknownTierRejected() {
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.publish("主旨", "內文", "GOLD", 10, "unknown-tier", null));
+        assertEquals(400, ex.getStatusCode().value());
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
+    /** PREMIUM 的 creditCost 必須 > 0（與 send 共用 validateCreditCost，不另立一套規則） */
+    @Test
+    void publishPremiumWithZeroCreditCostRejected() {
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.publish("主旨", "內文", Campaign.TIER_PREMIUM, 0, "premium-free", null));
+        assertEquals(400, ex.getStatusCode().value());
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
+    /** slug 重複時回 400（與 send 共用 validateSlug，避免唯一索引以 500 的形式失敗） */
+    @Test
+    void publishWithDuplicateSlugRejected() {
+        Campaign existing = new Campaign("舊", "舊", null, null, null, "now", null, 0, "sent");
+        when(campaignRepository.findBySlug("taken")).thenReturn(Optional.of(existing));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.publish("主旨", "內文", Campaign.TIER_BASIC, null, "taken", null));
+        assertEquals(400, ex.getStatusCode().value());
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
+    /** 省略 publishedAt 視為立即發布：publishedAt 必須非 NULL，否則文章不會出現在 archive */
+    @Test
+    void publishWithoutPublishedAtPublishesImmediately() {
+        when(campaignRepository.findBySlug("now-post")).thenReturn(Optional.empty());
+        ArgumentCaptor<Campaign> captor = ArgumentCaptor.forClass(Campaign.class);
+        when(campaignRepository.save(captor.capture())).thenAnswer(i -> i.getArgument(0));
+
+        CampaignService.PublishResult r = svc.publish("主旨", "內文",
+            Campaign.TIER_BASIC, null, "now-post", null);
+
+        assertNotNull(r.publishedAt());
+        assertNotNull(captor.getValue().getPublishedAt());
+        assertTrue(captor.getValue().isPublished());
+    }
+
+    /** 主旨或內文為空一律 400（campaign 兩欄皆 NOT NULL，不讓寫入以 500 失敗） */
+    @Test
+    void publishWithBlankSubjectOrMarkdownRejected() {
+        assertEquals(400, assertThrows(ResponseStatusException.class,
+            () -> svc.publish("  ", "內文", Campaign.TIER_BASIC, null, "blank-a", null))
+            .getStatusCode().value());
+        assertEquals(400, assertThrows(ResponseStatusException.class,
+            () -> svc.publish("主旨", null, Campaign.TIER_BASIC, null, "blank-b", null))
+            .getStatusCode().value());
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
+    /** 公開網址：設定值帶結尾斜線時不得產生雙斜線（某些反向代理下會 404） */
+    @Test
+    void publishUrlHandlesTrailingSlashInBaseUrl() {
+        CampaignService withSlash = new CampaignService(
+            mailSender, recipientService, campaignRepository, emailLogRepository,
+            markdownRenderer, emailTemplate, linkBuilder, mailQuotaService,
+            "https://news.example.com/");
+        when(campaignRepository.findBySlug("slash")).thenReturn(Optional.empty());
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+
+        CampaignService.PublishResult r = withSlash.publish("主旨", "內文",
+            Campaign.TIER_BASIC, null, "slash", null);
+
+        assertEquals("https://news.example.com/r/news/slash", r.url());
     }
 
     /**

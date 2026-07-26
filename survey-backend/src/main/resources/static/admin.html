@@ -32,7 +32,7 @@
   .full{grid-column:1/-1}.filters{display:grid;grid-template-columns:minmax(240px,2fr) repeat(5,minmax(120px,1fr));gap:10px;margin:12px 0}.filters label{margin:0}.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px;max-height:680px}
   table{width:100%;border-collapse:separate;border-spacing:0;font-size:.84rem}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;min-width:110px;max-width:300px;overflow-wrap:anywhere}
   th{position:sticky;top:0;background:#edf5f4;z-index:2;white-space:nowrap}tbody tr:hover{background:#f4fbfa}.empty{color:var(--muted);padding:20px;text-align:center}
-  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.76rem;font-weight:700}.pill.scheduled{background:var(--accent-soft);color:var(--accent-deep)}.pill.sent{background:#dcfce7;color:#166534}.pill.sending{background:#fff2cc;color:#92580a}.pill.failed{background:#fde8e8;color:var(--danger)}.pill.cancelled{background:var(--surface-2);color:var(--muted)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.76rem;font-weight:700}.pill.scheduled{background:var(--accent-soft);color:var(--accent-deep)}.pill.sent{background:#dcfce7;color:#166534}.pill.sending{background:#fff2cc;color:#92580a}.pill.failed{background:#fde8e8;color:var(--danger)}.pill.cancelled{background:var(--surface-2);color:var(--muted)}.pill.published{background:#e0e7ff;color:#3730a3}
   .suggestions{display:grid;gap:10px}.suggestion{border-left:4px solid var(--accent);background:#f7fbfb;border-radius:0 8px 8px 0;padding:12px 14px}.suggestion p{margin:0;white-space:pre-wrap}.suggestion small{display:block;color:var(--muted);margin-top:5px}
   @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.chart-grid{grid-template-columns:1fr}.full{grid-column:auto}.filters{grid-template-columns:1fr 1fr}.wrap{padding-inline:14px}}
   @media(max-width:520px){.kpis,.filters{grid-template-columns:1fr}.bar-row{grid-template-columns:minmax(95px,1.2fr) 2fr 44px}}
@@ -111,11 +111,14 @@
           <input type="text" id="art-slug" placeholder="my-first-post"></div>
         <div><label for="art-tier">分級</label>
           <select id="art-tier"><option value="BASIC">BASIC（訂閱者免費）</option><option value="PREMIUM">PREMIUM（需點數）</option></select></div>
-        <div><label for="art-cost">解鎖點數（PREMIUM 用，留空用預設）</label>
+        <div><label for="art-cost">解鎖點數（PREMIUM 必填且需 &gt; 0）</label>
           <input type="number" id="art-cost" min="1" placeholder="10"></div>
       </div>
       <p class="hint" id="tier-hint">設了 slug 才會出現在 /r/archive 與單篇頁面。</p>
-      <button class="btn" id="send-btn" style="margin-top:14px">發送</button><div class="msg" id="send-msg"></div></div>
+      <button class="btn" id="send-btn" style="margin-top:14px">發送</button>
+      <button class="btn ghost" id="publish-btn" style="margin-top:14px;margin-left:8px">只發布不寄送</button>
+      <p class="hint" style="margin:8px 0 0">「只發布不寄送」只把文章放上網頁（<code>/r/news/{slug}</code> 與 <code>/r/archive</code>），不寄任何信、不消耗寄信額度；PREMIUM 只能走這條路徑。</p>
+      <div class="msg" id="send-msg"></div></div>
     <div class="card"><h2>⑥ 寄送歷史　<button class="btn ghost" id="hist-btn">重新整理</button></h2><div class="table-wrap"><table id="hist"><thead><tr><th>主旨</th><th>模式</th><th>時間</th><th>狀態</th><th>成功/失敗</th><th></th></tr></thead><tbody></tbody></table></div></div>
     <div class="card"><h2>⑦ 邀請信（二次確認）　<button class="btn ghost" id="invite-refresh">重新整理</button></h2>
       <p class="hint">對匯入的待確認名單寄「訂閱確認」邀請信；已寄過的人會自動跳過，點確認連結後才進入可寄送名單。</p>
@@ -287,7 +290,7 @@
     $('#lock-btn').onclick=()=>{sessionStorage.removeItem(KEY);location.reload();};
     $('#analytics-refresh').onclick=()=>loadAnalytics(true);$('#export-json').onclick=()=>downloadProtected('/api/admin/survey','survey-responses.json');$('#export-csv').onclick=()=>downloadProtected('/api/admin/survey?format=csv','survey-responses.csv');$('#export-pdf').onclick=exportPdf;
     ['#raw-search','#raw-source','#raw-role','#raw-budget','#raw-subscription','#raw-sort'].forEach(selector=>$(selector).addEventListener(selector==='#raw-search'?'input':'change',renderRawTable));
-    $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=()=>{doCount();doQuota();};$('#role').onchange=doCount;$('#interest').onchange=doCount;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#hist-btn').onclick=doHistory;
+    $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=()=>{doCount();doQuota();};$('#role').onchange=doCount;$('#interest').onchange=doCount;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#publish-btn').onclick=doPublish;$('#hist-btn').onclick=doHistory;
     $('#invite-refresh').onclick=()=>{doInviteOverview();doQuota();};$('#invite-source').onchange=doInviteOverview;$('#invite-send-btn').onclick=doSendInvites;$('#invite-remind-btn').onclick=doSendReminders;
     $('#invite-tpl').addEventListener('toggle',()=>{if($('#invite-tpl').open)loadInviteTemplate();});$('#tpl-preview-btn').onclick=previewInviteTemplate;$('#tpl-save-btn').onclick=saveInviteTemplate;
     document.querySelectorAll('input[name=mode]').forEach(radio=>radio.onchange=()=>{$('#sched').disabled=mode()!=='schedule';});
@@ -296,20 +299,21 @@
     $('#reader-q').addEventListener('keydown',e=>{if(e.key==='Enter')searchReaders();});
     $('#ledger-email').addEventListener('keydown',e=>{if(e.key==='Enter')loadLedger();});
     // 階段 D 才會實作「信件內只寄免費區」的折疊。在那之前，PREMIUM 文章若寄出
-    // 會把受限區完整寄進信箱，paywall 形同虛設，故後端有守門（回 400）。
+    // 會把受限區完整寄進信箱，paywall 形同虛設，故寄送端點有守門（回 400）。
     // 這裡先在 UI 說明，避免使用者選了 PREMIUM 才撞到 400。
     $('#art-tier').addEventListener('change',e=>{
       const hint=$('#tier-hint');
       if(e.target.value==='PREMIUM'){
-        // 文案必須與後端行為一致：發送卡片只有一顆按鈕、一律打 /api/admin/campaign/send，
-        // 而該端點對 PREMIUM 無條件回 400（與有沒有設 slug 無關）。舊文案寫「設好 slug
-        // 後只發布不寄送」，照著做只會拿到「發送失敗」——頁面承諾了一條不存在的路徑。
-        hint.textContent='PREMIUM 內容本階段無法透過後台發布：發送會被拒絕（400），'
-          +'且目前沒有「只發布到網頁、不寄送」的獨立路徑（信件折疊於階段 D 實作）。'
-          +'現在請改用 BASIC 寄送。';
+        // 文案必須與後端行為一致：「發送」打 /api/admin/campaign/send，該端點對 PREMIUM
+        // 無條件回 400（與有沒有設 slug 無關）；「只發布不寄送」打
+        // /api/admin/campaign/publish，該端點接受 PREMIUM（不寄信就沒有信件端外洩）。
+        // 「可發布到網頁」與「可寄送」是兩回事，後者仍待階段 D 的信件折疊。
+        hint.textContent='PREMIUM 可以發布到網頁（請按「只發布不寄送」，slug 必填），'
+          +'但還不能寄送：按「發送」會被拒絕（400），因為信件端的折疊（只寄免費區）'
+          +'要到階段 D 才實作，現在寄出會把受限區完整寄進所有人的信箱。';
         hint.className='warn';
       }else{
-        hint.textContent='設了 slug 才會出現在 /r/archive 與單篇頁面。';
+        hint.textContent='設了 slug 才會出現在 /r/archive 與單篇頁面；「只發布不寄送」則一律需要 slug。';
         hint.className='hint';
       }
     });
@@ -575,6 +579,9 @@
    */
   function setPublishFieldsEnabled(enabled){
     ['#art-slug','#art-tier','#art-cost'].forEach(sel=>{$(sel).disabled=!enabled;});
+    // 「只發布不寄送」會建立一筆新文章，與「修改既有排程」是兩件互斥的事；
+    // 三個發布欄位已被停用時它也必須停用，否則按下去會用停用中（=舊批次）的值建新文章。
+    $('#publish-btn').disabled=!enabled;
     const hint=$('#tier-hint');
     if(!enabled){hint.textContent='修改排程不會變更發布設定（slug／分級／解鎖點數），故已停用這三個欄位。';hint.className='warn';}
     // 還原時觸發 change，讓分級提示由既有監聽器依目前 tier 重算（PREMIUM 有專屬警語）
@@ -603,12 +610,51 @@
       doHistory();doQuota(); // 寄送後已用額度改變，重新偵測（後端也已讓快取失效）
     }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent=(editing?'更新排程失敗：':'發送失敗：')+e.message;}}
     finally{$('#send-btn').disabled=false;}}
+  /**
+   * 只發布不寄送：把文章放上網頁（/r/news/{slug} 與 /r/archive），不寄任何信。
+   *
+   * 為什麼是獨立按鈕而不是「發送」底下的一個選項：兩條路徑的後端端點、必填欄位與
+   * 副作用都不同（publish 一律需要 slug、接受 PREMIUM、完全不碰寄信額度），
+   * 揉進同一顆按鈕，管理者就無法從畫面上判斷自己按下去到底會不會寄信給訂閱者。
+   */
+  async function doPublish(){
+    const m=$('#send-msg');m.className='msg';m.textContent='';
+    if(editingCampaignId!=null){m.className='msg err';m.textContent='正在修改排程，請先完成或取消後再發布文章。';return;}
+    if(!$('#subject').value.trim()){m.className='msg err';m.textContent='請填主旨';return;}
+    if(!$('#markdown').value.trim()){m.className='msg err';m.textContent='請填內文';return;}
+    const fields=publishFields();
+    // slug 對這條端點是必填：沒有 slug 就沒有 /r/news/{slug} 網址，讀者永遠打不開。
+    // 前端先擋是為了給出比後端 400 更具體的說明，後端仍會獨立驗一次。
+    if(!fields.slug){m.className='msg err';m.textContent='「只發布不寄送」需要 slug：沒有 slug 就沒有 /r/news/{slug} 網址，讀者永遠打不開。';return;}
+    // PREMIUM 的解鎖點數不會回退到全域預設值（後端 validateCreditCost 要求 > 0，
+    // 因為 credit_cost=0 的 PREMIUM 等同免費卻標示為付費，資料庫也有 CHECK 約束）
+    if(fields.tier==='PREMIUM'&&!(fields.creditCost>0)){m.className='msg err';m.textContent='PREMIUM 需要填解鎖點數（必須大於 0）。';return;}
+    if(!confirm(`確定把這篇文章發布到網頁嗎？\n分級 ${fields.tier}／slug ${fields.slug}\n不會寄出任何信件、不消耗寄信額度。`))return;
+    $('#publish-btn').disabled=true;
+    try{
+      const r=await api('/api/admin/campaign/publish',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,...fields})});
+      // 動態內容一律 textContent／DOM API：本頁的 esc() 只跳脫 & < >、不跳脫引號，
+      // 拼進 innerHTML 的屬性位置會被跳出（階段 C 抓過一次），故這裡不用字串拼 HTML。
+      m.className='msg ok';
+      m.textContent=`已發布（批次 #${r.campaignId}，${r.tier}${r.creditCost?`／解鎖 ${r.creditCost} 點`:''}）：`;
+      const link=document.createElement('a');
+      link.href=r.url;link.textContent=r.url;link.target='_blank';link.rel='noopener';
+      m.append(link);
+      // slug 在 campaign 表有 UNIQUE 約束：留著上一篇的值，下一篇必定撞 400「slug 已被使用」
+      $('#art-slug').value='';
+      doHistory();
+    }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='發布失敗：'+e.message;}}
+    finally{$('#publish-btn').disabled=false;}
+  }
   /** 建立單一表格儲存格，內容一律以 textContent 寫入避免 XSS。 */
   function cell(text){const td=document.createElement('td');td.textContent=text==null?'':String(text);return td;}
   /** 載入電子報寄送歷史，排程中的項目提供取消按鈕；時間欄排程顯示排程時間、其餘顯示建立時間。 */
   async function doHistory(){try{const rows=await api('/api/admin/campaigns'),body=$('#hist tbody');body.textContent='';rows.forEach(c=>{const tr=document.createElement('tr');tr.append(cell(c.subject),cell(c.mode));// 時間欄：排程批次顯示預定寄出時間，其餘顯示建立時間
       tr.append(cell(c.scheduledAt?'排程 '+formatDate(c.scheduledAt):formatDate(c.createdAt)));
-      const statusTd=document.createElement('td'),pill=document.createElement('span');pill.className='pill '+c.status;pill.textContent=c.status;statusTd.append(pill);tr.append(statusTd,cell(c.acceptedCount+'/'+c.failedCount));
+      const statusTd=document.createElement('td'),pill=document.createElement('span');pill.className='pill '+c.status;pill.textContent=c.status;statusTd.append(pill);
+      // 「只發布不寄送」的紀錄沒有寄送行為：成功/失敗顯示 0/0 會被讀成「寄了 0 封的失敗群發」，
+      // 與事實（根本沒打算寄信）相反，故改為明確標示未寄送。
+      tr.append(statusTd,cell(c.mode==='publish'?'—（未寄送）':c.acceptedCount+'/'+c.failedCount));
       const actionTd=document.createElement('td');if(c.status==='scheduled'){const editBtn=document.createElement('button');editBtn.className='btn ghost';editBtn.textContent='修改';editBtn.onclick=()=>doEditSchedule(c);const btn=document.createElement('button');btn.className='btn danger';btn.style.marginLeft='8px';btn.textContent='取消排程';btn.onclick=()=>doCancel(c.id);actionTd.append(editBtn,btn);}tr.append(actionTd);body.append(tr);});}catch(e){/* 401 已由 api 處理，其餘維持既有畫面。 */}}
   /** 取消指定的電子報排程。 */
   async function doCancel(id){if(!confirm('確定取消此排程？'))return;try{const r=await api('/api/admin/campaigns/'+id+'/schedule',{method:'DELETE'});alert(`已取消 ${r.cancelled} 封，失敗 ${r.failed}`);if(editingCampaignId===id)exitEditMode();doHistory();}catch(e){if(e.message!=='401')alert('取消失敗：'+e.message);}}

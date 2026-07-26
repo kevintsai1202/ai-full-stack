@@ -275,6 +275,64 @@ class AdminCampaignControllerTest {
            .andExpect(jsonPath("$.campaignId").value(8));
     }
 
+    /**
+     * 只發布不寄送：<b>無金鑰一律 401</b>，且完全不呼叫 CampaignService。
+     *
+     * <p>這條端點能建立 PREMIUM 文章、決定它的價格與是否發布，權限等級與寄送端點相同。
+     * 把 {@code guard.verify(key)} 拿掉，本測試立刻變紅。</p>
+     */
+    @Test
+    void publishWithoutKeyReturns401() throws Exception {
+        mvc.perform(post("/api/admin/campaign/publish")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"subject\":\"主旨\",\"markdown\":\"內文\",\"slug\":\"a-post\"}"))
+           .andExpect(status().isUnauthorized());
+        org.mockito.Mockito.verifyNoInteractions(campaignService);
+    }
+
+    /** 只發布不寄送：金鑰錯誤同樣 401（固定時間比對由 AdminKeyGuard 負責） */
+    @Test
+    void publishWithWrongKeyReturns401() throws Exception {
+        mvc.perform(post("/api/admin/campaign/publish").header("X-Admin-Key", "wrong-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"subject\":\"主旨\",\"markdown\":\"內文\",\"slug\":\"a-post\"}"))
+           .andExpect(status().isUnauthorized());
+        org.mockito.Mockito.verifyNoInteractions(campaignService);
+    }
+
+    /** 只發布不寄送：原樣轉交欄位並回傳文章公開網址（讓管理者能直接點開驗證） */
+    @Test
+    void publishDelegatesAndReturnsPublicUrl() throws Exception {
+        when(campaignService.publish(eq("主旨"), eq("內文"), eq("PREMIUM"), eq(10),
+                eq("premium-post"), any()))
+            .thenReturn(new CampaignService.PublishResult(9L, "premium-post", "PREMIUM", 10,
+                java.time.OffsetDateTime.parse("2026-07-25T04:00:00Z"),
+                "https://news.example.com/r/news/premium-post"));
+
+        mvc.perform(post("/api/admin/campaign/publish").header("X-Admin-Key", "test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"subject\":\"主旨\",\"markdown\":\"內文\",\"tier\":\"PREMIUM\","
+                    + "\"creditCost\":10,\"slug\":\"premium-post\","
+                    + "\"publishedAt\":\"2026-07-25T04:00:00Z\"}"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.campaignId").value(9))
+           .andExpect(jsonPath("$.slug").value("premium-post"))
+           .andExpect(jsonPath("$.tier").value("PREMIUM"))
+           .andExpect(jsonPath("$.creditCost").value(10))
+           .andExpect(jsonPath("$.url").value("https://news.example.com/r/news/premium-post"));
+    }
+
+    /** 只發布不寄送：publishedAt 格式錯誤回 400，且不呼叫 CampaignService */
+    @Test
+    void publishWithInvalidPublishedAtReturns400() throws Exception {
+        mvc.perform(post("/api/admin/campaign/publish").header("X-Admin-Key", "test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"subject\":\"主旨\",\"markdown\":\"內文\",\"slug\":\"a-post\","
+                    + "\"publishedAt\":\"not-a-date\"}"))
+           .andExpect(status().isBadRequest());
+        org.mockito.Mockito.verifyNoInteractions(campaignService);
+    }
+
     /** 發送：publishedAt 格式錯誤回 400，且不呼叫 CampaignService */
     @Test
     void sendWithInvalidPublishedAtReturns400() throws Exception {
