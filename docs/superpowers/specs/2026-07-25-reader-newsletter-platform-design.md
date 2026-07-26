@@ -740,3 +740,21 @@ migration 相關測試（`MigrationSafetyTest`）需要真實的 PostgreSQL—�
 6. **點數初版參數是估的**：300 點 / 10 點一篇在週更、半數 PREMIUM 的情境下約 14 個月才耗盡，稀缺感可能不足。已刻意接受並改為上線後依真實數據校準（見 §9.2 觀察指標），這是選擇 `app_setting` DB 設定表而非 yml 的直接原因。
 7. **參與度分級依賴開信率下限**：開信是低可靠訊號（信箱封鎖圖片），因此門檻放寬且以登入／解鎖等高可靠行為為主。仍可能有真實讀者被判為 dormant——但因 dormant 只影響「常規信不寄」而非退訂，且任何互動立即恢復 active，損害可逆。刻意接受。
 8. **`EngagementService` 的已寄期數需掃 `email_log`**：名單成長後此查詢會變重。第一版直接查（名單規模數百至數千，成本可忽略）；若日後變慢，對策是在 `survey_response` 加物化的 `campaigns_sent_count` 並於寄送時遞增，而非改變分級語意。
+9. **`Reader`／`SurveyResponse` 部分路徑仍是整列 `save()`，會靜默覆蓋條件式 UPDATE 寫入的欄位**（階段 C 審查發現，VIP 授予路徑已修，其餘尚未修）：
+
+> **機制**：`Reader` 沒有 `@Version` 也沒有 `@DynamicUpdate`，Hibernate 對它的 UPDATE 一律帶上所有可更新欄位（含 `credits`）；`SurveyResponse` 同理（含 `consent`、`unsubscribed`、`last_engaged_at`）。凡是「先 `findBy...` 讀出整個 entity、改一兩個欄位、再 `save()`」的路徑，寫回去的不只是被改的欄位，而是 SELECT 當下讀到的**整份快照**。若同一時間另一個請求用條件式 `@Modifying` UPDATE（`addCredits`／`deductCredits`／`touchEngagement`／`confirmByEmail`／`unsubscribeByEmail`）改了同一列的其他欄位，這個 save() 提交時會把那些欄位改動蓋回舊值——不會報錯，帳本／稽核資料與物化欄位从此對不上。
+>
+> **具體失效情境（已在 VIP 授予修好前發生過同類分析）**：後台授予 VIP 時 SELECT 讀到 `credits=300`，提交前讀者在另一分頁解鎖一篇 10 點文章（`UnlockService` 用條件式 UPDATE 把 DB 改成 290 並寫入 `delta=-10` 的 `credit_txn`），`grantVip` 提交時的整列 UPDATE 把 `credits` 寫回 300——扣點被無聲還原，但帳本那筆 `-10` 留著，於是 `reader.credits (300) ≠ sum(credit_txn) (290)`，破壞「餘額永遠可由帳本重算稽核」的核心不變式，且無任何錯誤訊息，要等對帳才會發現。
+>
+> **目前狀態**：
+> - **已修**：`AdminReaderService` 的 VIP 授予／取消改用 `ReaderRepository.updateVip`（只寫 `tier`、`vip_expires_at` 兩欄的條件式 UPDATE），`credits` 永遠不在該 UPDATE 敘述裡。
+> - **未修（`Reader`）**：`ReaderAccountService.findOrCreate`（`world.springai.survey.reader.ReaderAccountService`，`findOrCreate` 私有方法內）在 `reader.setLastLoginAt(now)` 之後呼叫 `readerRepository.save(reader)`，仍是整列寫回。讀者「登入」與「解鎖文章」同時發生時，理論上可同樣覆蓋掉並發的扣點。（同檔案 `createWithSignupGrant` 內的另一處 `readerRepository.save(newReader)` 是**新列的 INSERT**，不是 read-modify-write，不受影響。）
+> - **未修（`SurveyResponse`，同類缺陷、不同表）**：`ReaderPortalController.updateProfile`（`world.springai.survey.reader.ReaderPortalController`）走的是 `surveyResponseRepository`，不是 `Reader`，但機制完全相同——它 `findFirstByEmailIgnoreCaseOrderByCreatedAtDesc` 讀出整個 `SurveyResponse`、只改 `name`，就整列 `save()`。若同一 email 在這之間被 `confirmByEmail`（改 `consent`）、`unsubscribeByEmail`（改 `unsubscribed`）或 `touchEngagement`（改 `last_engaged_at`）動過，這次 `save()` 會把那些欄位的新值蓋回讀取當下的舊值。判斷：**這是同一類缺陷，只是發生在 `SurveyResponse` 而非 `Reader`**，且 `consent`／`unsubscribed` 是本專案最敏感的同意狀態，覆蓋風險不比 `credits` 輕。
+> - 已用 `grep -rn "readerRepository\.save\|surveyResponseRepository\.save" survey-backend/src/main` 掃過全庫，以上為僅有的三處呼叫（含前述已排除的 INSERT 一處），無遺漏。
+>
+> **修法選項**（下一個允許改動的階段擇一或並用）：
+> 1. **改成只寫必要欄位的 `@Modifying` 條件式 UPDATE**，與既有 `addCredits`／`deductCredits`／`updateVip` 的設計一致。例如新增 `ReaderRepository.updateLastLogin(id, now)`、`SurveyResponseRepository.updateName(email, name)`。代價最低（不需 migration、不需新依賴），且與現有慣例一致，**建議優先選這個**。
+> 2. **在 `Reader`（與視需要 `SurveyResponse`）加 `@Version` 樂觀鎖**，讓 Hibernate 在整列 UPDATE 前檢查版本號、版本不符即拋 `OptimisticLockException`，從根本阻止靜默覆蓋。**代價**：需新增資料庫欄位（`version INT`），也就是需要一支 Flyway migration——本階段（階段 C）明文禁止新增 migration，故**此選項現在不可執行**，留待下一個允許 migration 的階段（例如與 §5.4 邀請重複發獎的 `uq_credit_txn_referral_note` 修法一併排入）。且樂觀鎖只把問題轉成「後到者拋例外」，呼叫端仍需處理重試或回錯誤給使用者，不是免費的午餐。
+> 3. **加 `@DynamicUpdate`**：讓 Hibernate 只 UPDATE 實際變動過的欄位（依 entity 載入時的快照比對）。**只縮小競爭視窗、非根治**——若併發的另一方也改了同一欄位（而非不同欄位），`@DynamicUpdate` 不提供任何保護；且它仍是 read-modify-write，兩個請求間的時間窗只是變短而非消失。優點是不需 migration、可立即套用，適合當作選項 1 覆蓋不到的欄位（例如未來新增的雜項欄位）的**過渡防線**，不應作為長期解法。
+>
+> **建議順序**：本階段（若允許）先套選項 1 補上 `updateLastLogin` 與 `SurveyResponse` 的 `updateName`；選項 2 的 `@Version` 排入下一個允許 migration 的階段作為根治；選項 3 不單獨採用，除非發現選項 1 短期內來不及覆蓋的新欄位。
