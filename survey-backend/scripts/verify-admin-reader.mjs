@@ -168,7 +168,7 @@ let originalPremiumCost = null;
  * finally 的補償加點原本無條件執行：try 區塊若在 [4] 之前就拋錯（例如服務中途重啟），
  * 補償仍然扣 7 點，每一次失敗執行都讓測試讀者的餘額往下漂 7 點。
  */
-let granted = false;
+let creditsGranted = false;
 try {
   // ---- 7. 未授權必須被擋（先做：避免後面任何步驟意外用到無金鑰路徑） ----
   console.log('\n[0] 未帶金鑰的後台端點');
@@ -216,7 +216,7 @@ try {
   });
   eq(grant.status, 200, '批次加點回應碼');
   // 只要端點回了 200，帳本就可能已經寫入，補償就必須執行（即使 granted < 2）
-  if (grant.status === 200) granted = true;
+  if (grant.status === 200) creditsGranted = true;
   eq(grant.body.granted, 2, '成功筆數');
   eq(grant.body.failed, 0, '失敗筆數');
 
@@ -280,7 +280,7 @@ try {
       ok([200, 404].includes(del.status), `還原：取消 VIP 回應碼 ${del.status}（接受 200/404）`);
     }
     // 帳本只增不改，還原餘額靠補償性負數加點而非刪除歷史列
-    if (granted) {
+    if (creditsGranted) {
       const back = await api('/api/admin/readers/credits', {
         method: 'POST',
         body: JSON.stringify({ emails: [T1, T2], delta: -GRANT_DELTA, note: 'verify-admin-reader 還原' }),

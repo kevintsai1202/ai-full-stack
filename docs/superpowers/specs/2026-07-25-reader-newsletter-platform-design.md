@@ -412,6 +412,23 @@ credits >= campaign.credit_cost           → PARTIAL + CAN_UNLOCK（顯示解�
 > 6. 代價與補救：發獎失敗會靜默損失一次獎勵，以 ERROR 記錄，後台手動加點。
 > 7. 依賴方向：事件是為了不讓 `audience` 依賴 `reader`（spec §3）。
 >
+> **邀請獎勵關成 0 時，`/r/invite` 的「已成功邀請人數」會停止成長**（階段 C 端到端驗收確認）：
+> `ReferralService.stats()` 數的是該推薦人 `credit_txn` 中 `reason='REFERRAL'` 的筆數，
+> 而 `rewardFor()` 在 `creditPolicy.referralReward() <= 0` 時**完全不寫帳本**
+> （刻意設計：不佔用冪等鍵，日後把獎勵調回 100 時這位被邀者仍拿得到獎勵）。
+> 兩件事合起來的結果是：後台把 `credit.referral_reward` 設為 0 之後，朋友確實完成了
+> 確認訂閱，但邀請人的頁面完全沒有反應——人數不動、也沒有任何「已記錄但暫停發放」的痕跡。
+> 而 `/r/invite` 的文案在獎勵為 0 時寫的是「目前邀請獎勵暫停發放，**成功邀請仍會被記錄**」，
+> 這句話目前不成立。
+>
+> **影響**：只有在站方主動把獎勵調成 0 時才會發生，且不影響任何帳務正確性；
+> 但它是一句對讀者的明確承諾沒有兌現。
+> **修法（需 migration，故階段 C 未做）**：邀請成效的計數來源不該與「發了多少獎」綁在一起。
+> 正解是另建歸因紀錄（或在 `credit_txn` 允許 `delta=0` 的 `REFERRAL` 列並讓
+> `stats().earnedCredits` 改為加總 delta），前者需要新表、後者需要重新檢視
+> 「帳本不放 delta=0 的無意義列」這條既有慣例。在修好之前，若要關閉邀請獎勵，
+> 應同時把 `/r/invite` 的文案改成不承諾「仍會被記錄」。
+
 > **另一項必須寫進 spec 的發現**：`confirmByEmail` 的 JPQL 是 `update ... set consent = true where lower(email) = lower(:email)`，**沒有排除 `unsubscribed = true`**，而 PostgreSQL 的 UPDATE 即使值沒變也會回報 1 列。所以 `SubscriptionController` 那道 `affected > 0` 的條件，實際上只擋掉「名單裡完全沒有這個 email」——已退訂者、早已確認過的人，每次點舊連結都會發出事件。因此 `ReferralService` 的冪等檢查（`credit_txn` 的 `note` = 被邀者 email）**不是可選的加強，而是唯一真正的防重複發獎機制**，不可簡化。
 
 ### 5.5 發送：依 tier 分組（兩種內文）
@@ -527,6 +544,33 @@ sunset   ← 已寄期數 >= 淘汰門檻(12) 且 last_engaged_at 為 NULL 或�
 **所有數字動態注入，不寫死**：頁面渲染時從 `AppSettingService` 取值填入。涵蓋初始贈點、PREMIUM 單篇點數、邀請獎勵、VIP 效期。
 
 > **這是硬要求**：§9.2 明訂第一版參數就是要靠上線後數據校準的。若規則頁寫死「一篇 10 點」而後台已調成 50 點，讀者看到的代價與實際扣的不一致——這是最傷信任的一類落差。同理，`/r/me` 與解鎖提示區塊的數字也一律走同一個來源。
+
+> **階段 C 的實際狀態與一處必須講清楚的偏離**（端到端驗收 `verify-stage-c.mjs` 實測）：
+>
+> 三處的數字都不是寫死的，但**來源不是同一個**：
+>
+> | 位置 | 數字來源 | 改 `credit.premium_cost` 後會變嗎 |
+> |---|---|---|
+> | `/r/rules` | `CreditPolicy.premiumCost()` | 會 |
+> | `/r/me` | `CreditPolicy.premiumCost()` | 會 |
+> | paywall gate（`/r/news/{slug}`） | `CreditPolicy.costOf(campaign)` → **該篇的 `campaign.credit_cost`** | **不會** |
+>
+> `costOf()` 的設計是「文章自訂值優先，未設定（0）時退回全域預設」，但
+> `ck_campaign_premium_cost` 強制 PREMIUM 的 `credit_cost > 0`，而
+> `CampaignService.validateCreditCost` 也對 PREMIUM 要求 `creditCost > 0`——
+> 所以**任何一篇 PREMIUM 文章的 `credit_cost` 都不可能是 0，全域退路那條分支在實務上是死碼**。
+> 結果是：後台調整 `credit.premium_cost` 只會改變「規則頁與帳戶頁上的說明數字」，
+> 以及**日後新文章的預設填值**，不會改變任何已發布文章的實際解鎖價。
+>
+> **這算不算違反本節的硬要求？** 本節真正要防的落差是「讀者看到的代價 ≠ 實際扣的點數」。
+> 這一條**成立**：gate 顯示的數字與 `UnlockService` 扣的是同一個 `costOf(campaign)`，
+> 端到端驗收有專門的斷言（gate 顯示 20 → 實扣 20）。不成立的是本節文字暗示的
+> 「三處會同步變動」——因為每篇文章有自己的定價，本來就不該被全域參數追溯改價
+> （已解鎖的讀者付的是當時的價）。
+>
+> **待辦**：`/r/rules` 與 `/r/me` 的文案應改為「進階文章**通常**每篇 N 點，實際點數以各篇文章頁顯示為準」，
+> 否則讀者在規則頁看到 10、在某篇文章上看到 20 時，會認為系統或說明有一邊是錯的。
+> 這是文案調整，不改行為，留給階段 D 一併處理。
 
 **內容綱要**（以讀者會問的問題組織，非條文式）：
 
@@ -673,6 +717,62 @@ V7/V8 migration（**含 `credit_txn`，因為首次登入即需發 300 點 `SIGN
 
 **階段 C：點數消耗 + 邀請 + 規則頁**（功能區 3、4）
 接上 `AccessDecisionService` 的扣點路徑（`article_access` + 條件式 UPDATE）、後台手動／批次加點、VIP 授予、邀請碼與 confirm 時發獎、`/r/me`、`/r/invite`、`/r/rules`。**規則頁與 PREMIUM 發布能力必須同一階段上線**——先有付費牆而後有規則說明，讀者體驗上是本末倒置。
+
+> #### 階段 C 實際交付內容（端到端驗收後補記，2026-07-26）
+>
+> 驗收方式：`survey-backend/scripts/verify-stage-c.mjs`（可重跑、`--browser` 走真實 Chromium），
+> 走一條完整的讀者路徑：A 訂閱 → 首次登入拿初始贈點 → 取邀請連結 → B 透過連結訂閱
+> → B 未確認前 A 不得加點 → B 確認 → A 得獎勵 → 重複確認不重複發 → 發布 PREMIUM
+> → B 未解鎖時回應本文不含受限區 → 解鎖扣點 → 重複解鎖不重複扣 → 後台改參數
+> → 後台授予 VIP → VIP 免費看全文。連續執行兩次皆全綠。
+>
+> **已完成**：
+>
+> - 讀者可用點數解鎖 PREMIUM，且**必須按下按鈕才扣點**；`article_access` UNIQUE 實測擋住重複扣點。
+> - 邀請獎勵只在被邀者點確認信後發放，重複確認不重複發，自我邀請不發獎。
+> - 後台讀者管理（搜尋／VIP 授予與取消／批次加點／帳本查詢）與參數設定全部有 UI。
+> - 群發保留交易信額度；行銷可用量為 0 時回 409 拒絕，而非靜默寄 0 封。
+> - `credit_txn` 只增不改；端到端實測「`reader.credits` == 該讀者 `credit_txn` 總和」成立。
+> - 邀請人的交易明細不顯示被邀者 email（連 local part 都不出現），冪等鍵仍保存在 `note`。
+>
+> **與 spec 原設計的偏離（逐項）**：
+>
+> 1. **§5.2「`credits >= cost` → FULL + 扣點」改為「PARTIAL + `CAN_UNLOCK`，讀者按按鈕才扣」。**
+>    理由與取捨見 §5.2 第 5 點。
+> 2. **§5.4「confirm 成功的同一交易內發獎」改為事件 + `REQUIRES_NEW` 的獨立交易。**
+>    理由見 §5.4 的偏離說明（發布端根本沒有交易，用 `@TransactionalEventListener` 會靜默不觸發）。
+> 3. **§6 的交易信保留額度由階段 D 提前至階段 C 完成**（第 2 項的「群發前檢查」部分；
+>    「補寄前檢查」仍不成立，因為補寄要到階段 E 才存在）。
+> 4. **§5.11 的「三處數字同步變動」只成立於 `/r/rules` 與 `/r/me`**；paywall gate 的數字來自
+>    文章自己的 `credit_cost`，不隨全域參數變動。詳見 §5.11 的偏離說明——
+>    「顯示的數字 == 實際扣的點數」這條核心性質仍成立且有端到端斷言。
+> 5. **`/r/invite` 的邀請連結是 `/r/?ref={code}`，不是 §5.4 寫的 `/r/subscribe?ref=`。**
+>    訂閱入口就是 `/r/`（見 §8 的頁面表），`/r/subscribe` 這個路徑從未存在。
+>
+> **已知風險與未完成項目**：
+>
+> - `credit_txn` 缺 `(reason, note)` 的唯一索引，邀請獎勵的冪等是 check-then-act（詳見 §5.4）。
+> - `Reader` / `SurveyResponse` 部分路徑仍是整列 `save()`，可能靜默覆蓋條件式 UPDATE（詳見 §13.9；
+>   VIP 授予已修，`ReaderAccountService.findOrCreate` 的 `setLastLoginAt` 與
+>   `ReaderPortalController.updateProfile` 尚未修）。
+> - 邀請獎勵被後台關成 0 時，`/r/invite` 的「已成功邀請人數」會停止成長（詳見 §5.4）。
+> - **沒有「只發布到網頁、不寄送」的路徑**：`/api/admin/campaign/send` 對 PREMIUM 無條件回 400
+>   （階段 D 的信件折疊完成前必要的守門），而 `campaign` 同時是「發送批次」與「文章」。
+>   目前 PREMIUM 文章只能直接寫資料庫發布——端到端驗收腳本正是這樣建測試文章的。
+>   這是階段 C 交付範圍中**唯一沒有後台 UI 的能力**，必須誠實記錄，不可視為已完成。
+> - **VIP 閱讀 PREMIUM 時 `recordAccess` 會補寫 `cost=0` 的 `article_access`**（§5.2 規則 3 的既定設計），
+>   因此 **VIP 到期後，該讀者對「VIP 期間讀過的文章」仍永久免費**。這是刻意的（不追溯收費），
+>   但沒有寫進規則頁；若日後 VIP 改為付費訂閱，這條要先想清楚。
+> - `/r/rules` 與 `/r/me` 的文案把單篇點數說成固定值，與「每篇文章可自訂價」的實作不一致（詳見 §5.11 待辦）。
+> - **驗證腳本自身的兩個問題**（端到端驗收時發現，不影響產品邏輯，但會讓驗證失去效力）：
+>   ① `verify-unlock-flow.mjs` 的 fixture 重設把 `reader.credits` 設成 300 後又清空該讀者的
+>   `credit_txn`，於是測試資料庫裡永久存在一列 `credits=300 / 帳本總和=0`——
+>   **全庫唯一違反「餘額 == 帳本總和」的列，是驗證腳本自己造的**。日後做 §13.2 的重算對帳工具時
+>   這會是假陽性。修法是照 `verify-stage-c.mjs` 的做法連 `reader` 列一起刪、讓餘額由帳本重新累積，
+>   並補一條不變式斷言。
+>   ② `verify-admin.mjs` 用頂層 `import 'playwright'`，沒有其他腳本都有的全域安裝退路，
+>   在本專案（`survey-backend` 無 `node_modules`）一律 `ERR_MODULE_NOT_FOUND`——
+>   這支腳本目前跑不起來，等於一段驗證長期沒在執行。建議把 `loadPlaywright()` 抽成共用模組。
 
 **階段 D：內容製作升級**（功能區 7）
 MinIO 服務與上傳、後台插圖 UI、發送依 tier 分組、`vip_full_in_mail`。（交易信保留額度原規劃在此階段，已提前至階段 C 完成，見 §6。）
