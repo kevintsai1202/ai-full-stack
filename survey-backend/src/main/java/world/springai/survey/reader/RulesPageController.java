@@ -84,13 +84,7 @@ public class RulesPageController {
             .body(htmlTemplate.render("static/reader/rules.html", vars));
     }
 
-    /**
-     * 依登入狀態顯示不同的導覽連結。
-     *
-     * <p><b>注意</b>：{@code /r/me}（我的帳戶）頁面由 Task 9 提供，目前 repo 內
-     * 尚無對應的 {@code @GetMapping}。在 Task 9 完成前，已登入讀者點這個連結
-     * 會得到 404——這是預期中的暫時狀態，連結本身沒有打錯，不需改掉。</p>
-     */
+    /** 依登入狀態顯示不同的導覽連結 */
     private String navLinks(boolean loggedIn) {
         if (loggedIn) {
             return "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/me\">我的帳戶</a>";

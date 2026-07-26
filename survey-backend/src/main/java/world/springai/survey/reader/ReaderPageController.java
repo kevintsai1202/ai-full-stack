@@ -159,7 +159,7 @@ public class ReaderPageController {
     /** 依登入狀態顯示不同的導覽連結 */
     private String navLinks(boolean loggedIn) {
         if (loggedIn) {
-            return "<a href=\"/r/archive\">歷史內容</a>";
+            return "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/me\">我的帳戶</a>";
         }
         return "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/login\">登入</a>";
     }

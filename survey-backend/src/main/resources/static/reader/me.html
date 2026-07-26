@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>我的帳戶｜凱文大叔的電子報</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/r/reader.css">
+</head>
+<body>
+<header class="site-head">
+  <div class="site-head-inner">
+    <a class="brand" href="/r/">凱文大叔的電子報</a>
+    <nav><!--NAV_LINKS--></nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <h1 style="font-size:1.5rem">我的帳戶</h1>
+
+  <div class="card">
+    <h2>點數餘額</h2>
+    <p class="balance"><!--CREDITS--> 點</p>
+    <p style="color:var(--muted);font-size:.92rem">
+      進階內容每篇 <!--PREMIUM_COST--> 點，一次解鎖永久可讀。<a href="/r/rules">看遊戲規則</a>
+    </p>
+    <p style="margin-top:12px"><a class="btn ghost" href="/r/invite">邀請朋友賺點數</a></p>
+  </div>
+
+  <div class="card">
+    <h2>帳戶資訊</h2>
+    <p style="color:var(--muted);font-size:.92rem">Email：<!--EMAIL--></p>
+    <p style="color:var(--muted);font-size:.92rem">方案：<!--TIER_STATUS--></p>
+    <label for="display-name">顯示名稱</label>
+    <div class="form-row">
+      <input type="text" id="display-name" value="<!--DISPLAY_NAME-->" maxlength="40" placeholder="想讓我怎麼稱呼你？">
+      <button class="btn" id="save-profile">儲存</button>
+    </div>
+    <div class="msg" id="profile-msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>交易明細</h2>
+    <!--TXN_LIST-->
+  </div>
+
+  <div class="foot">
+    <p><button class="btn ghost" id="logout-btn">登出</button></p>
+  </div>
+</div>
+
+<script>
+  // 儲存顯示名稱：同時會更新名單中心的最後互動時間（參與度訊號）
+  const saveBtn = document.getElementById('save-profile');
+  const profileMsg = document.getElementById('profile-msg');
+
+  saveBtn.addEventListener('click', async () => {
+    saveBtn.disabled = true;
+    try {
+      const res = await fetch('/api/reader/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: document.getElementById('display-name').value })
+      });
+      if (res.ok) {
+        profileMsg.textContent = '已儲存。';
+        profileMsg.className = 'msg show ok';
+      } else if (res.status === 401) {
+        profileMsg.textContent = '登入已過期，請重新登入。';
+        profileMsg.className = 'msg show err';
+      } else {
+        profileMsg.textContent = '儲存失敗，請稍後再試。';
+        profileMsg.className = 'msg show err';
+      }
+    } catch (e) {
+      profileMsg.textContent = '連線失敗，請稍後再試。';
+      profileMsg.className = 'msg show err';
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+
+  // 登出後回訂閱首頁
+  document.getElementById('logout-btn').addEventListener('click', async () => {
+    await fetch('/api/reader/logout', { method: 'POST' });
+    location.href = '/r/';
+  });
+</script>
+</body>
+</html>

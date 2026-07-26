@@ -109,3 +109,54 @@ input[type=email] { width:100%; padding:12px 14px; border:1px solid var(--border
   padding-left: 1.3em;
   line-height: 1.9;
 }
+
+/* 餘額數字：帳戶頁的視覺焦點 */
+.balance {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 6px 0 4px;
+  color: var(--accent, #0d9488);
+}
+
+/* 交易明細列表 */
+.txn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.txn-item {
+  display: grid;
+  grid-template-columns: 4.5rem 6rem 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line, #eee);
+  font-size: .94rem;
+}
+
+.txn-delta {
+  font-weight: 700;
+  text-align: right;
+}
+
+.txn-delta.gain { color: #0d9488; }
+.txn-delta.spend { color: #b45309; }
+
+.txn-note {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.txn-date {
+  color: var(--muted);
+  font-size: .85rem;
+}
+
+/* 窄螢幕改為兩行，避免四欄擠壓 */
+@media (max-width: 560px) {
+  .txn-item {
+    grid-template-columns: 4.5rem 1fr;
+  }
+  .txn-date { grid-column: 2; }
+}
