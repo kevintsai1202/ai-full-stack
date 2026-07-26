@@ -182,16 +182,15 @@ class RulesPageControllerTest {
      * 獎勵為 0 時的文案必須精確：人數會計入（但要講清楚是<b>被邀者首次登入之後</b>），
      * 點數則暫停。
      *
-     * <p>V9 之後 {@code ReferralService.stats} 的人數改數 {@code reader.referred_by}，
-     * 所以「成功邀請仍會被計入人數」這件事第一次真的成立，文案可以講。
-     * 但 {@code referred_by} 是在被邀者<b>首次登入建立帳戶</b>時才寫入，
-     * 不是在他點確認信的那一刻——只寫「成功邀請仍會被記錄」仍然是承諾了
-     * 程式不保證的時序（朋友確認了訂閱但還沒登入時，人數確實不會動）。
-     * 因此本測試要求文案同時具備三件事：說明暫停發放、寫出「首次登入」這個條件、
-     * 不承諾暫停期間點數還會累積。</p>
+     * <p>{@code ReferralService.stats} 的人數是「帳本 REFERRAL 的 note」與
+     * {@code reader.referred_by} 的聯集，所以「成功邀請仍會被計入人數」真的成立，
+     * 文案可以講。但<b>獎勵為 0 時帳本那一邊完全不寫</b>（{@code rewardFor} 刻意
+     * 不占用冪等鍵），聯集只剩 {@code referred_by}，而它是在被邀者<b>首次登入建立
+     * 帳戶</b>時才寫入，不是在他點確認信的那一刻——只寫「成功邀請仍會被記錄」
+     * 仍然是承諾了程式在這個設定下不保證的時序。因此本測試要求文案同時具備三件事：
+     * 說明暫停發放、寫出「首次登入」這個條件、不承諾暫停期間點數還會累積。</p>
      *
-     * <p>破壞性驗證：把文案改回「目前邀請獎勵暫停發放，成功邀請仍會被記錄」
-     * （少了首次登入的條件）→ 本測試變紅。</p>
+     * <p>破壞性驗證：把 0 值文案裡的「並首次登入」刪掉 → 本測試變紅。</p>
      */
     @Test
     void zeroRewardCopyStatesExactlyWhatIsRecorded() throws Exception {
@@ -202,9 +201,15 @@ class RulesPageControllerTest {
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("暫停發放"));
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("邀請人數"),
             "沒有告訴讀者人數仍會計入——那是 V9 之後真的成立的事，不說反而低估了行為");
-        org.junit.jupiter.api.Assertions.assertTrue(html.contains("首次登入"),
-            "承諾了程式不保證的時序：referred_by 是被邀者首次登入建帳時才寫入，"
-                + "只說「成功邀請就會被記錄」會讓讀者盯著還沒成長的數字以為壞了");
+        // 必須斷言「整句片段」而不是孤立的「首次登入」四個字：/r/rules 一定會渲染
+        // <!--SIGNUP_GRANT_LINE-->，而 signupGrantLine 的兩個分支都含「首次登入」
+        //（「首次登入送 N 點」／「目前暫無首次登入贈點」），setUp 又把 signupGrant()
+        // 設成 77——所以 html.contains("首次登入") 無論 referralRewardNote(0) 回傳
+        // 什麼都會通過，是一條恆真的斷言，把「並首次登入」刪掉也照樣全綠。
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("並首次登入後"),
+            "承諾了程式不保證的時序：獎勵為 0 時帳本不寫，人數只能靠 referred_by，"
+                + "而它是被邀者首次登入建帳時才寫入；只說「成功邀請就會被記錄」"
+                + "會讓讀者盯著還沒成長的數字以為壞了");
         // 暫停期間點數確實不會累積，這些說法一律不成立
         for (String promise : java.util.List.of("點數仍會累計", "仍會獲得點數", "仍會拿到點數", "點數照樣累計")) {
             org.junit.jupiter.api.Assertions.assertFalse(html.contains(promise),

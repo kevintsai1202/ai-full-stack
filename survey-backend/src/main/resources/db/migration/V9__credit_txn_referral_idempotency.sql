@@ -32,5 +32,43 @@
 -- credit_txn 由 V7 建立，而正式資料庫目前仍在 V6（V7／V8 尚未部署）。
 -- 因此 V7→V9 首次在正式環境執行時，本索引是建在剛建好的空表上，
 -- 不存在「既有重複列導致 CREATE UNIQUE INDEX 失敗」的可能。
+
+-- 【鎖與 CONCURRENTLY 的取捨：不要照抄本檔的寫法去對大表加索引】
+-- 下面兩道 CREATE INDEX 都是「非 CONCURRENTLY」的普通建索引，會對整張表取
+-- ACCESS EXCLUSIVE 鎖，建索引期間該表連 SELECT 都會被擋住。在這裡是安全的，
+-- 唯一的理由是「兩張表在本次部署當下都是空的或極小」（見上一段），
+-- 空表上取鎖是瞬時操作，鎖不鎖沒有差別。
+--
+-- 反過來說：日後要為已上線且有數十萬列以上的表加索引時，絕不可照抄這個形狀，
+-- 否則整張表會在建索引期間被鎖死。那種情況要用 CREATE INDEX CONCURRENTLY，
+-- 而它有三個非顯而易見的限制：
+--   ① CONCURRENTLY 不能在交易區塊內執行。Flyway 預設把每一支 migration 包在
+--      一個交易裡，所以該檔案「必須」在最上方加上：
+--        -- flyway:executeInTransaction=false
+--      漏了這行會直接失敗（ERROR: CREATE INDEX CONCURRENTLY cannot run inside
+--      a transaction block），而不是靜默退化成普通建索引。
+--   ② 關掉交易的代價是該支 migration 不再是原子的：中途失敗會留下已執行的部分，
+--      因此那種檔案裡只該放這一道敘述。
+--   ③ CONCURRENTLY 失敗（例如唯一索引撞到既有重複列、或連線中斷）會留下一個
+--      INVALID 的索引，它不會被查詢使用卻仍會拖慢寫入，必須人工
+--      DROP INDEX（可加 CONCURRENTLY）清掉，Flyway 不會幫你回收。
+--      清掉之前重跑同名索引也會因為名稱衝突而失敗。
+
 CREATE UNIQUE INDEX uq_credit_txn_referral_note
     ON credit_txn (note) WHERE reason = 'REFERRAL';
+
+-- 【reader.referred_by 的索引】
+-- V7 只宣告了這個欄位，沒有為它建索引（當時沒有任何查詢用到它）。現在
+-- ReferralService.stats 的邀請人數是「帳本 REFERRAL 的 note」與「referred_by 指向
+-- 自己的讀者 email」的聯集，後者是 ReaderRepository.findInviteeEmailsByReferredBy
+-- 的 WHERE 條件——而 /r/invite 是登入讀者可以任意重新整理的頁面。沒有索引的話，
+-- 讀者數成長到數萬之後，每次重載都是一次 reader 全表掃描。
+-- V7 已經為 referral_code 與 credit_txn(reader_id, created_at) 建了索引，
+-- 唯獨這個「後來才出現的查詢路徑」漏了，在此補上。
+--
+-- 用部分索引（WHERE referred_by IS NOT NULL）而不是普通索引：referred_by 只有
+-- 「透過別人的邀請連結進來且已建帳」的讀者才有值，絕大多數列是 NULL。
+-- 把 NULL 列排除在索引外可讓索引小很多，而查詢一律帶 referred_by = ?
+-- （= 隱含 IS NOT NULL），規劃器仍然用得到這個部分索引。
+CREATE INDEX idx_reader_referred_by
+    ON reader (referred_by) WHERE referred_by IS NOT NULL;

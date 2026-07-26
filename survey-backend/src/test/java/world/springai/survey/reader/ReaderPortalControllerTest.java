@@ -570,6 +570,33 @@ class ReaderPortalControllerTest {
     }
 
     /**
+     * <b>人數 0 但點數不為 0 時，絕不可走空狀態。</b>
+     *
+     * <p>{@code ReferralStats(0, 100)} 代表「站方已經為某次邀請發了 100 點，
+     * 但那位被邀者沒被計入人數」。若空狀態只看 {@code invitedCount == 0}，
+     * 這一頁會印「還沒有人透過你的連結完成訂閱」——一句與帳戶頁那筆
+     * 「邀請獎勵 +100」直接矛盾的假話——並且把<b>已發放的點數整個藏起來</b>，
+     * 讀者在這頁一個字都看不到那 100 點。點數是實際發生的資產變動，
+     * 不論人數是多少都必須顯示。</p>
+     *
+     * <p>破壞性驗證：把空狀態條件改回只看 {@code invitedCount == 0} → 本測試變紅。</p>
+     */
+    @Test
+    void showsEarnedCreditsEvenWhenInvitedCountIsZero() throws Exception {
+        givenLoggedIn(reader(300));
+        when(referralService.stats(READER_ID))
+            .thenReturn(new ReferralService.ReferralStats(0, 100));
+
+        String html = mvc.perform(get("/r/invite").cookie(cookie()))
+            .andReturn().getResponse().getContentAsString();
+
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("還沒有人"),
+            "已經發出去 100 點卻說「還沒有人透過你的連結完成訂閱」：這是一句假話");
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("100"),
+            "已發放的點數被空狀態藏起來了：讀者在這頁看不到那 100 點");
+    }
+
+    /**
      * 獎勵為 0（後台關閉邀請獎勵）時，文案不得出現「拿到 0 點」這種讀起來像
      * 故障的字，必須改用講得通的說法，並沿用規則頁（{@code /r/rules}）
      * 「依值切換整段文字」的慣例。
@@ -590,11 +617,15 @@ class ReaderPortalControllerTest {
     /**
      * 獎勵為 0 時，{@code /r/invite} 的文案必須與同一頁下半部的成效區塊一致。
      *
-     * <p>V9 之後成效人數改數 {@code reader.referred_by}，獎勵暫停期間人數會成長，
-     * 所以「仍會計入邀請人數」不再是空頭承諾，可以講；但 {@code referred_by} 是
-     * 被邀者<b>首次登入建立帳戶</b>時才寫入，因此文案必須把這個條件寫出來，
-     * 否則讀者會在朋友「已確認訂閱、還沒登入」的空窗期盯著沒動的數字以為壞了。
-     * 點數則確實暫停，不得暗示還會累積。</p>
+     * <p>成效人數是「帳本 REFERRAL 的 note」與 {@code reader.referred_by} 的聯集，
+     * 所以「仍會計入邀請人數」不是空頭承諾，可以講。但<b>獎勵為 0 時帳本那一邊完全
+     * 不寫</b>（{@code rewardFor} 刻意不占用冪等鍵），聯集只剩 {@code referred_by}，
+     * 而它是被邀者<b>首次登入建立帳戶</b>時才寫入——因此這個分支的文案必須把
+     * 「首次登入」這個條件寫出來，否則讀者會在朋友「已確認訂閱、還沒登入」的空窗期
+     * 盯著沒動的數字以為壞了。點數則確實暫停，不得暗示還會累積。</p>
+     *
+     * <p>注意這個附註<b>只在 0 值分支需要</b>：獎勵 &gt; 0 時帳本在確認訂閱當下就寫，
+     * 人數立刻成長，靜態文案「點開確認信才算一次成功邀請」本身就是準確的。</p>
      */
     @Test
     void zeroRewardInviteCopyStatesExactlyWhatIsRecorded() throws Exception {
@@ -607,8 +638,11 @@ class ReaderPortalControllerTest {
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("暫停發放"));
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("邀請人數"),
             "沒有告訴讀者人數仍會計入——那是 V9 之後真的成立的事");
-        org.junit.jupiter.api.Assertions.assertTrue(html.contains("首次登入"),
-            "承諾了程式不保證的時序：referred_by 是被邀者首次登入建帳時才寫入");
+        // 斷言整句片段而非孤立的「首次登入」：後者容易在頁面其他地方（例如初始贈點
+        // 說明）出現而變成恆真的斷言。這裡要守的是「人數計入的條件裡包含首次登入」。
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("並首次登入後"),
+            "承諾了程式不保證的時序：獎勵為 0 時帳本不寫，人數只能靠 referred_by，"
+                + "而它是被邀者首次登入建帳時才寫入");
         for (String promise : java.util.List.of("點數仍會累計", "仍會獲得點數", "仍會拿到點數", "點數照樣累計")) {
             org.junit.jupiter.api.Assertions.assertFalse(html.contains(promise),
                 "承諾了「" + promise + "」，但獎勵為 0 時 rewardFor 根本不寫帳本");

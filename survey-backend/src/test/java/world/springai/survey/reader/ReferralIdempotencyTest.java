@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import world.springai.survey.audience.SubscriptionConfirmedEvent;
 
 import javax.sql.DataSource;
@@ -45,21 +47,44 @@ import static org.junit.jupiter.api.Assertions.fail;
     // 資料庫已由 @BeforeAll 以 Flyway 建好，Spring 這邊不再跑一次
     "spring.flyway.enabled=false",
     // 刻意不是 none：順帶驗證 V9 之後 entity 對應仍通得過啟動時的 validate
-    "spring.jpa.hibernate.ddl-auto=validate",
-    "spring.datasource.url=jdbc:postgresql://127.0.0.1:5433/survey_referral_test",
-    "spring.datasource.username=postgres",
-    "spring.datasource.password=password"
+    "spring.jpa.hibernate.ddl-auto=validate"
+    // 連線三項刻意不寫在這裡：註解裡只能放字面常數，一旦寫死就沒有任何
+    // 覆寫途徑（連環境變數都插不進去），別人的機器改不了 host／port／帳密。
+    // 改由下面的 @DynamicPropertySource 提供，沿用與 MigrationSafetyTest／
+    // UnlockConstraintTest 同一組 MIGRATION_TEST_DB_* 環境變數。
 })
 class ReferralIdempotencyTest {
 
-    private static final String DB_HOST = "127.0.0.1";
-    private static final String DB_PORT = "5433";
-    private static final String USER = "postgres";
-    private static final String PASS = "password";
+    /** 取得環境變數，未設定或空字串時退回預設值；與 {@link UnlockConstraintTest} 逐字相同 */
+    private static String env(String name, String defaultValue) {
+        String v = System.getenv(name);
+        return (v == null || v.isBlank()) ? defaultValue : v;
+    }
+
+    private static final String DB_HOST = env("MIGRATION_TEST_DB_HOST", "127.0.0.1");
+    private static final String DB_PORT = env("MIGRATION_TEST_DB_PORT", "5433");
+    private static final String USER = env("MIGRATION_TEST_DB_USER", "postgres");
+    private static final String PASS = env("MIGRATION_TEST_DB_PASSWORD", "password");
     private static final String ADMIN_URL = "jdbc:postgresql://" + DB_HOST + ":" + DB_PORT + "/postgres";
     /** 獨立的資料庫名稱，不與其他測試共用 */
     private static final String TEST_DB = "survey_referral_test";
     private static final String TEST_URL = "jdbc:postgresql://" + DB_HOST + ":" + DB_PORT + "/" + TEST_DB;
+
+    /**
+     * 把連線三項交給 Spring context。
+     *
+     * <p>{@code @SpringBootTest(properties = ...)} 只吃註解裡的字面常數，
+     * 寫死在那裡等於<b>沒有覆寫途徑</b>；{@code @DynamicPropertySource} 是註解字面值
+     * 與「可由環境變數決定的值」之間唯一的橋。值來自上面那組 {@code static final}，
+     * 所以 {@code @BeforeAll} 用的連線與 Spring 用的連線必然是同一個資料庫，
+     * 不可能出現「測試資料建在 A、context 連到 B」的錯配。</p>
+     */
+    @DynamicPropertySource
+    static void datasourceProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", () -> TEST_URL);
+        registry.add("spring.datasource.username", () -> USER);
+        registry.add("spring.datasource.password", () -> PASS);
+    }
 
     private static final String REFERRER_EMAIL = "host@referral-test.example";
     private static final String REFERRAL_CODE = "REFTEST1";
@@ -96,6 +121,7 @@ class ReferralIdempotencyTest {
                 若容器不存在：
                   docker run -d --name survey-test-db -e POSTGRES_PASSWORD=password \\
                     -p 5433:5432 pgvector/pgvector:pg18
+                連線資訊可用 MIGRATION_TEST_DB_HOST／PORT／USER／PASSWORD 覆寫。
                 """.formatted(ADMIN_URL));
         }
     }
@@ -178,6 +204,40 @@ class ReferralIdempotencyTest {
     }
 
     /**
+     * {@code reader.referred_by} 必須有索引，而且是排除 NULL 的部分索引。
+     *
+     * <p><b>為什麼這件事值得一條測試</b>：{@code /r/invite} 是登入讀者可以任意重新
+     * 整理的頁面，而邀請人數的其中一個來源是
+     * {@code ReaderRepository.findInviteeEmailsByReferredBy}，它的 WHERE 條件就是這個欄位。
+     * V7 只宣告了欄位、沒建索引（當時沒有查詢用到它），讀者數成長到數萬之後，
+     * 每次重載 {@code /r/invite} 就是一次 {@code reader} 全表掃描。這種缺陷不會讓任何
+     * 功能測試變紅，只會讓頁面慢慢變慢，所以必須用「索引在不在」直接釘住。</p>
+     *
+     * <p>同時斷言述詞排除 NULL：{@code referred_by} 只有透過邀請連結進來且已建帳的
+     * 讀者才有值，絕大多數列是 NULL，把它們留在索引裡只是白佔空間與寫入成本。</p>
+     */
+    @Test
+    void partialIndexExistsOnReaderReferredBy() throws SQLException {
+        String indexDef;
+        try (Connection c = dataSource.getConnection();
+             Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery(
+                 "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public'"
+                     + " AND tablename = 'reader'"
+                     + " AND indexname = 'idx_reader_referred_by'")) {
+            indexDef = rs.next() ? rs.getString(1) : null;
+        }
+
+        assertNotNull(indexDef, "資料庫裡沒有 idx_reader_referred_by："
+            + "邀請人數的其中一個來源（findInviteeEmailsByReferredBy）會全表掃描 reader，"
+            + "而 /r/invite 是讀者可任意重載的頁面");
+        assertTrue(indexDef.contains("referred_by"), "不是建在 referred_by 上：" + indexDef);
+        assertTrue(indexDef.contains("IS NOT NULL"),
+            "不是排除 NULL 的部分索引：referred_by 絕大多數列是 NULL，"
+                + "把它們納入索引只是白佔空間與寫入成本。實際定義：" + indexDef);
+    }
+
+    /**
      * 首次發獎成功；<b>第二次必須被資料庫擋下，而且餘額與帳本一起不變</b>。
      *
      * <p>這一條同時守住三件事：</p>
@@ -250,6 +310,39 @@ class ReferralIdempotencyTest {
 
         assertEquals(reward * 2, referrerCredits());
         assertEquals(2, referralLedgerRows());
+    }
+
+    /**
+     * 在真實資料庫上驗聯集計數：<b>被邀者確認了訂閱但從未登入，人數就必須是 1</b>，
+     * 而且他之後真的來登入（{@code reader} 列出現、{@code referred_by} 寫入）之後
+     * 仍然只算一人。
+     *
+     * <p>這是預設設定（{@code referralReward()=100}）下最常見的情境，也是
+     * 「只數 {@code referred_by}」那版實作最嚴重的缺陷所在：站方已經付了 100 點，
+     * 頁面卻說「還沒有人透過你的連結完成訂閱」。{@code ReferralServiceTest} 用 mock
+     * 驗過聯集的邏輯，這裡驗的是<b>兩支真實 SQL 查到的資料真的能對上</b>
+     * ——尤其是「帳本 note 與 reader.email 存的是同一個正規化值」這個去重前提，
+     * 那件事只有真實資料庫能證明。</p>
+     */
+    @Test
+    void invitedCountCountsConfirmedInviteeBeforeAndAfterFirstLogin() throws SQLException {
+        long referrerId = queryInt("SELECT id FROM reader WHERE email = '" + REFERRER_EMAIL + "'");
+
+        // ① 確認訂閱：帳本寫入，但被邀者還沒有 reader 列（他從未登入）
+        assertEquals(ReferralService.RewardOutcome.REWARDED,
+            referralService.rewardFor(INVITEE_EMAIL));
+        assertEquals(0, queryInt("SELECT count(*) FROM reader WHERE referred_by = " + referrerId),
+            "測試前提：被邀者尚未登入，referred_by 這一邊應該完全沒有列");
+        assertEquals(1, referralService.stats(referrerId).invitedCount(),
+            "確認訂閱但未登入的被邀者沒被計入：站方已經付了點數，頁面卻會說還沒有人");
+
+        // ② 被邀者首次登入：reader 列出現，referred_by 指向邀請人。同一個人不可變成兩人。
+        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
+            st.executeUpdate("INSERT INTO reader (email, credits, referral_code, referred_by)"
+                + " VALUES ('" + INVITEE_EMAIL + "', 0, 'INVITEE1', " + referrerId + ")");
+        }
+        assertEquals(1, referralService.stats(referrerId).invitedCount(),
+            "被邀者同時出現在帳本與 referred_by 時被算成兩人：聯集沒有去重");
     }
 
     /**

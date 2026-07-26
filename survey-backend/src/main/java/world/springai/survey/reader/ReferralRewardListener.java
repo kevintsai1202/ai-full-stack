@@ -49,6 +49,19 @@ import world.springai.survey.audience.SubscriptionConfirmedEvent;
  * 寫入（加餘額、寫帳本）成為獨立的原子單位」，而 {@code rewardFor} 現在自己
  * 帶著 {@code REQUIRES_NEW}，同樣是獨立的原子單位；本類不再是交易邊界而已。</p>
  *
+ * <p><b>本設計有一個隱含前提：{@code application.yml} 的
+ * {@code spring.jpa.open-in-view: false}</b>（目前已是 false，<b>不可改回 true</b>）。
+ * 上面「本類站在交易邊界之外」的推論只涵蓋了 {@code @Transactional}；OSIV 是另一條
+ * 會憑空造出共用狀態的路徑：它開著時，{@code OpenEntityManagerInViewInterceptor} 會在
+ * 請求一開始就建立一個 {@code EntityManager} 並綁到整個請求的執行緒上，
+ * {@code JpaTransactionManager} 之後<b>沿用那個既有的 EntityManager</b> 而不是開新的。
+ * 於是 {@code rewardFor} 撞唯一鍵時，flush 失敗留下的髒狀態會留在<b>整個請求共用</b>的
+ * persistence context 裡（Hibernate 在 flush 失敗後不保證 session 仍可用），
+ * 汙染同一請求後續所有 JPA 操作——而本類的 {@code catch} 會照樣把它當成
+ * 「安靜的冪等命中」正常返回，錯誤要到請求更後面才以完全無關的樣貌爆出來。
+ * 換句話說：OSIV 一旦打開，本類的捕捉點就不再是真正的邊界外，
+ * {@code REQUIRES_NEW} 也救不了（它換的是交易，不是 EntityManager）。</p>
+ *
  * <p><b>兩道 catch 的職責（V9 後有變化，不要照舊理解）</b>：本類不再開交易，
  * 所以 {@code rewardFor} 拋出的例外（撞唯一鍵、加點影響 0 列）就在本類的
  * {@code catch} 真正被接住並就地結束，<b>不會</b>再有「本方法返回之後才從外層

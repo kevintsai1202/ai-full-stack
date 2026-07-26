@@ -234,26 +234,46 @@ class ReferralServiceTest {
         assertThrows(IllegalStateException.class, () -> service.rewardFor("invitee@b.com"));
     }
 
-    /**
-     * 邀請<b>人數</b>必須來自 {@code reader.referred_by}，<b>點數</b>來自帳本。
-     *
-     * <p>兩個數字刻意不同源，所以這條測試把兩邊餵成<b>不一樣</b>的值：
-     * {@code referred_by} 有 3 人、帳本只有 2 筆各 100 點。若實作把人數改回數
-     * 帳本筆數（{@code rewards.size()}），人數會變成 2 而變紅。</p>
-     */
-    @Test
-    void invitedCountComesFromReferredByNotFromLedger() {
-        when(readerRepository.countByReferredBy(REFERRER_ID)).thenReturn(3L);
+    // ------------------------------------------------------------------
+    // stats()：邀請人數是「帳本 REFERRAL 的 note」與「reader.referred_by」的聯集
+    // ------------------------------------------------------------------
+
+    /** 讓帳本回傳指定 note 的 REFERRAL 列（每筆 100 點） */
+    private void givenLedgerNotes(String... notes) {
+        java.util.List<CreditTxn> rows = new java.util.ArrayList<>();
+        for (String note : notes) {
+            rows.add(new CreditTxn(REFERRER_ID, 100, CreditTxn.REASON_REFERRAL, null, note));
+        }
         when(creditTxnRepository.findByReaderIdAndReasonOrderByCreatedAtDesc(
                 REFERRER_ID, CreditTxn.REASON_REFERRAL))
-            .thenReturn(java.util.List.of(
-                new CreditTxn(REFERRER_ID, 100, CreditTxn.REASON_REFERRAL, null, "a@b.com"),
-                new CreditTxn(REFERRER_ID, 100, CreditTxn.REASON_REFERRAL, null, "c@b.com")));
+            .thenReturn(rows);
+    }
+
+    /** 讓 reader.referred_by 那一邊回傳指定的被邀者 email */
+    private void givenReferredByEmails(String... emails) {
+        when(readerRepository.findInviteeEmailsByReferredBy(REFERRER_ID))
+            .thenReturn(java.util.List.of(emails));
+    }
+
+    /**
+     * <b>最常見的情境：獎勵 &gt; 0、被邀者確認了訂閱但從未登入。</b>
+     *
+     * <p>電子報訂閱者絕大多數永遠不會來 {@code /r/} 登入（沒有任何流程會逼他登入），
+     * 所以 {@code reader} 列根本不存在、{@code referred_by} 也就沒有值；但站方已經
+     * 為那次邀請寫了帳本、付了點數。只數 {@code referred_by} 的實作在這裡會回 0，
+     * 頁面會印「還沒有人透過你的連結完成訂閱」——而那是一句假話。</p>
+     *
+     * <p>破壞性驗證：把 {@code stats} 改回只數 {@code referred_by} → 本測試變紅。</p>
+     */
+    @Test
+    void invitedCountIncludesLedgerInviteesWhoNeverLoggedIn() {
+        givenLedgerNotes("a@b.com", "c@b.com");
+        givenReferredByEmails();
 
         ReferralService.ReferralStats stats = service.stats(REFERRER_ID);
 
-        assertEquals(3, stats.invitedCount(),
-            "邀請人數不是來自 reader.referred_by：獎勵關閉期間人數就不會成長");
+        assertEquals(2, stats.invitedCount(),
+            "確認訂閱但未登入的被邀者沒被計入：站方已經付了點數，頁面卻說還沒有人");
         assertEquals(200, stats.earnedCredits(),
             "累計點數必須來自帳本（稽核來源），不可用人數 × 目前獎勵金額推算");
     }
@@ -261,24 +281,85 @@ class ReferralServiceTest {
     /**
      * <b>邀請獎勵被後台關成 0 時，人數仍必須成長。</b>
      *
-     * <p>這是本次修正的核心情境：{@code rewardFor} 在 {@code reward <= 0} 時
-     * 完全不寫帳本（刻意，避免占用冪等鍵），所以帳本是空的；但朋友確實完成了
-     * 訂閱並登入，{@code referred_by} 已寫入。舊實作（數帳本筆數）在這裡會回 0，
+     * <p>{@code rewardFor} 在 {@code reward <= 0} 時完全不寫帳本（刻意，避免占用
+     * 冪等鍵），所以帳本這一邊是空的；但朋友確實完成了訂閱並登入，
+     * {@code referred_by} 已寫入。只數帳本筆數的實作在這裡會回 0，
      * 邀請人的頁面顯示「還沒有人透過你的連結完成訂閱」——朋友說「我訂閱了」，
      * 頁面卻毫無反應。</p>
+     *
+     * <p>本測試<b>刻意不 stub {@code creditPolicy.referralReward()}</b>：
+     * {@code stats()} 從不讀 {@link CreditPolicy}，那個 stub 對本測試毫無作用，
+     * 只會讓人誤以為「獎勵為 0」這件事是由程式碼分支判斷的。真正代表「獎勵暫停」
+     * 的事實是<b>帳本為空</b>，那才是這裡餵進去的前提。</p>
+     *
+     * <p>破壞性驗證：把 {@code stats} 改回只數帳本筆數 → 本測試變紅。</p>
      */
     @Test
     void invitedCountStillGrowsWhileRewardIsPaused() {
-        when(creditPolicy.referralReward()).thenReturn(0);
-        when(readerRepository.countByReferredBy(REFERRER_ID)).thenReturn(2L);
-        when(creditTxnRepository.findByReaderIdAndReasonOrderByCreatedAtDesc(
-                REFERRER_ID, CreditTxn.REASON_REFERRAL))
-            .thenReturn(java.util.List.of());
+        givenLedgerNotes();
+        givenReferredByEmails("a@b.com", "c@b.com");
 
         ReferralService.ReferralStats stats = service.stats(REFERRER_ID);
 
         assertEquals(2, stats.invitedCount(),
             "獎勵暫停期間人數沒有成長：邀請人會以為朋友的訂閱沒有生效");
         assertEquals(0, stats.earnedCredits(), "獎勵暫停期間不該有點數");
+    }
+
+    /**
+     * 同一位被邀者同時出現在兩個來源時<b>只能算一人</b>。
+     *
+     * <p>這是「獎勵 &gt; 0 且被邀者也登入了」的情境，而且是設定正常時的常態：
+     * 帳本有他的 note、{@code referred_by} 也指向邀請人。若聯集沒有去重
+     * （例如寫成 {@code ledger.size() + referredBy.size()}），人數會膨脹成 2 倍，
+     * 讀者用「累計點數 ÷ 每人獎勵」一算就發現對不上。</p>
+     *
+     * <p>破壞性驗證：把 {@code Set} 換成 {@code List}（或直接相加兩邊筆數）→
+     * 本測試變紅（3 而非 2）。</p>
+     */
+    @Test
+    void invitedCountDeduplicatesInviteePresentInBothSources() {
+        givenLedgerNotes("a@b.com");
+        givenReferredByEmails("a@b.com", "c@b.com");
+
+        ReferralService.ReferralStats stats = service.stats(REFERRER_ID);
+
+        assertEquals(2, stats.invitedCount(),
+            "同一位被邀者同時出現在帳本與 referred_by 時被算了兩次：人數會膨脹");
+        assertEquals(100, stats.earnedCredits());
+    }
+
+    /**
+     * 去重必須不分大小寫。
+     *
+     * <p>帳本 note 是 {@code ReferralService.normalize} 之後的值，
+     * {@code reader.email} 也是正規化為小寫的，理論上兩邊一致；但這條測試釘住
+     * 「聯集用的鍵一定要再經過同一個正規化」這件事——若日後任一端出現大小寫變體
+     * （例如後台手動補帳本列），沒有正規化的聯集會把同一個人算成兩人。</p>
+     */
+    @Test
+    void invitedCountDeduplicationIsCaseInsensitive() {
+        givenLedgerNotes("Friend@B.com");
+        givenReferredByEmails("friend@b.com");
+
+        assertEquals(1, service.stats(REFERRER_ID).invitedCount(),
+            "同一個 email 的大小寫變體被算成兩人：聯集的鍵沒有經過 normalize");
+    }
+
+    /**
+     * 帳本裡 note 為 NULL 的 REFERRAL 列不得湊出一個不存在的人。
+     *
+     * <p>{@code credit_txn.note} 可為 NULL 是 V7 的既有慣例，而 V9 的部分唯一索引
+     * 也刻意不強制非空（PostgreSQL 的 UNIQUE 視 NULL 互異）。這種列雖然不該由
+     * {@code rewardFor} 產生，但後台補點或歷史資料可能有；它沒有可去重的鍵，
+     * 計入只會讓人數比實際多。</p>
+     */
+    @Test
+    void ledgerRowsWithoutNoteDoNotCountAsInvitees() {
+        givenLedgerNotes("a@b.com", null, "  ");
+        givenReferredByEmails();
+
+        assertEquals(1, service.stats(REFERRER_ID).invitedCount(),
+            "note 為 NULL 或空白的帳本列被當成一位被邀者：人數會比實際多");
     }
 }

@@ -8,9 +8,11 @@ import org.springframework.transaction.annotation.Transactional;
 import world.springai.survey.audience.SurveyResponse;
 import world.springai.survey.audience.SurveyResponseRepository;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 邀請歸因與獎勵發放。
@@ -61,9 +63,10 @@ public class ReferralService {
     /**
      * 邀請成效。
      *
-     * @param invitedCount  成功邀請人數，來源是 {@code reader.referred_by}
-     * @param earnedCredits 累計獲得點數，來源是 {@code credit_txn} 的 REFERRAL 列
-     *                      （兩者為何不同源、何時會有落差，見 {@link #stats}）
+     * @param invitedCount  成功邀請人數，來源是「帳本 REFERRAL 的 distinct note」與
+     *                      「{@code reader.referred_by} 指向自己的讀者 email」<b>兩者的聯集</b>
+     * @param earnedCredits 累計獲得點數，來源只有 {@code credit_txn} 的 REFERRAL 列
+     *                      （為何人數要聯集、兩個數字何時會有落差，見 {@link #stats}）
      */
     public record ReferralStats(int invitedCount, int earnedCredits) {}
 
@@ -147,7 +150,8 @@ public class ReferralService {
         int reward = creditPolicy.referralReward();
         // 後台可把獎勵調成 0（關閉此機制）。此時不寫帳本也不佔用冪等鍵——
         // 否則日後把獎勵調回 100，這位被邀者的獎勵就永遠拿不到了。
-        // 邀請「人數」不受這條影響：那個數字來自 reader.referred_by（見 stats）。
+        // 邀請「人數」不會因為這條而歸零：那個數字是「帳本 note」與 reader.referred_by
+        // 的聯集，獎勵為 0 期間帳本這一邊沒有列，仍可由 referred_by 這一邊計入（見 stats）。
         if (reward <= 0) {
             log.info("邀請獎勵設定為 {}，不發獎", reward);
             return RewardOutcome.NO_REFERRER;
@@ -194,41 +198,80 @@ public class ReferralService {
     /**
      * 某位推薦人的邀請成效：成功邀請人數與累計獲得點數。
      *
-     * <p><b>兩個數字刻意來自兩個不同的來源</b>：</p>
+     * <p><b>人數是兩個來源的聯集去重計數</b>，因為任一來源單獨使用都會在<b>常態設定下</b>
+     * 顯示錯的數字：</p>
      * <ul>
-     *   <li><b>人數</b>來自 {@code reader.referred_by}（{@link ReaderRepository#countByReferredBy}）
-     *       ——「誰邀請了我」的長期歸因紀錄，與獎勵是否發放無關。</li>
-     *   <li><b>點數</b>來自 {@code credit_txn} 的 REFERRAL 列加總——帳本是餘額的稽核來源，
-     *       這個數字必須與讀者實際拿到的點數同源，不可用「人數 × 目前獎勵金額」推算
-     *       （獎勵金額會被後台調整，推算值會與歷史實付金額不符）。</li>
+     *   <li><b>帳本</b>（{@code credit_txn} 中 {@code reason='REFERRAL'} 的 distinct
+     *       {@code note}）：note 存的就是被邀者 email（同時是發獎冪等鍵），在被邀者
+     *       <b>點確認信的那一刻</b>就寫入。但後台把獎勵關成 0 時 {@link #rewardFor}
+     *       完全不寫帳本（刻意，避免占用冪等鍵），這段期間的邀請一筆都不會出現。</li>
+     *   <li><b>{@code reader.referred_by}</b>：長期歸因紀錄，與獎勵金額無關。但它只在
+     *       被邀者<b>首次登入建立帳戶</b>時寫入（{@code ReaderAccountService#createWithSignupGrant}，
+     *       既有帳戶不回填），而電子報訂閱者<b>絕大多數永遠不會來 {@code /r/} 登入</b>
+     *       ——沒有任何流程會逼他登入。只數這一邊，等於在預設設定
+     *       （{@code referralReward()=100}）下把「已經付出去的 100 點」對應的那次邀請
+     *       藏起來，頁面會說「還沒有人透過你的連結完成訂閱」。</li>
      * </ul>
      *
-     * <p><b>兩者會有合理的落差，且兩個方向都可能</b>：</p>
-     * <ul>
-     *   <li><b>人數增加而點數不變</b>：後台把邀請獎勵設為 0（合法的營運設定）期間，
-     *       {@link #rewardFor} 完全不寫帳本（刻意，避免占用冪等鍵），但被邀者首次登入時
-     *       {@code referred_by} 照樣寫入。這正是本次修正的目的——在此之前人數也數帳本筆數，
-     *       於是關閉獎勵期間朋友明明完成了訂閱，邀請人的頁面卻毫無反應。</li>
-     *   <li><b>點數增加而人數不變</b>：被邀者<b>早就有 reader 帳戶</b>時，
-     *       {@code referred_by} 只在建帳當下寫入（見
-     *       {@code ReaderAccountService#createWithSignupGrant}），既有帳戶不會被回填，
-     *       但 {@link #rewardFor} 仍會發獎。這種人本來就不是「新帶進來的讀者」，
-     *       不計入人數是可接受的；帳務仍然正確。</li>
-     * </ul>
+     * <p>兩邊都以<b>被邀者 email</b> 去重（帳本 note 與 {@code reader.email} 存的是同一個
+     * 正規化值），所以四種情境的覆蓋是：</p>
+     * <table border="1">
+     *   <caption>聯集計數的覆蓋範圍</caption>
+     *   <tr><th>情境</th><th>帳本</th><th>referred_by</th><th>計入</th></tr>
+     *   <tr><td>獎勵 &gt; 0、未登入（最常見）</td><td>有</td><td>無</td><td>是</td></tr>
+     *   <tr><td>獎勵 &gt; 0、已登入</td><td>有</td><td>有</td><td>是（去重後算一人）</td></tr>
+     *   <tr><td>獎勵 = 0、已登入</td><td>無</td><td>有</td><td>是</td></tr>
+     *   <tr><td>獎勵 = 0、未登入</td><td>無</td><td>無</td><td>否（資料上不存在，無法計入）</td></tr>
+     * </table>
      *
-     * <p><b>時序</b>：人數在被邀者<b>首次登入</b>時才成長，不是在他確認訂閱時
-     * ——{@code referred_by} 由建帳流程寫入。對讀者的文案必須反映這件事
+     * <p><b>為什麼用兩支查詢 + Java 端的 {@code Set} 聯集，而不是一支原生 UNION 查詢</b>：
+     * ① 帳本那一邊<b>本來就要撈</b>（點數就是它的 delta 加總），所以聯集只多一支
+     * 取 email 的查詢，不是多兩支；② 去重規則是「用 {@link #normalize} 之後的 email 比較」，
+     * 這條規則在 Java 端與寫入端共用同一個方法，寫進 SQL 會變成第二份必須手動同步的
+     * 定義（本專案已為 {@code Locale.ROOT} 的正規化一致性踩過坑，見 {@link #normalize}）；
+     * ③ 原生查詢無法在 {@code ReferralServiceTest} 那種全 mock 的單元測試裡驗證聯集
+     * 與去重行為，只能靠真實資料庫測試，成本高且回饋慢。</p>
+     *
+     * <p><b>點數</b>仍只來自 {@code credit_txn} 的 REFERRAL 列加總：帳本是餘額的稽核來源，
+     * 這個數字必須與讀者實際拿到的點數同源，<b>不可</b>用「人數 × 目前獎勵金額」推算
+     * （獎勵金額會被後台調整，推算值會與歷史實付金額不符）。因此獎勵暫停期間人數會成長
+     * 而點數不動——這是正確的，兩個數字說的是不同的事，頁面文案必須反映
      * （見 {@code ReaderPortalController#rewardIntro}）。</p>
+     *
+     * <p><b>{@code @Transactional(readOnly = true)}</b>：兩支查詢必須看同一個快照。
+     * 少了它，Spring Data 會讓每支查詢各自借連線、各自開一個隱含交易，兩者之間若剛好
+     * 有一筆發獎提交，聯集就會混到兩個時點的資料（極端情況下算出比實際多一人）。
+     * 順帶只借一次連線。{@code readOnly} 讓驅動與 Hibernate 跳過 dirty check 與 flush
+     * ——本方法只讀，不該有任何寫入副作用（核心不變式：帳本只增不改，顯示路徑不碰它）。</p>
+     *
+     * <p><b>個資</b>：被邀者 email 只在本方法內用來算集合大小，
+     * {@link ReferralStats} 刻意只帶數字，不得讓任何 email 進入 HTTP 回應。</p>
      */
+    @Transactional(readOnly = true)
     public ReferralStats stats(Long referrerId) {
-        // countByReferredBy 回 long。用 Math.min 夾住而不是裸轉型：裸轉型溢位會變成
-        // 負數，頁面就會顯示負的邀請人數（雖然單一推薦人不可能真的超過 21 億人）。
-        int invited = (int) Math.min(
-            readerRepository.countByReferredBy(referrerId), Integer.MAX_VALUE);
         List<CreditTxn> rewards = creditTxnRepository
             .findByReaderIdAndReasonOrderByCreatedAtDesc(referrerId, CreditTxn.REASON_REFERRAL);
         int earned = rewards.stream().mapToInt(CreditTxn::getDelta).sum();
-        return new ReferralStats(invited, earned);
+
+        // 聯集容器：一律放正規化後的 email，讓「帳本有、referred_by 也有」的同一個人
+        // 只算一次。normalize 對 null 回空字串，所以先濾掉空值再放進來，
+        // 否則 note 為 NULL 的舊列（V7 允許）會湊出一個不存在的「第 N 人」。
+        Set<String> invitees = new HashSet<>();
+        for (CreditTxn txn : rewards) {
+            addIfPresent(invitees, txn.getNote());
+        }
+        for (String email : readerRepository.findInviteeEmailsByReferredBy(referrerId)) {
+            addIfPresent(invitees, email);
+        }
+        return new ReferralStats(invitees.size(), earned);
+    }
+
+    /** 把正規化後的 email 放進聯集，空值與空白一律略過（它們不代表任何一位被邀者） */
+    private static void addIfPresent(Set<String> invitees, String email) {
+        String normalized = normalize(email);
+        if (!normalized.isEmpty()) {
+            invitees.add(normalized);
+        }
     }
 
     /**

@@ -133,14 +133,22 @@ public class ReaderPortalController {
      * 設定），若整段文案原樣套用數字，讀者會看到「你會拿到 0 點」這種讀起來像
      * 故障的字。</p>
      *
-     * <p><b>0 值文案可以說「人數仍會計入」，但必須把條件寫出來</b>：
-     * {@code ReferralService.stats} 的人數已改為數 {@code reader.referred_by}，
-     * 所以獎勵暫停期間這一頁下半部的成效區塊（{@link #renderStats}）確實會成長，
-     * 不再與上半部的說明自相矛盾。但 {@code referred_by} 是在被邀者<b>首次登入
-     * 建立帳戶</b>時才寫入，不是在他確認訂閱的那一刻——只寫「成功邀請仍會被記錄」
-     * 依然是承諾了程式不保證的時序。點數則確實暫停（{@code rewardFor} 在
-     * {@code reward <= 0} 時不寫帳本，而點數來源是帳本）。
-     * 理由與 {@link RulesPageController#referralRewardNote} 逐字相同，兩處必須同步。</p>
+     * <p><b>兩種設定的文案精確度來自不同的資料來源，不可互相套用</b>
+     * （{@code ReferralService.stats} 的人數是「帳本 REFERRAL 的 note」與
+     * {@code reader.referred_by} 的<b>聯集</b>）：</p>
+     * <ul>
+     *   <li><b>獎勵 &gt; 0</b>（本方法的 else 分支）：帳本在被邀者<b>點確認信的那一刻</b>
+     *       就寫入，所以人數立刻成長，<b>不需要</b>「首次登入」這個附註。頁面靜態文案
+     *       （{@code invite.html} 的「還要點開確認信才算一次成功邀請」）因此是準確的。</li>
+     *   <li><b>獎勵 = 0</b>：{@code rewardFor} 在 {@code reward <= 0} 時完全不寫帳本
+     *       （刻意，避免占用冪等鍵），聯集只剩 {@code referred_by} 那一邊，而它是在被邀者
+     *       <b>首次登入建立帳戶</b>時才寫入。因此 0 值文案的「並首次登入」
+     *       <b>必須保留</b>——少了它就是承諾了程式在這個設定下不保證的時序。
+     *       點數也確實暫停（點數只來自帳本）。</li>
+     * </ul>
+     *
+     * <p>0 值文案的理由與 {@link RulesPageController#referralRewardNote} 逐字相同，
+     * 兩處必須同步。</p>
      */
     private String rewardIntro(int reward) {
         if (reward == 0) {
@@ -156,12 +164,18 @@ public class ReaderPortalController {
      * <p>零邀請時給鼓勵性的空狀態而非「0 人 / 0 點」——冷數字讀起來像
      * 失敗提示，而這頁的目的是讓人想去分享。</p>
      *
+     * <p><b>空狀態的條件是兩個數字都為 0</b>，不是只看人數。只看人數的話，任何
+     * 「站方已經為某次邀請付了點數、但那位被邀者沒被計入人數」的情形都會連
+     * <b>已發放的點數</b>一起藏起來——讀者的帳戶頁看得到那筆「邀請獎勵 +100」，
+     * 邀請頁卻說「還沒有人透過你的連結完成訂閱」。點數是實際發生的資產變動，
+     * 不論人數是多少都必須顯示。</p>
+     *
      * <p>只顯示彙總數字：{@link ReferralService.ReferralStats} 本身不帶被邀者
      * email 或任何可辨識資訊，邀請碼是可公開分享的連結，透過它訂閱的陌生人
      * 與邀請人彼此並不認識，此頁不得洩漏對方身分。</p>
      */
     private String renderStats(ReferralService.ReferralStats stats) {
-        if (stats.invitedCount() == 0) {
+        if (stats.invitedCount() == 0 && stats.earnedCredits() == 0) {
             return "<p class=\"empty\">還沒有人透過你的連結完成訂閱。分享出去試試看？</p>";
         }
         return """

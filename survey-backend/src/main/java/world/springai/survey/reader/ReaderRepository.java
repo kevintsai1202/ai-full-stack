@@ -95,18 +95,26 @@ public interface ReaderRepository extends JpaRepository<Reader, Long> {
     Optional<Reader> findByReferralCode(String referralCode);
 
     /**
-     * 某位推薦人成功邀請的人數：{@code referred_by} 指向他的讀者列數。
+     * 某位推薦人所帶進來的被邀者 email（{@code referred_by} 指向他的讀者列）。
      *
-     * <p><b>為什麼邀請人數要數這裡，而不是數帳本裡的 REFERRAL 筆數</b>：
-     * {@code ReferralService.rewardFor} 在後台把邀請獎勵設為 0 時<b>完全不寫帳本</b>
-     * （刻意如此，避免占用冪等鍵），於是關閉獎勵期間朋友確實完成了訂閱，
-     * 邀請人的頁面卻連人數都不會動。歸因與獎勵是兩件事，計數該用歸因欄位。
-     * 完整取捨與兩者的落差見 {@code ReferralService#stats}。</p>
+     * <p><b>為什麼是取 email 而不是 {@code count(*)}</b>：邀請人數是「帳本的 REFERRAL
+     * note」與「本欄位」<b>兩個來源的聯集去重計數</b>（見 {@code ReferralService#stats}）。
+     * 兩邊各自都有涵蓋不到的情境：帳本在獎勵被關成 0 時完全不寫，本欄位則只在被邀者
+     * <b>首次登入建立帳戶</b>時寫入（{@code ReaderAccountService#createWithSignupGrant}，
+     * 既有帳戶不回填），而絕大多數電子報訂閱者永遠不會來 {@code /r/} 登入。
+     * 只數其中一邊都會在預設設定下顯示錯的人數，所以必須取得<b>可去重的鍵</b>
+     * （email，與帳本 note 存的是同一個值）而非單純的筆數。</p>
      *
-     * <p>{@code referred_by} 在被邀者<b>首次登入建立帳戶</b>時寫入
-     * （見 {@code ReaderAccountService#createWithSignupGrant}），既有帳戶不回填。</p>
+     * <p><b>個資</b>：這裡回傳的是被邀者 email，而邀請碼是可公開分享的連結——透過它
+     * 訂閱的陌生人與邀請人並不認識。這些值<b>只能用來算集合大小</b>，
+     * 絕不可進入任何 HTTP 回應（{@code ReferralService.ReferralStats} 刻意只帶數字，
+     * 並由 {@code ReaderPortalControllerTest.neverLeaksInviteeEmail} 釘住）。</p>
+     *
+     * <p>刻意沒有留下 {@code countByReferredBy}：那個方法只能算單一來源的筆數，
+     * 留著會邀請日後有人把「只數 referred_by」的缺陷重新加回來。</p>
      */
-    long countByReferredBy(Long referrerId);
+    @Query("select r.email from Reader r where r.referredBy = :referrerId")
+    List<String> findInviteeEmailsByReferredBy(@Param("referrerId") Long referrerId);
 
     /**
      * 加點（正數）。回傳受影響筆數，0 表示該讀者不存在。

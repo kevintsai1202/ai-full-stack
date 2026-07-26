@@ -17,7 +17,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * V7／V8 migration 的既有資料保全與 backfill 正確性測試。
+ * migration 的既有資料保全與 backfill 正確性測試。
+ *
+ * <p><b>涵蓋範圍不只 V7／V8</b>：下方流程只套用到 V6 來模擬正式資料庫現況，
+ * 之後那道 {@code Flyway.migrate()} 沒有指定 {@code target}，也就是<b>一路套到最新版</b>。
+ * 所以 V9 以及日後每一支新增的 migration 都自動由本測試守著「既有列一筆都不能少、
+ * 一個字都不能變」。新增 migration 時<b>不需要</b>在這裡加什麼，但若那支 migration
+ * 會（合理地）改動 {@code survey_response} 的既有欄位，就必須在
+ * {@link #CHECKSUM_SQL} 的減號串後面補上欄名並在註解裡說明理由——
+ * 否則本測試會紅，而那正是它該做的事。</p>
  *
  * <p><b>為什麼需要真實 PostgreSQL</b>：本專案用到 jsonb 與 @&gt; 運算子，H2 不支援。
  * 而「既有訂閱名單不可清除」是硬約束（spec §4.0）——訂閱者的同意是他們親自點確認信
@@ -34,7 +42,8 @@ import static org.junit.jupiter.api.Assertions.fail;
  * 連不上時本測試會明確失敗而非靜默跳過——寧可紅燈也不要假綠燈。</p>
  *
  * <p>流程：重建乾淨的測試資料庫 → 只套用 V1–V6（模擬正式庫現況）→ 塞入代表性
- * 既有資料 → 套用 V7／V8 → 斷言既有資料逐列未變且 backfill 正確。</p>
+ * 既有資料 → 套用其餘全部 migration（V7 起，目前到 V9）→ 斷言既有資料逐列未變
+ * 且 backfill 正確。</p>
  */
 class MigrationSafetyTest {
 
@@ -114,7 +123,7 @@ class MigrationSafetyTest {
         beforeCount = queryInt("SELECT count(*) FROM survey_response");
         beforeChecksum = queryString(CHECKSUM_SQL);
 
-        // 套用 V7／V8
+        // 套用其餘全部 migration（V7 起，刻意不指定 target，新增的 migration 自動涵蓋）
         Flyway.configure()
             .dataSource(TEST_URL, USER, PASS)
             .load()
