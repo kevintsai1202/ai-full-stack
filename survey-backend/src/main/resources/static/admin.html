@@ -467,15 +467,22 @@
       label.textContent='單次上限（額度未知）';
       renderQuotaWarn();return;
     }
-    const q=mailQuota,batchMax=Math.max(1,q.batchMax);
+    // 上限用「行銷單批上限」（已扣掉交易信保留額度），與後端 clampLimit 同一個數字。
+    // 舊版回應缺這個欄位時退回 batchMax，避免 undefined 讓欄位 max 失效。
+    const q=mailQuota;
+    const batchMax=Math.max(0,typeof q.marketingBatchMax==='number'?q.marketingBatchMax:q.batchMax);
     // 欄位 max 收斂到單批安全上限；既有輸入值超過上限時一併下修，避免送出後被後端截掉
     limitInput.max=batchMax;
     if(parseInt(limitInput.value,10)>batchMax)limitInput.value=batchMax;
-    // 邀請信／補送提醒是「二次確認」信，語意上屬交易信，後端不套 marketingRemaining，
-    // 因此這裡的上限用未扣 reserve 的 batchMax。同一畫面的 #quota-info 講的是行銷群發
-    // 的可用量，兩個數字語意不同，不標明會被讀成同一件事而以為哪邊算錯了。
-    label.textContent=`單次上限（剩餘 ${q.remaining} 封，單批上限 ${batchMax}；`
-      +`邀請信屬確認信，不受 ${marketingReserve()} 封交易信保留額度限制）`;
+    // 這裡曾經寫成「邀請信屬確認信，不受 reserve 限制」並改用未扣 reserve 的 batchMax——
+    // 那個分類是錯的：邀請信是站方主動外推的再徵詢，讀者不在等它；magic link 才是讀者
+    // 當下盯著信箱等的那一封。用 batchMax 的後果是按一次「寄邀請信」就能把額度寄到 0，
+    // 讀者從此收不到登入信（spec §6 的產品級故障）。後端已改用 marketingBatchMax，
+    // 前端跟著同一個數字，兩邊才不會互相矛盾。
+    label.textContent=batchMax<=0
+      ? `單次上限（剩餘 ${q.remaining} 封已全數保留給登入信等交易信，目前無法寄邀請信）`
+      : `單次上限（剩餘 ${q.remaining} 封，其中 ${marketingReserve()} 封保留給登入信等交易信，`
+        +`邀請信單批上限 ${batchMax}）`;
     // 三個數字的關係必須一起顯示：後端擋信用的是「行銷可用」而非「總剩餘」，
     // 只顯示總剩餘會讓管理者以為還能寄那麼多，實際卻被靜默截斷。
     const marketing=`　│　剩餘額度 ${q.remaining} 封（保留 ${marketingReserve()} 封給登入信等交易信，行銷可用 ${marketingRemaining()} 封）`;

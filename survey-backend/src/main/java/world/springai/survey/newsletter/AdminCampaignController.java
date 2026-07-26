@@ -165,15 +165,39 @@ public class AdminCampaignController {
     }
 
     /**
-     * 將前端傳來的單次上限收斂到「實際可用額度」與「單批安全上限」之內。
-     * 前端已依 /api/admin/mail-quota 設好欄位 max，這裡是伺服器端的第二道防線：
+     * 將前端傳來的單次上限收斂到「行銷可用額度」與「單批安全上限」之內。
+     *
+     * <p>前端已依 {@code /api/admin/mail-quota} 設好欄位 max，這裡是伺服器端的第二道防線：
      * 避免直接打 API 或前端快取過期時一次送出超量請求（逐封同步寄送會逾時）。
-     * limit 為 null 時代表「不限」，同樣收斂成 batchMax 而非放行全部。
+     * limit 為 null 時代表「不限」，同樣收斂成上限而非放行全部。</p>
+     *
+     * <p><b>用 {@code marketingBatchMax()} 而非 {@code batchMax()}</b>：後者是
+     * {@code min(剩餘額度, 500)}，<b>沒有扣掉交易信保留額度</b>。邀請信與提醒信走的是
+     * {@link InviteService}，全程沒有任何額度判斷——{@code CampaignService} 內的
+     * reserve 檢查完全管不到這條路徑。於是「月剩餘 300、reserve 50」時按下「寄邀請信」，
+     * 這裡會回 300、逐封寄光額度，之後任何讀者點 magic link 都收不到登入信，
+     * 整個讀者端登不進去。那正是 spec §6 開宗明義要防的產品級故障。</p>
+     *
+     * <p><b>為什麼邀請信該讓位</b>：邀請信是站方主動外推的再徵詢，讀者不在等它，
+     * 晚一天寄沒有損失；magic link 才是讀者當下盯著信箱等的那一封。
+     * （{@code MailQuotaService.Quota#marketingBatchMax} 早就算出了正確的值，
+     * 在此之前卻沒有任何生產程式碼消費它——正確答案一直在，只是沒接上唯一需要它的呼叫點。）</p>
+     *
+     * <p><b>可用量為 0 時必須拋 409，絕不可回傳 0</b>：{@link InviteService} 把
+     * {@code limit <= 0} 解讀為「不限」（{@code limit > 0 && limit < eligible.size()}
+     * 才切分批次），所以把 0 傳下去的效果是<b>整份名單全寄</b>——與意圖完全相反，
+     * 而且正好發生在額度最吃緊的時候。這裡改為明確拒絕，與
+     * {@code CampaignService} 在 {@code marketingRemaining <= 0} 時回 409 的作法一致：
+     * 不寄 0 封卻回報成功，管理者會以為寄完了。</p>
      */
     private Integer clampLimit(Integer limit) {
-        long batchMax = mailQuotaService.current().batchMax();
-        if (limit == null || limit <= 0 || limit > batchMax) {
-            return (int) batchMax;
+        long marketingBatchMax = mailQuotaService.current().marketingBatchMax();
+        if (marketingBatchMax <= 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "行銷可用寄信額度已用盡（剩餘額度全數保留給登入信等交易信），請待額度重置後再寄");
+        }
+        if (limit == null || limit <= 0 || limit > marketingBatchMax) {
+            return (int) marketingBatchMax;
         }
         return limit;
     }

@@ -78,6 +78,11 @@ public class MailQuotaService {
      * <p>登入信、確認信、歡迎信不受此限制——它們正是 reserve 的使用者。
      * 這個數字存在的理由：群發把額度用到 0 時，讀者就收不到 magic link，
      * 那不是「信少寄一封」，而是整個讀者端登不進去（spec §6）。</p>
+     *
+     * <p><b>「確認信」指的是使用者送出訂閱後系統自動寄的那一封</b>（讀者當下在等它），
+     * <b>不包含</b>後台主動群發的「二次確認邀請信」（{@code InviteService}）——
+     * 後者是站方主動外推的再徵詢，讀者不在等它，屬行銷側，必須受 reserve 約束。
+     * 這兩者曾被歸成同一類，結果邀請信成為唯一一條完全不受保護的寄信路徑。</p>
      */
     private final long transactionalReserve;
 

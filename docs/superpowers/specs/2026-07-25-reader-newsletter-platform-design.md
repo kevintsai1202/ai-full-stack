@@ -611,7 +611,13 @@ sunset   ← 已寄期數 >= 淘汰門檻(12) 且 last_engaged_at 為 NULL 或�
 >
 > `CampaignService.send()` 與 `reschedule()` 在取得收件人清單後、建立／更新 campaign 之前檢查此值：`marketingRemaining <= 0` 時整批拒絕並回 409（不寄 0 封後回報成功）；收件人數超過 `marketingRemaining` 時縮減批量，縮減人數以 `SendResult.skippedForQuota` 回報，且 `campaign.recipientCount` 記錄的是**實際寄送人數**（供階段 E 補寄算差集使用）。登入信、確認信、歡迎信完全不受此檢查影響——它們走的是 `LoginMailService` 等既有路徑，未經過 `CampaignService`。
 >
-> 「群發吃光額度導致讀者無法登入」這個風險，在階段 B 上線至階段 C 這段期間確實成立過；階段 C 已補上防護，之後群發最多把行銷可用量用到 0，交易信仍有 reserve 保底。
+> **第二條路徑（全分支終審發現，已修）**：上面那段原本寫「階段 C 已補上防護」，但防護當時只存在於 `CampaignService`。**邀請信／提醒信走的是 `InviteService`，全程沒有任何額度判斷**，而 `AdminCampaignController.clampLimit()` 用的是 `Quota.batchMax()`（= `min(remaining, 500)`，**未扣 reserve**）。於是月剩餘 300、reserve 50 時，管理者按一次「寄邀請信」就會逐封寄出 300 封把額度歸零，之後讀者點 magic link 收不到登入信——正是本節要防的那個故障，只是從另一個入口發生。物證是 `Quota.marketingBatchMax` 在整個生產程式碼中**零消費者**：正確的值早就算出來了，只是沒接上唯一需要它的呼叫點。
+>
+> 修法：`clampLimit()` 改用 `marketingBatchMax()`。理由——邀請信是站方主動外推的再徵詢，讀者不在等它，晚一天寄沒有損失；magic link 才是讀者當下盯著信箱等的那一封。另外 `marketingBatchMax` 為 0 時**必須拋 409 而不是把 0 傳下去**：`InviteService` 把 `limit <= 0` 解讀為「不限」，傳 0 的效果會是整份名單全寄，與意圖完全相反且正好發生在額度最吃緊的時候。
+>
+> **第 3 項的分類仍然成立**：登入信、確認信、歡迎信不受 reserve 限制——它們走 `LoginMailService` 等既有路徑，既不經過 `CampaignService` 也不經過 `AdminCampaignController.clampLimit()`。「不受 reserve 限制」指的是「不被扣掉 reserve 之後的可用量所限」，也就是它們可以動用 reserve；本次改動只約束行銷側（群發、邀請信、提醒信），與這條分類沒有衝突。
+>
+> 目前狀態：`CampaignService.send()`／`reschedule()`、`POST /api/admin/campaign/invite`、`POST /api/admin/campaign/invite/remind` 三條會實際寄出行銷信的路徑都已受 reserve 保護；「補寄」前檢查仍待階段 E（功能本身尚不存在）。
 
 ## 7. 後台新增功能
 

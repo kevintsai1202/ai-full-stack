@@ -118,6 +118,98 @@ class AdminCampaignControllerTest {
            .andExpect(jsonPath("$.recipientCount").value(500));
     }
 
+    /**
+     * 額度吃緊時，邀請信的單次上限必須收斂到<b>扣掉交易信保留額度</b>之後的量。
+     *
+     * <p><b>失效情境</b>：ZSend 月剩餘 300 封、reserve 50。若這裡用的是
+     * {@code batchMax()}（= min(remaining, 500) = 300，未扣 reserve），
+     * 管理者按一次「寄邀請信」就會逐封寄出 300 封把額度歸零；此後任何讀者點
+     * magic link 都收不到登入信——整個讀者端登不進去。這不是「信晚一點到」，
+     * 是 spec §6 要防的產品級故障。邀請信是站方主動外推的再徵詢，讀者不在等它，
+     * 該讓位給交易信。</p>
+     *
+     * <p>邀請信與提醒信走 {@link InviteService}，本身<b>沒有任何額度判斷</b>
+     * （{@code CampaignService} 內的 reserve 檢查管不到這條路徑），
+     * 所以這個 clamp 是這條路徑上唯一的防線。把 {@code clampLimit} 改回
+     * {@code batchMax()}，本測試與下一個測試都會變紅。</p>
+     */
+    @Test
+    void inviteLimitReservesQuotaForTransactionalMail() throws Exception {
+        // 月剩餘 300、reserve 50 → 行銷可用 250，單批上限 250
+        when(mailQuotaService.current()).thenReturn(new MailQuotaService.Quota(
+            "zeabur", "healthy",
+            999999999L, 0L, 999999999L,
+            50000L, 49700L, 300L,
+            300L, 300L,
+            50L, 250L, 250L,
+            true, null, null));
+        when(inviteService.sendInvites("exam", 250))
+            .thenReturn(new InviteService.InviteResult(250, 250, 0, 0, 50));
+
+        mvc.perform(post("/api/admin/campaign/invite").header("X-Admin-Key", "test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"source\":\"exam\"}"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.recipientCount").value(250));
+
+        // 若用 batchMax（300）就會是這個呼叫——它必須從未發生
+        org.mockito.Mockito.verify(inviteService, org.mockito.Mockito.never())
+            .sendInvites("exam", 300);
+    }
+
+    /** 補送提醒信走的是同一個 clamp，保護不得只在首次邀請那條路徑上 */
+    @Test
+    void reminderLimitAlsoReservesQuotaForTransactionalMail() throws Exception {
+        when(mailQuotaService.current()).thenReturn(new MailQuotaService.Quota(
+            "zeabur", "healthy",
+            999999999L, 0L, 999999999L,
+            50000L, 49700L, 300L,
+            300L, 300L,
+            50L, 250L, 250L,
+            true, null, null));
+        when(inviteService.sendReminders("exam", 250))
+            .thenReturn(new InviteService.ReminderResult(250, 250, 0, 0, 0, 50));
+
+        mvc.perform(post("/api/admin/campaign/invite/remind").header("X-Admin-Key", "test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"source\":\"exam\",\"limit\":9999}"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.recipientCount").value(250));
+
+        org.mockito.Mockito.verify(inviteService, org.mockito.Mockito.never())
+            .sendReminders("exam", 300);
+    }
+
+    /**
+     * 行銷可用量已被 reserve 吃光時整批拒絕（409），且<b>一封都不能寄出</b>。
+     *
+     * <p>額度只剩 40 封、reserve 50 → 這 40 封全部保留給登入信。</p>
+     *
+     * <p><b>為什麼不能「clamp 成 0 再照常呼叫」</b>：{@link InviteService} 把
+     * {@code limit <= 0} 解讀為「不限」，傳 0 下去的效果是整份名單全寄——
+     * 與意圖完全相反，而且正好發生在額度最吃緊的時候。這條測試同時釘住
+     * 「回 409」與「完全沒有呼叫 InviteService」兩件事。</p>
+     */
+    @Test
+    void inviteIsRejectedWhenOnlyReserveRemains() throws Exception {
+        when(mailQuotaService.current()).thenReturn(new MailQuotaService.Quota(
+            "zeabur", "healthy",
+            999999999L, 0L, 999999999L,
+            50000L, 49960L, 40L,
+            40L, 40L,
+            50L, 0L, 0L,
+            true, null, null));
+
+        mvc.perform(post("/api/admin/campaign/invite").header("X-Admin-Key", "test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"source\":\"exam\",\"limit\":100}"))
+           .andExpect(status().isConflict());
+
+        org.mockito.Mockito.verify(inviteService, org.mockito.Mockito.never())
+            .sendInvites(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any());
+    }
+
     /** 邀請確認信：缺 source 回 400 */
     @Test
     void inviteWithoutSourceReturns400() throws Exception {
