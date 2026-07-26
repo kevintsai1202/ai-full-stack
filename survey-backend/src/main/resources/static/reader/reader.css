@@ -86,17 +86,10 @@ input[type=email] { width:100%; padding:12px 14px; border:1px solid var(--border
   color: var(--muted);
 }
 
-/* 解鎖按鈕為 <button>（其餘 .btn 多為 <a>），需補齊按鈕預設樣式差異。
-   只繼承 font-family，不用 font: inherit——後者是縮寫屬性，會連帶把
-   .btn 的 font-weight:700 與 font-size:1rem 重設掉（button.btn 的
-   specificity 比 .btn 高），解鎖按鈕就會變成細小字。 */
-button.btn {
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-button.btn:disabled {
-  opacity: .6;
-  cursor: default;
-}
+/* 解鎖按鈕（<button class="btn">）不需要任何額外規則：
+   .btn 本身已有 border:0、cursor:pointer、font-family:inherit，
+   disabled 狀態由 .btn[disabled] 的 opacity:.6 + cursor:not-allowed 負責
+   （el.disabled = true 會反映成 disabled 屬性，屬性選擇器選得到）。
+   曾經存在的 button.btn:disabled 規則反而因 specificity (0,2,1) > (0,2,0)
+   蓋掉 cursor:not-allowed，讓 index.html／login.html 的送出按鈕在
+   disabled 時游標變回 default。 */

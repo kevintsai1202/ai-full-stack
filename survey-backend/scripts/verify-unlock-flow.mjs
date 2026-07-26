@@ -1,6 +1,8 @@
 // 點數解鎖流程驗證：發布一篇 PREMIUM 文章 → 未解鎖時讀單篇（受限區不得洩漏、
 // 須顯示「用 10 點解鎖」）→ POST 解鎖端點（UNLOCKED、餘額 290）→ 再讀單篇
-// （受限區應出現）→ 再 POST 一次（ALREADY_UNLOCKED，餘額不再減少）。
+// （受限區應出現）→ 再 POST 一次（ALREADY_UNLOCKED，餘額不再減少）→ 未登入／GET
+// 一律拒絕 → VIP 直接打端點不得被扣點 → BASIC 文章回 409 而非 500
+// → 真實瀏覽器點按解鎖按鈕（--browser）。
 //
 // 用法（需先啟動應用；預設連本機 8080 與 docker 容器 survey-test-db）：
 //   node scripts/verify-unlock-flow.mjs
@@ -44,6 +46,8 @@ const SKIP_SEED = args.includes('--skip-seed');
 const WITH_BROWSER = args.includes('--browser');
 
 const SLUG = 'e2e-unlock';
+/** 另一篇 BASIC 文章：驗「不需要解鎖」的語意不會變成 500 */
+const BASIC_SLUG = 'e2e-unlock-basic';
 const EMAIL = 'e2e-unlock@example.com';
 const FREE_TEXT = 'E2E_UNLOCK_FREE_INTRO';
 const GATED_TEXT = 'E2E_UNLOCK_SENTINEL_GATED';
@@ -90,8 +94,8 @@ async function fetchPage(path, cookie) {
 }
 
 /** POST 解鎖端點，回傳 { status, data } */
-async function postUnlock(cookie) {
-  const res = await fetch(`${BASE}/api/reader/unlock/${SLUG}`, {
+async function postUnlock(cookie, slug = SLUG) {
+  const res = await fetch(`${BASE}/api/reader/unlock/${slug}`, {
     method: 'POST',
     headers: cookie ? { Cookie: cookie } : {}
   });
@@ -211,13 +215,58 @@ console.log('\n[7] GET 解鎖端點');
   check('回應 405', res.status === 405, `實際 ${res.status}`);
 }
 
-// 8. 真實瀏覽器：確認解鎖按鈕的前端腳本真的能跑（HTTP 斷言驗不到 JS）
-//    需要 playwright（本機為全域安裝）；沒有時只警告不算失敗。
+// 8. VIP 直接 POST 解鎖端點：本來就免費，絕不可被扣點。
+//    這是「授權判斷散落成兩份」的實際代價：article_access 只在 VIP 瀏覽過該篇時
+//    才由 recordAccess 補寫，所以一位還沒瀏覽過該篇的 VIP 直接打端點時，
+//    UnlockService 的三道檢查（已發布、PREMIUM、餘額足夠）會全部通過而真的扣點。
+console.log('\n[8] VIP 直接 POST 解鎖端點（不得扣點）');
+{
+  sql(`DELETE FROM article_access WHERE reader_id = ${readerId};`);
+  sql(`DELETE FROM credit_txn WHERE reader_id = ${readerId};`);
+  sql(`UPDATE reader SET credits = ${START_CREDITS}, tier = 'VIP',
+       vip_expires_at = now() + interval '30 days' WHERE id = ${readerId};`);
+
+  const { status, data } = await postUnlock(cookie);
+  check('回應 409（這篇不需要解鎖）', status === 409, `實際 ${status} ${JSON.stringify(data)}`);
+  check('outcome 為 NOT_REQUIRED', data?.outcome === 'NOT_REQUIRED', JSON.stringify(data));
+  check('★ VIP 餘額未被扣點',
+    sql(`SELECT credits FROM reader WHERE id = ${readerId};`) === String(START_CREDITS));
+  check('★ 未寫入任何扣點帳本',
+    sql(`SELECT count(*) FROM credit_txn WHERE reader_id = ${readerId};`) === '0');
+  check('★ 未寫入解鎖紀錄',
+    sql(`SELECT count(*) FROM article_access WHERE reader_id = ${readerId};`) === '0');
+
+  // 還原成 FREE，後續步驟才是一般讀者的情境
+  sql(`UPDATE reader SET tier = 'FREE', vip_expires_at = NULL WHERE id = ${readerId};`);
+}
+
+// 9. BASIC 文章 POST 解鎖端點：訂閱者本來就免費，語意是「這篇不需要解鎖」，
+//    必須回 409 而不是讓 UnlockService 的 fail-closed IllegalStateException 變成 500。
+console.log('\n[9] BASIC 文章 POST 解鎖端點（不得回 500）');
+{
+  sql(`
+    INSERT INTO campaign (subject, markdown, mode, recipient_count, accepted_count, failed_count,
+                          status, tier, credit_cost, slug, published_at)
+    VALUES ('端到端 BASIC 測試文章', ${quote(`${FREE_TEXT}\n\n<!--paywall-->\n\n${GATED_TEXT}`)},
+            'now', 1, 1, 0, 'sent', 'BASIC', 0, '${BASIC_SLUG}', now())
+    ON CONFLICT (slug) WHERE slug IS NOT NULL
+    DO UPDATE SET tier = 'BASIC', credit_cost = 0, published_at = now();
+  `);
+
+  const { status, data } = await postUnlock(cookie, BASIC_SLUG);
+  check('回應 409 而非 500', status === 409, `實際 ${status} ${JSON.stringify(data)}`);
+  check('outcome 為 NOT_REQUIRED', data?.outcome === 'NOT_REQUIRED', JSON.stringify(data));
+  check('未寫入任何扣點帳本',
+    sql(`SELECT count(*) FROM credit_txn WHERE reader_id = ${readerId};`) === '0');
+}
+
+// 10. 真實瀏覽器：確認解鎖按鈕的前端腳本真的能跑（HTTP 斷言驗不到 JS）
+//     需要 playwright（本機為全域安裝）；指定 --browser 卻載不到就算失敗。
 if (WITH_BROWSER) {
-  console.log('\n[8] 真實瀏覽器點按解鎖按鈕');
+  console.log('\n[10] 真實瀏覽器點按解鎖按鈕');
   await runBrowserStage();
 } else {
-  console.log('\n[8] 真實瀏覽器（略過，加 --browser 啟用）');
+  console.log('\n[10] 真實瀏覽器（略過，加 --browser 啟用）');
 }
 
 console.log(`\n=== 結果：${failures === 0 ? '全部通過' : `${failures} 項失敗`} ===\n`);
@@ -241,7 +290,13 @@ async function runBrowserStage() {
     const mod = await import(pathToFileURL(join(globalRoot, 'playwright', 'index.js')).href);
     playwright = mod.default ?? mod;
   } catch (e) {
-    console.log(`  ! 找不到 playwright，略過瀏覽器驗證：${e.message}`);
+    // 明確加了 --browser 卻載不到 playwright 必須算失敗，不可只印警告就 return：
+    // 那樣 failures 不增加、exit code 仍是 0，而本階段的三個關鍵斷言
+    // （尤其「按下解鎖前瀏覽器拿到的 HTML 不含受限區」與「解鎖按鈕的前端腳本
+    // 真的能跑」）全部沒跑——這是唯一會實際執行那段 JS 的驗證，靜默略過等於
+    // 把解鎖按鈕變成死按鈕也驗不出來。不想跑就不要加 --browser。
+    check('載入 playwright（已指定 --browser）', false,
+      `${e.message}；請安裝（npm i -g playwright）或移除 --browser`);
     return;
   }
 

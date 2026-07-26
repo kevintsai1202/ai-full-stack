@@ -315,6 +315,10 @@ class ReaderPageControllerTest {
 
         assertTrue(html.contains("用 10 點解鎖"), "應顯示成本與解鎖按鈕文字");
         assertTrue(html.contains("id=\"unlock-btn\""), "應有解鎖按鈕");
+        // 光有按鈕不夠：沒有腳本的解鎖按鈕是死按鈕，讀者按了毫無反應、永遠無法解鎖。
+        // 因此直接斷言腳本本體的兩個必要元素——綁定與端點路徑。
+        assertTrue(html.contains("addEventListener"), "解鎖按鈕必須有綁定事件的腳本，否則是死按鈕");
+        assertTrue(html.contains("/api/reader/unlock/"), "腳本必須真的打得到解鎖端點");
         assertTrue(html.contains("/r/rules"), "gate 區塊必須附規則頁連結（spec §5.11）");
         assertTrue(html.contains(FREE_MARKER), "免費區必須看得到");
         assertFalse(html.contains(SENTINEL), "受限區絕不可出現在 PARTIAL 回應中");
@@ -346,25 +350,86 @@ class ReaderPageControllerTest {
     }
 
     /**
-     * 解鎖腳本只在 CAN_UNLOCK 時輸出。
+     * 解鎖腳本「只」在 CAN_UNLOCK 時輸出——兩個方向都驗。
      *
-     * <p>不是效能考量——未登入者頁面帶著一段解鎖腳本，會讓「這篇要付費」
-     * 的訊息在錯誤的時機出現，而該讀者要做的是登入。</p>
+     * <p>只驗否定的一半（NOT_LOGGED_IN 時沒有腳本）證明不了這個測試的名字：
+     * 把腳本改成永遠輸出空字串，只驗否定面的測試仍會全綠，而解鎖按鈕就變成
+     * 死按鈕。因此同一個測試內先驗 NOT_LOGGED_IN 沒有腳本，再驗 CAN_UNLOCK
+     * 真的有腳本。</p>
+     *
+     * <p>NOT_LOGGED_IN 不輸出腳本也不是效能考量——未登入者頁面帶著一段解鎖
+     * 腳本，會讓「這篇要付費」的訊息在錯誤的時機出現，而該讀者要做的是登入。</p>
      */
     @Test
     void unlockScriptOnlyAppearsForCanUnlock() throws Exception {
         when(campaignRepository.findBySlug("test-article"))
             .thenReturn(Optional.of(gatedArticle(Campaign.TIER_PREMIUM, 10)));
-        when(readerContext.resolve(any())).thenReturn(Optional.empty());
         when(accessDecisionService.resolveCost(any())).thenReturn(10);
+
+        // 方向一：未登入 → 不得有腳本或按鈕
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
         stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
 
-        String html = mvc.perform(get("/r/news/test-article"))
+        String anonymousHtml = mvc.perform(get("/r/news/test-article"))
             .andReturn().getResponse().getContentAsString();
 
-        assertFalse(html.contains("unlock-btn"), "未登入時不該有解鎖腳本或按鈕");
-        assertTrue(html.contains("/r/login"), "應引導登入");
-        assertFalse(html.contains(SENTINEL));
+        assertFalse(anonymousHtml.contains("unlock-btn"), "未登入時不該有解鎖腳本或按鈕");
+        assertFalse(anonymousHtml.contains("/api/reader/unlock/"), "未登入時不該輸出解鎖端點路徑");
+        assertTrue(anonymousHtml.contains("/r/login"), "應引導登入");
+        assertFalse(anonymousHtml.contains(SENTINEL));
+
+        // 方向二：CAN_UNLOCK → 必須有腳本，否則按鈕是死的
+        when(readerContext.resolve(any()))
+            .thenReturn(Optional.of(new ReaderContext.Current(reader(Reader.TIER_FREE, 300), true)));
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.CAN_UNLOCK, 0);
+
+        String canUnlockHtml = mvc.perform(get("/r/news/test-article")
+                .cookie(new jakarta.servlet.http.Cookie(ReaderSessionService.COOKIE_NAME, "JWT")))
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(canUnlockHtml.contains("id=\"unlock-btn\""), "CAN_UNLOCK 必須有解鎖按鈕");
+        assertTrue(canUnlockHtml.contains("addEventListener"), "CAN_UNLOCK 必須輸出綁定事件的解鎖腳本");
+        assertTrue(canUnlockHtml.contains("/api/reader/unlock/"), "腳本必須真的打得到解鎖端點");
+        assertFalse(canUnlockHtml.contains(SENTINEL), "受限區絕不可出現在 PARTIAL 回應中");
+    }
+
+    /**
+     * PREMIUM 且 CAN_UNLOCK，但 markdown 沒有 {@code <!--paywall-->} 標記時，
+     * 既不渲染 gate 也不輸出解鎖腳本。
+     *
+     * <p>整篇都是免費區，沒有東西被擋住，顯示「用 10 點解鎖」等於向讀者
+     * 收取他已經能讀到的內容的費用。腳本更不能輸出：頁面上沒有
+     * {@code #unlock-btn}，{@code getElementById} 會回 null 而讓
+     * {@code addEventListener} 在讀者的 console 直接報錯。</p>
+     *
+     * <p>沒有這個測試，{@code gateRendered &&} 這個條件會被後人「順手簡化」掉。</p>
+     */
+    @Test
+    void premiumWithoutPaywallMarkerRendersNeitherGateNorScript() throws Exception {
+        // 刻意不含 <!--paywall-->：整篇都是免費區
+        Campaign c = new Campaign("測試文章", FREE_MARKER + "\n\n沒有受限區的內容。",
+            null, null, null, "now", null, 1, "sent");
+        c.setTier(Campaign.TIER_PREMIUM);
+        c.setCreditCost(10);
+        c.setSlug("test-article");
+        c.setPublishedAt(OffsetDateTime.parse("2026-07-20T10:00:00+08:00"));
+
+        when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(c));
+        when(readerContext.resolve(any()))
+            .thenReturn(Optional.of(new ReaderContext.Current(reader(Reader.TIER_FREE, 300), true)));
+        when(accessDecisionService.resolveCost(any())).thenReturn(10);
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.CAN_UNLOCK, 0);
+
+        String html = mvc.perform(get("/r/news/test-article")
+                .cookie(new jakarta.servlet.http.Cookie(ReaderSessionService.COOKIE_NAME, "JWT")))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(html.contains(FREE_MARKER), "整篇都是免費區，內容必須完整顯示");
+        assertFalse(html.contains("class=\"gate\""), "沒有受限區就不該渲染 paywall 區塊");
+        assertFalse(html.contains("unlock-btn"), "沒有受限區就不該有解鎖按鈕");
+        assertFalse(html.contains("/api/reader/unlock/"),
+            "沒有 #unlock-btn 卻輸出腳本，addEventListener 會在讀者的 console 報錯");
     }
 
     /** FULL 時受限區必須出現，且不該有 gate 區塊 */

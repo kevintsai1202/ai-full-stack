@@ -220,8 +220,10 @@ public class ReaderPageController {
                 "<a class=\"btn\" href=\"/r/\">重新訂閱</a>");
             case CAN_UNLOCK -> gateHtml("這是進階內容",
                 "解鎖需要 " + cost + " 點，<strong>一次解鎖永久可讀</strong>。",
+                // 只輸出 data-slug：腳本唯一讀取的資料屬性。data-cost 沒有任何
+                // 消費者，留著只會讓後人以為前端會用它做金額計算。
                 "<button class=\"btn\" id=\"unlock-btn\" data-slug=\"" + HtmlTemplate.escapeHtml(slug)
-                    + "\" data-cost=\"" + cost + "\">用 " + cost + " 點解鎖</button>"
+                    + "\">用 " + cost + " 點解鎖</button>"
                     + "<div class=\"msg\" id=\"unlock-msg\"></div>"
                     + rulesHint());
             case NEEDS_CREDITS -> gateHtml("這是進階內容",
@@ -244,6 +246,10 @@ public class ReaderPageController {
      * 重新渲染進來——不是用 JS 把內容插進頁面。受限區必須始終由 server 端
      * 依授權結果決定是否輸出（spec §5.3），前端插入等於受限區曾經出現在
      * 某個 API 回應中，paywall 就形同虛設。</p>
+     *
+     * <p><b>解除 disabled 只寫在各個錯誤分支，不用 {@code finally}</b>：
+     * finally 會在 {@code location.reload()} 之後執行，而 reload 是非同步的
+     * ——瀏覽器實際換頁前按鈕已被解除鎖定，讀者能再按一次而多打一次扣點端點。</p>
      */
     private static final String UNLOCK_SCRIPT = """
         <script>
@@ -265,7 +271,9 @@ public class ReaderPageController {
               if (!res.ok) { throw new Error('unlock failed'); }
               const data = await res.json();
               if (data.outcome === 'UNLOCKED' || data.outcome === 'ALREADY_UNLOCKED') {
-                // 重新載入讓 server 重新渲染受限區，不由前端插入內容
+                // 重新載入讓 server 重新渲染受限區，不由前端插入內容。
+                // 這裡刻意不解除 disabled：reload 生效前的空窗期若按鈕可再按，
+                // 讀者會多打一次扣點端點。
                 location.reload();
                 return;
               }
@@ -273,10 +281,10 @@ public class ReaderPageController {
                 unlockMsg.textContent = '點數不足，目前有 ' + data.credits + ' 點。';
                 unlockMsg.className = 'msg show err';
               }
+              unlockBtn.disabled = false;
             } catch (e) {
               unlockMsg.textContent = '解鎖失敗，請稍後再試。';
               unlockMsg.className = 'msg show err';
-            } finally {
               unlockBtn.disabled = false;
             }
           });
