@@ -250,11 +250,18 @@ class CampaignPublicationLifecycleTest {
         assertTrue(after.isAfter(original),
             "published_at 應為上架當下的新時間而非下架前的舊值：" + after + " vs " + original);
         // 回傳給後台的時間必須就是寫進資料庫的那一個，否則畫面顯示的與事實不符。
-        // 比到微秒為止：PostgreSQL 的 TIMESTAMPTZ 只存到微秒，而 OffsetDateTime.now()
-        // 在 JDK 21 會帶到奈秒，直接比 Instant 會因為被截掉的那三位數而假失敗。
-        assertEquals(r.publishedAt().toInstant().truncatedTo(java.time.temporal.ChronoUnit.MICROS),
-            after.toInstant().truncatedTo(java.time.temporal.ChronoUnit.MICROS),
-            "回傳的發布時間與資料庫裡的不一致");
+        //
+        // 容許 1 微秒誤差，而不是直接比 Instant 也不是各自 truncate：
+        // PostgreSQL 的 TIMESTAMPTZ 只存到微秒，而 JDK 21 的 OffsetDateTime.now()
+        // 會帶到奈秒——關鍵在於 PostgreSQL 是<b>四捨五入</b>而非截斷
+        // （實測 ...558463500ns 進資料庫後變成 ...558464µs）。所以兩邊各自
+        // truncate 到微秒仍會在剛好過半的奈秒值上偶發失敗，那是測試自己的
+        // 精度瑕疵，不是程式缺陷。誤差上界是半個微秒，取 1 微秒足以涵蓋，
+        // 同時仍能抓到「回傳的時間根本不是寫進去的那一個」（那會差好幾毫秒以上）。
+        long deltaNanos = java.time.Duration
+            .between(r.publishedAt().toInstant(), after.toInstant()).abs().toNanos();
+        assertTrue(deltaNanos <= 1000,
+            "回傳的發布時間與資料庫裡的不一致：" + r.publishedAt() + " vs " + after);
         assertEquals(SLUG, r.slug());
     }
 
