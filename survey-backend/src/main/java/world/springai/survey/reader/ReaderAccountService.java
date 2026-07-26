@@ -97,8 +97,14 @@ public class ReaderAccountService {
             return reader;
         }
 
+        // 只寫 last_login_at 一欄，絕不整列 save()：整列 UPDATE 會把 SELECT 當下讀到的
+        // credits 一起寫回去，靜默還原同一時間另一個分頁解鎖文章所扣掉的點（帳本那筆
+        // 扣款卻留著，餘額與帳本就此對不上）。理由完整寫在 ReaderRepository#touchLastLogin。
+        readerRepository.touchLastLogin(reader.getId(), now);
+        // touchLastLogin 的 clearAutomatically 已把 reader 清出一級快取（脫離管理），
+        // 因此以下 setter 只影響回傳值，不會在提交時觸發帶全欄位的 dirty-check UPDATE。
+        // 順序不可對調：先 setter 再 UPDATE 的話，那次 setter 會留下待寫入的髒資料。
         reader.setLastLoginAt(now);
-        reader = readerRepository.save(reader);
 
         // 更新名單中心的參與度時間戳；該 email 不在名單中時回 0，屬正常情形
         surveyResponseRepository.touchEngagement(normalized, now);

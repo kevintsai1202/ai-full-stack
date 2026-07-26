@@ -6,7 +6,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,25 +43,25 @@ public class ReaderPortalController {
     /** 交易明細一次只顯示最近幾筆，避免帳本無限成長拖慢頁面 */
     private static final int TXN_DISPLAY_LIMIT = 50;
 
-    /** 顯示名稱最長字元數（以 code point 計，避免切斷 surrogate pair） */
-    private static final int DISPLAY_NAME_MAX_LENGTH = 40;
-
     private final HtmlTemplate htmlTemplate;
     private final ReaderContext readerContext;
     private final CreditTxnRepository creditTxnRepository;
     private final SurveyResponseRepository surveyResponseRepository;
     private final ReferralService referralService;
     private final CreditPolicy creditPolicy;
+    /** 個人資料寫入；交易邊界在它身上（見 {@link #updateProfile}） */
+    private final ReaderProfileService readerProfileService;
     /** 對外公開的網域（含 scheme），組出可貼給別人的完整邀請連結時要用 */
     private final String publicBaseUrl;
 
-    /** 注入渲染、身分解析、帳本、名單中心、邀請統計、點數參數與對外網域 */
+    /** 注入渲染、身分解析、帳本、名單中心、邀請統計、點數參數、個人資料寫入與對外網域 */
     public ReaderPortalController(HtmlTemplate htmlTemplate,
                                  ReaderContext readerContext,
                                  CreditTxnRepository creditTxnRepository,
                                  SurveyResponseRepository surveyResponseRepository,
                                  ReferralService referralService,
                                  CreditPolicy creditPolicy,
+                                 ReaderProfileService readerProfileService,
                                  @Value("${app.public-base-url}") String publicBaseUrl) {
         this.htmlTemplate = htmlTemplate;
         this.readerContext = readerContext;
@@ -70,6 +69,7 @@ public class ReaderPortalController {
         this.surveyResponseRepository = surveyResponseRepository;
         this.referralService = referralService;
         this.creditPolicy = creditPolicy;
+        this.readerProfileService = readerProfileService;
         this.publicBaseUrl = publicBaseUrl;
     }
 
@@ -163,12 +163,13 @@ public class ReaderPortalController {
     /**
      * 更新顯示名稱。
      *
-     * <p>名單中查無此 email 時回 404 而<b>不建新列</b>：建列會讓「讀者維護
-     * 個人資訊」變成「讀者可往名單中心插資料」，而名單中心的每一列都代表
-     * 一份同意紀錄。</p>
+     * <p><b>本方法刻意沒有 {@code @Transactional}</b>：交易由
+     * {@link ReaderProfileService#updateName} 負責。註解掛在 controller 上會讓交易
+     * 在<b>身分驗證之前</b>就開啟——未帶 cookie 的請求先借連線、開交易，再回 401，
+     * 而這是公開端點（不需 admin key），等於讓未授權流量消耗連線池。
+     * 這裡只做身分解析與 404 判斷，寫入一律委派給服務層。</p>
      */
     @PostMapping("/api/reader/profile")
-    @Transactional
     public ResponseEntity<Void> updateProfile(
             @RequestBody ProfileRequest request,
             @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
@@ -178,20 +179,11 @@ public class ReaderPortalController {
         }
         String email = current.get().reader().getEmail();
 
-        Optional<SurveyResponse> row =
-            surveyResponseRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc(email);
-        if (row.isEmpty()) {
+        // 名單中查無此 email 時回 404 而不建新列：建列會讓「讀者維護個人資訊」
+        // 變成「讀者可往名單中心插資料」，而名單中心的每一列都代表一份同意紀錄。
+        if (!readerProfileService.updateName(email, request.name())) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
-
-        // 只截斷不拒絕：使用者輸入超長名稱時默默存前 40 字比回 400 友善，
-        // 而顯示名稱沒有任何正確性要求
-        String name = request.name() == null ? "" : request.name().trim();
-        row.get().setName(truncateByCodePoint(name, DISPLAY_NAME_MAX_LENGTH));
-        surveyResponseRepository.save(row.get());
-        // 更新個人資料是高可靠的參與度訊號（spec §5.10）
-        surveyResponseRepository.touchEngagement(email, OffsetDateTime.now());
-
         return ResponseEntity.ok().build();
     }
 
@@ -243,23 +235,6 @@ public class ReaderPortalController {
      */
     private static String formatTaipeiDate(OffsetDateTime value) {
         return value.atZoneSameInstant(TAIPEI).format(DATE_FORMAT);
-    }
-
-    /**
-     * 依 code point（而非 UTF-16 char）截斷字串，避免切在 surrogate pair 中間。
-     *
-     * <p>{@code String.substring} 以 UTF-16 code unit 計數，若名稱含
-     * 4-byte emoji（以代理對表示），切點若正好落在代理對中間，會留下孤立的
-     * 高代理字元，寫入 PostgreSQL 時 JDBC 編碼失敗或存成 {@code ?}。</p>
-     */
-    private static String truncateByCodePoint(String value, int maxLength) {
-        if (value.codePointCount(0, value.length()) <= maxLength) {
-            return value;
-        }
-        return value.codePoints()
-            .limit(maxLength)
-            .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
-            .toString();
     }
 
     /** 從名單中心取顯示名稱；查無資料回空字串 */

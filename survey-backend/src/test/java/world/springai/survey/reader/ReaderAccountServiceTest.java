@@ -173,6 +173,30 @@ class ReaderAccountServiceTest {
     }
 
     /**
+     * 既有讀者登入時<b>只能</b>用單欄位的 {@code touchLastLogin}，不得整列 {@code save()}。
+     *
+     * <p>整列 UPDATE 會連 {@code credits} 一起寫回 SELECT 當下的快照，靜默還原
+     * 同一時間另一分頁解鎖文章所扣的點（帳本那筆扣款卻留著）。改回
+     * {@code readerRepository.save(reader)} 這個測試就會變紅。</p>
+     *
+     * <p>本測試只能守住「有沒有呼叫 save()」這一半；另一半（受管理 entity 的
+     * dirty check 會自己補一道全欄位 UPDATE）mock 看不到，由
+     * {@link ReaderLoginPersistenceTest} 以真實資料庫守住。兩者缺一不可。</p>
+     */
+    @Test
+    void loginUsesSingleColumnUpdateInsteadOfFullRowSave() {
+        Reader existing = new Reader("user@example.com", "OLDCODE1");
+        existing.setId(7L);
+        existing.setCredits(300);
+        when(readerRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(existing));
+
+        service.findOrCreate("user@example.com", NOW);
+
+        verify(readerRepository).touchLastLogin(7L, NOW);
+        verify(readerRepository, never()).save(any(Reader.class));
+    }
+
+    /**
      * 後台代為建帳（findOrCreateWithoutLogin）不得偽造登入與參與度訊號。
      *
      * <p>站方為從未登入的學員設 VIP 時，若沿用登入路徑，該讀者會立刻在後台顯示

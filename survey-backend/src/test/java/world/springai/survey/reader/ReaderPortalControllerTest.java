@@ -64,9 +64,14 @@ class ReaderPortalControllerTest {
         // 這裡另外補上 MappingJackson2HttpMessageConverter：本頁比 RulesPageController
         // 多了 POST /api/reader/profile 的 JSON 請求體，setMessageConverters 會整組取代
         // 預設 converter 列表，若只放 String converter，JSON 請求會直接被拒（415）。
+        // ReaderProfileService 用真貨（而非 mock）：本檔既有的個人資料測試斷言的是
+        // surveyResponseRepository 的實際寫入，把服務 mock 掉會讓那些斷言全部落空。
+        // 注意這裡沒有 Spring proxy，所以它的 @Transactional 在本檔完全不參與——
+        // 交易是否真的生效由 ReaderProfileTransactionTest 負責。
         mvc = MockMvcBuilders.standaloneSetup(new ReaderPortalController(
                 new HtmlTemplate(), readerContext, creditTxnRepository,
                 surveyResponseRepository, referralService, creditPolicy,
+                new ReaderProfileService(surveyResponseRepository),
                 "https://survey.example.com"))
             .setMessageConverters(
                 new StringHttpMessageConverter(StandardCharsets.UTF_8),

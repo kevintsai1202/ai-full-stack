@@ -58,6 +58,36 @@ public interface ReaderRepository extends JpaRepository<Reader, Long> {
                   @Param("tier") String tier,
                   @Param("expiresAt") OffsetDateTime expiresAt);
 
+    /**
+     * 只更新最後登入時間一欄的條件式 UPDATE（登入路徑使用）。
+     *
+     * <p><b>為什麼不能用 {@code save(reader)}</b>：理由與 {@link #updateVip} 逐字相同——
+     * {@link Reader} 沒有 {@code @Version} 也沒有 {@code @DynamicUpdate}，整列 UPDATE 會
+     * 連 {@code credits} 一起寫回 SELECT 當下的快照。而登入路徑比後台授予 VIP <b>更容易
+     * 撞上</b>：兩端都是讀者本人的即時操作——A 分頁點 magic link 進入交易讀到
+     * {@code credits=300}，同時 B 分頁的解鎖 POST 讓 {@code deductCredits} 把 DB 改成 290
+     * 並寫入 {@code delta=-10} 的帳本列；A 提交時把 300 寫回去，扣點被靜默還原，
+     * 帳本那筆 -10 卻留著，{@code reader.credits} 與 {@code sum(credit_txn)} 從此對不上，
+     * 且無任何錯誤訊息。</p>
+     *
+     * <p><b>{@code flushAutomatically = true}</b>：同一交易內若已有待寫入的變更
+     * （例如首次登入剛 INSERT 的新讀者列），必須先 flush 再執行本 UPDATE，
+     * 否則 UPDATE 會打在一列還不存在的資料上。</p>
+     *
+     * <p><b>{@code clearAutomatically = true}</b>：UPDATE 之後清掉一級快取，讓被載入的
+     * {@link Reader} 物件<b>脫離管理</b>。這不只是為了「重讀能拿到新值」——更關鍵的是：
+     * 只要那個物件還被 Hibernate 管理，呼叫端在交易內對它做<b>任何</b> setter，
+     * 提交時的 dirty check 都會再發一次帶全欄位（含 {@code credits}）的 UPDATE，
+     * 等於繞過本方法白做工。呼叫端據此可以安全地把 {@code lastLoginAt} 設回物件上
+     * 供回傳值使用（見 {@code ReaderAccountService#findOrCreate}）。</p>
+     *
+     * @return 受影響筆數，0 表示該讀者列不存在
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Transactional
+    @Query("update Reader r set r.lastLoginAt = :now where r.id = :id")
+    int touchLastLogin(@Param("id") Long id, @Param("now") OffsetDateTime now);
+
     /** 邀請碼是否已存在，產生新碼時用於避免碰撞 */
     boolean existsByReferralCode(String referralCode);
 
@@ -90,8 +120,17 @@ public interface ReaderRepository extends JpaRepository<Reader, Long> {
      * 少了這個設定，呼叫端想在扣款後讀取最新餘額（見
      * {@link UnlockService#unlock}）會靜默失敗——查詢照樣執行、
      * Hibernate 卻直接回傳快取物件，看起來像是修好了，實際上餘額仍是舊的。</p>
+     *
+     * <p><b>{@code flushAutomatically = true} 是給未來的保險</b>：{@code clearAutomatically}
+     * 會在 UPDATE 後 {@code em.clear()}，但<b>不會先 flush</b>。目前之所以安全，
+     * 只是因為 {@link CreditTxn} 用 {@code GenerationType.IDENTITY}——persist 當下就發出
+     * INSERT，沒有東西留在 persistence context 裡等著被清掉。若日後為了批次效能把主鍵
+     * 改成 {@code SEQUENCE}，批次扣點迴圈中前面幾筆尚未 flush 的帳本列就會被
+     * {@code clear()} 丟棄，而餘額的 UPDATE 已經打進資料庫——餘額扣了、帳本沒寫，
+     * 直接破壞「{@code reader.credits} 恆等於 {@code sum(credit_txn)}」這條核心不變式，
+     * 而且沒有任何錯誤訊息。加這個旗標的成本是零。</p>
      */
-    @Modifying(clearAutomatically = true)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Transactional
     @Query("update Reader r set r.credits = r.credits - :cost where r.id = :id and r.credits >= :cost")
     int deductCredits(@Param("id") Long id, @Param("cost") int cost);
