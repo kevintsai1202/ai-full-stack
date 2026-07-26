@@ -1,9 +1,11 @@
 package world.springai.survey.reader;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,6 +15,7 @@ import world.springai.survey.audience.SurveyResponse;
 import world.springai.survey.audience.SurveyResponseRepository;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
@@ -33,6 +36,15 @@ public class ReaderPortalController {
 
     /** 日期顯示格式 */
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    /** 讀者面向的日期一律換算成台北時區再顯示，避免 UTC 存值在跨日時顯示成前一天 */
+    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+
+    /** 交易明細一次只顯示最近幾筆，避免帳本無限成長拖慢頁面 */
+    private static final int TXN_DISPLAY_LIMIT = 50;
+
+    /** 顯示名稱最長字元數（以 code point 計，避免切斷 surrogate pair） */
+    private static final int DISPLAY_NAME_MAX_LENGTH = 40;
 
     private final HtmlTemplate htmlTemplate;
     private final ReaderContext readerContext;
@@ -70,14 +82,18 @@ public class ReaderPortalController {
         Reader reader = current.get().reader();
 
         Map<String, String> vars = new HashMap<>();
+        // 「我的邀請」(/r/invite) 要到下一個任務才會實作，這裡先保留連結入口，
+        // 暫時會是預期中的 404（延續規則頁任務的慣例，待該任務完成後移除本註解）
         vars.put("<!--NAV_LINKS-->", "<a href=\"/r/archive\">歷史內容</a><a href=\"/r/invite\">我的邀請</a>");
         vars.put("<!--CREDITS-->", String.valueOf(reader.getCredits()));
         vars.put("<!--PREMIUM_COST-->", String.valueOf(creditPolicy.premiumCost()));
         vars.put("<!--EMAIL-->", HtmlTemplate.escapeHtml(reader.getEmail()));
         vars.put("<!--TIER_STATUS-->", renderTierStatus(reader));
         vars.put("<!--DISPLAY_NAME-->", HtmlTemplate.escapeHtml(displayNameOf(reader.getEmail())));
+        // 只取最近 50 筆：credit_txn 只增不刪，隨解鎖與邀請無限成長，
+        // 重度讀者若一次撈全部帳本，頁面會逐漸變慢
         vars.put("<!--TXN_LIST-->", renderTransactions(
-            creditTxnRepository.findByReaderIdOrderByCreatedAtDesc(reader.getId())));
+            creditTxnRepository.findByReaderIdOrderByCreatedAtDesc(reader.getId(), PageRequest.of(0, TXN_DISPLAY_LIMIT))));
 
         return privatePage(htmlTemplate.render("static/reader/me.html", vars));
     }
@@ -90,6 +106,7 @@ public class ReaderPortalController {
      * 一份同意紀錄。</p>
      */
     @PostMapping("/api/reader/profile")
+    @Transactional
     public ResponseEntity<Void> updateProfile(
             @RequestBody ProfileRequest request,
             @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
@@ -108,7 +125,7 @@ public class ReaderPortalController {
         // 只截斷不拒絕：使用者輸入超長名稱時默默存前 40 字比回 400 友善，
         // 而顯示名稱沒有任何正確性要求
         String name = request.name() == null ? "" : request.name().trim();
-        row.get().setName(name.length() > 40 ? name.substring(0, 40) : name);
+        row.get().setName(truncateByCodePoint(name, DISPLAY_NAME_MAX_LENGTH));
         surveyResponseRepository.save(row.get());
         // 更新個人資料是高可靠的參與度訊號（spec §5.10）
         surveyResponseRepository.touchEngagement(email, OffsetDateTime.now());
@@ -148,12 +165,39 @@ public class ReaderPortalController {
         if (reader.isActiveVip(now)) {
             return reader.getVipExpiresAt() == null
                 ? "VIP（無到期日）"
-                : "VIP（有效至 " + reader.getVipExpiresAt().format(DATE_FORMAT) + "）";
+                : "VIP（有效至 " + formatTaipeiDate(reader.getVipExpiresAt()) + "）";
         }
         if (Reader.TIER_VIP.equals(reader.getTier())) {
             return "VIP 已到期，目前為一般訂閱者";
         }
         return "一般訂閱者";
+    }
+
+    /**
+     * 把儲存的 {@link OffsetDateTime}（通常是 UTC）換算成台北時區再格式化。
+     *
+     * <p>直接用實體儲存的 offset 格式化會有跨日誤差：UTC 存的
+     * {@code 2026-07-26T22:00Z} 讀者當地（UTC+8）已經是 27 日。</p>
+     */
+    private static String formatTaipeiDate(OffsetDateTime value) {
+        return value.atZoneSameInstant(TAIPEI).format(DATE_FORMAT);
+    }
+
+    /**
+     * 依 code point（而非 UTF-16 char）截斷字串，避免切在 surrogate pair 中間。
+     *
+     * <p>{@code String.substring} 以 UTF-16 code unit 計數，若名稱含
+     * 4-byte emoji（以代理對表示），切點若正好落在代理對中間，會留下孤立的
+     * 高代理字元，寫入 PostgreSQL 時 JDBC 編碼失敗或存成 {@code ?}。</p>
+     */
+    private static String truncateByCodePoint(String value, int maxLength) {
+        if (value.codePointCount(0, value.length()) <= maxLength) {
+            return value;
+        }
+        return value.codePoints()
+            .limit(maxLength)
+            .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+            .toString();
     }
 
     /** 從名單中心取顯示名稱；查無資料回空字串 */
@@ -163,7 +207,20 @@ public class ReaderPortalController {
             .orElse("");
     }
 
-    /** 渲染交易明細；note 一律跳脫（存的是後台輸入的文章主旨與 email） */
+    /** 邀請獎勵明細列的固定顯示文字，取代被邀者 email（見 {@link #renderTransactions}） */
+    private static final String REFERRAL_NOTE_PLACEHOLDER = "一位朋友完成訂閱";
+
+    /**
+     * 渲染交易明細。
+     *
+     * <p><b>REFERRAL 一律不顯示 note</b>：{@code reason=REFERRAL} 的 note 存的是
+     * 被邀者的 email（{@code ReferralService} 用它當發獎冪等鍵，這個值本身
+     * 不能改），而邀請碼是可公開分享的連結——任何陌生人透過該連結訂閱，
+     * 他的 email 就會出現在邀請人的帳戶頁上，兩人可能素不相識。因此這裡只改
+     * 顯示層，用固定文字取代，不動 note 實際存的值。</p>
+     *
+     * <p>其餘 reason 的 note 一律跳脫（存的是後台輸入的文章主旨）。</p>
+     */
     private String renderTransactions(List<CreditTxn> transactions) {
         if (transactions.isEmpty()) {
             return "<p class=\"empty\">還沒有交易紀錄。</p>";
@@ -172,28 +229,37 @@ public class ReaderPortalController {
         for (CreditTxn txn : transactions) {
             String sign = txn.getDelta() >= 0 ? "+" : "";
             String cls = txn.getDelta() >= 0 ? "gain" : "spend";
+            String noteDisplay = CreditTxn.REASON_REFERRAL.equals(txn.getReason())
+                ? REFERRAL_NOTE_PLACEHOLDER
+                : HtmlTemplate.escapeHtml(txn.getNote());
             sb.append("<li class=\"txn-item\">")
               .append("<span class=\"txn-delta ").append(cls).append("\">")
               .append(sign).append(txn.getDelta()).append("</span>")
               .append("<span class=\"txn-reason\">").append(reasonLabel(txn.getReason())).append("</span>")
-              .append("<span class=\"txn-note\">").append(HtmlTemplate.escapeHtml(txn.getNote())).append("</span>")
+              .append("<span class=\"txn-note\">").append(noteDisplay).append("</span>")
               .append("<span class=\"txn-date\">")
-              .append(txn.getCreatedAt() == null ? "" : txn.getCreatedAt().format(DATE_FORMAT))
+              .append(txn.getCreatedAt() == null ? "" : formatTaipeiDate(txn.getCreatedAt()))
               .append("</span></li>");
         }
         return sb.append("</ul>").toString();
     }
 
-    /** 把交易原因代碼轉成讀者看得懂的中文 */
+    /**
+     * 把交易原因代碼轉成讀者看得懂的中文。
+     *
+     * <p>default 分支改回固定的通用中文，而非原樣輸出 {@code reason}：
+     * {@code credit_txn.reason} 是無 CHECK 約束的 TEXT 欄位，若日後任何
+     * 從輸入取得 reason 的後台功能寫入非常數值，原樣拼進 HTML 會是一個
+     * 未經 escape 的注入點，違反 {@link HtmlTemplate#render} 的契約。
+     * 顯示固定文案既 fail-safe，也不會把內部英文代碼洩漏給讀者。</p>
+     */
     private String reasonLabel(String reason) {
         return switch (reason) {
             case CreditTxn.REASON_SIGNUP_GRANT -> "初始贈點";
             case CreditTxn.REASON_REFERRAL -> "邀請獎勵";
             case CreditTxn.REASON_READ -> "解鎖文章";
             case CreditTxn.REASON_ADMIN_GRANT -> "站方贈點";
-            // 未知代碼原樣顯示：新增 reason 時忘記加對應中文，
-            // 顯示代碼比顯示空字串好——讀者看得到「有這筆」而非憑空消失
-            default -> reason;
+            default -> "點數調整";
         };
     }
 }

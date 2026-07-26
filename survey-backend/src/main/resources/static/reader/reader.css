@@ -35,8 +35,13 @@ img { max-width:100%; display:block; }
 .btn:hover { background:var(--accent-deep); }
 .btn[disabled] { opacity:.6; cursor:not-allowed; }
 
+/* 次要按鈕：透明底 + accent 邊框文字，與實心的 .btn 拉開視覺層級
+   （例如「邀請朋友賺點數」「登出」不該與「儲存」搶視覺焦點） */
+.btn.ghost { background:transparent; color:var(--accent-deep); border:1px solid var(--accent); }
+.btn.ghost:hover { background:var(--accent-soft); }
+
 /* 表單 */
-input[type=email] { width:100%; padding:12px 14px; border:1px solid var(--border-strong); border-radius:8px;
+input[type=email], input[type=text] { width:100%; padding:12px 14px; border:1px solid var(--border-strong); border-radius:8px;
                     font-size:1rem; font-family:inherit; }
 .form-row { display:flex; gap:10px; flex-wrap:wrap; }
 .form-row input { flex:1 1 240px; }
@@ -131,7 +136,7 @@ input[type=email] { width:100%; padding:12px 14px; border:1px solid var(--border
   gap: 10px;
   align-items: baseline;
   padding: 10px 0;
-  border-bottom: 1px solid var(--line, #eee);
+  border-bottom: 1px solid var(--border);
   font-size: .94rem;
 }
 

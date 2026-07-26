@@ -256,6 +256,31 @@ class ReaderPageControllerTest {
         assertTrue(body.contains("&lt;img src=x onerror"), "應為跳脫後的形式");
     }
 
+    /**
+     * 登入者的導覽列要顯示「我的帳戶」（{@code /r/me}）且不含未登入版連結，
+     * 未登入則顯示「登入」（{@code /r/login}）且不含已登入版連結。
+     *
+     * <p>比照 {@code RulesPageControllerTest#navReflectsLoginState}：兩個方向都要驗，
+     * 只驗未登入分支的話，把 {@code navLinks} 改回不含 {@code /r/me} 的版本，
+     * 全套測試仍會是綠的，等於證明不了這個測試的名字。</p>
+     */
+    @Test
+    void navReflectsLoginState() throws Exception {
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+
+        String anonymous = mvc.perform(get("/r/archive")).andReturn().getResponse().getContentAsString();
+        assertTrue(anonymous.contains("/r/login"), "未登入時導覽列應含登入連結");
+        assertFalse(anonymous.contains("/r/me"), "未登入時導覽列不得含我的帳戶連結");
+
+        Reader loggedInReader = reader(Reader.TIER_FREE, 300);
+        when(readerContext.resolve(any()))
+            .thenReturn(Optional.of(new ReaderContext.Current(loggedInReader, true)));
+
+        String loggedIn = mvc.perform(get("/r/archive")).andReturn().getResponse().getContentAsString();
+        assertTrue(loggedIn.contains("/r/me"), "已登入時導覽列應含我的帳戶連結");
+        assertFalse(loggedIn.contains("/r/login"), "已登入時導覽列不得再含登入連結");
+    }
+
     /** archive 只列已發布文章 */
     @Test
     void archiveListsPublishedArticles() throws Exception {
