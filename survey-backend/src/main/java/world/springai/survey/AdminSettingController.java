@@ -66,7 +66,16 @@ public class AdminSettingController {
     public Map<String, Integer> list(
             @RequestHeader(value = "X-Admin-Key", required = false) String key) {
         guard.verify(key);
+        return currentSettings();
+    }
 
+    /**
+     * 讀取全部可調參數的目前值（不驗證金鑰）。
+     *
+     * <p>抽出來讓 {@link #update} 可以在寫入後直接組回應，而不必再呼叫
+     * {@link #list} 對同一把已經驗證過的金鑰重驗一次。</p>
+     */
+    private Map<String, Integer> currentSettings() {
         // LinkedHashMap 保持固定順序，讓後台欄位不會每次重新載入就跳動
         Map<String, Integer> result = new LinkedHashMap<>();
         for (String settingKey : ordered()) {
@@ -109,11 +118,11 @@ public class AdminSettingController {
             validated.put(entry.getKey(), value);
         }
 
-        // 第二遍：全部寫入（set 會清除該鍵的快取，做到立即生效）
-        validated.forEach((k, v) -> settings.set(k, String.valueOf(v)));
+        // 第二遍：全部寫入，包在單一交易內（見 AppSettingService.setAll 的說明）
+        settings.setAll(validated);
         log.info("後台更新參數：{}", validated);
 
-        return list(key);
+        return currentSettings();
     }
 
     /** 固定的參數顯示順序 */

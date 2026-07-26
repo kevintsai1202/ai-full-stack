@@ -7,8 +7,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Map;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -52,7 +55,7 @@ class AdminSettingControllerTest {
                 .content("{\"credit.premium_cost\":\"20\"}"))
            .andExpect(status().isUnauthorized());
 
-        verify(settings, never()).set(anyString(), anyString());
+        verify(settings, never()).setAll(anyMap());
     }
 
     /** 讀取回全部可調參數 */
@@ -74,7 +77,7 @@ class AdminSettingControllerTest {
                 .content("{\"credit.premium_cost\":\"20\"}"))
            .andExpect(status().isOk());
 
-        verify(settings).set(eq(AppSettingService.CREDIT_PREMIUM_COST), eq("20"));
+        verify(settings).setAll(eq(Map.of(AppSettingService.CREDIT_PREMIUM_COST, 20)));
     }
 
     /** 可一次更新多筆 */
@@ -85,8 +88,9 @@ class AdminSettingControllerTest {
                 .content("{\"credit.premium_cost\":\"20\",\"credit.referral_reward\":\"150\"}"))
            .andExpect(status().isOk());
 
-        verify(settings).set(eq(AppSettingService.CREDIT_PREMIUM_COST), eq("20"));
-        verify(settings).set(eq(AppSettingService.CREDIT_REFERRAL_REWARD), eq("150"));
+        verify(settings).setAll(eq(Map.of(
+            AppSettingService.CREDIT_PREMIUM_COST, 20,
+            AppSettingService.CREDIT_REFERRAL_REWARD, 150)));
     }
 
     /**
@@ -103,7 +107,7 @@ class AdminSettingControllerTest {
                 .content("{\"evil.key\":\"boom\"}"))
            .andExpect(status().isBadRequest());
 
-        verify(settings, never()).set(anyString(), anyString());
+        verify(settings, never()).setAll(anyMap());
     }
 
     /**
@@ -121,7 +125,7 @@ class AdminSettingControllerTest {
                 .content("{\"evil.key\":\"999\"}"))
            .andExpect(status().isBadRequest());
 
-        verify(settings, never()).set(anyString(), anyString());
+        verify(settings, never()).setAll(anyMap());
     }
 
     /** 非整數值必須回 400（全部可調參數都是整數） */
@@ -132,7 +136,24 @@ class AdminSettingControllerTest {
                 .content("{\"credit.premium_cost\":\"abc\"}"))
            .andExpect(status().isBadRequest());
 
-        verify(settings, never()).set(anyString(), anyString());
+        verify(settings, never()).setAll(anyMap());
+    }
+
+    /**
+     * 值為 JSON {@code null} 必須回 400，而不是讓 {@code .trim()} 拋出 NPE 變成 500。
+     *
+     * <p>{@code Map<String, String>} 反序列化 JSON {@code null} 會得到 Java
+     * {@code null}，型別驗證那段 {@code catch (NumberFormatException | NullPointerException)}
+     * 就是為了接住這個情形；先前沒有測試覆蓋這一支，補上。</p>
+     */
+    @Test
+    void nullValueIsRejected() throws Exception {
+        mvc.perform(put("/api/admin/settings").header(KEY, "ok")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"credit.premium_cost\":null}"))
+           .andExpect(status().isBadRequest());
+
+        verify(settings, never()).setAll(anyMap());
     }
 
     /**
@@ -149,7 +170,7 @@ class AdminSettingControllerTest {
            .andExpect(status().isBadRequest());
 
         // 有效的那筆也不可以被寫入
-        verify(settings, never()).set(anyString(), anyString());
+        verify(settings, never()).setAll(anyMap());
     }
 
     /**

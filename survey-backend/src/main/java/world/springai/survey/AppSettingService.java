@@ -3,6 +3,7 @@ package world.springai.survey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -88,6 +89,27 @@ public class AppSettingService {
         repository.save(entity);
         cache.remove(key); // 立即生效的關鍵：不等快取自然過期
         log.info("參數 {} 已更新為 {}", key, value);
+    }
+
+    /**
+     * 批次寫入多筆參數，全部包在單一交易內。
+     *
+     * <p><b>為什麼需要這個方法</b>：{@link AdminSettingController#update} 先驗證
+     * 全部、再全部寫入，目的是避免「一半參數生效、一半沒生效，而站方只看到
+     * 一個錯誤訊息」。但若呼叫端對每個鍵各自呼叫 {@link #set}，寫入階段本身
+     * 並未包在同一交易——批次中某一筆的 {@code repository.save()} 若因連線
+     * 中斷或鎖逾時拋錯，前面已寫入的鍵不會回滾，呼叫端只收到一個 500 卻已
+     * 造成部分寫入，觸發條件從「驗證失敗」換成「寫入時的基礎設施故障」，
+     * 但失效模式與這支端點原本要防的完全相同。</p>
+     *
+     * <p><b>必須由外部 bean 呼叫</b>：{@code @Transactional} 只有在跨 bean 呼叫
+     * 經過 Spring proxy 時才會生效；若把這個迴圈寫成本類別內部呼叫的私有方法，
+     * 註解會靜默失效。{@link AdminSettingController} 持有的是被 proxy 包裹的
+     * {@code AppSettingService} bean，因此從那裡呼叫本方法才真的會開交易。</p>
+     */
+    @Transactional
+    public void setAll(Map<String, Integer> updates) {
+        updates.forEach((k, v) -> set(k, String.valueOf(v)));
     }
 
     /** 清除全部快取（測試與後台批次更新後使用） */
