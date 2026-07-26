@@ -112,7 +112,8 @@
         <div><label for="art-tier">分級</label>
           <select id="art-tier"><option value="BASIC">BASIC（訂閱者免費）</option><option value="PREMIUM">PREMIUM（需點數）</option></select></div>
         <div><label for="art-cost">解鎖點數（PREMIUM 必填，需在 1–10000 之間）</label>
-          <input type="number" id="art-cost" min="1" max="10000" placeholder="10"></div>
+          <input type="number" id="art-cost" min="1" max="10000" placeholder="10">
+          <p class="hint" id="cost-hint"></p></div>
       </div>
       <p class="hint" id="tier-hint">設了 slug 才會出現在 /r/archive 與單篇頁面。</p>
       <button class="btn" id="send-btn" style="margin-top:14px">發送</button>
@@ -312,9 +313,14 @@
           +'但還不能寄送：按「發送」會被拒絕（400），因為信件端的折疊（只寄免費區）'
           +'要到階段 D 才實作，現在寄出會把受限區完整寄進所有人的信箱。';
         hint.className='warn';
+        prefillPremiumCost();
       }else{
         hint.textContent='設了 slug 才會出現在 /r/archive 與單篇頁面；「只發布不寄送」則一律需要 slug。';
         hint.className='hint';
+        // 切回 BASIC 就清掉預填說明：那句話講的是 PREMIUM 的價格凍結語意，
+        // 留在畫面上會讓操作者以為 BASIC 也有解鎖點數。已填的數字不清（後端對
+        // BASIC 會忽略它，而操作者可能只是切過去看一眼就要切回來）。
+        $('#cost-hint').textContent='';
       }
     });
     // 分級提示的文案只有一份真相（上面那個 change 監聽器）。首次載入必須主動觸發一次，
@@ -587,7 +593,9 @@
     // 三個發布欄位已被停用時它也必須停用，否則按下去會用停用中（=舊批次）的值建新文章。
     $('#publish-btn').disabled=!enabled;
     const hint=$('#tier-hint');
-    if(!enabled){hint.textContent='修改排程不會變更發布設定（slug／分級／解鎖點數），故已停用這三個欄位。';hint.className='warn';}
+    // 欄位停用時一併清掉預填說明：那句話講的是「這個值可改、發布後凍結」，
+    // 留在一個已停用的欄位旁邊只會誤導（此時它根本不參與這次操作）。
+    if(!enabled){hint.textContent='修改排程不會變更發布設定（slug／分級／解鎖點數），故已停用這三個欄位。';hint.className='warn';$('#cost-hint').textContent='';}
     // 還原時觸發 change，讓分級提示由既有監聽器依目前 tier 重算（PREMIUM 有專屬警語）
     else $('#art-tier').dispatchEvent(new Event('change'));
   }
@@ -881,10 +889,66 @@
     'vip.default_days':['VIP 預設效期（天）','授予 VIP 時未指定天數就用這個值']
   };
 
+  /**
+   * GET /api/admin/settings 的回應快取（每個鍵為 {value,min,max}）；null 表示尚未載入。
+   *
+   * 需要快取是因為現在有兩個消費者：參數分頁（惰性載入，只在切過去時才打 API）
+   * 與「切到 PREMIUM 時預填解鎖點數」。後者可能在參數分頁從未被打開的情況下被觸發，
+   * 若各自直接打 API，每次切換分級都會多一次往返。
+   */
+  let settingsViews=null;
+
+  /**
+   * 取得參數設定，同一個頁面生命週期內只打一次 API。
+   *
+   * 惰性而非在 init() 就預先載入：多數操作根本不需要參數（寄信、看歷史、查讀者），
+   * 為了一個可能用不到的預填值在每次開後台都多打一次 API 不合理。
+   * saveSettings 成功後會把快取設回 null，否則操作者剛把預設值改成 50，
+   * 下一篇文章仍會被預填成舊的 10——那正是這個功能要避免的落差。
+   */
+  async function fetchSettings(){
+    if(!settingsViews)settingsViews=await api('/api/admin/settings');
+    return settingsViews;
+  }
+
+  /**
+   * 切到 PREMIUM 時把「解鎖點數」預填成目前的全域預設值。
+   *
+   * 為什麼要預填：後端 validateCreditCost 對 PREMIUM 要求 creditCost > 0（credit_cost=0
+   * 的 PREMIUM 等同免費卻標示為付費，資料庫也有 CHECK），所以這個欄位無論如何都得填。
+   * 預填成全域預設值讓最常見的情形（就用預設價）不必手動輸入，也讓操作者看得到
+   * 「目前的預設值是多少」——那個數字同時是讀者在規則頁看到的退路值。
+   *
+   * 欄位維持必填、可改：預填不是鎖定，操作者填別的數字一律以他填的為準。
+   * 空值判斷用 trim()：使用者按了又刪掉留下空白字元時，仍視為「沒填」。
+   */
+  async function prefillPremiumCost(){
+    const input=$('#art-cost');
+    // 不得覆蓋操作者已輸入的值——覆蓋掉一個已經輸入的價格是靜默改價，
+    // 而發布後沒有改價路徑（見下方 hint 文案）。
+    if(input.value.trim()!=='')return;
+    try{
+      const views=await fetchSettings();
+      const value=views&&views['credit.premium_cost']&&views['credit.premium_cost'].value;
+      if(value==null)return;
+      // await 期間操作者可能已自己輸入、或已把分級切回 BASIC；兩者都不該被覆蓋。
+      // 第一次檢查（函式開頭）擋的是同步情形，這次擋的是非同步競態。
+      if(input.value.trim()!==''||$('#art-tier').value!=='PREMIUM')return;
+      // 值是後端來的整數，用 .value property 賦值，不拼 HTML（本頁的 esc() 不跳脫引號）
+      input.value=String(value);
+      $('#cost-hint').textContent='已帶入目前的全域預設值，可修改；發布後價格即凍結'
+        +'（發布後沒有改價路徑，只能下架重發）。';
+    }catch(e){
+      // 載入失敗就不預填：欄位仍是必填、操作者仍可手動輸入，發布不會因此被卡住。
+      // 401 已由 api() 顯示閘門，這裡不再重複報錯干擾正在編輯的內容。
+      if(e.message!=='401')$('#cost-hint').textContent='讀不到全域預設值，請手動填入解鎖點數。';
+    }
+  }
+
   /** 載入參數並產生輸入欄位（以 DOM API 建構，不拼 innerHTML） */
   async function loadSettings(){
     try{
-      const views=await api('/api/admin/settings');
+      const views=await fetchSettings();
       const root=$('#settings-fields');root.replaceChildren();
       Object.entries(views).forEach(([k,view])=>{
         const [label,hint]=SETTING_LABELS[k]||[k,''];
@@ -912,6 +976,8 @@
     if(!Object.keys(payload).length){showMsg('settings-msg','參數尚未載入，請重新整理頁面。',false);return;}
     try{
       await api('/api/admin/settings',{method:'PUT',body:JSON.stringify(payload)});
+      // 快取失效：不清的話，操作者剛把預設值改成 50，下一篇 PREMIUM 仍會被預填成舊的 10。
+      settingsViews=null;
       showMsg('settings-msg','已儲存，立即生效。',true);
     }catch(e){if(e.message!=='401')showMsg('settings-msg','儲存失敗：'+e.message,false);}
   }
