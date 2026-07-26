@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>找不到這篇文章｜凱文大叔的電子報</title>
+<!-- 錯誤頁不該被索引：搜尋引擎若收錄它，讀者會從搜尋結果點進一個永遠沒有內容的網址。
+     這也是與 login.html 一致的作法（同樣是 noindex）。 -->
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/r/reader.css">
+</head>
+<body>
+<header class="site-head">
+  <div class="site-head-inner">
+    <a class="brand" href="/r/">凱文大叔的電子報</a>
+    <!-- 導覽刻意寫死成「歷史內容」而不隨登入狀態變化（作法同 login.html）：
+         這一頁對所有人都是同一份內容，不需要解析 reader_session cookie。
+         這條路徑任何人都能用任意 slug 打，少一次 JWT 解析與資料庫查詢就少一分
+         被當成廉價 DoS 面的空間。 -->
+    <nav><a href="/r/archive">歷史內容</a></nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <h1 style="margin-top:0;font-size:1.3rem">找不到這篇文章</h1>
+    <p style="color:var(--muted);font-size:.94rem">
+      這個網址沒有對應的文章。可能是連結打錯了，或這篇已經被站方撤下。
+    </p>
+    <a class="btn" href="/r/archive">回歷史內容看看</a>
+  </div>
+</div>
+</body>
+</html>

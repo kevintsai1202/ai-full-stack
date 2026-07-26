@@ -369,6 +369,31 @@ class AdminCampaignControllerTest {
            .andExpect(jsonPath("$.slug").value("premium-post"));
     }
 
+    /**
+     * ★ 後台 400 的<b>原因</b>必須出現在回應本文裡（{@code ProblemDetail.detail}）。
+     *
+     * <p><b>為什麼要單獨釘住</b>：Spring Boot 預設 {@code server.error.include-message=never}，
+     * reason 根本不會送出來，前端只能顯示「HTTP 400」，管理者無從得知該改什麼——
+     * 「slug 已被使用」「加點說明請縮短至 200 字以內」「publishedAt 格式錯誤」
+     * 全部變成沒有原因的失敗。{@code ApiExceptionHandler} 是為此加的，
+     * 但在本次改動前<b>沒有任何測試斷言過那個 detail 真的到得了客戶端</b>——
+     * 只有斷言狀態碼的測試，把 advice 整個刪掉也不會變紅。</p>
+     *
+     * <p>這條同時是「讀者頁改回 HTML 404」那項改動的護欄：那個修法刻意<b>不動</b>
+     * advice 的範圍，本測試確保後台這一端不會被順手改壞。</p>
+     */
+    @Test
+    void adminBadRequestReasonReachesResponseBody() throws Exception {
+        mvc.perform(post("/api/admin/campaign/publish").header("X-Admin-Key", "test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"subject\":\"主旨\",\"markdown\":\"內文\",\"slug\":\"a-post\","
+                    + "\"publishedAt\":\"not-a-date\"}"))
+           .andExpect(status().isBadRequest())
+           .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+               .content().contentTypeCompatibleWith("application/problem+json"))
+           .andExpect(jsonPath("$.detail").value("publishedAt 格式錯誤"));
+    }
+
     /** 發送：publishedAt 格式錯誤回 400，且不呼叫 CampaignService */
     @Test
     void sendWithInvalidPublishedAtReturns400() throws Exception {

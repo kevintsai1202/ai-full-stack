@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 import world.springai.survey.newsletter.Campaign;
 import world.springai.survey.newsletter.CampaignRepository;
 import world.springai.survey.newsletter.ContentSplitter;
@@ -105,9 +104,13 @@ public class ReaderPageController {
     @GetMapping(value = "/r/news/{slug}", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> article(@PathVariable String slug,
                          @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
-        Campaign campaign = campaignRepository.findBySlug(slug)
-            .filter(Campaign::isPublished)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到這篇文章"));
+        // 未發布（含已下架）與不存在一律走同一條 404 路徑：兩者若給出不同回應，
+        // 這個公開端點就成了「這個 slug 存在嗎」的探測器。
+        Optional<Campaign> found = campaignRepository.findBySlug(slug).filter(Campaign::isPublished);
+        if (found.isEmpty()) {
+            return notFoundPage();
+        }
+        Campaign campaign = found.get();
 
         Optional<ReaderContext.Current> current = readerContext.resolve(sessionCookie);
         Reader reader = current.map(ReaderContext.Current::reader).orElse(null);
@@ -153,6 +156,46 @@ public class ReaderPageController {
         return ResponseEntity.ok()
             .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
             .header(HttpHeaders.VARY, HttpHeaders.COOKIE)
+            .body(html);
+    }
+
+    /**
+     * 找不到文章時回傳的 <b>HTML</b> 404 頁。
+     *
+     * <p><b>為什麼不能沿用 {@code throw new ResponseStatusException(NOT_FOUND, ...)}</b>：
+     * {@code ApiExceptionHandler} 是沒有範圍限制的 {@code @RestControllerAdvice}，
+     * 它的 {@code @ExceptionHandler(ResponseStatusException.class)} 會連這條讀者頁的例外
+     * 一起攔下，回一個 {@code application/problem+json}。實機確認的輸出（帶瀏覽器的
+     * Accept 標頭）是：</p>
+     * <pre>
+     * HTTP/1.1 404
+     * Content-Type: application/problem+json
+     * {"type":"about:blank","title":"Not Found","status":404,
+     *  "detail":"找不到這篇文章","instance":"/r/news/definitely-not-a-real-slug"}
+     * </pre>
+     * <p>也就是說讀者點到失效連結時，瀏覽器直接把一串 JSON 印在畫面上。那個 advice
+     * 本身是必要的（後台的 400 必須把 reason 送出來，否則「slug 已被使用」之類的
+     * 原因全部消失），所以修的是<b>這一端</b>：讀者頁自己回 HTML，不再拋例外，
+     * 那個 advice 的行為與涵蓋範圍完全不動。</p>
+     *
+     * <p><b>為什麼不改成限制 advice 的範圍</b>：{@code reader} 套件裡同時住著 HTML 頁
+     * （本類）與 JSON API（{@code ReaderPortalController}、{@code UnlockController}、
+     * {@code ReaderAuthController} 的 POST），{@code basePackages} 切不開；改用「API
+     * controller 掛自訂註解」則是 fail-open 設計——日後新增的後台 controller 只要忘了
+     * 掛註解，它的 400 reason 就靜默消失，正好是上一批工作刻意修掉的那個缺陷。
+     * 相對地，會拋 {@code ResponseStatusException} 的 HTML 端點全庫只有這<b>一處</b>，
+     * 就地修是與問題等寬的改動。</p>
+     *
+     * <p><b>{@code no-store}</b>：這個 404 是暫時狀態——同一個 slug 之後可能被
+     * 重新上架（{@code POST /api/admin/campaigns/{id}/publication}）。若讓共享快取
+     * 收下這個 404，重新上架後讀者仍會拿到快取的錯誤頁。頁面內容對所有人相同，
+     * 因此不需要 {@code Vary: Cookie}。</p>
+     */
+    private ResponseEntity<String> notFoundPage() {
+        String html = htmlTemplate.render("static/reader/not-found.html", Map.of());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .header(HttpHeaders.CONTENT_TYPE, "text/html;charset=UTF-8")
+            .header(HttpHeaders.CACHE_CONTROL, "no-store")
             .body(html);
     }
 

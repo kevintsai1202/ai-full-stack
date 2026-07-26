@@ -54,6 +54,8 @@ class ReaderPageControllerTest {
     private static final String FREE_MARKER = "FREE_INTRO_TEXT";
 
     @Autowired MockMvc mvc;
+    /** 用於斷言 ApiExceptionHandler 真的在這個切片裡（否則 404 頁的測試會恆綠） */
+    @Autowired org.springframework.context.ApplicationContext applicationContext;
 
     @MockBean CampaignRepository campaignRepository;
     @MockBean AccessDecisionService accessDecisionService;
@@ -238,6 +240,79 @@ class ReaderPageControllerTest {
         when(campaignRepository.findBySlug("nope")).thenReturn(Optional.empty());
 
         mvc.perform(get("/r/news/nope")).andExpect(status().isNotFound());
+    }
+
+    /**
+     * ★ 讀者頁的 404 必須是 <b>HTML</b>，不得是 {@code application/problem+json}。
+     *
+     * <p><b>釘住的是什麼</b>：{@code ApiExceptionHandler} 是<b>沒有範圍限制</b>的
+     * {@code @RestControllerAdvice}，它的 {@code @ExceptionHandler(ResponseStatusException.class)}
+     * 會攔下任何 controller 拋出的 {@code ResponseStatusException} 並回 JSON。
+     * 這一頁是給人看的 HTML 頁，讀者點到失效連結時實機拿到的是：</p>
+     * <pre>
+     * Content-Type: application/problem+json
+     * {"type":"about:blank","title":"Not Found","status":404,"detail":"找不到這篇文章",...}
+     * </pre>
+     * <p>——瀏覽器直接把一串 JSON 印在畫面上。修法是讀者頁自己回 HTML 而不拋例外
+     * （見 {@code ReaderPageController#notFoundPage}）。把它改回
+     * {@code orElseThrow(() -> new ResponseStatusException(NOT_FOUND, ...))}，
+     * 本測試立刻變紅。</p>
+     *
+     * <p><b>前置斷言不可省略</b>：如果這個 {@code @WebMvcTest} 切片裡根本沒有那個
+     * advice，這條測試就會<b>恆綠而毫無意義</b>——它測到的只是 Spring 的預設行為，
+     * 而不是「advice 在場但沒有攔到讀者頁」。因此先斷言 advice 真的被註冊。</p>
+     */
+    @Test
+    void articleNotFoundRendersHtmlPageNotProblemJson() throws Exception {
+        assertTrue(applicationContext.getBeanNamesForType(
+                world.springai.survey.ApiExceptionHandler.class).length > 0,
+            "這個測試切片沒有載入 ApiExceptionHandler，本測試會恆綠而測不到任何東西");
+
+        when(campaignRepository.findBySlug("nope")).thenReturn(Optional.empty());
+
+        String body = mvc.perform(get("/r/news/nope")
+                // 瀏覽器實際送出的 Accept 標頭
+                .header(HttpHeaders.ACCEPT,
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"))
+            .andExpect(status().isNotFound())
+            .andExpect(header().string(HttpHeaders.CONTENT_TYPE,
+                org.hamcrest.Matchers.containsString("text/html")))
+            // 這個 404 是暫時狀態：同一個 slug 之後可能被重新上架，
+            // 共享快取收下它會讓重新上架後的讀者仍拿到錯誤頁
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+            .andReturn().getResponse().getContentAsString();
+
+        assertFalse(body.contains("problem+json"), "回應本文不得是 ProblemDetail");
+        assertFalse(body.contains("\"status\":404"), "回應本文不得是裸 JSON：" + body);
+        assertTrue(body.contains("<html"), "必須是可讀的 HTML 頁：" + body);
+        assertTrue(body.contains("找不到這篇文章"), "應顯示中文說明");
+        // 死路不可以是死路：必須有一條回到站內的路
+        assertTrue(body.contains("/r/archive"), "404 頁必須提供回歷史內容的連結");
+    }
+
+    /**
+     * 404 頁不得洩漏任何受限內容，也不得洩漏「這個 slug 到底存不存在」。
+     *
+     * <p>已下架（{@code published_at} 為 NULL）與從未存在的 slug 必須拿到
+     * <b>逐字相同</b>的回應本文；若兩者有差異，這個公開端點就成了
+     * 「哪些 slug 存在」的探測器。</p>
+     */
+    @Test
+    void notFoundPageIsIdenticalForUnpublishedAndUnknownSlug() throws Exception {
+        Campaign unpublished = gatedArticle(Campaign.TIER_PREMIUM, 10);
+        unpublished.setPublishedAt(null);
+        when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(unpublished));
+        when(campaignRepository.findBySlug("nope")).thenReturn(Optional.empty());
+
+        String unpublishedBody = mvc.perform(get("/r/news/test-article"))
+            .andReturn().getResponse().getContentAsString();
+        String unknownBody = mvc.perform(get("/r/news/nope"))
+            .andReturn().getResponse().getContentAsString();
+
+        assertFalse(unpublishedBody.contains(SENTINEL), "已下架文章的受限區洩漏到 404 頁");
+        assertFalse(unpublishedBody.contains(FREE_MARKER), "已下架文章的免費區也不該出現");
+        assertEquals(unknownBody, unpublishedBody,
+            "已下架與不存在的回應本文不同，等於洩漏 slug 是否存在");
     }
 
     /** 文章標題必須經 HTML 跳脫，避免標題含標籤時破版或注入 */
