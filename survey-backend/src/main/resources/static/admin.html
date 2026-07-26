@@ -865,32 +865,40 @@
   // ===== 參數設定 =====
 
   /**
-   * 各參數的中文標籤、說明與下限。
+   * 各參數的中文標籤與說明。
    *
-   * 下限必須與後端一致（CreditPolicy 的夾擠與 AdminSettingController 的驗證）：
-   * premium_cost / vip.default_days 為 0 會造成權限外洩，後端拒絕（400）；
-   * signup_grant / referral_reward 的 0 是合法的「關閉贈點」。
-   * 前端帶上 input.min 只是讓使用者在送出前就被擋，不取代後端驗證。
+   * 這裡刻意「只有文案，沒有任何數字」：允許區間（min/max）一律由
+   * GET /api/admin/settings 的回應帶出來（每個鍵回 {value,min,max}）。
+   * 前端若自己再寫一份界限，就會出現「頁面允許輸入、後端回 400」或更糟的
+   * 「頁面擋住、後端其實允許」——同一個規則兩份實作遲早不同步。
+   * 界限的唯一來源是 AdminSettingController.ADJUSTABLE。
+   * 前端設 input.min / input.max 只是讓使用者在送出前就被擋，不取代後端驗證。
    */
   const SETTING_LABELS={
-    'credit.signup_grant':['初始贈點','首次登入時發放；設 0 可關閉贈點',0],
-    'credit.premium_cost':['進階文章單篇點數','文章可個別覆寫；此為預設值，最小 1',1],
-    'credit.referral_reward':['邀請成功獎勵','被邀者點確認信後發放；設 0 可關閉',0],
-    'vip.default_days':['VIP 預設效期（天）','授予 VIP 時未指定天數就用這個值，最小 1',1]
+    'credit.signup_grant':['初始贈點','首次登入時發放；設 0 可關閉贈點'],
+    'credit.premium_cost':['進階文章單篇點數','文章可個別覆寫，此為預設值'],
+    'credit.referral_reward':['邀請成功獎勵','被邀者點確認信後發放；設 0 可關閉'],
+    'vip.default_days':['VIP 預設效期（天）','授予 VIP 時未指定天數就用這個值']
   };
 
   /** 載入參數並產生輸入欄位（以 DOM API 建構，不拼 innerHTML） */
   async function loadSettings(){
     try{
-      const values=await api('/api/admin/settings');
+      const views=await api('/api/admin/settings');
       const root=$('#settings-fields');root.replaceChildren();
-      Object.entries(values).forEach(([k,v])=>{
-        const [label,hint,min]=SETTING_LABELS[k]||[k,'',0];
+      Object.entries(views).forEach(([k,view])=>{
+        const [label,hint]=SETTING_LABELS[k]||[k,''];
         const box=document.createElement('div');box.style.marginBottom='14px';
         const lab=document.createElement('label');lab.htmlFor='set-'+k;lab.textContent=label;
-        const input=document.createElement('input');input.type='number';input.id='set-'+k;input.dataset.key=k;input.value=v;
-        input.min=String(min ?? 0);
-        const p=document.createElement('p');p.className='hint';p.textContent=hint;
+        const input=document.createElement('input');input.type='number';input.id='set-'+k;input.dataset.key=k;input.value=view.value;
+        // min/max 直接取後端回應；欄位缺漏時不填假值（留空的 input 不會誤擋合法輸入，
+        // 由後端驗證兜底），這樣「後端沒帶界限」會表現為 UI 上少了限制而不是靜默錯誤的限制。
+        if(view.min!=null)input.min=String(view.min);
+        if(view.max!=null)input.max=String(view.max);
+        const p=document.createElement('p');p.className='hint';
+        // 允許區間也一併寫進說明文字：input 的 min/max 只在按上下鍵或送出時才有感，
+        // 直接寫出來操作者才知道自己有多少空間。數字同樣來自後端回應。
+        p.textContent=(view.min!=null&&view.max!=null)?`${hint}（可填 ${view.min}–${view.max}）`:hint;
         box.append(lab,input,p);root.append(box);
       });
       loadSettings.done=true;

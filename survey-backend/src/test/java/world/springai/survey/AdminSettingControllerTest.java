@@ -63,10 +63,37 @@ class AdminSettingControllerTest {
     void listsAllAdjustableSettings() throws Exception {
         mvc.perform(get("/api/admin/settings").header(KEY, "ok"))
            .andExpect(status().isOk())
-           .andExpect(jsonPath("$['credit.premium_cost']").exists())
-           .andExpect(jsonPath("$['credit.signup_grant']").exists())
-           .andExpect(jsonPath("$['credit.referral_reward']").exists())
-           .andExpect(jsonPath("$['vip.default_days']").exists());
+           .andExpect(jsonPath("$['credit.premium_cost'].value").exists())
+           .andExpect(jsonPath("$['credit.signup_grant'].value").exists())
+           .andExpect(jsonPath("$['credit.referral_reward'].value").exists())
+           .andExpect(jsonPath("$['vip.default_days'].value").exists());
+    }
+
+    /**
+     * 每個參數都必須帶著允許區間回傳。
+     *
+     * <p>{@code admin.html} 用這兩個欄位設 {@code <input type=number>} 的
+     * {@code min} / {@code max}。少了它們，前端就得自己寫一份界限——同一個
+     * 規則兩份實作，遲早出現「頁面允許輸入、後端回 400」或更糟的「頁面擋住、
+     * 後端其實允許」。這個測試守的是那份唯一來源真的送到前端。</p>
+     *
+     * <p>斷言具體數值（而不是只斷言 {@code exists()}）：只驗欄位存在的話，
+     * 把 min/max 對調或全部回 0 都不會被抓到。</p>
+     */
+    @Test
+    void listExposesBoundsForEverySetting() throws Exception {
+        mvc.perform(get("/api/admin/settings").header(KEY, "ok"))
+           .andExpect(status().isOk())
+           // 下限與 CreditPolicy 的夾值語意一致：贈點類允許 0（關閉），成本與效期最小 1
+           .andExpect(jsonPath("$['credit.signup_grant'].min").value(0))
+           .andExpect(jsonPath("$['credit.premium_cost'].min").value(1))
+           .andExpect(jsonPath("$['credit.referral_reward'].min").value(0))
+           .andExpect(jsonPath("$['vip.default_days'].min").value(1))
+           // 上限：三個點數參數共用同一個量級，VIP 效期是十年
+           .andExpect(jsonPath("$['credit.signup_grant'].max").value(10000))
+           .andExpect(jsonPath("$['credit.premium_cost'].max").value(10000))
+           .andExpect(jsonPath("$['credit.referral_reward'].max").value(10000))
+           .andExpect(jsonPath("$['vip.default_days'].max").value(3650));
     }
 
     /** 更新單筆參數 */
@@ -200,4 +227,87 @@ class AdminSettingControllerTest {
                 .content("{\"credit.signup_grant\":\"-1\"}"))
            .andExpect(status().isBadRequest());
     }
+
+    /**
+     * 每個參數的上限值本身必須是合法輸入。
+     *
+     * <p>上限存在的意義是擋住「打錯位數」，不是把營運空間縮到用不了。若把區間
+     * 寫成半開（{@code value >= max} 就拒），這個測試會抓到。</p>
+     */
+    @Test
+    void upperBoundValueItselfIsAccepted() throws Exception {
+        for (Map.Entry<String, Integer> entry : MAX_VALUES.entrySet()) {
+            mvc.perform(put("/api/admin/settings").header(KEY, "ok")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"" + entry.getKey() + "\":\"" + entry.getValue() + "\"}"))
+               .andExpect(status().isOk());
+
+            verify(settings).setAll(eq(Map.of(entry.getKey(), entry.getValue())));
+        }
+    }
+
+    /**
+     * 超過上限必須回 400，且一筆都不寫入。
+     *
+     * <p><b>沒有上限的實際後果</b>：{@code credit.signup_grant} 設成
+     * {@link Integer#MAX_VALUE} 之後每位新讀者都拿到 21 億點，而點數不過期、
+     * 規則調整也不回收（{@code /r/rules} 的明文承諾），事後清不乾淨；
+     * {@code credit.premium_cost} 設成極大值則讓單篇成本超過任何人可能累積的
+     * 餘額，等於把全站進階內容鎖死。只有後台可達，但下限既然已逐項寫了，
+     * 補上限的邊際成本接近零。</p>
+     */
+    @Test
+    void aboveUpperBoundIsRejected() throws Exception {
+        for (Map.Entry<String, Integer> entry : MAX_VALUES.entrySet()) {
+            mvc.perform(put("/api/admin/settings").header(KEY, "ok")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"" + entry.getKey() + "\":\"" + (entry.getValue() + 1) + "\"}"))
+               .andExpect(status().isBadRequest());
+
+            // 極端值（打錯位數最常見的樣子）同樣要被擋
+            mvc.perform(put("/api/admin/settings").header(KEY, "ok")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"" + entry.getKey() + "\":\"" + Integer.MAX_VALUE + "\"}"))
+               .andExpect(status().isBadRequest());
+        }
+
+        verify(settings, never()).setAll(anyMap());
+    }
+
+    /**
+     * 400 的錯誤訊息必須寫明允許區間。
+     *
+     * <p>後台的 {@code api()} 會把 reason 直接顯示給操作者。只說「不得小於 1」
+     * 或「超出範圍」，他仍得靠試錯才知道上限在哪；一次講完區間可以省掉那一輪。</p>
+     */
+    @Test
+    void rejectionMessageStatesAllowedRange() throws Exception {
+        // 超過上限
+        mvc.perform(put("/api/admin/settings").header(KEY, "ok")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"vip.default_days\":\"4000\"}"))
+           .andExpect(status().isBadRequest())
+           .andExpect(jsonPath("$.detail")
+               .value(org.hamcrest.Matchers.containsString("必須在 1 到 3650 之間")));
+
+        // 低於下限也要講整個區間，而不是只講下限
+        mvc.perform(put("/api/admin/settings").header(KEY, "ok")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"credit.signup_grant\":\"-1\"}"))
+           .andExpect(status().isBadRequest())
+           .andExpect(jsonPath("$.detail")
+               .value(org.hamcrest.Matchers.containsString("必須在 0 到 10000 之間")));
+    }
+
+    /**
+     * 每個參數的上限（與 {@code AdminSettingController.ADJUSTABLE} 一致）。
+     *
+     * <p>刻意在測試裡另寫一份數字而不是讀生產程式的常數：讀同一個常數的測試
+     * 恆為真，改壞了也不會變紅。</p>
+     */
+    private static final Map<String, Integer> MAX_VALUES = new java.util.LinkedHashMap<>(Map.of(
+        AppSettingService.CREDIT_SIGNUP_GRANT, 10000,
+        AppSettingService.CREDIT_PREMIUM_COST, 10000,
+        AppSettingService.CREDIT_REFERRAL_REWARD, 10000,
+        AppSettingService.VIP_DEFAULT_DAYS, 3650));
 }

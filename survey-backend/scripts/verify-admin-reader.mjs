@@ -156,6 +156,15 @@ async function verifyBrowser() {
       () => document.querySelectorAll('#settings-fields input[data-key]').length > 0, null, { timeout: 15000 });
     const keys = await page.locator('#settings-fields input[data-key]').count();
     ok(keys >= 4, `參數設定欄位數 ${keys} >= 4`);
+    // 每個欄位的 min/max 都必須有值，而且是後端回應帶來的（前端不再自寫一份數字）。
+    // 少了這條，「後端欄位改名 → 前端 view.max 變 undefined → max 靜默消失」不會被發現。
+    const bounds = await page.evaluate(() =>
+      [...document.querySelectorAll('#settings-fields input[data-key]')]
+        .map(i => ({ key: i.dataset.key, min: i.min, max: i.max })));
+    for (const b of bounds) {
+      ok(b.min !== '' && b.max !== '' && Number(b.max) > Number(b.min),
+        `${b.key} 的輸入欄位帶有允許區間 ${b.min}–${b.max}`);
+    }
     await page.close();
   } finally {
     await browser.close();
@@ -240,14 +249,26 @@ try {
   console.log('\n[6] 參數設定 → /r/rules 動態注入');
   const before = await api('/api/admin/settings');
   eq(before.status, 200, '讀取參數回應碼');
-  originalPremiumCost = before.body['credit.premium_cost'];
+  // 每個鍵回 {value,min,max}：界限只在後端定義一份，後台頁面拿它設 input 的 min/max
+  originalPremiumCost = before.body['credit.premium_cost'].value;
   ok(originalPremiumCost != null, `原始 credit.premium_cost = ${originalPremiumCost}`);
+  // 界限必須真的隨值回傳，否則後台的 max 會靜默消失（欄位缺漏時前端不填假值）
+  ok(before.body['credit.premium_cost'].max > before.body['credit.premium_cost'].min,
+    `credit.premium_cost 允許區間 ${before.body['credit.premium_cost'].min}`
+      + `–${before.body['credit.premium_cost'].max}`);
 
   const put = await api('/api/admin/settings', {
     method: 'PUT', body: JSON.stringify({ 'credit.premium_cost': '20' }),
   });
   eq(put.status, 200, '寫入參數回應碼');
-  eq(put.body['credit.premium_cost'], 20, '寫入後讀回的值');
+  eq(put.body['credit.premium_cost'].value, 20, '寫入後讀回的值');
+
+  // 上限外的值必須被擋（沒有上限時 signup_grant 可被設成 21 億，
+  // 而點數不過期、規則調整也不回收，事後清不乾淨）
+  const tooBig = await api('/api/admin/settings', {
+    method: 'PUT', body: JSON.stringify({ 'credit.signup_grant': '2147483647' }),
+  });
+  eq(tooBig.status, 400, '超過上限的參數應回 400');
 
   // 關鍵斷言：後台改的數字必須立刻出現在讀者看到的頁面上（不是等 60 秒快取過期）
   const rulesHtml = await (await fetch(BASE + '/r/rules')).text();

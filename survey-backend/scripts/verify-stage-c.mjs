@@ -274,9 +274,11 @@ try {
 
   const settings = await admin('/api/admin/settings');
   eq(settings.status, 200, '讀取點數參數回應碼');
-  const SIGNUP_GRANT = Number(settings.body['credit.signup_grant']);
-  const REFERRAL_REWARD = Number(settings.body['credit.referral_reward']);
-  originalPremiumCost = settings.body['credit.premium_cost'];
+  // GET/PUT /api/admin/settings 每個鍵回的是 {value,min,max}（界限由後端唯一定義，
+  // 後台頁面拿它設 input 的 min/max，不在前端另寫一份數字），故取值要走 .value
+  const SIGNUP_GRANT = Number(settings.body['credit.signup_grant'].value);
+  const REFERRAL_REWARD = Number(settings.body['credit.referral_reward'].value);
+  originalPremiumCost = settings.body['credit.premium_cost'].value;
   check(`初始贈點 ${SIGNUP_GRANT}、邀請獎勵 ${REFERRAL_REWARD}、進階單篇 ${originalPremiumCost}`,
     Number.isFinite(SIGNUP_GRANT) && Number.isFinite(REFERRAL_REWARD) && originalPremiumCost != null);
   check('邀請獎勵 > 0（否則第 5 步無從驗證發獎）', REFERRAL_REWARD > 0,
@@ -410,7 +412,7 @@ try {
       method: 'PUT', body: JSON.stringify({ 'credit.premium_cost': String(NEW_PREMIUM_COST) }),
     });
     eq(put.status, 200, '寫入參數回應碼');
-    eq(put.body['credit.premium_cost'], NEW_PREMIUM_COST, '寫入後讀回的值');
+    eq(put.body['credit.premium_cost'].value, NEW_PREMIUM_COST, '寫入後讀回的值');
 
     const rules = (await page('/r/rules', bCookie)).body;
     check(`/r/rules 顯示「進階文章每篇 ${NEW_PREMIUM_COST} 點」`,
@@ -508,7 +510,7 @@ try {
         method: 'PUT', body: JSON.stringify({ 'credit.premium_cost': String(originalPremiumCost) }),
       });
       eq(back.status, 200, '還原 credit.premium_cost 回應碼');
-      eq(back.body && back.body['credit.premium_cost'], originalPremiumCost, '還原後讀回的值');
+      eq(back.body && back.body['credit.premium_cost'].value, originalPremiumCost, '還原後讀回的值');
       const rules = (await page('/r/rules')).body;
       check(`/r/rules 已還原為每篇 ${originalPremiumCost} 點`,
         rules.includes(`進階文章每篇 ${originalPremiumCost} 點`));
