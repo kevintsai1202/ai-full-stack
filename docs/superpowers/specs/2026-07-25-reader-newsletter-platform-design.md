@@ -934,8 +934,13 @@ V7/V8 migration（**含 `credit_txn`，因為首次登入即需發 300 點 `SIGN
 >
 > **設計決定與理由**：
 >
-> - **`slug` 對這條端點是必填**（`send` 的 slug 是選填）。沒有 slug 的「純網頁文章」沒有
+> - **`slug` 對這條端點是必填**。沒有 slug 的「純網頁文章」沒有
 >   `/r/news/{slug}` 網址，讀者永遠打不開——寫進資料庫等於消失。缺 slug 回 400。
+>   （`send` 的 slug 原為選填、留空＝只寄不上架；**2026-07-27 產品決定改為留空自動產生**
+>   `nl-YYYYMMDD-xxxx`，讓每一封寄出的電子報都出現在 `/r/archive`——在此之前生產已累積
+>   3 封讀者事後找不到的「孤兒電子報」。publish 端點維持必填不自動產生：它的唯一目的
+>   就是建立文章，slug 是文章的門牌，該由操作者自己決定。副作用：舊守門「publishedAt
+>   有值卻沒 slug → 400」因 slug 恆存在而移除，該組合改為以指定時間發布。）
 > - **不呼叫 `mailSender` 的任何方法，也不走 `applyMarketingQuota`**。不寄信就不該佔用
 >   （更不該吃掉）交易信的保留額度，也不需要讓 `MailQuotaService` 的快取失效。
 >   單元測試對 `sendBatch(List)`／`schedule`／`send(3 args)` **三個**方法都驗 `never()`

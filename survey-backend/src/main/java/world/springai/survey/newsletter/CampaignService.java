@@ -119,15 +119,16 @@ public class CampaignService {
         String normalizedTier = validateTier(tier);
         int normalizedCreditCost = validateCreditCost(normalizedTier, creditCost);
         String normalizedSlug = validateSlug(slug);
-        // 與「設了 slug 未設 publishedAt 自動發布」對稱的反向檢查：
-        // 設了 publishedAt 卻沒設 slug 同樣是使用者最可能沒預期到的失敗——
-        // publishedAt 非 NULL 就會讓 archive 查詢把這篇文章列出來，但沒有 slug
-        // 就沒有 /r/news/{slug} 網址可點，讀者會點到一個永遠 404 的空連結。
-        // 因此兩種矛盾組合都必須在寫入 campaign 前擋下，而非各自只顧單一方向。
-        if (publishedAt != null && normalizedSlug == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "指定 publishedAt 時必須同時指定 slug，否則文章會出現在列表卻無法開啟");
+        // slug 留空時自動產生：每一封寄出的電子報都要出現在 /r/archive（產品決定，
+        // 2026-07-27）。在此之前 slug 留空＝只寄不上架，寄過的內容讀者事後找不到——
+        // 生產已累積 3 封這樣的「孤兒電子報」。只有 send 這條路徑自動產生；
+        // 「只發布不寄送」（publish）維持必填，因為那條路徑的唯一目的就是建立文章，
+        // slug 是文章的門牌，該由操作者自己決定。
+        if (normalizedSlug == null) {
+            normalizedSlug = generateSlug();
         }
+        // 自動產生之後 normalizedSlug 恆非 null，舊守門「publishedAt 有值卻沒 slug → 400」
+        // 已無可達路徑，故移除；publishedAt 有值時沿用呼叫端指定的時間發布。
         OffsetDateTime normalizedPublishedAt = resolvePublishedAt(normalizedSlug, publishedAt);
 
         // 守門：階段 D（依 tier 產生折疊版內文 foldedHtml）完成前，PREMIUM 內容一旦寄出，
@@ -717,6 +718,35 @@ public class CampaignService {
      * 驗證 slug：會直接組進 /r/news/{slug} 網址，只接受小寫英數與連字號；
      * 重複時回明確 400（而非讓 uq_campaign_slug 唯一索引丟出 500）。
      */
+    /**
+     * 為 slug 留空的寄送自動產生一個：{@code nl-YYYYMMDD-xxxx}。
+     *
+     * <p>格式取捨：中文主旨無法可靠轉成可讀的英文 slug，硬轉的結果比亂碼更難認；
+     * 「nl-日期-隨機碼」讓網址看得出是哪一天的電子報，隨機尾碼負責唯一性。
+     * 尾碼字元集只用小寫英數（符合 {@link #SLUG_PATTERN}），撞號時重試——
+     * 30 秒內寄兩封才可能同日期，31^4 ≈ 92 萬種尾碼，實務上一次就過。</p>
+     *
+     * <p>上限 20 次重試後拋例外而非無窮迴圈：撞 20 次代表隨機源壞了或資料異常，
+     * 靜默重試到天荒地老只會把問題藏起來。</p>
+     */
+    private String generateSlug() {
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        String alphabet = "abcdefghjkmnpqrstuvwxyz23456789"; // 避開 i/l/o/0/1，肉眼核對網址時不易看錯
+        String datePart = OffsetDateTime.now(ZoneOffset.UTC).toLocalDate()
+            .format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+        for (int attempt = 0; attempt < 20; attempt++) {
+            StringBuilder suffix = new StringBuilder(4);
+            for (int i = 0; i < 4; i++) {
+                suffix.append(alphabet.charAt(random.nextInt(alphabet.length())));
+            }
+            String candidate = "nl-" + datePart + "-" + suffix;
+            if (campaignRepository.findBySlug(candidate).isEmpty()) {
+                return candidate;
+            }
+        }
+        throw new IllegalStateException("自動產生 slug 連續 20 次撞號，請檢查資料或改為手動指定");
+    }
+
     private String validateSlug(String slug) {
         if (slug == null) {
             return null;

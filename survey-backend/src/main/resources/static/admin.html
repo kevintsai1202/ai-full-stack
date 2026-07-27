@@ -322,7 +322,8 @@
         $('#cost-hint').textContent=COST_FREEZE_HINT;
         prefillPremiumCost();
       }else{
-        hint.textContent='設了 slug 才會出現在 /r/archive 與單篇頁面；「只發布不寄送」則一律需要 slug。';
+        hint.textContent='寄送時 slug 留空會自動產生（nl-日期-隨機碼），每封電子報都會出現在歷史內容；'
+          +'想要好記的網址就自己填。「只發布不寄送」則一律需要自填 slug。';
         hint.className='hint';
         // 切回 BASIC 就清掉預填說明：那句話講的是 PREMIUM 的價格凍結語意，
         // 留在畫面上會讓操作者以為 BASIC 也有解鎖點數。已填的數字不清（後端對

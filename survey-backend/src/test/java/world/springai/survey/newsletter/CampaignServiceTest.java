@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
@@ -232,22 +233,69 @@ class CampaignServiceTest {
     }
 
     /**
-     * 反向的矛盾輸入：設了 publishedAt 卻沒設 slug → 回 400，且不建立 campaign。
+     * slug 留空 + 指定 publishedAt：自動產生 slug，並以指定時間發布。
      *
-     * <p>與「設了 slug 未設 publishedAt 自動發布」對稱——這裡沒有自動補值的空間，
-     * 因為 slug 是網址片段，服務端無法安全地替使用者「猜」一個；若放行，
-     * archive 會列出一篇 publishedAt 非 NULL 但 slug 為 null 的文章，讀者點下去
-     * 命中 /r/news/（空 path variable）而 404。</p>
+     * <p>2026-07-27 產品決定之前，這個組合會被 400 擋下（「服務端無法安全地替
+     * 使用者猜一個 slug」）；自動產生上線後 slug 恆存在，矛盾組合不再成立，
+     * 指定的 publishedAt 照常生效。</p>
      */
     @Test
-    void sendWithPublishedAtButNoSlugRejected() {
-        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-            () -> svc.send("主旨", "內文", null, null, "now", null,
-                null, null, null, Instant.parse("2026-07-25T04:00:00Z")));
+    void sendWithPublishedAtButNoSlugAutoGeneratesAndPublishesAtGivenTime() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@x.com"));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(mailSender.sendBatch(anyList())).thenReturn("job-1");
+        when(linkBuilder.unsubscribeLink("a@x.com")).thenReturn("https://x/u?a");
 
-        assertEquals(400, ex.getStatusCode().value());
-        verify(campaignRepository, never()).save(any(Campaign.class));
-        verify(mailSender, never()).sendBatch(anyList());
+        svc.send("主旨", "內文", null, null, "now", null,
+            null, null, null, Instant.parse("2026-07-25T04:00:00Z"));
+
+        ArgumentCaptor<Campaign> saved = ArgumentCaptor.forClass(Campaign.class);
+        verify(campaignRepository, atLeastOnce()).save(saved.capture());
+        assertNotNull(saved.getValue().getSlug(), "slug 必須被自動產生");
+        assertEquals(Instant.parse("2026-07-25T04:00:00Z"),
+            saved.getValue().getPublishedAt().toInstant(), "指定的 publishedAt 必須照常生效");
+    }
+
+    /**
+     * slug 留空的一般寄送：自動產生 nl-日期-隨機碼並立即發布——
+     * 每一封寄出的電子報都必須出現在 /r/archive（2026-07-27 產品決定）。
+     */
+    @Test
+    void slugLessSendAutoGeneratesSlugAndPublishes() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@x.com"));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(mailSender.sendBatch(anyList())).thenReturn("job-1");
+        when(linkBuilder.unsubscribeLink("a@x.com")).thenReturn("https://x/u?a");
+
+        svc.send("主旨", "內文", null, null, "now", null);
+
+        ArgumentCaptor<Campaign> saved = ArgumentCaptor.forClass(Campaign.class);
+        verify(campaignRepository, atLeastOnce()).save(saved.capture());
+        String slug = saved.getValue().getSlug();
+        // 格式釘死：日期讓網址看得出是哪一天的電子報；尾碼字元集避開 i/l/o/0/1
+        assertTrue(slug.matches("nl-\\d{8}-[a-hj-km-np-z2-9]{4}"),
+            "自動 slug 格式不符：" + slug);
+        assertNotNull(saved.getValue().getPublishedAt(), "自動 slug 的寄送必須同時發布");
+    }
+
+    /** 自動 slug 撞號時重試，不得拿已存在的 slug 去撞 uq_campaign_slug（那會變成 500） */
+    @Test
+    void autoSlugRetriesOnCollision() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@x.com"));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(mailSender.sendBatch(anyList())).thenReturn("job-1");
+        when(linkBuilder.unsubscribeLink("a@x.com")).thenReturn("https://x/u?a");
+        // 第一個候選碼「已存在」，第二個放行——驗證撞號會換一個而不是直接用
+        when(campaignRepository.findBySlug(anyString()))
+            .thenReturn(Optional.of(new Campaign()), Optional.empty());
+
+        svc.send("主旨", "內文", null, null, "now", null);
+
+        ArgumentCaptor<Campaign> saved = ArgumentCaptor.forClass(Campaign.class);
+        verify(campaignRepository, atLeastOnce()).save(saved.capture());
+        assertNotNull(saved.getValue().getSlug());
+        // findBySlug 至少被查了兩次（第一次撞號、第二次成功）
+        verify(campaignRepository, org.mockito.Mockito.atLeast(2)).findBySlug(anyString());
     }
 
     /** 正常發布 BASIC：campaign 建立且 tier/creditCost/slug/publishedAt 欄位正確落地 */
