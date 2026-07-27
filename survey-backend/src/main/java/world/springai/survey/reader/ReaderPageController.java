@@ -1,5 +1,7 @@
 package world.springai.survey.reader;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -7,11 +9,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import world.springai.survey.newsletter.Campaign;
 import world.springai.survey.newsletter.CampaignRepository;
 import world.springai.survey.newsletter.ContentSplitter;
 import world.springai.survey.newsletter.MarkdownRenderer;
+import world.springai.survey.newsletter.PublicCampaignTagService;
 
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -44,6 +48,7 @@ public class ReaderPageController {
     private final ArticleAccessRepository articleAccessRepository;
     private final ReaderContext readerContext;
     private final HtmlTemplate htmlTemplate;
+    private final PublicCampaignTagService campaignTagService;
 
     /**
      * 注入內容、授權與渲染所需的服務。
@@ -52,13 +57,15 @@ public class ReaderPageController {
      * 的下限保護）已收斂到 {@link AccessDecisionService#resolveCost(Campaign)}
      * 唯一一份實作，controller 不應再自行讀取 app_setting 重算一次。</p>
      */
+    @Autowired
     public ReaderPageController(CampaignRepository campaignRepository,
                                MarkdownRenderer markdownRenderer,
                                ContentSplitter contentSplitter,
                                AccessDecisionService accessDecisionService,
                                ArticleAccessRepository articleAccessRepository,
                                ReaderContext readerContext,
-                               HtmlTemplate htmlTemplate) {
+                               HtmlTemplate htmlTemplate,
+                               ObjectProvider<PublicCampaignTagService> campaignTagServiceProvider) {
         this.campaignRepository = campaignRepository;
         this.markdownRenderer = markdownRenderer;
         this.contentSplitter = contentSplitter;
@@ -66,14 +73,40 @@ public class ReaderPageController {
         this.articleAccessRepository = articleAccessRepository;
         this.readerContext = readerContext;
         this.htmlTemplate = htmlTemplate;
+        this.campaignTagService = campaignTagServiceProvider.getIfAvailable();
+    }
+
+    /** 舊單元測試相容建構式；沒有標籤服務時維持原本列表行為。 */
+    public ReaderPageController(CampaignRepository campaignRepository,
+                                MarkdownRenderer markdownRenderer,
+                                ContentSplitter contentSplitter,
+                                AccessDecisionService accessDecisionService,
+                                ArticleAccessRepository articleAccessRepository,
+                                ReaderContext readerContext,
+                                HtmlTemplate htmlTemplate) {
+        this.campaignRepository = campaignRepository;
+        this.markdownRenderer = markdownRenderer;
+        this.contentSplitter = contentSplitter;
+        this.accessDecisionService = accessDecisionService;
+        this.articleAccessRepository = articleAccessRepository;
+        this.readerContext = readerContext;
+        this.htmlTemplate = htmlTemplate;
+        this.campaignTagService = null;
     }
 
     /** 歷史內容列表：只列已發布者，登入者會看到自己的解鎖狀態 */
     @GetMapping(value = "/r/archive", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<String> archive(
-            @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
+    public ResponseEntity<String> archiveFiltered(
+            @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie,
+            @RequestParam(required = false) String tag) {
         Optional<ReaderContext.Current> current = readerContext.resolve(sessionCookie);
         List<Campaign> articles = campaignRepository.findBySlugIsNotNullAndPublishedAtIsNotNullOrderByPublishedAtDesc();
+        Set<Long> matchingIds = campaignTagService == null ? Set.of() : campaignTagService.campaignIds(tag);
+        if (tag != null && !tag.isBlank()) {
+            articles = campaignTagService == null
+                ? List.of()
+                : articles.stream().filter(article -> matchingIds.contains(article.getId())).toList();
+        }
 
         // 登入者的已解鎖清單，用於在列表上標示；未登入則為空集合
         Set<Long> unlocked = current
@@ -84,6 +117,8 @@ public class ReaderPageController {
 
         String html = htmlTemplate.render("templates/reader/archive.html", Map.of(
             "<!--NAV_LINKS-->", ReaderNav.links(current.isPresent()),
+            "<!--TAG_FILTERS-->", renderTagFilters(tag),
+            "<!--ARCHIVE_RESULT-->", renderArchiveResult(tag, articles.size()),
             "<!--ARTICLE_LIST-->", renderArticleList(articles, unlocked)));
 
         // 同一個 URL 的內容會因 reader_session cookie 而異（登入者看到已解鎖標記），
@@ -93,6 +128,11 @@ public class ReaderPageController {
             .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
             .header(HttpHeaders.VARY, HttpHeaders.COOKIE)
             .body(html);
+    }
+
+    /** 舊單元測試直接呼叫相容方法。 */
+    public ResponseEntity<String> archive(String sessionCookie) {
+        return archiveFiltered(sessionCookie, null);
     }
 
     /**
@@ -137,6 +177,7 @@ public class ReaderPageController {
         vars.put("<!--PAGE_DESCRIPTION-->", HtmlTemplate.escapeHtml(summaryOf(split.freeMarkdown())));
         vars.put("<!--ARTICLE_TITLE-->", HtmlTemplate.escapeHtml(campaign.getSubject()));
         vars.put("<!--ARTICLE_META-->", renderMeta(campaign));
+        vars.put("<!--ARTICLE_TAGS-->", renderArticleTags(campaign.getId()));
         vars.put("<!--ARTICLE_CONTENT-->", contentHtml); // 已是渲染後的 HTML，不可再跳脫
         vars.put("<!--NAV_LINKS-->", ReaderNav.links(current.isPresent()));
         // 只有「未取得全文且該文章真的有受限區」時才需要 paywall 區塊
@@ -199,17 +240,32 @@ public class ReaderPageController {
             .body(html);
     }
 
-    /** 渲染 archive 的文章列表；列表不輸出任何內文，日後若要加摘要，必須取自 split(...).freeMarkdown() */
+    /** 渲染 archive 部落格卡片；摘要只取免費區，絕不輸出受限內容。 */
     private String renderArticleList(List<Campaign> articles, Set<Long> unlocked) {
         if (articles.isEmpty()) {
             return "<p class=\"empty\">還沒有已發布的內容，訂閱後第一封就會寄給你。</p>";
         }
-        StringBuilder sb = new StringBuilder("<ul class=\"article-list\">");
+        Map<Long, List<PublicCampaignTagService.TagSummary>> tags = campaignTagService == null
+            ? Map.of()
+            : campaignTagService.tagsByCampaign(
+                articles.stream().map(Campaign::getId).filter(java.util.Objects::nonNull).toList());
+        StringBuilder sb = new StringBuilder("<div class=\"article-grid\">");
         for (Campaign c : articles) {
-            sb.append("<li class=\"article-item\">")
+            ContentSplitter.Split split = contentSplitter.split(c.getMarkdown());
+            String summary = summaryOf(split.freeMarkdown());
+            int minutes = Math.max(1, summary.replaceAll("\\s+", "").length() / 220 + 1);
+            sb.append("<article class=\"article-card\">")
+              .append("<a class=\"article-cover\" href=\"/r/news/")
+              .append(HtmlTemplate.escapeHtml(c.getSlug())).append("\" aria-hidden=\"true\" tabindex=\"-1\">")
+              .append(HtmlTemplate.escapeHtml(c.getCoverEmoji() == null ? "📝" : c.getCoverEmoji()))
+              .append("</a><div class=\"article-card-body\"><div class=\"article-meta\">")
+              .append(renderMeta(c)).append("<span>").append(minutes).append(" 分鐘閱讀</span></div>")
               .append("<h2><a href=\"/r/news/").append(HtmlTemplate.escapeHtml(c.getSlug())).append("\">")
               .append(HtmlTemplate.escapeHtml(c.getSubject())).append("</a></h2>")
-              .append("<div class=\"article-meta\">").append(renderMeta(c));
+              .append("<p class=\"article-excerpt\">").append(HtmlTemplate.escapeHtml(summary)).append("</p>")
+              .append(renderTagLinks(c.getId() == null
+                  ? List.of()
+                  : tags.getOrDefault(c.getId(), List.of())));
             // 未持久化（尚未存檔）的 campaign id 為 null，Set.of()/不可變集合的
             // contains(null) 會直接拋 NPE，因此在呼叫點先擋掉 null，
             // 而不是依賴 unlocked 集合的實作細節（例如原本用 Collections.emptySet()
@@ -217,9 +273,61 @@ public class ReaderPageController {
             if (c.getId() != null && unlocked.contains(c.getId())) {
                 sb.append("<span class=\"tag unlocked\">已解鎖</span>");
             }
-            sb.append("</div></li>");
+            sb.append("<a class=\"read-more\" href=\"/r/news/")
+              .append(HtmlTemplate.escapeHtml(c.getSlug())).append("\">閱讀文章 →</a></div></article>");
         }
-        return sb.append("</ul>").toString();
+        return sb.append("</div>").toString();
+    }
+
+    /** 渲染 archive 的 hashtag 篩選列。 */
+    private String renderTagFilters(String selectedSlug) {
+        if (campaignTagService == null) {
+            return "";
+        }
+        StringBuilder html = new StringBuilder("<nav class=\"tag-filters\" aria-label=\"依 hashtag 篩選\"><a class=\"filter-chip")
+            .append(selectedSlug == null || selectedSlug.isBlank() ? " active" : "")
+            .append("\" href=\"/r/archive\">全部</a>");
+        for (PublicCampaignTagService.TagSummary tag : campaignTagService.publicTags()) {
+            html.append("<a class=\"filter-chip")
+                .append(tag.slug().equals(selectedSlug) ? " active" : "")
+                .append("\" href=\"/r/archive?tag=")
+                .append(java.net.URLEncoder.encode(tag.slug(), java.nio.charset.StandardCharsets.UTF_8))
+                .append("\">#").append(HtmlTemplate.escapeHtml(tag.name()))
+                .append(" <span>").append(tag.articleCount()).append("</span></a>");
+        }
+        return html.append("</nav>").toString();
+    }
+
+    /** 顯示目前篩選結果摘要。 */
+    private String renderArchiveResult(String tag, int count) {
+        if (tag == null || tag.isBlank()) {
+            return "<p class=\"archive-result\">共 " + count + " 篇文章</p>";
+        }
+        return "<p class=\"archive-result\">目前篩選 <strong>#" + HtmlTemplate.escapeHtml(tag)
+            + "</strong>，共 " + count + " 篇文章。</p>";
+    }
+
+    /** 渲染單篇文章標籤。 */
+    private String renderArticleTags(Long campaignId) {
+        if (campaignTagService == null || campaignId == null) {
+            return "";
+        }
+        return renderTagLinks(campaignTagService.tagsByCampaign(List.of(campaignId))
+            .getOrDefault(campaignId, List.of()));
+    }
+
+    /** 渲染可點選的 hashtag 連結。 */
+    private String renderTagLinks(List<PublicCampaignTagService.TagSummary> tags) {
+        if (tags.isEmpty()) {
+            return "";
+        }
+        StringBuilder html = new StringBuilder("<div class=\"article-tags\">");
+        for (PublicCampaignTagService.TagSummary tag : tags) {
+            html.append("<a href=\"/r/archive?tag=")
+                .append(java.net.URLEncoder.encode(tag.slug(), java.nio.charset.StandardCharsets.UTF_8))
+                .append("\">#").append(HtmlTemplate.escapeHtml(tag.name())).append("</a>");
+        }
+        return html.append("</div>").toString();
     }
 
     /** 渲染日期與分級標籤 */

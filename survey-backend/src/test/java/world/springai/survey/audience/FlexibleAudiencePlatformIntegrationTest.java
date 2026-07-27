@@ -251,6 +251,66 @@ class FlexibleAudiencePlatformIntegrationTest {
         assertEquals(matching.personId(), result.items().getFirst().get("personId"));
     }
 
+    /** 讀者搜尋可依指定電子報寄送狀態與文章 hashtag 解鎖歷程交叉篩選。 */
+    @Test
+    void audienceSearchFiltersByDeliveryAndUnlockHistory() {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        AudiencePlatformService.PersonResult person =
+            audience.mergePerson("insight-history@example.com", "Insight History", now);
+        audience.appendConsent(
+            person.personId(), AudiencePlatformService.CONSENT_CONFIRMED,
+            "survey", null, Map.of(), now);
+        Long readerId = jdbc.queryForObject("""
+            INSERT INTO reader (email, tier, credits, referral_code)
+            VALUES ('insight-history@example.com', 'FREE', 100, 'INSIGHT-HISTORY')
+            RETURNING id
+            """, Long.class);
+        Long deliveredCampaign = jdbc.queryForObject("""
+            INSERT INTO campaign (
+                subject, markdown, mode, recipient_count, accepted_count,
+                failed_count, status, slug, published_at
+            ) VALUES ('已收電子報', '免費內容', 'now', 1, 1, 0, 'sent',
+                      'insight-delivered', now())
+            RETURNING id
+            """, Long.class);
+        Long unlockedCampaign = jdbc.queryForObject("""
+            INSERT INTO campaign (
+                subject, markdown, mode, recipient_count, accepted_count,
+                failed_count, status, slug, published_at
+            ) VALUES ('已解鎖文章', '免費內容', 'publish', 0, 0, 0, 'published',
+                      'insight-unlocked', now())
+            RETURNING id
+            """, Long.class);
+        jdbc.update("""
+            INSERT INTO campaign_recipient (
+                campaign_id, person_id, email, email_normalized, status, sent_at
+            ) VALUES (?, ?, 'insight-history@example.com',
+                      'insight-history@example.com', 'SENT', now())
+            """, deliveredCampaign, person.personId());
+        jdbc.update("""
+            INSERT INTO article_access (reader_id, campaign_id, cost)
+            VALUES (?, ?, 10)
+            """, readerId, unlockedCampaign);
+        jdbc.update("""
+            INSERT INTO campaign_tag (campaign_id, tag_id)
+            SELECT ?, id FROM content_tag WHERE slug = 'rag'
+            """, unlockedCampaign);
+
+        AudienceSearchService search = new AudienceSearchService(jdbc);
+        AudienceSearchService.Filters filters = new AudienceSearchService.Filters(
+            "insight-history", null, null, null, null, null, null, null, null, null,
+            new AudienceSearchService.DeliveryFilter(
+                deliveredCampaign, List.of("SENT"), null, null, 1, null, null),
+            new AudienceSearchService.UnlockFilter(
+                null, "rag", null, null, 1, null, null));
+        AudienceSearchService.SearchResult result = search.search(
+            new AudienceSearchService.SearchRequest(filters, null, 0, 50));
+
+        assertEquals(1, result.total());
+        assertEquals(1, result.items().getFirst().get("deliveryCount"));
+        assertEquals(1, result.items().getFirst().get("unlockCount"));
+    }
+
     /** Preview 固定資格，Execute 相同冪等鍵重送只呼叫一次加點服務。 */
     @Test
     void bulkCreditsUseSnapshotAndIdempotencyKey() {

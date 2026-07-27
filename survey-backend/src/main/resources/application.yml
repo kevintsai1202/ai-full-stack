@@ -18,8 +18,13 @@ spring:
     clean-disabled: true
 server:
   port: ${PORT:8080}
+  # 由受信任反向代理（Zeabur）還原真實來源 IP，供登入防濫用節流使用。
+  forward-headers-strategy: native
 app:
   admin-api-key: ${ADMIN_API_KEY:dev-admin-key}
+  security:
+    # 本機若要沿用測試祕密，必須明確 opt-in；部署環境預設 fail-closed。
+    allow-insecure-dev-secrets: ${APP_ALLOW_INSECURE_DEV_SECRETS:false}
   integrations:
     exam:
       # Exam 正式站 API 根網址與兩邊共用的唯讀 integration token。
@@ -60,6 +65,9 @@ app:
     # 登入信節流：同一 email 在 login-throttle-minutes 內最多寄幾封
     login-throttle-count: ${READER_LOGIN_THROTTLE_COUNT:3}
     login-throttle-minutes: ${READER_LOGIN_THROTTLE_MINUTES:15}
+    # 同一來源 IP 與全站在相同視窗內的上限，避免輪替 Email 耗盡交易信額度。
+    login-ip-throttle-count: ${READER_LOGIN_IP_THROTTLE_COUNT:20}
+    login-global-throttle-count: ${READER_LOGIN_GLOBAL_THROTTLE_COUNT:200}
   # 寄信設定：api-key 空白時自動 fallback 成 NoopMailSender（不真寄）
   mail:
     api-key: ${SEND_MAIL_API:}

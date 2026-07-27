@@ -1,5 +1,7 @@
 package world.springai.survey.newsletter;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,8 +40,26 @@ public class AdminCampaignController {
     private final InviteService inviteService;
     /** 寄信額度偵測服務 */
     private final MailQuotaService mailQuotaService;
+    /** 文章 Emoji 與 hashtag 服務 */
+    private final CampaignMetadataService metadataService;
 
-    /** 注入依賴 */
+    /** Spring 正式執行時注入完整依賴。 */
+    @Autowired
+    public AdminCampaignController(AdminKeyGuard guard,
+                                   CampaignService campaignService,
+                                   RecipientService recipientService,
+                                   InviteService inviteService,
+                                   MailQuotaService mailQuotaService,
+                                   ObjectProvider<CampaignMetadataService> metadataServiceProvider) {
+        this.guard = guard;
+        this.campaignService = campaignService;
+        this.recipientService = recipientService;
+        this.inviteService = inviteService;
+        this.mailQuotaService = mailQuotaService;
+        this.metadataService = metadataServiceProvider.getIfAvailable();
+    }
+
+    /** 舊單元測試相容建構式；不處理新文章中繼資料。 */
     public AdminCampaignController(AdminKeyGuard guard,
                                    CampaignService campaignService,
                                    RecipientService recipientService,
@@ -50,6 +70,7 @@ public class AdminCampaignController {
         this.recipientService = recipientService;
         this.inviteService = inviteService;
         this.mailQuotaService = mailQuotaService;
+        this.metadataService = null;
     }
 
     /** 預覽用請求：主旨與 markdown 內文 */
@@ -79,7 +100,17 @@ public class AdminCampaignController {
      * vipFullInMail 與 filterLevels 屬階段 D／F 範圍，本次不開放設定。
      */
     public record SendRequest(String subject, String markdown, Filter filter, String mode, String scheduledAt,
-                              String tier, Integer creditCost, String slug, String publishedAt) {}
+                              String tier, Integer creditCost, String slug, String publishedAt,
+                              String coverEmoji, List<String> tags) {
+
+        /** 舊 Java 呼叫相容建構式。 */
+        public SendRequest(String subject, String markdown, Filter filter, String mode,
+                           String scheduledAt, String tier, Integer creditCost,
+                           String slug, String publishedAt) {
+            this(subject, markdown, filter, mode, scheduledAt, tier, creditCost, slug,
+                publishedAt, null, null);
+        }
+    }
 
     /** 收件名單計數與樣本（前 5 筆），需提供有效金鑰 */
     @GetMapping("/api/admin/recipients")
@@ -132,6 +163,7 @@ public class AdminCampaignController {
             @RequestHeader(value = KEY_HEADER, required = false) String key,
             @RequestBody SendRequest req) {
         guard.verify(key);
+        validateMetadata(req.coverEmoji(), req.tags());
         // 從篩選條件取出 role / interest（允許 filter 為 null）
         String role = req.filter() == null ? null : req.filter().role();
         String interest = req.filter() == null ? null : req.filter().interest();
@@ -148,10 +180,13 @@ public class AdminCampaignController {
             }
         }
 
-        return campaignService.send(req.subject(), req.markdown(), role, interest, req.mode(), scheduledAt,
+        CampaignService.SendResult result = campaignService.send(
+            req.subject(), req.markdown(), role, interest, req.mode(), scheduledAt,
             req.tier(), req.creditCost(), req.slug(), parsePublishedAt(req.publishedAt()),
             req.filter() == null ? null : req.filter().audience(),
             req.filter() == null ? null : req.filter().savedSegmentId());
+        updateMetadata(result.campaignId(), req.coverEmoji(), req.tags());
+        return result;
     }
 
     /**
@@ -161,7 +196,14 @@ public class AdminCampaignController {
      * slug 為<b>必填</b>（與 {@link SendRequest} 不同），缺少時由 CampaignService 回 400。</p>
      */
     public record PublishRequest(String subject, String markdown, String tier, Integer creditCost,
-                                 String slug, String publishedAt) {}
+                                 String slug, String publishedAt, String coverEmoji, List<String> tags) {
+
+        /** 舊 Java 呼叫相容建構式。 */
+        public PublishRequest(String subject, String markdown, String tier, Integer creditCost,
+                              String slug, String publishedAt) {
+            this(subject, markdown, tier, creditCost, slug, publishedAt, null, null);
+        }
+    }
 
     /**
      * 只把文章發布到網頁（{@code /r/news/{slug}} 與 {@code /r/archive}），<b>完全不寄信</b>，
@@ -179,8 +221,12 @@ public class AdminCampaignController {
             @RequestHeader(value = KEY_HEADER, required = false) String key,
             @RequestBody PublishRequest req) {
         guard.verify(key);
-        return campaignService.publish(req.subject(), req.markdown(), req.tier(), req.creditCost(),
+        validateMetadata(req.coverEmoji(), req.tags());
+        CampaignService.PublishResult result = campaignService.publish(
+            req.subject(), req.markdown(), req.tier(), req.creditCost(),
             req.slug(), parsePublishedAt(req.publishedAt()));
+        updateMetadata(result.campaignId(), req.coverEmoji(), req.tags());
+        return result;
     }
 
     /**
@@ -254,6 +300,20 @@ public class AdminCampaignController {
             return Instant.parse(publishedAt);
         } catch (java.time.format.DateTimeParseException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "publishedAt 格式錯誤");
+        }
+    }
+
+    /** 新服務存在時，把 UI 中的 Emoji 與 hashtag 寫入剛建立的文章。 */
+    private void updateMetadata(long campaignId, String coverEmoji, List<String> tags) {
+        if (metadataService != null) {
+            metadataService.update(campaignId, coverEmoji, tags);
+        }
+    }
+
+    /** 在任何寄送／發布副作用前先驗證新欄位。 */
+    private void validateMetadata(String coverEmoji, List<String> tags) {
+        if (metadataService != null) {
+            metadataService.validate(coverEmoji, tags);
         }
     }
 

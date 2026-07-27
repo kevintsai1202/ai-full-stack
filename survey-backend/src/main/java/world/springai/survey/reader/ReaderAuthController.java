@@ -3,6 +3,7 @@ package world.springai.survey.reader;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -35,6 +36,7 @@ public class ReaderAuthController {
     private final ReaderSessionService sessionService;
     private final ReaderContext readerContext;
     private final HtmlTemplate htmlTemplate;
+    private final LoginAbuseGuard loginAbuseGuard;
 
     /** 注入登入流程所需的服務 */
     public ReaderAuthController(LoginMailService loginMailService,
@@ -42,13 +44,15 @@ public class ReaderAuthController {
                                ReaderAccountService readerAccountService,
                                ReaderSessionService sessionService,
                                ReaderContext readerContext,
-                               HtmlTemplate htmlTemplate) {
+                               HtmlTemplate htmlTemplate,
+                               LoginAbuseGuard loginAbuseGuard) {
         this.loginMailService = loginMailService;
         this.loginTokenService = loginTokenService;
         this.readerAccountService = readerAccountService;
         this.sessionService = sessionService;
         this.readerContext = readerContext;
         this.htmlTemplate = htmlTemplate;
+        this.loginAbuseGuard = loginAbuseGuard;
     }
 
     /** 登入請求：email 必填且需為合法格式，redirect 選填 */
@@ -109,9 +113,14 @@ public class ReaderAuthController {
      * 成功假象（spec §6），讀者正在等這封信。</p>
      */
     @PostMapping("/api/reader/login")
-    public Map<String, Boolean> requestLogin(@Valid @RequestBody LoginRequest request) {
+    public Map<String, Boolean> requestLogin(@Valid @RequestBody LoginRequest request,
+                                             HttpServletRequest servletRequest) {
+        OffsetDateTime now = OffsetDateTime.now();
+        if (!loginAbuseGuard.tryAcquire(servletRequest.getRemoteAddr(), now)) {
+            return Map.of("sent", false, "throttled", true);
+        }
         LoginMailService.SendResult result =
-            loginMailService.sendLoginLink(request.email(), request.redirect(), OffsetDateTime.now());
+            loginMailService.sendLoginLink(request.email(), request.redirect(), now);
         return Map.of("sent", result.sent(), "throttled", result.throttled());
     }
 

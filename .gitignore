@@ -67,3 +67,6 @@ teaching-site/data/render-verify/
 # survey 頁渲染驗證截圖輸出（可重跑產生，不納版控）
 survey-backend/data/survey-render/
 land-page/screenshots/hero-verify/
+
+# 管理後台驗證截圖與統計報告 PDF（含線上個資，嚴禁提交）
+output/

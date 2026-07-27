@@ -23,4 +23,11 @@ class MarkdownRendererTest {
     void nullSafe() {
         assertEquals("", renderer.toHtml(null));
     }
+
+    /** 編輯器中的單一換行必須保留，避免寄出後兩行被折成同一段。 */
+    @Test
+    void preservesSingleLineBreak() {
+        String html = renderer.toHtml("第一行\n第二行");
+        assertTrue(html.contains("第一行<br />\n第二行"), html);
+    }
 }

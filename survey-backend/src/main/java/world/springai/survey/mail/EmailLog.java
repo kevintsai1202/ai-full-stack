@@ -35,6 +35,10 @@ public class EmailLog {
     @Column(name = "campaign_id")
     private Long campaignId;
 
+    /** 所屬實際寄送批次；舊交易信與歷史資料可為 null。 */
+    @Column(name = "batch_id")
+    private Long batchId;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -68,6 +72,8 @@ public class EmailLog {
     public String getStatus() { return status; }
     public String getError() { return error; }
     public Long getCampaignId() { return campaignId; }
+    public Long getBatchId() { return batchId; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setStatus(String status) { this.status = status; }
+    public void setBatchId(Long batchId) { this.batchId = batchId; }
 }

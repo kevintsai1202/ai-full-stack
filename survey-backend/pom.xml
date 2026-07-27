@@ -6,7 +6,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.5.0</version>
+    <version>3.5.14</version>
     <relativePath/>
   </parent>
   <groupId>world.springai</groupId>
@@ -16,6 +16,11 @@
   <description>Landing page 問卷收集後端</description>
   <properties>
     <java.version>21</java.version>
+    <!-- 明確壓到已修補版本；每次升級後以 OSV 掃描實際 runtime tree。 -->
+    <jackson-bom.version>2.21.5</jackson-bom.version>
+    <logback.version>1.5.34</logback.version>
+    <commons-lang3.version>3.18.0</commons-lang3.version>
+    <tomcat.version>10.1.57</tomcat.version>
   </properties>
   <dependencies>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
@@ -23,7 +28,12 @@
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-validation</artifactId></dependency>
     <dependency><groupId>org.flywaydb</groupId><artifactId>flyway-core</artifactId></dependency>
     <dependency><groupId>org.flywaydb</groupId><artifactId>flyway-database-postgresql</artifactId></dependency>
-    <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>42.7.12</version>
+      <scope>runtime</scope>
+    </dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
     <dependency>
       <groupId>org.commonmark</groupId>
@@ -62,5 +72,22 @@
          每次重建乾淨的 survey_migration_test 資料庫。既維持自動化（每次 mvn test 都驗證），
          也不新增任何測試依賴。 -->
   </dependencies>
-  <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- 測試環境明確允許既有開發金鑰，避免把放寬設定帶入正式部署。 -->
+          <systemPropertyVariables>
+            <APP_ALLOW_INSECURE_DEV_SECRETS>true</APP_ALLOW_INSECURE_DEV_SECRETS>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 </project>

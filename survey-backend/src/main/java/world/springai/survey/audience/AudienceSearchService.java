@@ -50,6 +50,26 @@ public class AudienceSearchService {
             OffsetDateTime from,
             OffsetDateTime to) {}
 
+    /** 電子報寄送軌跡條件；status 使用 campaign_recipient 的大寫狀態。 */
+    public record DeliveryFilter(
+            Long campaignId,
+            List<String> statuses,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            Integer countMin,
+            Integer countMax,
+            Boolean neverReceived) {}
+
+    /** 文章解鎖條件；可依文章或 hashtag 限制。 */
+    public record UnlockFilter(
+            Long campaignId,
+            String tagSlug,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            Integer countMin,
+            Integer countMax,
+            Boolean neverUnlocked) {}
+
     /** 搜尋條件；空值代表不限。 */
     public record Filters(
             String query,
@@ -61,7 +81,26 @@ public class AudienceSearchService {
             Integer creditsMax,
             SurveyFilter survey,
             ExamFilter exam,
-            ActivityFilter activity) {}
+            ActivityFilter activity,
+            DeliveryFilter delivery,
+            UnlockFilter unlock) {
+
+        /** 舊 API 與既有 Java 測試相容建構式。 */
+        public Filters(
+                String query,
+                List<String> sourceKeys,
+                List<String> consentStatus,
+                List<String> accountStatus,
+                List<String> vipStatus,
+                Integer creditsMin,
+                Integer creditsMax,
+                SurveyFilter survey,
+                ExamFilter exam,
+                ActivityFilter activity) {
+            this(query, sourceKeys, consentStatus, accountStatus, vipStatus,
+                creditsMin, creditsMax, survey, exam, activity, null, null);
+        }
+    }
 
     /** 排序白名單；未知欄位會回 400，不直接串進 SQL。 */
     public record Sort(String field, String direction) {}
@@ -118,6 +157,12 @@ public class AudienceSearchService {
                     rs.getObject("vip_expires_at", OffsetDateTime.class)));
                 item.put("credits", rs.getObject("credits"));
                 item.put("lastLoginAt", rs.getObject("last_login_at", OffsetDateTime.class));
+                item.put("deliveryCount", rs.getInt("delivery_count"));
+                item.put("lastDeliveryAt",
+                    rs.getObject("last_delivery_at", OffsetDateTime.class));
+                item.put("unlockCount", rs.getInt("unlock_count"));
+                item.put("lastUnlockAt",
+                    rs.getObject("last_unlock_at", OffsetDateTime.class));
                 return item;
             },
             dataParams.toArray());
@@ -187,7 +232,11 @@ public class AudienceSearchService {
                 r.tier,
                 r.vip_expires_at,
                 r.credits,
-                r.last_login_at
+                r.last_login_at,
+                COALESCE(delivery.delivery_count, 0) AS delivery_count,
+                delivery.last_delivery_at,
+                COALESCE(unlocks.unlock_count, 0) AS unlock_count,
+                unlocks.last_unlock_at
               FROM audience_person p
               LEFT JOIN LATERAL (
                     SELECT status
@@ -212,6 +261,18 @@ public class AudienceSearchService {
                      WHERE ar.person_id = p.id
               ) activity ON TRUE
               LEFT JOIN reader r ON lower(r.email) = p.email_normalized
+              LEFT JOIN LATERAL (
+                    SELECT
+                        count(*) FILTER (WHERE cr.status = 'SENT') AS delivery_count,
+                        max(cr.sent_at) FILTER (WHERE cr.status = 'SENT') AS last_delivery_at
+                      FROM campaign_recipient cr
+                     WHERE cr.person_id = p.id OR cr.email_normalized = p.email_normalized
+              ) delivery ON TRUE
+              LEFT JOIN LATERAL (
+                    SELECT count(*) AS unlock_count, max(aa.unlocked_at) AS last_unlock_at
+                      FROM article_access aa
+                     WHERE aa.reader_id = r.id
+              ) unlocks ON TRUE
              WHERE 1 = 1
             """;
     }
@@ -258,7 +319,128 @@ public class AudienceSearchService {
         appendSurveyFilter(where, params, filters.survey());
         appendExamFilter(where, params, filters.exam());
         appendActivityFilter(where, params, filters.activity());
+        appendDeliveryFilter(where, params, filters.delivery());
+        appendUnlockFilter(where, params, filters.unlock());
         return new SqlFilter(where.toString(), params);
+    }
+
+    /** 電子報寄送條件使用 EXISTS 與彙總欄位，避免逐列 join 造成同一人物重複。 */
+    private void appendDeliveryFilter(
+            StringBuilder where,
+            List<Object> params,
+            DeliveryFilter delivery) {
+        if (delivery == null) {
+            return;
+        }
+        if (Boolean.TRUE.equals(delivery.neverReceived())) {
+            where.append(" AND COALESCE(delivery.delivery_count, 0) = 0");
+        } else if (Boolean.FALSE.equals(delivery.neverReceived())) {
+            where.append(" AND COALESCE(delivery.delivery_count, 0) > 0");
+        }
+        if (delivery.countMin() != null) {
+            where.append(" AND COALESCE(delivery.delivery_count, 0) >= ?");
+            params.add(delivery.countMin());
+        }
+        if (delivery.countMax() != null) {
+            where.append(" AND COALESCE(delivery.delivery_count, 0) <= ?");
+            params.add(delivery.countMax());
+        }
+        if (delivery.campaignId() == null
+                && (delivery.statuses() == null || delivery.statuses().isEmpty())
+                && delivery.from() == null
+                && delivery.to() == null) {
+            return;
+        }
+        where.append("""
+             AND EXISTS (
+                 SELECT 1 FROM campaign_recipient delivery_row
+                  WHERE (delivery_row.person_id = p.id
+                         OR delivery_row.email_normalized = p.email_normalized)
+            """);
+        if (delivery.campaignId() != null) {
+            where.append(" AND delivery_row.campaign_id = ?");
+            params.add(delivery.campaignId());
+        }
+        if (delivery.statuses() != null && !delivery.statuses().isEmpty()) {
+            where.append(" AND delivery_row.status IN (");
+            appendPlaceholders(
+                where,
+                params,
+                delivery.statuses().stream()
+                    .map(value -> value.toUpperCase(java.util.Locale.ROOT))
+                    .toList());
+            where.append(")");
+        }
+        if (delivery.from() != null) {
+            where.append(" AND COALESCE(delivery_row.sent_at, delivery_row.created_at) >= ?");
+            params.add(delivery.from());
+        }
+        if (delivery.to() != null) {
+            where.append(" AND COALESCE(delivery_row.sent_at, delivery_row.created_at) < ?");
+            params.add(delivery.to());
+        }
+        where.append(")");
+    }
+
+    /** 解鎖條件由 article_access 關聯文章與 hashtag，不碰不可變點數帳本。 */
+    private void appendUnlockFilter(
+            StringBuilder where,
+            List<Object> params,
+            UnlockFilter unlock) {
+        if (unlock == null) {
+            return;
+        }
+        if (Boolean.TRUE.equals(unlock.neverUnlocked())) {
+            where.append(" AND COALESCE(unlocks.unlock_count, 0) = 0");
+        } else if (Boolean.FALSE.equals(unlock.neverUnlocked())) {
+            where.append(" AND COALESCE(unlocks.unlock_count, 0) > 0");
+        }
+        if (unlock.countMin() != null) {
+            where.append(" AND COALESCE(unlocks.unlock_count, 0) >= ?");
+            params.add(unlock.countMin());
+        }
+        if (unlock.countMax() != null) {
+            where.append(" AND COALESCE(unlocks.unlock_count, 0) <= ?");
+            params.add(unlock.countMax());
+        }
+        if (unlock.campaignId() == null
+                && !StringUtils.hasText(unlock.tagSlug())
+                && unlock.from() == null
+                && unlock.to() == null) {
+            return;
+        }
+        where.append("""
+             AND EXISTS (
+                 SELECT 1
+                   FROM article_access unlock_row
+                   JOIN campaign unlock_campaign ON unlock_campaign.id = unlock_row.campaign_id
+                  WHERE unlock_row.reader_id = r.id
+            """);
+        if (unlock.campaignId() != null) {
+            where.append(" AND unlock_row.campaign_id = ?");
+            params.add(unlock.campaignId());
+        }
+        if (StringUtils.hasText(unlock.tagSlug())) {
+            where.append("""
+                 AND EXISTS (
+                     SELECT 1
+                       FROM campaign_tag unlock_campaign_tag
+                       JOIN content_tag unlock_tag ON unlock_tag.id = unlock_campaign_tag.tag_id
+                      WHERE unlock_campaign_tag.campaign_id = unlock_row.campaign_id
+                        AND unlock_tag.slug = ?
+                 )
+                """);
+            params.add(unlock.tagSlug().trim().toLowerCase(java.util.Locale.ROOT));
+        }
+        if (unlock.from() != null) {
+            where.append(" AND unlock_row.unlocked_at >= ?");
+            params.add(unlock.from());
+        }
+        if (unlock.to() != null) {
+            where.append(" AND unlock_row.unlocked_at < ?");
+            params.add(unlock.to());
+        }
+        where.append(")");
     }
 
     /** Survey 條件使用 record schema 與 Fact，不依賴固定 survey_response 欄位。 */
@@ -414,6 +596,10 @@ public class AudienceSearchService {
             case "vipExpiresAt" -> "r.vip_expires_at";
             case "lastLoginAt" -> "r.last_login_at";
             case "lastActivityAt" -> "activity.last_activity_at";
+            case "deliveryCount" -> "delivery.delivery_count";
+            case "lastDeliveryAt" -> "delivery.last_delivery_at";
+            case "unlockCount" -> "unlocks.unlock_count";
+            case "lastUnlockAt" -> "unlocks.last_unlock_at";
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不支援的排序欄位");
         };
         String direction = sort != null && "ASC".equalsIgnoreCase(sort.direction()) ? "ASC" : "DESC";
@@ -502,7 +688,9 @@ public class AudienceSearchService {
             filters.creditsMax(),
             filters.survey(),
             filters.exam(),
-            filters.activity());
+            filters.activity(),
+            filters.delivery(),
+            filters.unlock());
     }
 
     /** SQL 片段與參數必須一起傳遞，避免漏加或順序錯位。 */

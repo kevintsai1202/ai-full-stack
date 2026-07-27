@@ -138,6 +138,10 @@ public class Campaign {
     @Column(name = "filter_levels", nullable = false)
     private String filterLevels = "active";
 
+    /** 公開文章列表使用的封面 Emoji；空值時由畫面使用預設圖示。 */
+    @Column(name = "cover_emoji")
+    private String coverEmoji;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -220,6 +224,8 @@ public class Campaign {
     public void setVipFullInMail(boolean vipFullInMail) { this.vipFullInMail = vipFullInMail; }
     public String getFilterLevels() { return filterLevels; }
     public void setFilterLevels(String filterLevels) { this.filterLevels = filterLevels; }
+    public String getCoverEmoji() { return coverEmoji; }
+    public void setCoverEmoji(String coverEmoji) { this.coverEmoji = coverEmoji; }
 
     /** 是否為進階內容（需點數或 VIP） */
     public boolean isPremium() {

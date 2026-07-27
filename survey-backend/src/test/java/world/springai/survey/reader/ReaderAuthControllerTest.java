@@ -44,6 +44,7 @@ class ReaderAuthControllerTest {
     @MockBean LoginTokenService loginTokenService;
     @MockBean ReaderAccountService readerAccountService;
     @MockBean ReaderContext readerContext;
+    @MockBean LoginAbuseGuard loginAbuseGuard;
 
     /** 建立一位讀者 */
     private Reader reader() {
@@ -56,6 +57,7 @@ class ReaderAuthControllerTest {
     /** 登入請求成功時回 sent=true */
     @Test
     void loginRequestReportsSent() throws Exception {
+        when(loginAbuseGuard.tryAcquire(anyString(), any())).thenReturn(true);
         when(loginMailService.sendLoginLink(eq("user@example.com"), any(), any()))
             .thenReturn(new LoginMailService.SendResult(true, false));
 
@@ -70,6 +72,7 @@ class ReaderAuthControllerTest {
     /** 節流時回 throttled=true，前端要顯示不同訊息 */
     @Test
     void loginRequestReportsThrottled() throws Exception {
+        when(loginAbuseGuard.tryAcquire(anyString(), any())).thenReturn(true);
         when(loginMailService.sendLoginLink(anyString(), any(), any()))
             .thenReturn(new LoginMailService.SendResult(false, true));
 
@@ -88,6 +91,21 @@ class ReaderAuthControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"email\":\"not-an-email\"}"))
            .andExpect(status().isBadRequest());
+
+        verify(loginMailService, never()).sendLoginLink(anyString(), any(), any());
+    }
+
+    /** 同一來源 IP 或全站達上限時，不得進入簽發與寄信服務。 */
+    @Test
+    void abuseGuardStopsLoginMailBeforeTokenIssuance() throws Exception {
+        when(loginAbuseGuard.tryAcquire(anyString(), any())).thenReturn(false);
+
+        mvc.perform(post("/api/reader/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"user@example.com\"}"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.sent").value(false))
+           .andExpect(jsonPath("$.throttled").value(true));
 
         verify(loginMailService, never()).sendLoginLink(anyString(), any(), any());
     }

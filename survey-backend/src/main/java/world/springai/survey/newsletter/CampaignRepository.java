@@ -84,6 +84,17 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long> {
     /** 依建立時間新到舊列出（歷史頁用） */
     List<Campaign> findAllByOrderByCreatedAtDesc();
 
+    /** 補寄完成後以逐收件人狀態回寫 campaign 的累計摘要，不整列 save 避免併發覆蓋。 */
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query("update Campaign c set c.recipientCount = :recipients, "
+        + "c.acceptedCount = :accepted, c.failedCount = :failed "
+        + "where c.id = :id")
+    int updateDeliveryTotals(@Param("id") Long id,
+                             @Param("recipients") int recipients,
+                             @Param("accepted") int accepted,
+                             @Param("failed") int failed);
+
     /**
      * 將已到寄送時間但仍停在 scheduled 的舊資料整理為 sent。
      *
