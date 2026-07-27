@@ -44,6 +44,35 @@ function eq(actual, expected, label) {
 }
 
 /**
+ * 等待某個 input 的值變成預期值，逾時計為一項失敗而不是拋出。
+ *
+ * 之前的寫法是 waitForFunction 之後再 eq()——那個 eq 恆真（waitForFunction 已保證
+ * 等值），而真正的失敗會以 TimeoutError 從 main() 逃出：exit code 雖然正確（非 0），
+ * 但不印 ✗、也不印「失敗 N 項」總結，除錯時只有一段 stack trace 沒有現場。
+ */
+async function expectValue(page, selector, expected, label, timeout = 10000) {
+  try {
+    await page.waitForFunction(
+      ({ sel, exp }) => document.querySelector(sel)?.value === String(exp),
+      { sel: selector, exp: expected }, { timeout });
+    check(label, true);
+  } catch {
+    check(label, false,
+      `逾時；實際 ${JSON.stringify(await page.inputValue(selector))}／預期 ${JSON.stringify(expected)}`);
+  }
+}
+
+/** 等待頁面達成任意條件，逾時計為一項失敗而不是拋出（理由同 expectValue） */
+async function expectCondition(page, label, fn, timeout = 10000) {
+  try {
+    await page.waitForFunction(fn, null, { timeout });
+    check(label, true);
+  } catch {
+    check(label, false, '逾時未達成');
+  }
+}
+
+/**
  * 載入 playwright：先試專案內解析，再逐一嘗試常見的全域安裝目錄。
  * 刻意不呼叫 `npm root -g`（那需要 shell），作法與 verify-publish-endpoint.mjs 一致。
  */
@@ -98,6 +127,11 @@ const main = async () => {
   try {
     const page = await browser.newPage();
 
+    // pageerror 監聽器必須在任何操作之前註冊，才能覆蓋全部步驟——
+    // 之前註冊在 [7] 之後，前七組（含 500 錯誤路徑）的未捕捉錯誤全都看不到。
+    const pageErrors = [];
+    page.on('pageerror', e => pageErrors.push(e.message));
+
     // 攔截全部後台 API：本腳本驗的是前端邏輯，不需要真的後端、金鑰或資料庫。
     //
     // 註冊順序有意義：Playwright 的 route 是「後註冊者先比對」，所以萬用攔截必須
@@ -143,10 +177,7 @@ const main = async () => {
     eq(settingsCalls, 0, '★ 切換前尚未打過 /api/admin/settings（惰性載入）');
     eq(await page.inputValue('#art-cost'), '', '前置條件：解鎖點數欄位是空的');
     await page.selectOption('#art-tier', 'PREMIUM');
-    await page.waitForFunction(
-      expected => document.querySelector('#art-cost')?.value === String(expected),
-      FAKE_PREMIUM_COST, { timeout: 10000 });
-    eq(await page.inputValue('#art-cost'), FAKE_PREMIUM_COST, '★ 解鎖點數已預填成全域預設值');
+    await expectValue(page, '#art-cost', FAKE_PREMIUM_COST, '★ 解鎖點數已預填成全域預設值');
     eq(settingsCalls, 1, '★ 預填時單獨 fetch 了一次 settings');
     const costHint = await page.textContent('#cost-hint');
     check('★ hint 說明「已帶入目前的全域預設值，可修改」',
@@ -164,6 +195,13 @@ const main = async () => {
     await page.waitForTimeout(500);
     eq(await page.inputValue('#art-cost'), OPERATOR_COST,
       '★ 操作者輸入的 5 未被預設值 37 覆蓋');
+    // 凍結警告綁「PREMIUM 狀態」而非「預填事件」：欄位已有值、預填被守門擋下時，
+    // 操作者（自己輸入價格的人）正是最需要看到警告的人。
+    const hintNoPrefill = await page.textContent('#cost-hint');
+    check('★ 未預填時仍顯示「發布後價格即凍結」警告',
+      !!hintNoPrefill && hintNoPrefill.includes('發布後價格即凍結'), hintNoPrefill);
+    check('★ 未預填時不得聲稱「已帶入全域預設值」（那不是事實）',
+      !!hintNoPrefill && !hintNoPrefill.includes('已帶入'), hintNoPrefill);
 
     // 刻意不驗「只留空白字元」：type=number 的 input 不接受空白字元，
     // 瀏覽器會直接把它正規化成空字串，造不出那個狀態。實作的 trim() 是防禦性的。
@@ -171,10 +209,16 @@ const main = async () => {
     await page.selectOption('#art-tier', 'BASIC');
     await page.fill('#art-cost', '');
     await page.selectOption('#art-tier', 'PREMIUM');
-    await page.waitForFunction(
-      expected => document.querySelector('#art-cost')?.value === String(expected),
-      FAKE_PREMIUM_COST, { timeout: 10000 });
-    eq(await page.inputValue('#art-cost'), FAKE_PREMIUM_COST, '清空後再切回 PREMIUM 會重新預填');
+    await expectValue(page, '#art-cost', FAKE_PREMIUM_COST, '清空後再切回 PREMIUM 會重新預填');
+
+    console.log('\n[3b] 操作者改掉預填值後，「已帶入預設值」的說法必須撤掉');
+    // 此刻欄位是預填的 37、hint 含「已帶入」。操作者一改值那句就不再為真——
+    // 留著會讓畫面聲稱一個手打的數字是全域預設（顯示與事實不同源）。
+    await page.fill('#art-cost', '12'); // fill 會觸發 input 事件
+    await expectCondition(page, '★ 改值後 hint 撤掉「已帶入」、保留凍結警告', () => {
+      const t = document.querySelector('#cost-hint')?.textContent || '';
+      return !t.includes('已帶入') && t.includes('發布後價格即凍結');
+    });
 
     console.log('\n[4] 反覆切換分級不得重複打 API（快取）');
     const before = settingsCalls;
@@ -182,16 +226,14 @@ const main = async () => {
       await page.selectOption('#art-tier', 'BASIC');
       await page.fill('#art-cost', '');
       await page.selectOption('#art-tier', 'PREMIUM');
-      await page.waitForFunction(
-        expected => document.querySelector('#art-cost')?.value === String(expected),
-        FAKE_PREMIUM_COST, { timeout: 10000 });
+      await expectValue(page, '#art-cost', FAKE_PREMIUM_COST, `第 ${i + 1} 輪切換後仍會預填`);
     }
     eq(settingsCalls, before, '★ 三輪切換後 settings 呼叫次數未增加（沿用快取）');
 
     console.log('\n[5] 切回 BASIC 清掉價格凍結說明（那句話只適用 PREMIUM）');
     await page.selectOption('#art-tier', 'BASIC');
-    await page.waitForFunction(() => document.querySelector('#cost-hint')?.textContent === '', null, { timeout: 5000 });
-    eq(await page.textContent('#cost-hint'), '', 'BASIC 不顯示解鎖點數的說明');
+    await expectCondition(page, 'BASIC 不顯示解鎖點數的說明',
+      () => document.querySelector('#cost-hint')?.textContent === '', 5000);
 
     console.log('\n[6] 儲存參數後快取失效，預填改帶新值');
     const NEW_COST = 88;
@@ -219,11 +261,32 @@ const main = async () => {
     await page.fill('#art-cost', '');
     await page.selectOption('#art-tier', 'BASIC');
     await page.selectOption('#art-tier', 'PREMIUM');
-    await page.waitForFunction(
-      expected => document.querySelector('#art-cost')?.value === String(expected),
-      NEW_COST, { timeout: 10000 });
-    eq(await page.inputValue('#art-cost'), NEW_COST,
+    await expectValue(page, '#art-cost', NEW_COST,
       '★ 改過預設值之後，預填帶的是新值（快取已失效）');
+
+    console.log('\n[6b] settings 首次載入還在路上時，操作者輸入的值不得被覆蓋（競態守門）');
+    // 這組專門執行 prefillPremiumCost 裡「await 之後的第二道守門」：函式進入時欄位
+    // 是空的（第一道守門放行）、fetch 在路上時操作者輸入了價格、fetch 回來後
+    // 第二道守門必須發現欄位已非空而放棄預填。之前的 [2] 抓不到這條——快取已熱、
+    // fetch 立即 resolve，欄位在函式進入時就非空，第一道守門就攔住了，第二道
+    // 從未被執行。只刪第二道守門，本組會變紅、其他組全綠。
+    await page.unroute('**/api/admin/settings');
+    await page.route('**/api/admin/settings', async route => {
+      await new Promise(r => setTimeout(r, 1000)); // 模擬慢速網路：讓 fetch 停在路上
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ 'credit.premium_cost': { value: FAKE_PREMIUM_COST, min: 1, max: 10000 } }),
+      });
+    });
+    await page.reload({ waitUntil: 'domcontentloaded' }); // 快取歸零（頁面生命週期變數）
+    await page.waitForSelector('#app:not([hidden])', { timeout: 10000 });
+    await page.click('.tab[data-view="campaign"]');
+    await page.waitForSelector('#art-tier', { state: 'visible', timeout: 10000 });
+    await page.selectOption('#art-tier', 'PREMIUM');     // 觸發預填（fetch 要走 1 秒）
+    await page.fill('#art-cost', String(OPERATOR_COST)); // fetch 完成前操作者已輸入
+    await page.waitForTimeout(1500);                     // 等 fetch 回來、預填邏輯收尾
+    eq(await page.inputValue('#art-cost'), OPERATOR_COST,
+      '★ fetch 期間輸入的值未被覆蓋（await 後的第二道守門真的擋住了）');
 
     console.log('\n[7] settings 讀不到時不預填，但不阻斷發布流程');
     await page.unroute('**/api/admin/settings');
@@ -234,20 +297,11 @@ const main = async () => {
     await page.waitForSelector('#app:not([hidden])', { timeout: 10000 });
     await page.click('.tab[data-view="campaign"]');
     await page.selectOption('#art-tier', 'PREMIUM');
-    await page.waitForFunction(
-      () => (document.querySelector('#cost-hint')?.textContent || '').includes('請手動填入'),
-      null, { timeout: 10000 });
+    await expectCondition(page, '出現「請手動填入」提示',
+      () => (document.querySelector('#cost-hint')?.textContent || '').includes('請手動填入'));
     eq(await page.inputValue('#art-cost'), '', '讀不到預設值時欄位留空（不填假值）');
     check('★ 提示操作者手動填入，且發布按鈕仍可用',
       !(await page.isDisabled('#publish-btn')), await page.textContent('#cost-hint'));
-
-    // 主控台不得有未處理錯誤（預填是 async，拋錯很容易只在 console 留痕）
-    const errors = [];
-    page.on('pageerror', e => errors.push(e.message));
-    await page.selectOption('#art-tier', 'BASIC');
-    await page.selectOption('#art-tier', 'PREMIUM');
-    await page.waitForTimeout(300);
-    check('沒有未捕捉的頁面錯誤', errors.length === 0, errors.join('；'));
 
     console.log('\n[8] 發布成功訊息附上「另寄 BASIC 通知信」的操作指引（C3）');
     // 這條同時是相容性守衛：verify-publish-endpoint.mjs 的 --browser 階段對
@@ -269,9 +323,8 @@ const main = async () => {
     await page.selectOption('#art-tier', 'PREMIUM');
     await page.fill('#art-cost', '37');
     await page.click('#publish-btn');
-    await page.waitForFunction(
-      () => document.querySelector('#send-msg')?.textContent?.includes('已發布'),
-      null, { timeout: 10000 });
+    await expectCondition(page, '發布成功訊息出現',
+      () => document.querySelector('#send-msg')?.textContent?.includes('已發布'));
     const pubMsg = await page.textContent('#send-msg');
     check('相容性：訊息仍含「已發布」（verify-publish-endpoint 的斷言）',
       pubMsg.includes('已發布'));
@@ -283,6 +336,40 @@ const main = async () => {
       pubMsg.includes('BASIC 通知信'), pubMsg);
     check('★ 警告受限內容不要貼進信裡',
       pubMsg.includes('受限內容不要貼進信裡'), pubMsg);
+    // 發布成功後點數欄位必須清空：殘留上一篇的價格會擋掉下一篇的預填
+    //（第一道守門看到欄位非空就 return），且可能被誤信為預設值直接發布。
+    eq(await page.inputValue('#art-cost'), '', '★ 發布成功後解鎖點數欄位已清空');
+
+    console.log('\n[9] BASIC 發布的指引不含 PREMIUM 的外洩警告（指引依 tier 分支）');
+    // BASIC 文章沒有受限區：對它顯示「受限內容不要貼進信裡——PREMIUM 寄送會把
+    // 受限區完整寄給所有收件人」會讓操作者誤以為自己剛發布的東西有外洩風險。
+    const PUB_SLUG_BASIC = 'prefill-verify-basic';
+    await page.unroute('**/api/admin/campaign/publish');
+    await page.route('**/api/admin/campaign/publish', route =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          campaignId: 4243, tier: 'BASIC', creditCost: 0,
+          url: `https://example.invalid/r/news/${PUB_SLUG_BASIC}`,
+        }),
+      }));
+    await page.selectOption('#art-tier', 'BASIC');
+    await page.fill('#art-slug', PUB_SLUG_BASIC);
+    await page.click('#publish-btn');
+    await expectCondition(page, 'BASIC 發布成功訊息出現',
+      () => document.querySelector('#send-msg')?.textContent?.includes('#4243'));
+    const basicMsg = await page.textContent('#send-msg');
+    check('★ BASIC 仍明講訂閱者不會自動收到通知',
+      basicMsg.includes('訂閱者不會自動收到通知'), basicMsg);
+    check('★ BASIC 不出現「受限內容不要貼進信裡」的外洩警告',
+      !basicMsg.includes('受限內容不要貼進信裡'), basicMsg);
+    check('★ BASIC 不出現「另建 BASIC 通知信」的建議（對 BASIC 文章是誤導）',
+      !basicMsg.includes('BASIC 通知信'), basicMsg);
+
+    // 主控台不得有未處理錯誤（預填是 async，拋錯很容易只在 console 留痕）。
+    // 監聽器在最開頭就註冊了，這裡驗的是整支腳本全部步驟的累積結果。
+    check('全程沒有未捕捉的頁面錯誤', pageErrors.length === 0, pageErrors.join('；'));
 
   } finally {
     try { await browser.close(); } catch (e) { console.log(`  ! 關閉瀏覽器失敗：${e.message}`); }

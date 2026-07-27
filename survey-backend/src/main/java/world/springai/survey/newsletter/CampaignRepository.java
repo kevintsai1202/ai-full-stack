@@ -132,6 +132,23 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long> {
      * <p><b>用一次聚合查詢而非撈回全部列在 Java 端算</b>：區間只需要兩個數字，
      * 把每一篇已發布 PREMIUM 文章的實體載進記憶體只為了取 min／max，會隨文章數線性變差。</p>
      *
+     * <p><b>效能取捨（刻意不加快取、目前也不加索引）</b>：本查詢在公開免登入的
+     * {@code /r/rules} 與 {@code /r/me} 每次請求都執行，而 {@code campaign} 表沒有
+     * 涵蓋 {@code (tier, slug, published_at)} 的索引（V4／V8 只有 slug 的部分唯一索引），
+     * 所以是一次全表掃描。<b>不加快取是刻意的</b>：同頁其他數字走 60 秒快取，但這個
+     * 區間一旦快取，就會與 gate 顯示的即時價格出現時間差——那正是本查詢要消除的
+     * 「顯示與實際不同源」落差。全表掃描的實際成本以文章數為界：電子報的發文頻率
+     * 讓 {@code campaign} 成長極慢（每週個位數），數百列以內可忽略；
+     * <b>若文章數成長到數千列、或 /r/rules 出現明顯延遲，屆時再補
+     * {@code (tier, published_at)} 的部分索引</b>，不要先補——多一個索引就多一份
+     * 寫入成本與一個要維護的物件。（對照：{@code /r/archive} 在公開路徑上做的
+     * 是更貴的全表查詢且回傳所有列。）</p>
+     *
+     * <p><b>區間裡不可能摻進全域預設值</b>——這是整個修正成立的關鍵：WHERE 是
+     * {@code tier = 'PREMIUM'} 精確比對，而 DB 的 {@code ck_campaign_premium_cost}
+     * 對這些列強制 {@code credit_cost > 0}，所以被算進區間的每一列，
+     * {@code costOf()} 必然回它自己的 {@code credit_cost}。</p>
+     *
      * @param tier 要統計的分級。刻意用參數而非在 JPQL 裡寫死 {@code 'PREMIUM'}：
      *             JPQL 無法引用 Java 常數，寫死會讓 {@link Campaign#TIER_PREMIUM}
      *             在 {@link Campaign} 之外多出第二個定義點。

@@ -273,9 +273,12 @@ try {
   });
   eq(tooBig.status, 400, '超過上限的參數應回 400');
 
-  // 關鍵斷言：後台改的數字必須立刻出現在讀者看到的頁面上（不是等 60 秒快取過期）
-  const rulesHtml = await (await fetch(BASE + '/r/rules')).text();
-  has(rulesHtml, '進階文章每篇 20 點', '/r/rules 顯示新的解鎖點數');
+  // 關鍵斷言：後台改的值必須立刻生效（不是等 60 秒快取過期）。
+  // 用 GET round-trip 驗，不綁頁面文案——C1 之後 /r/rules 顯示的是已發布 PREMIUM
+  // 文章的實際 credit_cost 區間，與全域預設無關（頁面契約由 verify-stage-c.mjs
+  // 的 [10] 驗證）。舊斷言「/r/rules 顯示每篇 20 點」自 5d18002 起就已失效。
+  const readBack = await api('/api/admin/settings');
+  eq(readBack.body['credit.premium_cost'].value, 20, '重新 GET 讀回的值（快取已失效）');
 
   // 白名單以外的鍵必須被拒（否則這支端點等於任意 key-value 寫入口）
   const badKey = await api('/api/admin/settings', {
@@ -288,11 +291,14 @@ try {
   // ---- 還原：參數改回原值、VIP 取消、加點以負數補償 ----
   try {
     if (originalPremiumCost != null) {
-      await api('/api/admin/settings', {
+      const undo = await api('/api/admin/settings', {
         method: 'PUT', body: JSON.stringify({ 'credit.premium_cost': String(originalPremiumCost) }),
       });
-      const restored = await (await fetch(BASE + '/r/rules')).text();
-      has(restored, `進階文章每篇 ${originalPremiumCost} 點`, '/r/rules 已還原為原始點數');
+      // 還原驗證同樣走 API round-trip，不綁 /r/rules 文案（理由同上：C1 之後
+      // 頁面顯示的是文章實際定價的區間，不會反映全域預設）。
+      eq(undo.status, 200, '還原參數回應碼');
+      eq(undo.body['credit.premium_cost'].value, Number(originalPremiumCost),
+        'credit.premium_cost 已還原為原始值');
     }
     // 還原步驟的回傳值一律檢查並計入 failures。
     // api() 對非 2xx 不拋錯（回 {status, body}），先前這裡完全不看回傳值就直接印

@@ -405,21 +405,44 @@ try {
             WHERE lower(r.email) = ${quote(B_EMAIL)};`), 1, 'article_access 筆數');
   }
 
-  // ── [10] 後台改參數 → 三處顯示與實扣一致（spec §5.11） ───────────────
-  console.log('\n[10] 後台改 credit.premium_cost，驗證三處顯示與實扣一致');
+  // ── [10] 頁面點數區間與實扣一致（spec §5.11，C1 之後的新契約） ───────
+  // C1 之前這裡驗的是「改 credit.premium_cost → 兩頁數字跟著變」——那組斷言自
+  // 5d18002 起就已失效（文案加了「通常」），C1 之後更是設計上不成立：只要站上有
+  // 已發布的 PREMIUM 文章，兩頁顯示的是實際 credit_cost 區間，與全域預設無關。
+  // 新契約有兩條：
+  //   (a) 頁面顯示的區間 == 資料庫裡已發布 PREMIUM 的 credit_cost 區間（同源）
+  //   (b) 有已發布 PREMIUM 時，改全域預設「不影響」兩頁的數字
+  // 預期字串當場從 DB 算出來，不寫死——測試庫可能有其他驗證腳本殘留的已發布
+  // PREMIUM 文章，寫死區間會讓本腳本依執行順序偶發失敗。
+  console.log('\n[10] 頁面顯示實際點數區間，且不再跟全域預設連動');
   {
+    /** 從 DB 算出目前「已發布 PREMIUM」的區間片語（與 PremiumCostDisplay 同一組資料來源） */
+    const phraseFromDb = () => {
+      const [min, max] = sql(`SELECT min(credit_cost)||','||max(credit_cost) FROM campaign
+        WHERE tier = 'PREMIUM' AND slug IS NOT NULL AND published_at IS NOT NULL;`).split(',');
+      return min === max ? `目前每篇 ${min} 點` : `目前每篇 ${min}–${max} 點`;
+    };
+
+    const expected = phraseFromDb();
+    const rules = (await page('/r/rules', bCookie)).body;
+    check(`★ /r/rules 顯示與 DB 同源的區間「進階文章${expected}」`,
+      rules.includes(`進階文章${expected}`));
+    const me = (await page('/r/me', bCookie)).body;
+    check(`★ /r/me 顯示與 DB 同源的區間「進階內容${expected}」`,
+      me.includes(`進階內容${expected}`));
+
     const put = await admin('/api/admin/settings', {
       method: 'PUT', body: JSON.stringify({ 'credit.premium_cost': String(NEW_PREMIUM_COST) }),
     });
     eq(put.status, 200, '寫入參數回應碼');
     eq(put.body['credit.premium_cost'].value, NEW_PREMIUM_COST, '寫入後讀回的值');
 
-    const rules = (await page('/r/rules', bCookie)).body;
-    check(`/r/rules 顯示「進階文章每篇 ${NEW_PREMIUM_COST} 點」`,
-      rules.includes(`進階文章每篇 ${NEW_PREMIUM_COST} 點`));
-    const me = (await page('/r/me', bCookie)).body;
-    check(`/r/me 顯示「進階內容每篇 ${NEW_PREMIUM_COST} 點」`,
-      me.includes(`進階內容每篇 ${NEW_PREMIUM_COST} 點`));
+    // 契約 (b)：全域預設改了，頁面的區間必須紋風不動（它來自文章自己的定價）
+    const rulesAfterPut = (await page('/r/rules', bCookie)).body;
+    check(`★ 改全域預設後 /r/rules 的區間不變（仍是「${expected}」）`,
+      rulesAfterPut.includes(`進階文章${expected}`));
+    check('★ /r/rules 未因全域預設而出現「通常每篇」退路文案',
+      !rulesAfterPut.includes('通常每篇'));
 
     // gate 那一處：顯示的數字必須等於「按下去真的會扣的點數」。
     // 注意 gate 的數字來自文章自己的 credit_cost（DB CHECK 強制 PREMIUM 的
@@ -427,6 +450,12 @@ try {
     // 因此這裡驗的是「顯示 == 實扣」，而不是「gate 會跟著全域參數變」。
     // 後者不成立，已列入報告與 spec 的偏離項。
     publishArticle(ART.cost20);
+    // 契約 (a) 的動態面：發布新文章後區間立刻更新（無快取），且必然涵蓋
+    // 這篇 gate 的價格——因為兩者讀的是同一個欄位（campaign.credit_cost）。
+    const expectedAfterPublish = phraseFromDb();
+    const rulesAfterPublish = (await page('/r/rules', bCookie)).body;
+    check(`★ 發布 ${ART.cost20.cost} 點文章後 /r/rules 的區間隨之更新（「${expectedAfterPublish}」）`,
+      rulesAfterPublish.includes(`進階文章${expectedAfterPublish}`));
     const before = credits(B_EMAIL);
     const gate = (await page(`/r/news/${ART.cost20.slug}`, bCookie)).body;
     check(`★ gate 顯示「用 ${NEW_PREMIUM_COST} 點解鎖」`,

@@ -229,6 +229,9 @@
   ];
   /** 名單來源代碼轉中文標籤，未知代碼原樣顯示 */
   const SOURCE_LABELS={survey_form:'問卷填寫',exam:'線上測驗'};
+  // PREMIUM 解鎖點數的凍結警告：發布後沒有改價路徑（只能下架重發），這句話必須
+  // 在「分級 = PREMIUM」時恆常顯示，與有沒有預填無關——它描述的是狀態，不是事件。
+  const COST_FREEZE_HINT='發布後價格即凍結（沒有改價路徑，只能下架重發）。';
   function sourceLabel(code){return SOURCE_LABELS[code]||code||'';}
   const $=selector=>document.querySelector(selector);
   let surveyRows=[];
@@ -313,6 +316,10 @@
           +'但還不能寄送：按「發送」會被拒絕（400），因為信件端的折疊（只寄免費區）'
           +'要到階段 D 才實作，現在寄出會把受限區完整寄進所有人的信箱。';
         hint.className='warn';
+        // 價格凍結警告綁在「PREMIUM 狀態」而非「預填事件」上：欄位已有值時預填函式
+        // 會直接 return，若警告只在預填成功時出現，操作者恰好在最需要警告的情境
+        // （自己輸入價格）永遠看不到它。
+        $('#cost-hint').textContent=COST_FREEZE_HINT;
         prefillPremiumCost();
       }else{
         hint.textContent='設了 slug 才會出現在 /r/archive 與單篇頁面；「只發布不寄送」則一律需要 slug。';
@@ -322,6 +329,12 @@
         // BASIC 會忽略它，而操作者可能只是切過去看一眼就要切回來）。
         $('#cost-hint').textContent='';
       }
+    });
+    // 操作者一改點數，「已帶入目前的全域預設值」就不再為真——留著會讓畫面聲稱
+    // 一個手打的數字是全域預設（與 C1 修掉的「顯示與事實不同源」同一類缺陷）。
+    // 改完只留恆常的凍結警告。
+    $('#art-cost').addEventListener('input',()=>{
+      if($('#art-tier').value==='PREMIUM')$('#cost-hint').textContent=COST_FREEZE_HINT;
     });
     // 分級提示的文案只有一份真相（上面那個 change 監聽器）。首次載入必須主動觸發一次，
     // 否則使用者只要沒動過分級下拉（BASIC 是預設值，最常見的情形）就永遠看不到現行提示，
@@ -660,12 +673,20 @@
       // 就是為了擋這件事）。上面那條連結可直接複製進通知信。
       const notice=document.createElement('p');
       notice.className='hint';notice.style.margin='8px 0 0';
-      notice.textContent='訂閱者不會自動收到通知。想通知的話，另外建一篇 BASIC 通知信'
-        +'（內文放摘要與上面這條文章連結即可，受限內容不要貼進信裡——PREMIUM 寄送'
-        +'會把受限區完整寄給所有收件人）。';
+      // 指引依 tier 分支：BASIC 文章本來就沒有受限區，對它顯示「受限內容不要貼進信裡」
+      // 會讓操作者誤以為自己剛發布的東西有外洩風險。
+      notice.textContent=r.tier==='PREMIUM'
+        ?('訂閱者不會自動收到通知。想通知的話，另外建一篇 BASIC 通知信'
+          +'（內文放摘要與上面這條文章連結即可，受限內容不要貼進信裡——PREMIUM 寄送'
+          +'會把受限區完整寄給所有收件人）。')
+        :'訂閱者不會自動收到通知；需要的話可另寄一封含這條連結的信。';
       m.append(notice);
       // slug 在 campaign 表有 UNIQUE 約束：留著上一篇的值，下一篇必定撞 400「slug 已被使用」
       $('#art-slug').value='';
+      // 點數也一併清空：留著上一篇的價格，下一篇的預填會被第一道守門擋住（欄位非空），
+      // 而殘留的數字可能被誤信為預設值直接發布——發布後凍結、沒有改價路徑。
+      $('#art-cost').value='';
+      if($('#art-tier').value==='PREMIUM')$('#cost-hint').textContent=COST_FREEZE_HINT;
       doHistory();
     }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='發布失敗：'+e.message;}}
     // 不可無條件解鎖：await 期間使用者可能已切到歷史列表按「修改」，
@@ -948,12 +969,13 @@
       if(input.value.trim()!==''||$('#art-tier').value!=='PREMIUM')return;
       // 值是後端來的整數，用 .value property 賦值，不拼 HTML（本頁的 esc() 不跳脫引號）
       input.value=String(value);
-      $('#cost-hint').textContent='已帶入目前的全域預設值，可修改；發布後價格即凍結'
-        +'（發布後沒有改價路徑，只能下架重發）。';
+      // 「已帶入預設值」只在真的預填時出現；凍結警告則由 tier change handler 恆常顯示。
+      // 操作者一改值這句就不再為真，由 #art-cost 的 input 監聽器負責撤掉。
+      $('#cost-hint').textContent='已帶入目前的全域預設值，可修改。'+COST_FREEZE_HINT;
     }catch(e){
       // 載入失敗就不預填：欄位仍是必填、操作者仍可手動輸入，發布不會因此被卡住。
       // 401 已由 api() 顯示閘門，這裡不再重複報錯干擾正在編輯的內容。
-      if(e.message!=='401')$('#cost-hint').textContent='讀不到全域預設值，請手動填入解鎖點數。';
+      if(e.message!=='401')$('#cost-hint').textContent='讀不到全域預設值，請手動填入解鎖點數。'+COST_FREEZE_HINT;
     }
   }
 

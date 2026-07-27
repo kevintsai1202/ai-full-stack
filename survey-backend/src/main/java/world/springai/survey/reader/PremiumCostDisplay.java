@@ -70,7 +70,7 @@ public class PremiumCostDisplay {
         if (min.intValue() == max.intValue()) {
             return "目前每篇 " + min + " 點";
         }
-        // 全形連接號（en dash）與後台參數頁的「可填 1–10000」用法一致
+        // 連接號用 en dash（U+2013，半形寬度），與後台參數頁的「可填 1–10000」用法一致
         return "目前每篇 " + min + "–" + max + " 點";
     }
 }

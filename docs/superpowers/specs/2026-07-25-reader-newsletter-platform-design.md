@@ -630,9 +630,12 @@ sunset   ← 已寄期數 >= 淘汰門檻(12) 且 last_engaged_at 為 NULL 或�
 >
 > | 位置 | 數字來源 | 改 `credit.premium_cost` 後會變嗎 |
 > |---|---|---|
-> | `/r/rules` | `CreditPolicy.premiumCost()` | 會 |
-> | `/r/me` | `CreditPolicy.premiumCost()` | 會 |
+> | `/r/rules` | `PremiumCostDisplay` → **已發布 PREMIUM 的 `credit_cost` 區間**（空站才退回 `premiumCost()`） | **否**（僅空站狀態會） |
+> | `/r/me` | `PremiumCostDisplay` → 同上（兩頁共用同一個產生點） | **否**（僅空站狀態會） |
 > | paywall gate（`/r/news/{slug}`） | `CreditPolicy.costOf(campaign)` → **該篇的 `campaign.credit_cost`** | **不會** |
+>
+> （表格為 2026-07-27 第二輪修正後的現況；下方保留當時的分析原文，其中描述兩頁來源為
+> `premiumCost()` 的段落是**修正前**的狀態，留作決策脈絡。）
 >
 > `costOf()` 的設計是「文章自訂值優先，未設定（0）時退回全域預設」，但
 > `ck_campaign_premium_cost` 強制 PREMIUM 的 `credit_cost > 0`，而
