@@ -27,6 +27,9 @@ app:
   public-base-url: ${APP_PUBLIC_BASE_URL:http://127.0.0.1:8080}
   # 讀者端設定（部署設定，非產品參數；點數類參數存 DB 見 app_setting 表）
   reader:
+    # 讀者入口網域（不含協定與路徑）：來自這個 Host 的根路徑請求會被 302 導向 /r/。
+    # 空值＝停用（本機開發與測試不受影響）。見 ReaderEntryHostFilter。
+    entry-host: ${READER_ENTRY_HOST:}
     # JWT 簽章秘鑰（線上務必換成 32 字元以上的強隨機字串）
     jwt-secret: ${READER_JWT_SECRET:dev-reader-jwt-secret-change-me-32chars}
     # 登入態有效天數
