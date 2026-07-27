@@ -278,6 +278,26 @@ if (WITH_BROWSER) {
   console.log('\n[10] 真實瀏覽器（略過，加 --browser 啟用）');
 }
 
+// 最終清理：把 fixture 讀者整列刪掉，讓測試庫在腳本結束後不留任何
+// 「credits ≠ sum(credit_txn)」的列。fixture 的建立方式（upsert credits=300、
+// 清空帳本）在執行期間刻意違反這條不變式——那是為了讓每一步的帳本斷言從零開始，
+// 但跑完若留著，這一列就會讓任何對帳稽核（SELECT ... HAVING credits <> sum）誤報。
+// 刪除順序照外鍵反向：article_access → credit_txn → login_token → reader。
+// 中途崩潰時本段不會執行，殘留由下一次執行開頭的 upsert＋清理自我修復；
+// 清理本身的結果要驗證（本專案有腳本因 finally 不檢查回傳值而假通過過）。
+{
+  sql(`DELETE FROM article_access WHERE reader_id = ${readerId};`);
+  sql(`DELETE FROM credit_txn WHERE reader_id = ${readerId};`);
+  sql(`DELETE FROM login_token WHERE email = '${EMAIL}';`);
+  sql(`DELETE FROM reader WHERE id = ${readerId};`);
+  check('清理：fixture 讀者已整列移除',
+    sql(`SELECT count(*) FROM reader WHERE email = '${EMAIL}';`) === '0');
+  check('清理：測試庫沒有任何違反「餘額 == 帳本總和」的列',
+    sql(`SELECT count(*) FROM (SELECT r.id FROM reader r LEFT JOIN credit_txn t
+         ON t.reader_id = r.id GROUP BY r.id
+         HAVING r.credits <> coalesce(sum(t.delta), 0)) v;`) === '0');
+}
+
 console.log(`\n=== 結果：${failures === 0 ? '全部通過' : `${failures} 項失敗`} ===\n`);
 process.exit(failures === 0 ? 0 : 1);
 

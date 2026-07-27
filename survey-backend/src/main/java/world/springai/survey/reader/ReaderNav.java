@@ -6,7 +6,7 @@ package world.springai.survey.reader;
  * <p><b>為什麼需要這一層</b>：在此之前，同一條導覽列有四份各自拼字串的實作
  * （{@code ReaderPageController}、{@code ReaderPortalController} 的
  * {@code /r/me} 與 {@code /r/invite} 各一份、{@code RulesPageController}），
- * 加上 {@code static/reader/index.html} 裡寫死的第五份。結果是可預期的：</p>
+ * 加上 {@code templates/reader/index.html} 裡寫死的第五份。結果是可預期的：</p>
  * <ul>
  *   <li>{@code /r/} 首頁對<b>已登入</b>讀者仍顯示「登入」——點下去會再寄一封
  *       magic link 給早就登入的人。</li>
@@ -26,7 +26,7 @@ package world.springai.survey.reader;
  * <p><b>機械化守衛</b>：{@code ReaderNavGuardTest} 守著兩件事——① reader 套件的
  * 生產程式碼中，除本類外不得出現 {@code <a href="/r/archive"}、
  * {@code <a href="/r/me"}、{@code <a href="/r/login"} 這三個逐字字串；
- * ② {@code static/reader/*.html}（{@code login.html} 與 {@code not-found.html}
+ * ② {@code templates/reader/*.html}（{@code login.html} 與 {@code not-found.html}
  * 除外）的 {@code <nav>} 區塊內只能有 {@code <!--NAV_LINKS-->} 佔位符、不得含
  * {@code <a}。這兩道檢查窄到目前偽陽性為零（paywall 行動按鈕、規則頁提示連結
  * 用的都是不同的字串），能擋住「某個 controller 順手 inline 一份導覽」與

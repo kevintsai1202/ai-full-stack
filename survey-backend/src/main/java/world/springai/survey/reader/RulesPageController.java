@@ -97,7 +97,7 @@ public class RulesPageController {
         return ResponseEntity.ok()
             .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
             .header(HttpHeaders.VARY, HttpHeaders.COOKIE)
-            .body(htmlTemplate.render("static/reader/rules.html", vars));
+            .body(htmlTemplate.render("templates/reader/rules.html", vars));
     }
 
     /** 「首次登入送 X 點」列項文案；X 為 0 時改用不荒謬的說法（關閉贈點是合法營運設定） */

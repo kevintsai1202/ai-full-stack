@@ -1,12 +1,51 @@
 // 管理後台 admin.html 端到端驗證腳本（不實際發送）
 // 用法：$env:ADMIN_API_KEY="<金鑰>"; node survey-backend/scripts/verify-admin.mjs
-// 需求：npx playwright（首次會自動下載 chromium）
-import { chromium } from 'playwright';
+// 需求：playwright（本機為全域安裝：npm i -g playwright）
 import { mkdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const BASE = process.env.ADMIN_BASE || 'https://springai-survey.zeabur.app';
 const KEY = process.env.ADMIN_API_KEY;
 if (!KEY) { console.error('請先設定環境變數 ADMIN_API_KEY'); process.exit(1); }
+
+/**
+ * 動態載入 playwright：先試專案內解析，再逐一嘗試常見的全域安裝目錄。
+ *
+ * 原本的靜態 `import { chromium } from 'playwright'` 在 playwright 不在專案
+ * node_modules 時直接 ERR_MODULE_NOT_FOUND——這支腳本因此**長期跑不起來**而沒人發現
+ * （它不在 mvn test 裡，紅了不會有人看到）。載不到一律 exit 1，不印警告混過去。
+ * 作法與 verify-publish-endpoint.mjs / verify-admin-cost-prefill.mjs 一致。
+ */
+async function loadPlaywright() {
+  try {
+    return await import('playwright');
+  } catch { /* 專案內沒有，改找全域 */ }
+  const roots = [
+    process.env.APPDATA && join(process.env.APPDATA, 'npm', 'node_modules'),
+    process.env.ProgramFiles && join(process.env.ProgramFiles, 'nodejs', 'node_modules'),
+    '/usr/local/lib/node_modules',
+    '/usr/lib/node_modules',
+  ].filter(Boolean);
+  for (const root of roots) {
+    const entry = join(root, 'playwright', 'index.js');
+    if (existsSync(entry)) return await import(pathToFileURL(entry).href);
+  }
+  throw new Error('專案內與常見全域安裝目錄都找不到 playwright；請安裝：npm i -g playwright');
+}
+
+let chromium;
+try {
+  // 全域安裝的 playwright 以 CJS 形式被動態 import 時，具名匯出掛在 default 底下
+  const mod = await loadPlaywright();
+  const pw = mod.default ?? mod;
+  chromium = pw.chromium;
+  if (!chromium) throw new Error('載入的 playwright 模組沒有 chromium 匯出');
+} catch (e) {
+  console.error('FAIL:', e.message);
+  process.exit(1);
+}
 
 const browser = await chromium.launch();
 const page = await browser.newPage();

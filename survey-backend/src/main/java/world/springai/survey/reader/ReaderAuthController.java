@@ -57,7 +57,7 @@ public class ReaderAuthController {
     /** 登入頁（無動態內容，但需由 controller 提供以支援 /r/login 這種無副檔名路徑） */
     @GetMapping(value = "/r/login", produces = MediaType.TEXT_HTML_VALUE)
     public String loginPage() {
-        return htmlTemplate.render("static/reader/login.html",
+        return htmlTemplate.render("templates/reader/login.html",
             Map.of("<!--PAGE_TITLE-->", "登入｜凱文大叔的電子報"));
     }
 
@@ -80,7 +80,7 @@ public class ReaderAuthController {
     public ResponseEntity<String> indexPage(
             @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
         boolean loggedIn = readerContext.resolve(sessionCookie).isPresent();
-        String html = htmlTemplate.render("static/reader/index.html",
+        String html = htmlTemplate.render("templates/reader/index.html",
             Map.of("<!--NAV_LINKS-->", ReaderNav.links(loggedIn)));
         return ResponseEntity.ok()
             .header(HttpHeaders.CACHE_CONTROL, "private, no-store")

@@ -82,7 +82,7 @@ public class ReaderPageController {
                 .collect(Collectors.toSet()))
             .orElse(Collections.emptySet());
 
-        String html = htmlTemplate.render("static/reader/archive.html", Map.of(
+        String html = htmlTemplate.render("templates/reader/archive.html", Map.of(
             "<!--NAV_LINKS-->", ReaderNav.links(current.isPresent()),
             "<!--ARTICLE_LIST-->", renderArticleList(articles, unlocked)));
 
@@ -148,7 +148,7 @@ public class ReaderPageController {
         // getElementById 會回 null 而讓 addEventListener 在讀者的 console 報錯。
         vars.put("<!--UNLOCK_SCRIPT-->",
             gateRendered && decision.reason() == AccessDecisionService.Reason.CAN_UNLOCK ? UNLOCK_SCRIPT : "");
-        String html = htmlTemplate.render("static/reader/article.html", vars);
+        String html = htmlTemplate.render("templates/reader/article.html", vars);
 
         // 同一篇文章的網址對登入 VIP 與匿名訪客回傳不同內容（全文 vs 截斷），
         // 若缺這兩個標頭，CDN／app-gateway 這類共享快取可能把某位 VIP 的 FULL
@@ -192,7 +192,7 @@ public class ReaderPageController {
      * 因此不需要 {@code Vary: Cookie}。</p>
      */
     private ResponseEntity<String> notFoundPage() {
-        String html = htmlTemplate.render("static/reader/not-found.html", Map.of());
+        String html = htmlTemplate.render("templates/reader/not-found.html", Map.of());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
             .header(HttpHeaders.CONTENT_TYPE, "text/html;charset=UTF-8")
             .header(HttpHeaders.CACHE_CONTROL, "no-store")

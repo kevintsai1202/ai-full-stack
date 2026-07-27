@@ -33,7 +33,7 @@ public class HtmlTemplate {
      * 呼叫端必須先經過 {@link #escapeHtml}；已渲染完成的 HTML（如 markdown 輸出）
      * 才可直接傳入。</p>
      *
-     * @param resourcePath classpath 路徑，如 {@code static/reader/article.html}
+     * @param resourcePath classpath 路徑，如 {@code templates/reader/article.html}
      */
     public String render(String resourcePath, Map<String, String> replacements) {
         String html = load(resourcePath);

@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <ol>
  *   <li>某個 controller 直接在程式碼裡 inline 一段逐字相同的導覽連結（例如複製
  *       {@code ReaderNav} 的輸出貼進自己的字串常數）。</li>
- *   <li>某個 {@code static/reader/*.html} 模板的 {@code <nav>} 區塊寫死連結，
+ *   <li>某個 {@code templates/reader/*.html} 模板的 {@code <nav>} 區塊寫死連結，
  *       而不是留 {@code <!--NAV_LINKS-->} 佔位符讓 {@code HtmlTemplate} 動態注入。</li>
  * </ol>
  */
@@ -43,7 +43,7 @@ class ReaderNavGuardTest {
 
     /** 讀者端模板根目錄 */
     private static final Path READER_STATIC_ROOT =
-        Path.of("src/main/resources/static/reader");
+        Path.of("src/main/resources/templates/reader");
 
     /**
      * 只能出現在 {@code ReaderNav.java} 裡的三個逐字字串（Java 原始碼中雙引號會被
@@ -100,7 +100,7 @@ class ReaderNavGuardTest {
     }
 
     /**
-     * {@code static/reader/*.html} 除 {@code login.html} 與 {@code not-found.html} 外，
+     * {@code templates/reader/*.html} 除 {@code login.html} 與 {@code not-found.html} 外，
      * {@code <nav>} 區塊內只能有 {@code ReaderNav} 動態注入的佔位符，不得含
      * {@code <a}（也就是不得寫死任何連結）。
      */
@@ -137,6 +137,33 @@ class ReaderNavGuardTest {
         assertTrue(violations.isEmpty(),
             "reader 模板的 <nav> 必須只用 ReaderNav 動態注入的佔位符，不得寫死連結：\n"
                 + String.join("\n", violations));
+    }
+
+    /**
+     * 讀者模板不得放回 {@code static/}。
+     *
+     * <p>Spring Boot 預設把 {@code classpath:/static/**} 整個對外供應，模板放在那裡
+     * 等於原始檔（含未替換的 {@code <!--NAV_LINKS-->} 等佔位符）可經
+     * {@code /reader/xxx.html} 直接取得——看起來像壞掉的重複頁面，且不受 controller
+     * 的登入檢查與快取標頭管制。模板已於 2026-07-27 搬到 {@code templates/reader/}
+     * （不在任何預設靜態供應路徑內），本測試防止有人「順手」把新模板加回
+     * {@code static/reader/}。{@code reader.css} 留在原地是刻意的：
+     * {@code WebConfig} 的 {@code /r/*.css} 映射從那裡供應靜態附件。</p>
+     */
+    @Test
+    void readerTemplatesMustNotLiveUnderStaticResources() throws IOException {
+        Path staticReader = Path.of("src/main/resources/static/reader");
+        if (!Files.isDirectory(staticReader)) {
+            return; // 目錄整個不存在也算合格（css 若日後搬走，目錄可能被刪）
+        }
+        try (Stream<Path> files = Files.list(staticReader)) {
+            List<String> htmlFiles = files.map(p -> p.getFileName().toString())
+                .filter(name -> name.endsWith(".html"))
+                .toList();
+            assertTrue(htmlFiles.isEmpty(),
+                "static/reader/ 下不得有 HTML 模板（會被 Spring 靜態資源處理器原樣供出，"
+                    + "含未替換的佔位符）。請放到 templates/reader/：" + htmlFiles);
+        }
     }
 
     /** 列出目錄下所有 .java 檔（與 {@code PackageDependencyTest} 同樣的四行慣例） */

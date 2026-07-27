@@ -17,7 +17,7 @@ class HtmlTemplateTest {
     /** 佔位符會被替換掉，且替換後不留殘跡 */
     @Test
     void replacesPlaceholders() {
-        String rendered = template.render("static/reader/login.html",
+        String rendered = template.render("templates/reader/login.html",
             Map.of("<!--PAGE_TITLE-->", "登入測試"));
 
         assertTrue(rendered.contains("登入測試"));
@@ -28,7 +28,7 @@ class HtmlTemplateTest {
     @Test
     void missingResourceFailsLoudly() {
         assertThrows(IllegalStateException.class,
-            () -> template.render("static/reader/does-not-exist.html", Map.of()));
+            () -> template.render("templates/reader/does-not-exist.html", Map.of()));
     }
 
     /** HTML 跳脫：五個危險字元都要處理 */

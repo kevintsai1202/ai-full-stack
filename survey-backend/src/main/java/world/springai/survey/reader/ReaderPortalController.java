@@ -112,7 +112,7 @@ public class ReaderPortalController {
         vars.put("<!--TXN_LIST-->", renderTransactions(
             creditTxnRepository.findByReaderIdOrderByCreatedAtDesc(reader.getId(), PageRequest.of(0, TXN_DISPLAY_LIMIT))));
 
-        return privatePage(htmlTemplate.render("static/reader/me.html", vars));
+        return privatePage(htmlTemplate.render("templates/reader/me.html", vars));
     }
 
     /** 我的邀請：邀請連結、邀請碼與成效 */
@@ -137,7 +137,7 @@ public class ReaderPortalController {
         vars.put("<!--REFERRAL_CODE-->", HtmlTemplate.escapeHtml(reader.getReferralCode()));
         vars.put("<!--STATS_BLOCK-->", renderStats(stats));
 
-        return privatePage(htmlTemplate.render("static/reader/invite.html", vars));
+        return privatePage(htmlTemplate.render("templates/reader/invite.html", vars));
     }
 
     /**
