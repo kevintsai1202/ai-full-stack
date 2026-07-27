@@ -14,6 +14,7 @@ import world.springai.survey.newsletter.Campaign;
 import world.springai.survey.newsletter.CampaignRepository;
 import world.springai.survey.newsletter.ContentSplitter;
 import world.springai.survey.newsletter.MarkdownRenderer;
+import world.springai.survey.media.MediaAssetService;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -62,6 +63,7 @@ class ReaderPageControllerTest {
     @MockBean ArticleAccessRepository articleAccessRepository;
     @MockBean ReaderContext readerContext;
     @MockBean AppSettingService appSettingService;
+    @MockBean MediaAssetService mediaAssetService;
 
     /** 建立一篇含 paywall 標記的文章 */
     private Campaign gatedArticle(String tier, int cost) {
@@ -123,6 +125,26 @@ class ReaderPageControllerTest {
             .decide(readerCaptor.capture(), subscribedCaptor.capture(), any(), any());
         assertNull(readerCaptor.getValue(), "未登入時傳給 decide() 的 reader 必須是 null");
         assertFalse(subscribedCaptor.getValue(), "未登入時傳給 decide() 的 subscribed 必須是 false");
+    }
+
+    /** 設定 MinIO 封面時，單篇頁輸出圖片且 alt 使用已跳脫文章主旨。 */
+    @Test
+    void articleRendersConfiguredMediaCover() throws Exception {
+        Campaign campaign = gatedArticle(Campaign.TIER_BASIC, 0);
+        campaign.setCoverMediaId(77L);
+        when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(campaign));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        when(mediaAssetService.publicUrl(77L))
+            .thenReturn(Optional.of("https://media.example.com/newsletter-media/images/cover.png"));
+        stubDecision(AccessDecisionService.Access.FULL, AccessDecisionService.Reason.BASIC_OPEN, 0);
+
+        String body = mvc.perform(get("/r/news/test-article"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(body.contains("class=\"article-hero-cover\""));
+        assertTrue(body.contains("https://media.example.com/newsletter-media/images/cover.png"));
+        assertTrue(body.contains("alt=\"測試文章\""));
     }
 
     /** 已登入但未確認訂閱：同樣不得含受限區 */

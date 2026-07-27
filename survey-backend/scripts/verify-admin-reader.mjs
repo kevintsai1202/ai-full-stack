@@ -96,6 +96,21 @@ async function loadPlaywright() {
 
 /** 用瀏覽器實際操作 admin.html 的「讀者管理」分頁，確認 UI 真的把資料渲染出來 */
 async function verifyBrowser() {
+  // 新版讀者管理以 audience_person 為主資料來源；單純授予 VIP 只會建立
+  // reader_account，畫面搜尋不到。先以可重跑的 import API 將測試帳號併入人物主檔，
+  // 才能讓這段瀏覽器驗證覆蓋目前真正使用的整合讀者列表。
+  const imported = await api('/api/admin/import', {
+    method: 'POST',
+    body: JSON.stringify({
+      source: 'exam',
+      people: [
+        { email: T1, name: 'Reader Verify 1' },
+        { email: T2, name: 'Reader Verify 2' },
+      ],
+    }),
+  });
+  eq(imported.status, 200, '瀏覽器測試人物名單準備');
+
   const playwright = await loadPlaywright();
   const chromium = playwright.chromium ?? playwright.default?.chromium;
   const browser = await chromium.launch();

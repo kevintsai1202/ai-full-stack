@@ -555,12 +555,14 @@ credits >= campaign.credit_cost           → PARTIAL + CAN_UNLOCK（顯示解�
 
 **已知限制**（寫入報表 UI 說明，避免誤判）：許多信箱預設封鎖遠端圖片，開信率是**下限**而非實數。因此開信資料**不作為補寄依據**（依 5.6 只看是否成功寄出）。
 
-### 5.8 圖片上傳（MinIO）
+### 5.8 圖片／檔案上傳（MinIO）
 
-- Zeabur 部署 MinIO 服務；bucket `newsletter-media` 設為公開讀取（信件圖片必須可被收件人信箱客戶端從外部匿名抓取）。
-- 後端以 AWS SDK for Java v2 的 S3 client 連 MinIO（`endpointOverride` + `pathStyleAccessEnabled(true)`）。
-- 上傳流程：admin 上傳 → 計算內容 SHA-256 → `object_key = {hash前16}.{ext}` → 已存在則直接回傳既有 URL（內容去重）→ 寫 `media_asset` → 回傳絕對 URL。
-- 限制：僅 `image/png|jpeg|gif|webp`，單檔 ≤ 5 MB。
+- Zeabur 部署 MinIO 服務；bucket `newsletter-media` 設為匿名唯讀（只允許 `s3:GetObject`，不得匿名列目錄或寫入），讓信件圖片能由外部信箱客戶端抓取。
+- 後端以 AWS SDK for Java v2 的 S3 client 連 MinIO（`endpointOverride` + `pathStyleAccessEnabled(true)`），固定使用同步 `URLConnectionHttpClient`；排除未使用的 Apache／Netty runtime client。
+- 上傳流程：admin 上傳 → 依 magic bytes／檔案結構確認實際格式 → 計算完整 SHA-256 → `object_key = {kind}/{完整hash}.{可信副檔名}` → 已存在則直接回傳既有 URL（內容去重）→ 寫 `media_asset` → 回傳絕對 URL。
+- 圖片：PNG／JPEG／GIF／WebP，單檔 ≤ 5 MB，另限制最多 4,000 萬像素。
+- 文件：PDF／UTF-8 TXT／CSV／DOCX／XLSX／PPTX，單檔 ≤ 10 MB，以 attachment 下載；SVG、HTML、JavaScript、可執行檔與泛用 ZIP 一律拒絕。
+- `campaign.cover_media_id` 可引用圖片封面；archive 與文章頁使用圖片，未設定時回退到 `cover_emoji`。
 - **未來遷移 Cloudflare R2**：R2 與 MinIO 同為 S3 API 相容，遷移只需搬物件 + 改 endpoint/credentials/bucket 設定，**不需要程式抽象層**。刻意不做 `MediaStorage` 介面（YAGNI）。
 
 ### 5.9 Raw HTML 引用

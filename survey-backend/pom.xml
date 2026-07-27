@@ -16,12 +16,25 @@
   <description>Landing page 問卷收集後端</description>
   <properties>
     <java.version>21</java.version>
+    <!-- MinIO 以 S3 相容 API 存取；使用 BOM 確保 AWS SDK 模組版本一致。 -->
+    <aws.java.sdk.version>2.47.3</aws.java.sdk.version>
     <!-- 明確壓到已修補版本；每次升級後以 OSV 掃描實際 runtime tree。 -->
     <jackson-bom.version>2.21.5</jackson-bom.version>
     <logback.version>1.5.34</logback.version>
     <commons-lang3.version>3.18.0</commons-lang3.version>
     <tomcat.version>10.1.57</tomcat.version>
   </properties>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>bom</artifactId>
+        <version>${aws.java.sdk.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
   <dependencies>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-data-jpa</artifactId></dependency>
@@ -44,6 +57,28 @@
       <groupId>org.apache.poi</groupId>
       <artifactId>poi-ooxml</artifactId>
       <version>5.5.1</version>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+      <!--
+        媒體儲存固定使用下方的 URLConnection 同步 client；排除 S3 預設附帶但未使用的
+        Apache／Netty runtime client，縮小映像與已知漏洞攻擊面。
+      -->
+      <exclusions>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>apache5-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>netty-nio-client</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>url-connection-client</artifactId>
     </dependency>
     <dependency>
       <groupId>io.jsonwebtoken</groupId>

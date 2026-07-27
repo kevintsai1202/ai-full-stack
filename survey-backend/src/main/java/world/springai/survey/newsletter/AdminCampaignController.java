@@ -101,14 +101,22 @@ public class AdminCampaignController {
      */
     public record SendRequest(String subject, String markdown, Filter filter, String mode, String scheduledAt,
                               String tier, Integer creditCost, String slug, String publishedAt,
-                              String coverEmoji, List<String> tags) {
+                              String coverEmoji, List<String> tags, Long coverMediaId) {
+
+        /** 圖片封面推出前的完整請求相容建構式。 */
+        public SendRequest(String subject, String markdown, Filter filter, String mode,
+                           String scheduledAt, String tier, Integer creditCost,
+                           String slug, String publishedAt, String coverEmoji, List<String> tags) {
+            this(subject, markdown, filter, mode, scheduledAt, tier, creditCost, slug,
+                publishedAt, coverEmoji, tags, null);
+        }
 
         /** 舊 Java 呼叫相容建構式。 */
         public SendRequest(String subject, String markdown, Filter filter, String mode,
                            String scheduledAt, String tier, Integer creditCost,
                            String slug, String publishedAt) {
             this(subject, markdown, filter, mode, scheduledAt, tier, creditCost, slug,
-                publishedAt, null, null);
+                publishedAt, null, null, null);
         }
     }
 
@@ -163,7 +171,7 @@ public class AdminCampaignController {
             @RequestHeader(value = KEY_HEADER, required = false) String key,
             @RequestBody SendRequest req) {
         guard.verify(key);
-        validateMetadata(req.coverEmoji(), req.tags());
+        validateMetadata(req.coverEmoji(), req.tags(), req.coverMediaId());
         // 從篩選條件取出 role / interest（允許 filter 為 null）
         String role = req.filter() == null ? null : req.filter().role();
         String interest = req.filter() == null ? null : req.filter().interest();
@@ -185,7 +193,7 @@ public class AdminCampaignController {
             req.tier(), req.creditCost(), req.slug(), parsePublishedAt(req.publishedAt()),
             req.filter() == null ? null : req.filter().audience(),
             req.filter() == null ? null : req.filter().savedSegmentId());
-        updateMetadata(result.campaignId(), req.coverEmoji(), req.tags());
+        updateMetadata(result.campaignId(), req.coverEmoji(), req.tags(), req.coverMediaId());
         return result;
     }
 
@@ -196,12 +204,19 @@ public class AdminCampaignController {
      * slug 為<b>必填</b>（與 {@link SendRequest} 不同），缺少時由 CampaignService 回 400。</p>
      */
     public record PublishRequest(String subject, String markdown, String tier, Integer creditCost,
-                                 String slug, String publishedAt, String coverEmoji, List<String> tags) {
+                                 String slug, String publishedAt, String coverEmoji, List<String> tags,
+                                 Long coverMediaId) {
+
+        /** 圖片封面推出前的完整請求相容建構式。 */
+        public PublishRequest(String subject, String markdown, String tier, Integer creditCost,
+                              String slug, String publishedAt, String coverEmoji, List<String> tags) {
+            this(subject, markdown, tier, creditCost, slug, publishedAt, coverEmoji, tags, null);
+        }
 
         /** 舊 Java 呼叫相容建構式。 */
         public PublishRequest(String subject, String markdown, String tier, Integer creditCost,
                               String slug, String publishedAt) {
-            this(subject, markdown, tier, creditCost, slug, publishedAt, null, null);
+            this(subject, markdown, tier, creditCost, slug, publishedAt, null, null, null);
         }
     }
 
@@ -221,11 +236,11 @@ public class AdminCampaignController {
             @RequestHeader(value = KEY_HEADER, required = false) String key,
             @RequestBody PublishRequest req) {
         guard.verify(key);
-        validateMetadata(req.coverEmoji(), req.tags());
+        validateMetadata(req.coverEmoji(), req.tags(), req.coverMediaId());
         CampaignService.PublishResult result = campaignService.publish(
             req.subject(), req.markdown(), req.tier(), req.creditCost(),
             req.slug(), parsePublishedAt(req.publishedAt()));
-        updateMetadata(result.campaignId(), req.coverEmoji(), req.tags());
+        updateMetadata(result.campaignId(), req.coverEmoji(), req.tags(), req.coverMediaId());
         return result;
     }
 
@@ -304,16 +319,17 @@ public class AdminCampaignController {
     }
 
     /** 新服務存在時，把 UI 中的 Emoji 與 hashtag 寫入剛建立的文章。 */
-    private void updateMetadata(long campaignId, String coverEmoji, List<String> tags) {
+    private void updateMetadata(long campaignId, String coverEmoji, List<String> tags,
+                                Long coverMediaId) {
         if (metadataService != null) {
-            metadataService.update(campaignId, coverEmoji, tags);
+            metadataService.update(campaignId, coverEmoji, tags, coverMediaId);
         }
     }
 
     /** 在任何寄送／發布副作用前先驗證新欄位。 */
-    private void validateMetadata(String coverEmoji, List<String> tags) {
+    private void validateMetadata(String coverEmoji, List<String> tags, Long coverMediaId) {
         if (metadataService != null) {
-            metadataService.validate(coverEmoji, tags);
+            metadataService.validate(coverEmoji, tags, coverMediaId);
         }
     }
 

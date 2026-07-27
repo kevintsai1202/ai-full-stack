@@ -36,6 +36,7 @@
   .source-picker{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:stretch}.source-create{margin-top:10px;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)}.source-create label{margin-top:0}.source-create[hidden]{display:none}.source-create-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
   .actions{display:flex;gap:8px;flex-wrap:wrap}.count{font-weight:800;color:var(--accent-deep);font-size:1.1rem}iframe.preview{width:100%;height:360px;border:1px solid var(--border);border-radius:8px;background:#fff}
   .editor-toolbar{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0}.editor-toolbar .btn{min-height:34px;padding:5px 9px}.tag-options{display:flex;gap:7px;flex-wrap:wrap;margin:7px 0 10px}.tag-option{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border:1px solid var(--border);border-radius:999px;background:var(--surface)}.tag-option input{width:16px;height:16px}
+  .media-panel{margin:12px 0;padding:14px;border:1px solid var(--border);border-radius:10px;background:#f8fbfa}.media-upload{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:end}.media-library{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:12px;max-height:330px;overflow:auto}.media-item{min-width:0;border:1px solid var(--border);border-radius:9px;background:#fff;overflow:hidden}.media-thumb{display:grid;place-items:center;aspect-ratio:16/9;background:var(--surface-2);color:var(--muted);font-size:1.8rem}.media-thumb img{width:100%;height:100%;object-fit:cover}.media-info{padding:9px}.media-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem;font-weight:750}.media-meta{font-size:.74rem;color:var(--muted)}.media-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}.media-actions .btn{min-height:30px;padding:4px 7px;font-size:.76rem}.cover-selection{display:flex;align-items:center;gap:10px;margin-top:10px;padding:9px;border:1px dashed var(--border-strong);border-radius:9px}.cover-selection img{width:92px;aspect-ratio:16/9;object-fit:cover;border-radius:6px}.cover-selection .cover-copy{min-width:0;flex:1}.cover-selection strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .msg{margin-top:12px;padding:10px 12px;border-radius:8px;display:none}.msg.ok{display:block;background:var(--accent-soft);color:var(--accent-deep)}.msg.err{display:block;background:#fde8e8;color:var(--danger)}
   .gate{position:fixed;inset:0;background:rgba(16,32,51,.66);display:flex;align-items:center;justify-content:center;z-index:50}.gate .box{background:#fff;border-radius:var(--r);padding:28px;max-width:400px;width:90%;box-shadow:0 24px 70px rgba(0,0,0,.22)}
   .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px}
@@ -53,8 +54,8 @@
   .advanced-filters{margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:10px;background:#f8fbfa}.advanced-filters summary{cursor:pointer;font-weight:800;color:var(--accent-deep)}
   .reader-detail-dialog{width:min(1040px,94vw);max-height:90vh;border:0;border-radius:14px;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.28)}.reader-detail-dialog::backdrop{background:rgba(16,32,51,.62)}.reader-detail-dialog h3{margin:22px 0 8px}
   details.schema-settings{margin-top:14px;border-top:1px solid var(--border);padding-top:12px}details.schema-settings summary{cursor:pointer;font-weight:750}
-  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.chart-grid,#campaign-view,#readers-view{grid-template-columns:1fr}.full,#campaign-view>.card:nth-child(n),#readers-view>.card:nth-child(n){grid-column:auto}.filters,.dynamic-toolbar{grid-template-columns:1fr 1fr}.wrap{padding-inline:16px}.tabs{overflow-x:auto;position:static}.tab{flex:0 0 auto}}
-  @media(max-width:520px){.kpis,.filters,.dynamic-toolbar{grid-template-columns:1fr}.bar-row{grid-template-columns:minmax(95px,1.2fr) 2fr 44px}.form-row,.import-fields{align-items:stretch;flex-direction:column}.form-row .btn,.source-picker .btn{width:100%}.source-picker{grid-template-columns:1fr}.page-head .btn{width:100%}}
+  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.chart-grid,#campaign-view,#readers-view{grid-template-columns:1fr}.full,#campaign-view>.card:nth-child(n),#readers-view>.card:nth-child(n){grid-column:auto}.filters,.dynamic-toolbar{grid-template-columns:1fr 1fr}.media-library{grid-template-columns:repeat(2,minmax(0,1fr))}.wrap{padding-inline:16px}.tabs{overflow-x:auto;position:static}.tab{flex:0 0 auto}}
+  @media(max-width:520px){.kpis,.filters,.dynamic-toolbar,.media-upload,.media-library{grid-template-columns:1fr}.bar-row{grid-template-columns:minmax(95px,1.2fr) 2fr 44px}.form-row,.import-fields{align-items:stretch;flex-direction:column}.form-row .btn,.source-picker .btn,.media-upload .btn{width:100%}.source-picker{grid-template-columns:1fr}.page-head .btn{width:100%}}
   @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style>
 </head>
@@ -171,6 +172,18 @@
         <button type="button" class="btn ghost format-btn" data-template="<!--paywall-->\n" title="付費牆">付費牆</button>
       </div>
       <textarea id="markdown" placeholder="# 標題&#10;&#10;支援 **粗體**、清單、[連結](https://...)"></textarea>
+      <details class="media-panel" id="media-panel" open>
+        <summary style="cursor:pointer;font-weight:800;color:var(--accent-deep)">圖片／檔案上傳（MinIO）</summary>
+        <p class="hint">圖片可插入內文或設為封面；文件會插入下載連結。圖片限 PNG/JPEG/GIF/WebP 5 MB，文件限 PDF/TXT/CSV/DOCX/XLSX/PPTX 10 MB。</p>
+        <div class="media-upload">
+          <div><label for="media-file" style="margin-top:0">選擇檔案</label><input type="file" id="media-file" accept="image/png,image/jpeg,image/gif,image/webp,.pdf,.txt,.csv,.docx,.xlsx,.pptx"></div>
+          <button type="button" class="btn" id="media-upload-btn">上傳</button>
+          <button type="button" class="btn ghost" id="media-refresh-btn">重新整理</button>
+        </div>
+        <div class="msg" id="media-msg"></div>
+        <div class="cover-selection" id="media-cover-selection"><div class="cover-copy"><strong>尚未選擇圖片封面</strong><span class="hint">未選擇時會使用下方 Emoji。</span></div></div>
+        <div class="media-library" id="media-library"><span class="hint">媒體庫載入中…</span></div>
+      </details>
       <div class="row" style="margin-top:10px">
         <div><label for="cover-emoji">封面 Emoji</label><select id="cover-emoji"><option value="">📝 預設</option><option>🚀</option><option>💡</option><option>🤖</option><option>🧠</option><option>🛠️</option><option>📚</option><option>✨</option></select></div>
         <div><label for="emoji-picker">插入 Emoji</label><select id="emoji-picker"><option value="">選擇 Emoji</option><option>😀</option><option>🎉</option><option>✅</option><option>👉</option><option>💡</option><option>🚀</option><option>⚠️</option><option>❤️</option><option>🔥</option><option>📌</option></select></div>
@@ -488,6 +501,9 @@
   const selectedDeliveryEmails=new Set();
   /** 目前文章已選 hashtag 名稱，包含預設與本次新增的自訂值。 */
   const selectedCampaignTags=new Set();
+  /** 最近載入的媒體庫，以及草稿目前選用的圖片封面 ID。 */
+  let mediaLibrary=[];
+  let selectedCoverMediaId=null;
   let previewTimer=null;
 
   /** 取得目前分頁保存的管理金鑰。 */
@@ -613,7 +629,7 @@
     fillSelect('#role',ROLES);fillSelect('#interest',INTERESTS);
     loadAudienceSources();
     loadAudienceInsightOptions();
-    restoreComposeDraft();loadCampaignTags();
+    restoreComposeDraft();loadCampaignTags();loadMediaLibrary();
     document.querySelectorAll('.tab').forEach(tab=>tab.onclick=()=>switchView(tab.dataset.view));
     $('#lock-btn').onclick=()=>{sessionStorage.removeItem(KEY);location.reload();};
     $('#analytics-refresh').onclick=()=>loadAnalytics(true);$('#export-json').onclick=()=>downloadProtected('/api/admin/survey','survey-responses.json');$('#export-csv').onclick=()=>downloadProtected('/api/admin/survey?format=csv','survey-responses.csv');$('#export-pdf').onclick=exportPdf;
@@ -628,6 +644,8 @@
     $('#campaign-custom-tag').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();addCampaignTag();}});
     ['#subject','#markdown'].forEach(selector=>$(selector).addEventListener('input',composeChanged));
     $('#cover-emoji').onchange=composeChanged;
+    $('#media-upload-btn').onclick=uploadMedia;
+    $('#media-refresh-btn').onclick=loadMediaLibrary;
     $('#delivery-close').onclick=closeDelivery;$('#delivery-refresh').onclick=()=>{deliveryPage=0;loadDeliveryRecipients();};$('#delivery-status').onchange=()=>{deliveryPage=0;selectedDeliveryEmails.clear();loadDeliveryRecipients();};$('#delivery-size').onchange=()=>{deliveryPage=0;loadDeliveryRecipients();};$('#delivery-mode').onchange=()=>{$('#delivery-scheduled-at').disabled=$('#delivery-mode').value!=='schedule';};$('#delivery-send').onclick=sendDeliveryBatch;$('#delivery-check-all').onchange=toggleDeliveryPage;$('#delivery-prev').onclick=()=>{if(deliveryPage>0){deliveryPage--;loadDeliveryRecipients();}};$('#delivery-next').onclick=()=>{if((deliveryPage+1)*deliveryResult.size<deliveryResult.total){deliveryPage++;loadDeliveryRecipients();}};$('#delivery-q').addEventListener('keydown',event=>{if(event.key==='Enter'){deliveryPage=0;loadDeliveryRecipients();}});
     $('#invite-refresh').onclick=()=>{doInviteOverview();doQuota();};$('#invite-source').onchange=doInviteOverview;$('#invite-send-btn').onclick=doSendInvites;$('#invite-remind-btn').onclick=doSendReminders;
     $('#invite-tpl').addEventListener('toggle',()=>{if($('#invite-tpl').open)loadInviteTemplate();});$('#tpl-preview-btn').onclick=previewInviteTemplate;$('#tpl-save-btn').onclick=saveInviteTemplate;
@@ -987,7 +1005,7 @@
   function composeChanged(){
     try{localStorage.setItem('newsletter-compose-draft',JSON.stringify({
       subject:$('#subject').value,markdown:$('#markdown').value,coverEmoji:$('#cover-emoji').value,
-      tags:[...selectedCampaignTags],savedAt:new Date().toISOString()
+      coverMediaId:selectedCoverMediaId,tags:[...selectedCampaignTags],savedAt:new Date().toISOString()
     }));}catch{}
     clearTimeout(previewTimer);previewTimer=setTimeout(doPreview,500);
   }
@@ -1000,8 +1018,124 @@
       if(!$('#subject').value)$('#subject').value=draft.subject||'';
       if(!$('#markdown').value)$('#markdown').value=draft.markdown||'';
       $('#cover-emoji').value=draft.coverEmoji||'';
+      selectedCoverMediaId=draft.coverMediaId!=null&&Number.isSafeInteger(Number(draft.coverMediaId))
+        ?Number(draft.coverMediaId):null;
       (draft.tags||[]).forEach(tag=>selectedCampaignTags.add(tag));
     }catch{}
+  }
+
+  /** 將位元組數轉成精簡的人類可讀文字。 */
+  function mediaSize(bytes){
+    if(bytes<1024)return bytes+' B';
+    if(bytes<1024*1024)return (bytes/1024).toFixed(1)+' KB';
+    return (bytes/1024/1024).toFixed(1)+' MB';
+  }
+
+  /** 將不可信檔名轉成安全的 Markdown 連結文字。 */
+  function markdownLabel(value){
+    return String(value||'下載檔案').replace(/\\/g,'\\\\').replace(/([\[\]()])/g,'\\$1').replace(/[\r\n]+/g,' ');
+  }
+
+  /** 載入最近媒體並以 DOM API 渲染，避免檔名造成 XSS。 */
+  async function loadMediaLibrary(){
+    const host=$('#media-library');
+    try{
+      mediaLibrary=await api('/api/admin/media?limit=200');
+      renderMediaLibrary();
+      renderCoverSelection();
+    }catch(error){
+      if(error.message!=='401'){host.textContent='媒體庫載入失敗：'+error.message;}
+    }
+  }
+
+  /** 渲染媒體庫卡片與插入／封面操作。 */
+  function renderMediaLibrary(){
+    const host=$('#media-library');host.replaceChildren();
+    if(!mediaLibrary.length){host.append(emptyNode('尚未上傳任何媒體'));return;}
+    mediaLibrary.forEach(asset=>{
+      const card=document.createElement('article');card.className='media-item';
+      const thumb=document.createElement('div');thumb.className='media-thumb';
+      if(asset.kind==='IMAGE'){
+        const image=document.createElement('img');image.src=asset.url;image.alt='';image.loading='lazy';thumb.append(image);
+      }else{thumb.textContent='📎';}
+      const info=document.createElement('div');info.className='media-info';
+      const name=document.createElement('span');name.className='media-name';name.title=asset.originalName;name.textContent=asset.originalName;
+      const meta=document.createElement('span');meta.className='media-meta';
+      meta.textContent=asset.kind==='IMAGE'
+        ?`${asset.width}×${asset.height} · ${mediaSize(asset.sizeBytes)}`
+        :`${asset.contentType} · ${mediaSize(asset.sizeBytes)}`;
+      const actions=document.createElement('div');actions.className='media-actions';
+      const insert=document.createElement('button');insert.type='button';insert.className='btn ghost';
+      insert.textContent=asset.kind==='IMAGE'?'插入圖片':'插入連結';insert.onclick=()=>insertMedia(asset);
+      actions.append(insert);
+      if(asset.kind==='IMAGE'){
+        const cover=document.createElement('button');cover.type='button';cover.className='btn ghost media-cover-btn';
+        cover.textContent=asset.id===selectedCoverMediaId?'封面使用中':'設為封面';
+        cover.disabled=asset.id===selectedCoverMediaId||editingCampaignId!=null;cover.onclick=()=>setCoverMedia(asset.id);
+        actions.append(cover);
+      }
+      const copy=document.createElement('button');copy.type='button';copy.className='btn ghost';
+      copy.textContent='複製網址';copy.onclick=async()=>{
+        try{await navigator.clipboard.writeText(asset.url);showMsg('media-msg','已複製公開網址。',true);}
+        catch{showMsg('media-msg','瀏覽器不允許存取剪貼簿，請使用插入按鈕。',false);}
+      };
+      actions.append(copy);info.append(name,meta,actions);card.append(thumb,info);host.append(card);
+    });
+  }
+
+  /** 上傳選定檔案；成功後加入媒體庫最前方。 */
+  async function uploadMedia(){
+    const input=$('#media-file'),file=input.files?.[0],button=$('#media-upload-btn');
+    if(!file){showMsg('media-msg','請先選擇檔案。',false);return;}
+    const form=new FormData();form.append('file',file);
+    button.disabled=true;button.textContent='上傳中…';
+    try{
+      const asset=await api('/api/admin/media',{method:'POST',body:form});
+      mediaLibrary=[asset,...mediaLibrary.filter(item=>item.id!==asset.id)];
+      renderMediaLibrary();input.value='';
+      showMsg('media-msg',asset.kind==='IMAGE'
+        ?'圖片已上傳，可插入內文或設為封面。'
+        :'文件已上傳，可插入下載連結。',true);
+    }catch(error){
+      if(error.message!=='401')showMsg('media-msg','上傳失敗：'+error.message,false);
+    }finally{button.disabled=false;button.textContent='上傳';}
+  }
+
+  /** 在 Markdown 游標位置插入公開圖片或文件下載連結。 */
+  function insertMedia(asset){
+    const editor=$('#markdown'),start=editor.selectionStart,end=editor.selectionEnd;
+    const label=markdownLabel(asset.originalName.replace(/\.[^.]+$/,''));
+    const markdown=asset.kind==='IMAGE'
+      ?`![${label}](${asset.url})\n`
+      :`[📎 ${markdownLabel(asset.originalName)}](${asset.url})\n`;
+    editor.setRangeText(markdown,start,end,'end');editor.focus();composeChanged();
+    showMsg('media-msg',asset.kind==='IMAGE'?'已插入圖片。':'已插入文件連結。',true);
+  }
+
+  /** 設定或清除目前草稿的圖片封面。 */
+  function setCoverMedia(mediaId){
+    selectedCoverMediaId=mediaId==null?null:Number(mediaId);
+    renderCoverSelection();renderMediaLibrary();composeChanged();
+  }
+
+  /** 顯示目前圖片封面與清除按鈕。 */
+  function renderCoverSelection(){
+    const host=$('#media-cover-selection');host.replaceChildren();
+    const selected=mediaLibrary.find(asset=>asset.id===selectedCoverMediaId&&asset.kind==='IMAGE');
+    if(selected){
+      const image=document.createElement('img');image.src=selected.url;image.alt='';
+      const copy=document.createElement('div');copy.className='cover-copy';
+      const title=document.createElement('strong');title.textContent=selected.originalName;
+      const hint=document.createElement('span');hint.className='hint';hint.textContent='已設為文章封面，會顯示於列表與文章頁。';
+      copy.append(title,hint);
+      const clear=document.createElement('button');clear.type='button';clear.className='btn ghost media-cover-clear';clear.textContent='清除封面';clear.disabled=editingCampaignId!=null;clear.onclick=()=>setCoverMedia(null);
+      host.append(image,copy,clear);
+    }else{
+      const copy=document.createElement('div');copy.className='cover-copy';
+      const title=document.createElement('strong');title.textContent=selectedCoverMediaId?'封面圖片載入中…':'尚未選擇圖片封面';
+      const hint=document.createElement('span');hint.className='hint';hint.textContent='未選擇時會使用下方 Emoji。';
+      copy.append(title,hint);host.append(copy);
+    }
   }
 
   /** 從後端載入 hashtag，並保留草稿中的自訂標籤。 */
@@ -1184,7 +1318,8 @@
   function publishFields(){
     const slug=$('#art-slug').value.trim(),cost=$('#art-cost').value.trim();
     return {tier:$('#art-tier').value,creditCost:cost?Number(cost):null,slug:slug||null,
-      coverEmoji:$('#cover-emoji').value||null,tags:[...selectedCampaignTags]};
+      coverEmoji:$('#cover-emoji').value||null,tags:[...selectedCampaignTags],
+      coverMediaId:selectedCoverMediaId};
   }
   /**
    * 發布欄位的啟用／停用（「修改排程」模式用）。
@@ -1195,9 +1330,14 @@
    * 所以直接停用並明說，而不是靜默丟棄。
    */
   function setPublishFieldsEnabled(enabled){
-    ['#art-slug','#art-tier','#art-cost','#cover-emoji','#campaign-custom-tag','#campaign-add-tag']
+    ['#art-slug','#art-tier','#art-cost','#cover-emoji','#campaign-custom-tag','#campaign-add-tag',
+      '#media-file','#media-upload-btn']
       .forEach(sel=>{$(sel).disabled=!enabled;});
     document.querySelectorAll('#campaign-tag-options input').forEach(input=>input.disabled=!enabled);
+    document.querySelectorAll('.media-cover-btn,.media-cover-clear').forEach(button=>{
+      button.disabled=!enabled||(button.classList.contains('media-cover-btn')
+        &&button.textContent==='封面使用中');
+    });
     // 「只發布不寄送」會建立一筆新文章，與「修改既有排程」是兩件互斥的事；
     // 三個發布欄位已被停用時它也必須停用，否則按下去會用停用中（=舊批次）的值建新文章。
     $('#publish-btn').disabled=!enabled;
@@ -1227,6 +1367,8 @@
         // slug 在 campaign 表有 UNIQUE 約束：留著上一封的值，下一封必定撞 400
         //「slug 已被使用」。成功送出後清空，讓「一次一篇」成為預設行為。
         $('#art-slug').value='';
+        // 封面屬於單篇文章，寄送完成後清除，避免下一封誤用上一封封面。
+        setCoverMedia(null);
       }
       doHistory();doQuota(); // 寄送後已用額度改變，重新偵測（後端也已讓快取失效）
     }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent=(editing?'更新排程失敗：':'發送失敗：')+e.message;}}
@@ -1282,6 +1424,7 @@
       // 點數也一併清空：留著上一篇的價格，下一篇的預填會被第一道守門擋住（欄位非空），
       // 而殘留的數字可能被誤信為預設值直接發布——發布後凍結、沒有改價路徑。
       $('#art-cost').value='';
+      setCoverMedia(null);
       if($('#art-tier').value==='PREMIUM')$('#cost-hint').textContent=COST_FREEZE_HINT;
       doHistory();
     }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='發布失敗：'+e.message;}}

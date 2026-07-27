@@ -142,6 +142,10 @@ public class Campaign {
     @Column(name = "cover_emoji")
     private String coverEmoji;
 
+    /** MinIO 圖片封面 ID；空值時使用封面 Emoji。 */
+    @Column(name = "cover_media_id")
+    private Long coverMediaId;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -226,6 +230,8 @@ public class Campaign {
     public void setFilterLevels(String filterLevels) { this.filterLevels = filterLevels; }
     public String getCoverEmoji() { return coverEmoji; }
     public void setCoverEmoji(String coverEmoji) { this.coverEmoji = coverEmoji; }
+    public Long getCoverMediaId() { return coverMediaId; }
+    public void setCoverMediaId(Long coverMediaId) { this.coverMediaId = coverMediaId; }
 
     /** 是否為進階內容（需點數或 VIP） */
     public boolean isPremium() {

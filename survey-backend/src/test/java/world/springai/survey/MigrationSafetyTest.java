@@ -173,6 +173,22 @@ class MigrationSafetyTest {
         }
     }
 
+    /** V14 只新增媒體表與 nullable 封面外鍵，不改寫既有 campaign。 */
+    @Test
+    void articleMediaSchemaIsAdditiveAndReady() throws SQLException {
+        assertEquals(1, queryInt("""
+            SELECT count(*) FROM information_schema.tables
+             WHERE table_schema = 'public' AND table_name = 'media_asset'
+            """));
+        assertEquals(1, queryInt("""
+            SELECT count(*) FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'campaign'
+               AND column_name = 'cover_media_id' AND is_nullable = 'YES'
+            """));
+        assertEquals(0, queryInt("SELECT count(*) FROM campaign WHERE cover_media_id IS NOT NULL"),
+            "既有文章不得被自動綁定任意封面");
+    }
+
     /** V10 的彈性名單底座必須完整建立，避免只建立人物表卻無法保存活動、Fact 或匯入稽核。 */
     @Test
     void flexibleAudienceTablesAreCreated() throws SQLException {

@@ -16,6 +16,11 @@ spring:
     # 重新徵求（設計文件 §4.0 的硬約束）。Flyway 11 的預設值已是 true，
     # 但這條約束太重要，不依賴預設值。
     clean-disabled: true
+  servlet:
+    multipart:
+      # 應用層仍會依圖片／文件類型做更嚴格的 5 MB／10 MB 檢查。
+      max-file-size: 10MB
+      max-request-size: 11MB
 server:
   port: ${PORT:8080}
   # 由受信任反向代理（Zeabur）還原真實來源 IP，供登入防濫用節流使用。
@@ -36,6 +41,18 @@ app:
     # 0 表示不自動清理；設定正整數後只清 raw_data，摘要與 Fact 仍保留。
     raw-retention-days: ${AUDIENCE_RAW_RETENTION_DAYS:0}
     retention-cron: ${AUDIENCE_RETENTION_CRON:0 35 3 * * *}
+  media:
+    # 本機與測試預設停用；正式環境啟用後若 MinIO 無法初始化會拒絕啟動。
+    enabled: ${MEDIA_STORAGE_ENABLED:false}
+    endpoint: ${MINIO_ENDPOINT:http://127.0.0.1:9000}
+    public-base-url: ${MINIO_PUBLIC_BASE_URL:http://127.0.0.1:9000}
+    access-key: ${MINIO_ACCESS_KEY:}
+    secret-key: ${MINIO_SECRET_KEY:}
+    bucket: ${MINIO_BUCKET:newsletter-media}
+    region: ${MINIO_REGION:us-east-1}
+    image-max-bytes: ${MEDIA_IMAGE_MAX_BYTES:5242880}
+    file-max-bytes: ${MEDIA_FILE_MAX_BYTES:10485760}
+    image-max-pixels: ${MEDIA_IMAGE_MAX_PIXELS:40000000}
   # 管理後台專用入口；設定後該 Host 只允許 admin.html 與 /api/admin/**。
   admin:
     entry-host: ${ADMIN_ENTRY_HOST:}

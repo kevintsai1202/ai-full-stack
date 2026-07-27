@@ -11,6 +11,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import world.springai.survey.media.MediaAssetService;
 
 /** 管理文章封面 Emoji 與正規化 hashtag。 */
 @Service
@@ -18,10 +19,12 @@ public class CampaignMetadataService {
 
     private static final int MAX_TAGS = 8;
     private final JdbcTemplate jdbc;
+    private final MediaAssetService mediaAssetService;
 
-    /** 注入資料庫查詢工具。 */
-    public CampaignMetadataService(JdbcTemplate jdbc) {
+    /** 注入資料庫查詢工具與媒體驗證服務。 */
+    public CampaignMetadataService(JdbcTemplate jdbc, MediaAssetService mediaAssetService) {
         this.jdbc = jdbc;
+        this.mediaAssetService = mediaAssetService;
     }
 
     /** 列出後台可選 hashtag。 */
@@ -36,14 +39,15 @@ public class CampaignMetadataService {
 
     /** 儲存文章 Emoji 與 hashtag；同名標籤會自動共用。 */
     @Transactional
-    public void update(long campaignId, String coverEmoji, List<String> requestedTags) {
-        validate(coverEmoji, requestedTags);
+    public void update(long campaignId, String coverEmoji, List<String> requestedTags,
+                       Long coverMediaId) {
+        validate(coverEmoji, requestedTags, coverMediaId);
         if (jdbc.queryForObject("SELECT count(*) FROM campaign WHERE id = ?", Long.class, campaignId) == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到指定文章");
         }
         String emoji = coverEmoji == null ? null : coverEmoji.strip();
-        jdbc.update("UPDATE campaign SET cover_emoji = ? WHERE id = ?",
-            emoji == null || emoji.isBlank() ? null : emoji, campaignId);
+        jdbc.update("UPDATE campaign SET cover_emoji = ?, cover_media_id = ? WHERE id = ?",
+            emoji == null || emoji.isBlank() ? null : emoji, coverMediaId, campaignId);
 
         LinkedHashSet<String> tags = new LinkedHashSet<>();
         if (requestedTags != null) {
@@ -73,8 +77,14 @@ public class CampaignMetadataService {
         }
     }
 
+    /** 舊呼叫相容：只更新 Emoji 與 hashtag。 */
+    public void update(long campaignId, String coverEmoji, List<String> requestedTags) {
+        update(campaignId, coverEmoji, requestedTags, null);
+    }
+
     /** 在寄信或發布產生副作用前先驗證中繼資料，避免信已寄出才回 400。 */
-    public void validate(String coverEmoji, List<String> requestedTags) {
+    public void validate(String coverEmoji, List<String> requestedTags, Long coverMediaId) {
+        mediaAssetService.requireImage(coverMediaId);
         String emoji = coverEmoji == null ? null : coverEmoji.strip();
         if (emoji != null && emoji.codePointCount(0, emoji.length()) > 4) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "封面 Emoji 最多 4 個字元");
@@ -94,6 +104,11 @@ public class CampaignMetadataService {
         if (tags.stream().anyMatch(name -> name.codePointCount(0, name.length()) > 30)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "hashtag 最多 30 個字元");
         }
+    }
+
+    /** 舊呼叫相容：沒有圖片封面。 */
+    public void validate(String coverEmoji, List<String> requestedTags) {
+        validate(coverEmoji, requestedTags, null);
     }
 
     /** 將自訂標籤轉為可放在查詢參數中的穩定 slug。 */

@@ -16,6 +16,7 @@ import world.springai.survey.newsletter.CampaignRepository;
 import world.springai.survey.newsletter.ContentSplitter;
 import world.springai.survey.newsletter.MarkdownRenderer;
 import world.springai.survey.newsletter.PublicCampaignTagService;
+import world.springai.survey.media.MediaAssetService;
 
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -49,6 +50,7 @@ public class ReaderPageController {
     private final ReaderContext readerContext;
     private final HtmlTemplate htmlTemplate;
     private final PublicCampaignTagService campaignTagService;
+    private final MediaAssetService mediaAssetService;
 
     /**
      * 注入內容、授權與渲染所需的服務。
@@ -65,7 +67,8 @@ public class ReaderPageController {
                                ArticleAccessRepository articleAccessRepository,
                                ReaderContext readerContext,
                                HtmlTemplate htmlTemplate,
-                               ObjectProvider<PublicCampaignTagService> campaignTagServiceProvider) {
+                               ObjectProvider<PublicCampaignTagService> campaignTagServiceProvider,
+                               MediaAssetService mediaAssetService) {
         this.campaignRepository = campaignRepository;
         this.markdownRenderer = markdownRenderer;
         this.contentSplitter = contentSplitter;
@@ -74,6 +77,7 @@ public class ReaderPageController {
         this.readerContext = readerContext;
         this.htmlTemplate = htmlTemplate;
         this.campaignTagService = campaignTagServiceProvider.getIfAvailable();
+        this.mediaAssetService = mediaAssetService;
     }
 
     /** 舊單元測試相容建構式；沒有標籤服務時維持原本列表行為。 */
@@ -92,6 +96,7 @@ public class ReaderPageController {
         this.readerContext = readerContext;
         this.htmlTemplate = htmlTemplate;
         this.campaignTagService = null;
+        this.mediaAssetService = null;
     }
 
     /** 歷史內容列表：只列已發布者，登入者會看到自己的解鎖狀態 */
@@ -178,6 +183,7 @@ public class ReaderPageController {
         vars.put("<!--ARTICLE_TITLE-->", HtmlTemplate.escapeHtml(campaign.getSubject()));
         vars.put("<!--ARTICLE_META-->", renderMeta(campaign));
         vars.put("<!--ARTICLE_TAGS-->", renderArticleTags(campaign.getId()));
+        vars.put("<!--ARTICLE_COVER-->", renderArticleCover(campaign));
         vars.put("<!--ARTICLE_CONTENT-->", contentHtml); // 已是渲染後的 HTML，不可再跳脫
         vars.put("<!--NAV_LINKS-->", ReaderNav.links(current.isPresent()));
         // 只有「未取得全文且該文章真的有受限區」時才需要 paywall 區塊
@@ -249,6 +255,13 @@ public class ReaderPageController {
             ? Map.of()
             : campaignTagService.tagsByCampaign(
                 articles.stream().map(Campaign::getId).filter(java.util.Objects::nonNull).toList());
+        Map<Long, String> coverUrls = mediaAssetService == null
+            ? Map.of()
+            : mediaAssetService.publicUrls(articles.stream()
+                .map(Campaign::getCoverMediaId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList());
         StringBuilder sb = new StringBuilder("<div class=\"article-grid\">");
         for (Campaign c : articles) {
             ContentSplitter.Split split = contentSplitter.split(c.getMarkdown());
@@ -256,8 +269,15 @@ public class ReaderPageController {
             int minutes = Math.max(1, summary.replaceAll("\\s+", "").length() / 220 + 1);
             sb.append("<article class=\"article-card\">")
               .append("<a class=\"article-cover\" href=\"/r/news/")
-              .append(HtmlTemplate.escapeHtml(c.getSlug())).append("\" aria-hidden=\"true\" tabindex=\"-1\">")
-              .append(HtmlTemplate.escapeHtml(c.getCoverEmoji() == null ? "📝" : c.getCoverEmoji()))
+              .append(HtmlTemplate.escapeHtml(c.getSlug())).append("\" aria-hidden=\"true\" tabindex=\"-1\">");
+            String coverUrl = c.getCoverMediaId() == null ? null : coverUrls.get(c.getCoverMediaId());
+            if (coverUrl != null) {
+                sb.append("<img src=\"").append(HtmlTemplate.escapeHtml(coverUrl))
+                    .append("\" alt=\"\" loading=\"lazy\" decoding=\"async\">");
+            } else {
+                sb.append(HtmlTemplate.escapeHtml(c.getCoverEmoji() == null ? "📝" : c.getCoverEmoji()));
+            }
+            sb
               .append("</a><div class=\"article-card-body\"><div class=\"article-meta\">")
               .append(renderMeta(c)).append("<span>").append(minutes).append(" 分鐘閱讀</span></div>")
               .append("<h2><a href=\"/r/news/").append(HtmlTemplate.escapeHtml(c.getSlug())).append("\">")
@@ -277,6 +297,19 @@ public class ReaderPageController {
               .append(HtmlTemplate.escapeHtml(c.getSlug())).append("\">閱讀文章 →</a></div></article>");
         }
         return sb.append("</div>").toString();
+    }
+
+    /** 渲染單篇文章封面；沒有圖片時不額外輸出 Emoji 大圖。 */
+    private String renderArticleCover(Campaign campaign) {
+        if (mediaAssetService == null || campaign.getCoverMediaId() == null) {
+            return "";
+        }
+        return mediaAssetService.publicUrl(campaign.getCoverMediaId())
+            .map(url -> "<figure class=\"article-hero-cover\"><img src=\""
+                + HtmlTemplate.escapeHtml(url) + "\" alt=\""
+                + HtmlTemplate.escapeHtml(campaign.getSubject())
+                + "\" fetchpriority=\"high\" decoding=\"async\"></figure>")
+            .orElse("");
     }
 
     /** 渲染 archive 的 hashtag 篩選列。 */
