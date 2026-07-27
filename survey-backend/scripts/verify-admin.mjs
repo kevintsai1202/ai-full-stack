@@ -84,17 +84,31 @@ try {
   await page.waitForFunction(() => /\d/.test(document.querySelector('#rcount')?.textContent || ''), null, { timeout: 15000 });
   console.log('OK 收件數載入：', await page.locator('#rcount').textContent());
 
-  // 6. 撰寫 + 預覽 → iframe 應有渲染內容
+  // 6. 分隔線與付費牆必須插入真正換行，不可把 "\n" 字面值寫進內文
+  await page.fill('#markdown', '');
+  await page.getByRole('button', { name: '分隔線', exact: true }).click();
+  await page.getByRole('button', { name: '付費牆', exact: true }).click();
+  const blockMarkdown = await page.inputValue('#markdown');
+  if (blockMarkdown !== '---\n\n<!--paywall-->\n\n') {
+    fail(`Markdown 區塊插入格式錯誤：${JSON.stringify(blockMarkdown)}`);
+  }
+  console.log('OK 分隔線與付費牆插入真正換行');
+
+  // 7. 撰寫 + 付費牆預覽 → iframe 應顯示免費區、分界與付費內容預覽
   await page.fill('#subject', '驗證用主旨');
-  await page.fill('#markdown', '# Hello\n\nverify body');
+  await page.fill('#markdown', '# Hello\n\n免費內容\n\n<!--paywall-->\n\n付費內容');
   await page.click('#preview-btn');
   await page.waitForFunction(() => {
     const f = document.querySelector('#preview');
-    return f && f.srcdoc && f.srcdoc.includes('Hello');
+    return f && f.srcdoc
+      && f.srcdoc.includes('Hello')
+      && f.srcdoc.includes('付費牆分界')
+      && f.srcdoc.includes('付費內容預覽')
+      && !f.srcdoc.includes('<!--paywall-->');
   }, null, { timeout: 15000 });
-  console.log('OK 預覽渲染成功');
+  console.log('OK 付費牆預覽渲染成功');
 
-  // 7. 回到分析頁並截圖留存
+  // 8. 回到分析頁並截圖留存
   await page.click('#tab-analytics');
   await mkdir('output/playwright', { recursive: true });
   await page.screenshot({ path: 'output/playwright/survey-admin-verify.png', fullPage: true });

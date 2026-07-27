@@ -168,8 +168,8 @@
         <button type="button" class="btn ghost format-btn" data-wrap="`" title="行內程式碼">&lt;/&gt;</button>
         <button type="button" class="btn ghost format-btn" data-template="[連結文字](https://)" title="連結">連結</button>
         <button type="button" class="btn ghost format-btn" data-template="![圖片說明](https://)" title="圖片">圖片</button>
-        <button type="button" class="btn ghost format-btn" data-template="---\n" title="分隔線">分隔線</button>
-        <button type="button" class="btn ghost format-btn" data-template="<!--paywall-->\n" title="付費牆">付費牆</button>
+        <button type="button" class="btn ghost format-btn" data-block="---" title="分隔線">分隔線</button>
+        <button type="button" class="btn ghost format-btn" data-block="<!--paywall-->" title="付費牆">付費牆</button>
       </div>
       <textarea id="markdown" placeholder="# 標題&#10;&#10;支援 **粗體**、清單、[連結](https://...)"></textarea>
       <details class="media-panel" id="media-panel" open>
@@ -987,6 +987,14 @@
       const lineStart=editor.value.lastIndexOf('\n',Math.max(0,start-1))+1;
       editor.setRangeText(prefix,lineStart,lineStart,'end');editor.focus();
       editor.setSelectionRange(start+prefix.length,end+prefix.length);composeChanged();return;
+    }else if(button.dataset.block!=null){
+      // 分隔線與付費牆都是區塊標記，必須各自位於獨立一行。
+      // 依游標前後既有換行補足空白行，避免插入字面 "\n" 或黏在正文同一行。
+      const before=editor.value.slice(0,start),after=editor.value.slice(end);
+      const leading=!before?'':before.endsWith('\n\n')?'':before.endsWith('\n')?'\n':'\n\n';
+      const trailing=!after?'\n\n':after.startsWith('\n\n')?'':after.startsWith('\n')?'\n':'\n\n';
+      inserted=leading+button.dataset.block+trailing;
+      cursorStart=cursorEnd=start+inserted.length;
     }else{
       inserted=button.dataset.template||'';cursorStart=start;cursorEnd=start+inserted.length;
     }

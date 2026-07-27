@@ -77,6 +77,32 @@ class CampaignServiceTest {
             false, null, null);
     }
 
+    /** 付費牆預覽應顯示分界及兩側內容，但不可洩漏原始控制標記。 */
+    @Test
+    void previewShowsPaywallBoundaryAndBothContentSections() {
+        when(linkBuilder.previewUnsubscribeLink()).thenReturn("https://example.com/unsubscribe");
+
+        String html = svc.preview("主旨",
+            "免費內容\n\n<!--paywall-->\n\n付費內容");
+
+        assertTrue(html.contains("免費內容"), html);
+        assertTrue(html.contains("付費牆分界"), html);
+        assertTrue(html.contains("付費內容預覽"), html);
+        assertTrue(html.contains("付費內容"), html);
+        assertTrue(!html.contains("<!--paywall-->"), html);
+    }
+
+    /** 一般文章預覽維持原本的所見即所得內容，不插入付費牆提示。 */
+    @Test
+    void previewWithoutPaywallKeepsNormalRendering() {
+        when(linkBuilder.previewUnsubscribeLink()).thenReturn("https://example.com/unsubscribe");
+
+        String html = svc.preview("主旨", "# 一般文章");
+
+        assertTrue(html.contains("<h1>一般文章</h1>"), html);
+        assertTrue(!html.contains("付費牆分界"), html);
+    }
+
     /** 立即發送：呼叫 sendBatch，每封 html 含該收件人的退訂連結，campaign 記為 sent、accepted=2 */
     @Test
     void immediateSendUsesBatchWithPersonalizedLinks() {

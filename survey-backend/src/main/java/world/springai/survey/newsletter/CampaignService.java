@@ -83,11 +83,37 @@ public class CampaignService {
     public record SendResult(Long campaignId, int recipientCount, int accepted, int failed,
                              int skippedForQuota) {}
 
-    /** 預覽：把 markdown 渲染並套外框（用示意退訂連結） */
+    /**
+     * 預覽：把 markdown 渲染並套外框（用示意退訂連結）。
+     *
+     * <p>若內容含付費牆，使用和讀者端相同的切分器呈現清楚的分界及受限區預覽。
+     * 此視覺提示只存在於管理後台預覽，不會進入測試信或正式寄送內容。</p>
+     */
     public String preview(String subject, String markdown) {
-        String body = markdownRenderer.toHtml(markdown);
+        ContentSplitter.Split split = contentSplitter.split(markdown);
+        String body = split.hasGate()
+            ? paywallPreview(split)
+            : markdownRenderer.toHtml(markdown);
         return emailTemplate.wrapCampaign(body, linkBuilder.previewUnsubscribeLink(),
             readerSiteLinks.archive(), readerSiteLinks.login("/r/archive"));
+    }
+
+    /** 組合付費牆預覽，讓管理員同時看見免費區、分界與受限區內容。 */
+    private String paywallPreview(ContentSplitter.Split split) {
+        String freeHtml = markdownRenderer.toHtml(split.freeMarkdown());
+        String gatedHtml = markdownRenderer.toHtml(split.gatedMarkdown());
+        return freeHtml + """
+            <div role="separator" aria-label="付費牆分界"
+                 style="margin:28px 0 18px;padding:16px 18px;border:2px dashed #0f766e;\
+                 border-radius:12px;background:#f0fdfa;color:#134e4a;text-align:center">
+              <strong style="display:block;font-size:16px">🔒 付費牆分界</strong>
+              <span style="display:block;margin-top:6px;font-size:13px">下方內容需符合權限或解鎖後才能閱讀</span>
+            </div>
+            <div style="padding:18px;border:1px solid #99f6e4;border-radius:12px;\
+                 background:#f8fffe">
+              <div style="margin-bottom:12px;color:#0f766e;font-size:12px;font-weight:700;\
+                   letter-spacing:.08em">付費內容預覽</div>
+            """ + gatedHtml + "</div>";
     }
 
     /** 寄一封測試信給指定信箱（立即、單封） */
