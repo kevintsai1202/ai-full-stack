@@ -2,6 +2,7 @@ package world.springai.survey.audience;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -26,15 +27,18 @@ public class AdminImportController {
     private final SurveyResponseRepository repository;
     private final AdminKeyGuard guard;
     private final AudienceSpreadsheetReader spreadsheetReader;
+    private final AudienceSourceService sourceService;
 
     /** 注入資料層、金鑰守衛與 XLSX 解析器。 */
     public AdminImportController(
             SurveyResponseRepository repository,
             AdminKeyGuard guard,
-            AudienceSpreadsheetReader spreadsheetReader) {
+            AudienceSpreadsheetReader spreadsheetReader,
+            AudienceSourceService sourceService) {
         this.repository = repository;
         this.guard = guard;
         this.spreadsheetReader = spreadsheetReader;
+        this.sourceService = sourceService;
     }
 
     /** 匯入的單一人員：email 必填，name 選填 */
@@ -42,6 +46,30 @@ public class AdminImportController {
 
     /** 匯入請求：來源標記（如 exam）與人員清單 */
     public record ImportRequest(String source, List<Person> people) {}
+
+    /** 新增來源請求；label 是後台顯示名稱，內部 key 由服務產生。 */
+    public record SourceRequest(String label) {}
+
+    /** 列出系統預設與管理員自訂的名單來源。 */
+    @GetMapping("/api/admin/import/sources")
+    public List<AudienceSourceService.SourceOption> listSources(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key) {
+        guard.verify(key);
+        return sourceService.list();
+    }
+
+    /** 新增並保存一個名單來源；同名來源直接回傳既有項目。 */
+    @PostMapping("/api/admin/import/sources")
+    public AudienceSourceService.SourceOption addSource(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key,
+            @RequestBody SourceRequest request) {
+        guard.verify(key);
+        try {
+            return sourceService.add(request == null ? null : request.label());
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage());
+        }
+    }
 
     /**
      * 預覽 XLSX 名單，不寫入資料庫。

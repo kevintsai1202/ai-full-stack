@@ -32,6 +32,7 @@
   .btn{padding:10px 16px;border:1px solid transparent;border-radius:8px;background:var(--accent);color:#fff;font-weight:750;cursor:pointer;font-size:.92rem;white-space:nowrap;min-height:44px}
   .btn:hover{background:var(--accent-deep)}.btn:disabled{opacity:.55;cursor:not-allowed}.btn.ghost{background:var(--surface);border-color:var(--border-strong);color:var(--accent-deep)}.btn.ghost:hover{background:var(--surface-2)}.btn.danger{background:var(--danger)}
   .form-row{display:flex;gap:10px;align-items:center;margin-bottom:12px}.form-row input{flex:1}
+  .source-picker{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:stretch}.source-create{margin-top:10px;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)}.source-create label{margin-top:0}.source-create[hidden]{display:none}.source-create-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
   .actions{display:flex;gap:8px;flex-wrap:wrap}.count{font-weight:800;color:var(--accent-deep);font-size:1.1rem}iframe.preview{width:100%;height:360px;border:1px solid var(--border);border-radius:8px;background:#fff}
   .msg{margin-top:12px;padding:10px 12px;border-radius:8px;display:none}.msg.ok{display:block;background:var(--accent-soft);color:var(--accent-deep)}.msg.err{display:block;background:#fde8e8;color:var(--danger)}
   .gate{position:fixed;inset:0;background:rgba(16,32,51,.66);display:flex;align-items:center;justify-content:center;z-index:50}.gate .box{background:#fff;border-radius:var(--r);padding:28px;max-width:400px;width:90%;box-shadow:0 24px 70px rgba(0,0,0,.22)}
@@ -44,7 +45,7 @@
   .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.76rem;font-weight:700}.pill.scheduled{background:var(--accent-soft);color:var(--accent-deep)}.pill.sent{background:#dcfce7;color:#166534}.pill.sending{background:#fff2cc;color:#92580a}.pill.failed{background:#fde8e8;color:var(--danger)}.pill.cancelled{background:var(--surface-2);color:var(--muted)}.pill.published{background:#e0e7ff;color:#3730a3}.pill.unpublished{background:var(--surface-2);color:var(--muted)}
   .suggestions{display:grid;gap:10px}.suggestion{border-left:4px solid var(--accent);background:#f7fbfb;border-radius:0 8px 8px 0;padding:12px 14px}.suggestion p{margin:0;white-space:pre-wrap}.suggestion small{display:block;color:var(--muted);margin-top:5px}
   @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.chart-grid,#campaign-view,#readers-view{grid-template-columns:1fr}.full,#campaign-view>.card:nth-child(n),#readers-view>.card:nth-child(n){grid-column:auto}.filters{grid-template-columns:1fr 1fr}.wrap{padding-inline:16px}.tabs{overflow-x:auto;position:static}.tab{flex:0 0 auto}}
-  @media(max-width:520px){.kpis,.filters{grid-template-columns:1fr}.bar-row{grid-template-columns:minmax(95px,1.2fr) 2fr 44px}.form-row{align-items:stretch;flex-direction:column}.form-row .btn{width:100%}.page-head .btn{width:100%}}
+  @media(max-width:520px){.kpis,.filters{grid-template-columns:1fr}.bar-row{grid-template-columns:minmax(95px,1.2fr) 2fr 44px}.form-row,.import-fields{align-items:stretch;flex-direction:column}.form-row .btn,.source-picker .btn{width:100%}.source-picker{grid-template-columns:1fr}.page-head .btn{width:100%}}
   @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style>
 </head>
@@ -161,14 +162,28 @@
     <div class="card">
       <h2>匯入學員名單</h2>
       <p class="hint">選擇 XLSX 後會先預覽，不會直接寫入。匯入的學員仍是「尚未同意」狀態，需寄出確認信並由本人完成訂閱。</p>
-      <div class="row">
+      <div class="row import-fields">
         <div>
           <label for="import-source">名單來源</label>
-          <select id="import-source">
-            <option value="dify">Dify 學員</option>
-            <option value="exam">線上測驗</option>
-            <option value="survey_form">問卷填寫</option>
-          </select>
+          <div class="source-picker">
+            <select id="import-source">
+              <option value="dify">Dify 學員</option>
+              <option value="exam">線上測驗</option>
+              <option value="survey_form">問卷填寫</option>
+            </select>
+            <button class="btn ghost" id="source-create-toggle" type="button"
+                    aria-expanded="false" aria-controls="source-create-panel">新增來源</button>
+          </div>
+          <div class="source-create" id="source-create-panel" hidden>
+            <label for="source-create-name">新來源名稱</label>
+            <input type="text" id="source-create-name" maxlength="40"
+                   placeholder="例如：2026 夏季班">
+            <div class="source-create-actions">
+              <button class="btn" id="source-create-save" type="button">儲存並選用</button>
+              <button class="btn ghost" id="source-create-cancel" type="button">取消</button>
+            </div>
+            <div class="msg" id="source-create-msg" role="status" aria-live="polite"></div>
+          </div>
         </div>
         <div>
           <label for="import-file">Excel 檔案（.xlsx，最多 2 MB／5,000 筆）</label>
@@ -268,7 +283,7 @@
     ['建議',r=>answer(r,'suggestion')],['完整 answers',r=>jsonText(r.answers)],['完整 UTM',r=>jsonText(r.utm)],
     ['來源',r=>sourceLabel(r.source)],['同意寄送',r=>r.consent?'是':'否'],['已退訂',r=>r.unsubscribed?'是':'否']
   ];
-  /** 名單來源代碼轉中文標籤，未知代碼原樣顯示 */
+  /** 名單來源代碼轉顯示名稱；載入 API 後會加入管理員自訂來源。 */
   const SOURCE_LABELS={survey_form:'問卷填寫',exam:'線上測驗',dify:'Dify 學員'};
   /** 最近一次 XLSX 預覽通過驗證的人員；確認匯入前不寫入資料庫。 */
   let importPreviewPeople=[];
@@ -332,10 +347,75 @@
   /** 把固定選項填入下拉選單。 */
   function fillSelect(selector,items){const el=$(selector);items.forEach(value=>{const option=document.createElement('option');option.value=value;option.textContent=value;el.appendChild(option);});}
 
+  /**
+   * 以後端保存的來源清單更新三個入口：匯入、邀請信與原始資料篩選。
+   * 保留各選單目前值，避免管理員新增來源時意外切換另一個正在操作的區塊。
+   */
+  function replaceSourceOptions(selector,sources,includeAll=false){
+    const select=$(selector),current=select.value;
+    select.replaceChildren();
+    if(includeAll){
+      const all=document.createElement('option');all.value='';all.textContent='全部';select.appendChild(all);
+    }
+    sources.forEach(source=>{
+      SOURCE_LABELS[source.key]=source.label;
+      const option=document.createElement('option');
+      option.value=source.key;option.textContent=source.label;select.appendChild(option);
+    });
+    if([...select.options].some(option=>option.value===current))select.value=current;
+  }
+
+  /** 從後端載入跨裝置共用的名單來源。 */
+  async function loadAudienceSources(selectedImportKey=''){
+    try{
+      const sources=await api('/api/admin/import/sources');
+      replaceSourceOptions('#import-source',sources);
+      replaceSourceOptions('#invite-source',sources);
+      replaceSourceOptions('#raw-source',sources,true);
+      if(selectedImportKey&&[...$('#import-source').options].some(option=>option.value===selectedImportKey)){
+        $('#import-source').value=selectedImportKey;
+      }
+      if(analyticsLoaded)renderRawTable();
+      return sources;
+    }catch(error){
+      if(error.message!=='401')showMsg('source-create-msg','來源清單載入失敗：'+error.message,false);
+      return [];
+    }
+  }
+
+  /** 展開或收合新增來源區；收合時清除尚未送出的錯誤訊息。 */
+  function toggleSourceCreate(open){
+    $('#source-create-panel').hidden=!open;
+    $('#source-create-toggle').setAttribute('aria-expanded',String(open));
+    if(open){
+      $('#source-create-name').focus();
+    }else{
+      $('#source-create-name').value='';
+      const message=$('#source-create-msg');message.className='msg';message.textContent='';
+    }
+  }
+
+  /** 保存自訂來源，重新整理所有來源選單，並在匯入區自動選用新來源。 */
+  async function createAudienceSource(){
+    const label=$('#source-create-name').value.trim();
+    try{
+      const created=await api('/api/admin/import/sources',{
+        method:'POST',
+        body:JSON.stringify({label})
+      });
+      await loadAudienceSources(created.key);
+      resetImportPreview();
+      toggleSourceCreate(false);
+    }catch(error){
+      if(error.message!=='401')showMsg('source-create-msg','新增失敗：'+error.message,false);
+    }
+  }
+
   /** 初始化管理頁事件與資料，確保只執行一次。 */
   function init(){
     if(init.done)return;init.done=true;
     fillSelect('#role',ROLES);fillSelect('#interest',INTERESTS);
+    loadAudienceSources();
     document.querySelectorAll('.tab').forEach(tab=>tab.onclick=()=>switchView(tab.dataset.view));
     $('#lock-btn').onclick=()=>{sessionStorage.removeItem(KEY);location.reload();};
     $('#analytics-refresh').onclick=()=>loadAnalytics(true);$('#export-json').onclick=()=>downloadProtected('/api/admin/survey','survey-responses.json');$('#export-csv').onclick=()=>downloadProtected('/api/admin/survey?format=csv','survey-responses.csv');$('#export-pdf').onclick=exportPdf;
@@ -347,6 +427,10 @@
     // 讀者管理與參數設定
     $('#import-preview-btn').onclick=previewImport;$('#import-confirm-btn').onclick=confirmImport;
     $('#import-file').onchange=resetImportPreview;$('#import-source').onchange=resetImportPreview;
+    $('#source-create-toggle').onclick=()=>toggleSourceCreate($('#source-create-panel').hidden);
+    $('#source-create-cancel').onclick=()=>toggleSourceCreate(false);
+    $('#source-create-save').onclick=createAudienceSource;
+    $('#source-create-name').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();createAudienceSource();}});
     $('#reader-search-btn').onclick=searchReaders;$('#vip-grant-btn').onclick=grantVip;$('#grant-btn').onclick=grantCredits;$('#ledger-btn').onclick=loadLedger;$('#settings-save-btn').onclick=saveSettings;
     $('#reader-q').addEventListener('keydown',e=>{if(e.key==='Enter')searchReaders();});
     $('#ledger-email').addEventListener('keydown',e=>{if(e.key==='Enter')loadLedger();});

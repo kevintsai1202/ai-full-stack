@@ -21,6 +21,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -36,6 +37,47 @@ class AdminImportControllerTest {
     @Autowired MockMvc mvc;
     @MockBean SurveyResponseRepository repository;
     @MockBean AudienceSpreadsheetReader spreadsheetReader;
+    @MockBean AudienceSourceService sourceService;
+
+    /** 來源清單需通過管理金鑰，並完整回傳內部鍵與顯示名稱。 */
+    @Test
+    void listSourcesReturnsConfiguredOptions() throws Exception {
+        when(sourceService.list()).thenReturn(List.of(
+                new AudienceSourceService.SourceOption("dify", "Dify 學員"),
+                new AudienceSourceService.SourceOption("custom-summer", "2026 夏季班")));
+
+        mvc.perform(get("/api/admin/import/sources").header("X-Admin-Key", "test-key"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[1].key").value("custom-summer"))
+                .andExpect(jsonPath("$[1].label").value("2026 夏季班"));
+    }
+
+    /** 新增來源需通過管理金鑰，並交由來源服務做正規化與持久化。 */
+    @Test
+    void addSourceReturnsCreatedOption() throws Exception {
+        when(sourceService.add("合作夥伴名單"))
+                .thenReturn(new AudienceSourceService.SourceOption("custom-partner", "合作夥伴名單"));
+
+        mvc.perform(post("/api/admin/import/sources")
+                        .header("X-Admin-Key", "test-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"label\":\"合作夥伴名單\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.key").value("custom-partner"))
+                .andExpect(jsonPath("$.label").value("合作夥伴名單"));
+    }
+
+    /** 無效來源名稱應以可讀的 400 原因回覆。 */
+    @Test
+    void addSourceRejectsInvalidLabel() throws Exception {
+        when(sourceService.add("")).thenThrow(new IllegalArgumentException("請輸入名單來源名稱"));
+
+        mvc.perform(post("/api/admin/import/sources")
+                        .header("X-Admin-Key", "test-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"label\":\"\"}"))
+                .andExpect(status().isBadRequest());
+    }
 
     /** 未帶金鑰應回 401，不寫入任何資料 */
     @Test
