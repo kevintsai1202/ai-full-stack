@@ -17,6 +17,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,6 +39,7 @@ class AdminImportControllerTest {
     @MockBean SurveyResponseRepository repository;
     @MockBean AudienceSpreadsheetReader spreadsheetReader;
     @MockBean AudienceSourceService sourceService;
+    @MockBean AudienceImportService importService;
 
     /** 來源清單需通過管理金鑰，並完整回傳內部鍵與顯示名稱。 */
     @Test
@@ -85,51 +87,54 @@ class AdminImportControllerTest {
         String body = "{\"source\":\"exam\",\"people\":[{\"email\":\"a@b.com\"}]}";
         mvc.perform(post("/api/admin/import").contentType(MediaType.APPLICATION_JSON).content(body))
            .andExpect(status().isUnauthorized());
-        verify(repository, never()).save(any());
+        verify(importService, never()).importPeople(any(), any());
     }
 
     /** 新 email 應以待確認狀態（consent=false）與指定來源寫入 */
     @Test
     void importSavesNewEmailAsPendingConsentWithSource() throws Exception {
-        when(repository.existsByEmailIgnoreCase("student@example.com")).thenReturn(false);
+        when(importService.importPeople(eq("exam"), any())).thenReturn(
+                new AudienceImportService.ImportResult(1, 1, 0, 1, 0, 0, 0, 1, 0));
         String body = "{\"source\":\"exam\",\"people\":[{\"email\":\"student@example.com\",\"name\":\"王小明\"}]}";
         mvc.perform(post("/api/admin/import").header("X-Admin-Key", "test-key")
                 .contentType(MediaType.APPLICATION_JSON).content(body))
            .andExpect(status().isOk())
            .andExpect(jsonPath("$.imported").value(1))
            .andExpect(jsonPath("$.skipped").value(0));
-        ArgumentCaptor<SurveyResponse> captor = ArgumentCaptor.forClass(SurveyResponse.class);
-        verify(repository).save(captor.capture());
-        SurveyResponse saved = captor.getValue();
-        assertEquals("student@example.com", saved.getEmail());
-        assertEquals("王小明", saved.getName());
-        assertEquals("exam", saved.getSource());
-        assertEquals(false, saved.isConsent());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AudienceImportService.ImportPerson>> captor =
+                ArgumentCaptor.forClass(List.class);
+        verify(importService).importPeople(eq("exam"), captor.capture());
+        assertEquals("student@example.com", captor.getValue().getFirst().email());
+        assertEquals("王小明", captor.getValue().getFirst().name());
     }
 
     /** 已存在的 email（不分大小寫）應略過不重複寫入 */
     @Test
     void importSkipsExistingEmail() throws Exception {
-        when(repository.existsByEmailIgnoreCase("dup@example.com")).thenReturn(true);
+        when(importService.importPeople(eq("exam"), any())).thenReturn(
+                new AudienceImportService.ImportResult(2, 0, 1, 1, 0, 0, 0, 0, 1));
         String body = "{\"source\":\"exam\",\"people\":[{\"email\":\"dup@example.com\"}]}";
         mvc.perform(post("/api/admin/import").header("X-Admin-Key", "test-key")
                 .contentType(MediaType.APPLICATION_JSON).content(body))
            .andExpect(status().isOk())
            .andExpect(jsonPath("$.imported").value(0))
            .andExpect(jsonPath("$.skipped").value(1));
-        verify(repository, never()).save(any());
+        verify(importService).importPeople(eq("exam"), any());
     }
 
     /** 空白或格式無效的 email 應略過並計入 skipped */
     @Test
     void importSkipsInvalidEmail() throws Exception {
+        when(importService.importPeople(eq("exam"), any())).thenReturn(
+                new AudienceImportService.ImportResult(3, 0, 0, 0, 0, 0, 2, 0, 2));
         String body = "{\"source\":\"exam\",\"people\":[{\"email\":\"\"},{\"email\":\"not-an-email\"}]}";
         mvc.perform(post("/api/admin/import").header("X-Admin-Key", "test-key")
                 .contentType(MediaType.APPLICATION_JSON).content(body))
            .andExpect(status().isOk())
            .andExpect(jsonPath("$.imported").value(0))
            .andExpect(jsonPath("$.skipped").value(2));
-        verify(repository, never()).save(any());
+        verify(importService).importPeople(eq("exam"), any());
     }
 
     /** 缺 source 或空名單應回 400 */
@@ -139,7 +144,7 @@ class AdminImportControllerTest {
         mvc.perform(post("/api/admin/import").header("X-Admin-Key", "test-key")
                 .contentType(MediaType.APPLICATION_JSON).content(body))
            .andExpect(status().isBadRequest());
-        verify(repository, never()).save(any());
+        verify(importService, never()).importPeople(any(), any());
     }
 
     /** XLSX 預覽需通過管理金鑰，且只回傳解析結果、不寫入資料庫。 */

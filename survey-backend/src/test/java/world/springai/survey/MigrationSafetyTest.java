@@ -173,6 +173,65 @@ class MigrationSafetyTest {
         }
     }
 
+    /** V10 的彈性名單底座必須完整建立，避免只建立人物表卻無法保存活動、Fact 或匯入稽核。 */
+    @Test
+    void flexibleAudienceTablesAreCreated() throws SQLException {
+        for (String table : new String[] {
+                "audience_person", "audience_consent", "audience_identity",
+                "audience_record", "audience_fact", "form_definition", "form_field",
+                "import_profile", "import_batch", "import_item",
+                "audience_selection_snapshot", "audience_selection_target",
+                "audience_bulk_operation", "audience_segment",
+                "integration_sync_cursor", "audience_data_request", "audience_suppression"
+        }) {
+            assertEquals(1, queryInt(
+                "SELECT count(*) FROM information_schema.tables"
+                    + " WHERE table_schema = 'public' AND table_name = '" + table + "'"),
+                "資料表 " + table + " 未建立");
+        }
+    }
+
+    /** 相同 Email 的多筆舊問卷要合成一個人物，但每一筆歷史活動都必須保留。 */
+    @Test
+    void legacySurveyRowsAreBackfilledWithoutLosingHistory() throws SQLException {
+        assertEquals(3, queryInt("SELECT count(*) FROM audience_person"),
+            "既有三個 Email 應回填成三個唯一人物");
+        assertEquals(beforeCount, queryInt("""
+            SELECT count(*) FROM audience_record
+             WHERE record_type = 'survey_submission'
+               AND external_record_id LIKE 'survey_response:%'
+            """), "每一筆 survey_response 都必須有對應活動");
+    }
+
+    /** 退訂狀態優先於已確認；匯入後不得把退訂者重新視為可寄送。 */
+    @Test
+    void legacyConsentPrecedenceIsPreserved() throws SQLException {
+        assertEquals("CONFIRMED", queryString("""
+            SELECT c.status
+              FROM audience_consent c
+              JOIN audience_person p ON p.id = c.person_id
+             WHERE p.email_normalized = 'confirmed@example.com'
+             ORDER BY c.occurred_at DESC, c.id DESC
+             LIMIT 1
+            """));
+        assertEquals("PENDING", queryString("""
+            SELECT c.status
+              FROM audience_consent c
+              JOIN audience_person p ON p.id = c.person_id
+             WHERE p.email_normalized = 'pending@example.com'
+             ORDER BY c.occurred_at DESC, c.id DESC
+             LIMIT 1
+            """));
+        assertEquals("UNSUBSCRIBED", queryString("""
+            SELECT c.status
+              FROM audience_consent c
+              JOIN audience_person p ON p.id = c.person_id
+             WHERE p.email_normalized = 'gone@example.com'
+             ORDER BY c.occurred_at DESC, c.id DESC
+             LIMIT 1
+            """));
+    }
+
     /**
      * 參數初始值要逐項核對 8 組 key 與 value（而非只驗筆數與抽驗 2 筆）。
      *

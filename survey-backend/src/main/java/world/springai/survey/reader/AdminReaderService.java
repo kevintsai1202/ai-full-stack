@@ -31,7 +31,7 @@ import java.util.Map;
  * 且任何「更新回 0 列」的情形一律計為失敗、不寫帳本。</p>
  */
 @Service
-public class AdminReaderService {
+public class AdminReaderService implements world.springai.survey.audience.AudienceReaderOperations {
 
     private static final Logger log = LoggerFactory.getLogger(AdminReaderService.class);
 
@@ -102,7 +102,17 @@ public class AdminReaderService {
         Reader reader = readerRepository.findByEmailIgnoreCase(email)
             .orElseGet(() -> readerAccountService.findOrCreateWithoutLogin(email, now));
 
-        OffsetDateTime expiresAt = now.plusDays(days);
+        // 有效 VIP 採延長而非覆蓋：從目前到期日往後加，避免再次授予反而縮短權益。
+        // vipExpiresAt=null 代表永久 VIP，任何有限天數操作都不可把它縮短。
+        OffsetDateTime expiresAt;
+        if (Reader.TIER_VIP.equals(reader.getTier())
+                && (reader.getVipExpiresAt() == null || reader.getVipExpiresAt().isAfter(now))) {
+            expiresAt = reader.getVipExpiresAt() == null
+                ? null
+                : reader.getVipExpiresAt().plusDays(days);
+        } else {
+            expiresAt = now.plusDays(days);
+        }
         int affected = readerRepository.updateVip(reader.getId(), Reader.TIER_VIP, expiresAt);
         if (affected == 0) {
             // 讀者列在查詢與更新之間消失。絕不可回 200 讓站方以為設好了。
@@ -111,6 +121,12 @@ public class AdminReaderService {
 
         log.info("已授予 VIP：{} 至 {}", reader.getEmail(), expiresAt);
         return toSummary(reader, Reader.TIER_VIP, expiresAt);
+    }
+
+    /** 名單批次層使用的 VIP port；沿用同一交易與延長規則。 */
+    @Override
+    public void grantVipForAudience(String email, int days, OffsetDateTime now) {
+        grantVip(email, days, now);
     }
 
     /**
@@ -196,6 +212,12 @@ public class AdminReaderService {
 
         log.info("後台加點 {} 點：成功 {} 筆、失敗 {} 筆（{}）", delta, granted, failed.size(), note);
         return new GrantResult(granted, failed.size(), failed);
+    }
+
+    /** 名單批次層使用的點數 port；單筆成功才回 true。 */
+    @Override
+    public boolean grantCreditsForAudience(String email, int delta, String note) {
+        return grantCredits(List.of(email), delta, note).granted() == 1;
     }
 
     /**

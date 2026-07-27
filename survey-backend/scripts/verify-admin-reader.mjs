@@ -114,7 +114,7 @@ async function verifyBrowser() {
     await page.click('#reader-search-btn');
     await page.waitForFunction(
       () => document.querySelectorAll('#reader-table tbody tr').length > 0, null, { timeout: 15000 });
-    const firstCell = await page.locator('#reader-table tbody tr td').first().textContent();
+    const firstCell = await page.locator('#reader-table tbody tr td').nth(1).textContent();
     has(firstCell, 'verify-admin-reader', '讀者表格第一格顯示 email');
 
     // XSS 回歸：讀者 email 是使用者可控內容（後台對任意 email 都能授予 VIP，
@@ -131,15 +131,18 @@ async function verifyBrowser() {
       ['屬性注入', 'a" onmouseover="window.__xss=1" data-x="@example.invalid'],
     ]) {
       await page.evaluate(() => { delete window.__xss; });
-      await page.route('**/api/admin/readers?*', (route) => route.fulfill({
+      await page.route('**/api/admin/audience/search', (route) => route.fulfill({
         status: 200, contentType: 'application/json',
-        body: JSON.stringify([{ email: evilEmail, tier: 'VIP', vipActive: true,
-          vipExpiresAt: null, credits: 0, referralCode: 'x', lastLoginAt: null }]),
+        body: JSON.stringify({ items: [{ personId: 999, email: evilEmail, name: '',
+          consentStatus: 'CONFIRMED', sources: ['survey_form'], surveyCount: 1, examCount: 0,
+          lastActivityAt: null, readerAccount: true, tier: 'VIP', vipStatus: 'ACTIVE',
+          vipExpiresAt: null, credits: 0, lastLoginAt: null }],
+          total: 1, page: 0, size: 50, dynamicFields: [], facets: {} }),
       }));
       await page.fill('#reader-q', 'xss');
       await page.click('#reader-search-btn');
       await page.waitForFunction(
-        (e) => (document.querySelector('#reader-table tbody tr td')?.textContent || '').includes(e),
+        (e) => (document.querySelector('#reader-table tbody tr td:nth-child(2)')?.textContent || '').includes(e),
         evilEmail, { timeout: 15000 });
       // 滑過「取消 VIP」按鈕：屬性注入的事件處理器會在這一刻觸發
       const btn = page.locator('#reader-table tbody tr button');
@@ -147,7 +150,7 @@ async function verifyBrowser() {
       ok(await page.evaluate(() => window.__xss === undefined), `惡意 email（${label}）未被執行`);
       ok(await page.locator('#reader-table tbody tr td img').count() === 0,
         `惡意 email（${label}）未產生 img 節點`);
-      await page.unroute('**/api/admin/readers?*');
+      await page.unroute('**/api/admin/audience/search');
     }
 
     // 參數設定分頁：欄位應由 /api/admin/settings 動態產生

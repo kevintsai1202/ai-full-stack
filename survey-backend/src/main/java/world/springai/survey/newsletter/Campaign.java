@@ -6,8 +6,12 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+import world.springai.survey.audience.AudienceSearchService;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 /** 電子報發送批次，對應資料表 campaign */
 @Entity
@@ -18,6 +22,12 @@ public class Campaign {
     public static final String TIER_BASIC = "BASIC";
     /** 進階內容：需點數解鎖或 VIP 身分 */
     public static final String TIER_PREMIUM = "PREMIUM";
+    /** 尚未到寄送時間、仍可修改或取消的排程 */
+    public static final String STATUS_SCHEDULED = "scheduled";
+    /** 已完成送交寄信商的寄送批次 */
+    public static final String STATUS_SENT = "sent";
+    /** 已由管理員取消的排程 */
+    public static final String STATUS_CANCELLED = "cancelled";
 
     /**
      * 模式：只發布到網頁、完全不寄信。
@@ -77,6 +87,15 @@ public class Campaign {
 
     @Column(name = "filter_interest")
     private String filterInterest;
+
+    /** 新版動態分眾條件快照；即使日後刪除保存分眾，歷史仍可追溯。 */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "filter_json", columnDefinition = "jsonb")
+    private AudienceSearchService.Filters filterJson;
+
+    /** 使用的保存分眾 ID；刪除分眾時 DB 會設為 null。 */
+    @Column(name = "saved_segment_id")
+    private Long savedSegmentId;
 
     @Column(nullable = false)
     private String mode;
@@ -148,6 +167,8 @@ public class Campaign {
     public String getBodyHtml() { return bodyHtml; }
     public String getFilterRole() { return filterRole; }
     public String getFilterInterest() { return filterInterest; }
+    public AudienceSearchService.Filters getFilterJson() { return filterJson; }
+    public Long getSavedSegmentId() { return savedSegmentId; }
     public String getMode() { return mode; }
     public OffsetDateTime getScheduledAt() { return scheduledAt; }
     public int getRecipientCount() { return recipientCount; }
@@ -155,6 +176,22 @@ public class Campaign {
     public int getFailedCount() { return failedCount; }
     public String getStatus() { return status; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
+
+    /**
+     * 回傳給 Admin 的排程操作權限；時間以後端時鐘為準，前端不可自行用狀態字串推測。
+     */
+    public boolean getCanModifySchedule() {
+        return canModifyScheduleAt(OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
+    /**
+     * 判斷指定時間點是否仍可修改或取消排程，供 Service 與序列化結果共用同一條規則。
+     */
+    public boolean canModifyScheduleAt(OffsetDateTime now) {
+        return STATUS_SCHEDULED.equals(status)
+            && scheduledAt != null
+            && scheduledAt.isAfter(now);
+    }
 
     public void setAcceptedCount(int acceptedCount) { this.acceptedCount = acceptedCount; }
     public void setFailedCount(int failedCount) { this.failedCount = failedCount; }
@@ -166,6 +203,8 @@ public class Campaign {
     public void setBodyHtml(String bodyHtml) { this.bodyHtml = bodyHtml; }
     public void setFilterRole(String filterRole) { this.filterRole = filterRole; }
     public void setFilterInterest(String filterInterest) { this.filterInterest = filterInterest; }
+    public void setFilterJson(AudienceSearchService.Filters filterJson) { this.filterJson = filterJson; }
+    public void setSavedSegmentId(Long savedSegmentId) { this.savedSegmentId = savedSegmentId; }
     public void setScheduledAt(OffsetDateTime scheduledAt) { this.scheduledAt = scheduledAt; }
     public void setRecipientCount(int recipientCount) { this.recipientCount = recipientCount; }
 

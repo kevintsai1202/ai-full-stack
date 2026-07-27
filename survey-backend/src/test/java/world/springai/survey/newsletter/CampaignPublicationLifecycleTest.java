@@ -76,6 +76,9 @@ class CampaignPublicationLifecycleTest {
     /** 受限區哨兵：只要它出現在任何 update campaign 敘述裡，就是整列寫回 */
     private static final String GATED_SENTINEL = "SENTINEL_GATED_LIFECYCLE";
     private static final String READER_EMAIL = "lifecycle-reader@example.com";
+    /** 排程到期整理測試使用的兩個固定 slug */
+    private static final String ELAPSED_SCHEDULE_SLUG = "lifecycle-schedule-elapsed";
+    private static final String FUTURE_SCHEDULE_SLUG = "lifecycle-schedule-future";
     /** 讀者餘額；同時是 credit_txn 的總和（300 贈點 - 10 解鎖） */
     private static final int READER_CREDITS = 290;
 
@@ -172,10 +175,15 @@ class CampaignPublicationLifecycleTest {
 
     /** 讀取 campaign 的 status 欄位 */
     private String statusInDb() throws SQLException {
+        return statusInDb(SLUG);
+    }
+
+    /** 依 slug 讀取 campaign 的 status 欄位 */
+    private String statusInDb(String slug) throws SQLException {
         try (Connection c = dataSource.getConnection();
              Statement st = c.createStatement();
              ResultSet rs = st.executeQuery(
-                 "SELECT status FROM campaign WHERE slug = '" + SLUG + "'")) {
+                 "SELECT status FROM campaign WHERE slug = '" + slug + "'")) {
             rs.next();
             return rs.getString(1);
         }
@@ -208,6 +216,43 @@ class CampaignPublicationLifecycleTest {
             .map(s -> s.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").trim())
             .filter(s -> s.startsWith("update campaign "))
             .toList();
+    }
+
+    /**
+     * 寄送歷史載入時，真實 JPQL 必須只把已到期排程改成 sent，未到期排程維持 scheduled。
+     *
+     * <p>Service mock 只能證明方法被呼叫，無法證明 JPQL 的時間比較方向寫對；這裡以
+     * 真實 PostgreSQL 同時放一筆過去與未來資料，防止 {@code <=} 被誤寫成 {@code >=}
+     * 而把尚未寄出的排程提前關閉。</p>
+     */
+    @Test
+    void historyReconcilesOnlyElapsedSchedules() throws SQLException {
+        try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
+            st.executeUpdate("DELETE FROM campaign WHERE slug IN ('" + ELAPSED_SCHEDULE_SLUG
+                + "', '" + FUTURE_SCHEDULE_SLUG + "')");
+            st.executeUpdate("INSERT INTO campaign "
+                + "(subject, markdown, mode, scheduled_at, recipient_count, status, tier, credit_cost, slug) "
+                + "VALUES ('已到期排程', '內文', 'schedule', '2000-01-01T00:00:00Z', 1, "
+                + "'scheduled', 'BASIC', 0, '" + ELAPSED_SCHEDULE_SLUG + "')");
+            st.executeUpdate("INSERT INTO campaign "
+                + "(subject, markdown, mode, scheduled_at, recipient_count, status, tier, credit_cost, slug) "
+                + "VALUES ('未到期排程', '內文', 'schedule', '2099-01-01T00:00:00Z', 1, "
+                + "'scheduled', 'BASIC', 0, '" + FUTURE_SCHEDULE_SLUG + "')");
+        }
+
+        try {
+            campaignService.list();
+
+            assertEquals(Campaign.STATUS_SENT, statusInDb(ELAPSED_SCHEDULE_SLUG),
+                "已到期排程應整理為 sent，否則 Admin 仍會顯示修改與取消");
+            assertEquals(Campaign.STATUS_SCHEDULED, statusInDb(FUTURE_SCHEDULE_SLUG),
+                "未到期排程必須維持 scheduled，否則會提前失去操作權");
+        } finally {
+            try (Connection c = dataSource.getConnection(); Statement st = c.createStatement()) {
+                st.executeUpdate("DELETE FROM campaign WHERE slug IN ('" + ELAPSED_SCHEDULE_SLUG
+                    + "', '" + FUTURE_SCHEDULE_SLUG + "')");
+            }
+        }
     }
 
     /**

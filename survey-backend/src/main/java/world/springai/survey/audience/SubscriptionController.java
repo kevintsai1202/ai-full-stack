@@ -35,14 +35,18 @@ public class SubscriptionController {
     private final UnsubscribeTokenService tokenService;
     /** 確認成功後發布事件；讓 reader 能在不被 audience 依賴的前提下發放推薦獎勵 */
     private final ApplicationEventPublisher eventPublisher;
+    /** 新版同意事件資料層；與舊布林欄位同步維護。 */
+    private final AudiencePlatformService audiencePlatformService;
 
-    /** 注入名單資料層、HMAC 驗證與事件發布器 */
+    /** 注入名單資料層、HMAC 驗證、事件發布器與新版同意資料層。 */
     public SubscriptionController(SurveyResponseRepository repository,
                                   UnsubscribeTokenService tokenService,
-                                  ApplicationEventPublisher eventPublisher) {
+                                  ApplicationEventPublisher eventPublisher,
+                                  AudiencePlatformService audiencePlatformService) {
         this.repository = repository;
         this.tokenService = tokenService;
         this.eventPublisher = eventPublisher;
+        this.audiencePlatformService = audiencePlatformService;
     }
 
     /**
@@ -59,8 +63,15 @@ public class SubscriptionController {
             String normalized = normalize(email);
             int affected = repository.confirmByEmail(normalized);
             if (affected > 0) {
+                OffsetDateTime now = OffsetDateTime.now();
+                audiencePlatformService.appendConsentByEmail(
+                    normalized,
+                    AudiencePlatformService.CONSENT_CONFIRMED,
+                    "confirmation-link",
+                    java.util.Map.of("method", "signed-link"),
+                    now);
                 // 確認訂閱是高可靠的參與度訊號（spec §5.10）
-                repository.touchEngagement(normalized, OffsetDateTime.now());
+                repository.touchEngagement(normalized, now);
                 // 事件發布是同步的，例外會往上拋。發放獎勵失敗不該影響「使用者已經
                 // 同意訂閱」這個已經成立且已提交的事實——更關鍵的是：若讓例外變成
                 // 500，「不論結果一律回相同的 200」這條性質就破了，端點會變成
@@ -86,7 +97,16 @@ public class SubscriptionController {
     public ResponseEntity<String> unsubscribe(@RequestParam(value = "email", required = false) String email,
                                               @RequestParam(value = "t", required = false) String token) {
         if (StringUtils.hasText(email) && tokenService.verify(email, token)) {
-            repository.unsubscribeByEmail(normalize(email));
+            String normalized = normalize(email);
+            int affected = repository.unsubscribeByEmail(normalized);
+            if (affected > 0) {
+                audiencePlatformService.appendConsentByEmail(
+                    normalized,
+                    AudiencePlatformService.CONSENT_UNSUBSCRIBED,
+                    "unsubscribe-link",
+                    java.util.Map.of("method", "signed-link"),
+                    OffsetDateTime.now());
+            }
         }
         return ResponseEntity.ok()
             .contentType(MediaType.parseMediaType("text/html; charset=UTF-8"))

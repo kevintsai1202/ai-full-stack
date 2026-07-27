@@ -145,10 +145,32 @@ public interface SurveyResponseRepository extends JpaRepository<SurveyResponse, 
      * role 為 null 不限；interest 為 null 不限，否則用 jsonb 包含比對。
      */
     @Query(value = """
-        select distinct lower(email) from survey_response
-        where consent = true and unsubscribed = false
-          and (:role is null or role = :role)
-          and (:interest is null or interest @> jsonb_build_array(:interest))
+        select p.email_normalized
+          from audience_person p
+         where (
+               select c.status
+                 from audience_consent c
+                where c.person_id = p.id and c.channel = 'EMAIL'
+                order by c.occurred_at desc, c.id desc
+                limit 1
+         ) = 'CONFIRMED'
+           and (
+               :role is null or exists (
+                   select 1 from audience_fact f
+                    where f.person_id = p.id
+                      and f.fact_key = 'profile.role'
+                      and f.value_text = :role
+               )
+           )
+           and (
+               :interest is null or exists (
+                   select 1 from audience_fact f
+                    where f.person_id = p.id
+                      and f.fact_key = 'profile.interest'
+                      and f.value_text = :interest
+               )
+           )
+         order by p.email_normalized
         """, nativeQuery = true)
     java.util.List<String> findRecipients(@Param("role") String role, @Param("interest") String interest);
 }

@@ -22,11 +22,12 @@
   #campaign-view>.card{margin:0}#campaign-view>.card:nth-child(n+3){grid-column:1/-1}
   #readers-view{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
   #readers-view>.card{margin:0}#readers-view>.card:nth-child(n+3){grid-column:1/-1}
+  .view,.card{min-width:0}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:22px;margin-bottom:20px}
   #campaign-view>.card:first-child,#readers-view>.card:first-child{border-top:4px solid var(--accent);box-shadow:var(--shadow)}
   .card h2{font-size:1.08rem;line-height:1.4;margin:0 0 14px}.section-head{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}
   label{display:block;font-weight:700;margin:12px 0 6px;font-size:.92rem}
-  input[type=text],input[type=email],input[type=password],input[type=datetime-local],input[type=search],input[type=number],input[type=file],select,textarea{width:100%;padding:10px 12px;border:1px solid var(--border-strong);border-radius:8px;font-size:.95rem;background:#fff;color:var(--fg);min-height:44px}
+  input[type=text],input[type=email],input[type=password],input[type=date],input[type=datetime-local],input[type=search],input[type=number],input[type=file],select,textarea{width:100%;padding:10px 12px;border:1px solid var(--border-strong);border-radius:8px;font-size:.95rem;background:#fff;color:var(--fg);min-height:44px}
   input[type=file]{padding:7px 9px}input::placeholder,textarea::placeholder{color:#71817c}
   textarea{min-height:180px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.row{display:flex;gap:12px;flex-wrap:wrap}.row>div{flex:1;min-width:160px}
   .btn{padding:10px 16px;border:1px solid transparent;border-radius:8px;background:var(--accent);color:#fff;font-weight:750;cursor:pointer;font-size:.92rem;white-space:nowrap;min-height:44px}
@@ -39,13 +40,18 @@
   .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px}
   .kpi-label{font-size:.8rem;color:var(--muted);font-weight:800;letter-spacing:.05em}.kpi-value{font-size:1.8rem;font-weight:900;margin-top:4px}.kpi-note{font-size:.8rem;color:var(--muted)}
   .chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.chart-grid .card{margin:0}.chart{display:grid;gap:10px}.bar-row{display:grid;grid-template-columns:minmax(110px,1.2fr) 3fr 54px;gap:10px;align-items:center;font-size:.88rem}.bar-label{overflow-wrap:anywhere}.bar-track{height:9px;border-radius:999px;background:var(--surface-2);overflow:hidden}.bar-fill{height:100%;background:var(--accent);border-radius:inherit}.bar-value{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
-  .full{grid-column:1/-1}.filters{display:grid;grid-template-columns:minmax(240px,2fr) repeat(5,minmax(120px,1fr));gap:10px;margin:12px 0}.filters label{margin:0}.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px;max-height:680px}
+  .full{grid-column:1/-1}.filters{display:grid;grid-template-columns:minmax(240px,2fr) repeat(5,minmax(120px,1fr));gap:10px;margin:12px 0}.filters label{margin:0}.table-wrap{width:100%;max-width:100%;min-width:0;overflow:auto;border:1px solid var(--border);border-radius:10px;max-height:680px}
   table{width:100%;border-collapse:separate;border-spacing:0;font-size:.84rem}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;min-width:110px;max-width:300px;overflow-wrap:anywhere}
   th{position:sticky;top:0;background:#edf5f4;z-index:2;white-space:nowrap}tbody tr:hover{background:#f4fbfa}.empty{color:var(--muted);padding:20px;text-align:center}
   .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.76rem;font-weight:700}.pill.scheduled{background:var(--accent-soft);color:var(--accent-deep)}.pill.sent{background:#dcfce7;color:#166534}.pill.sending{background:#fff2cc;color:#92580a}.pill.failed{background:#fde8e8;color:var(--danger)}.pill.cancelled{background:var(--surface-2);color:var(--muted)}.pill.published{background:#e0e7ff;color:#3730a3}.pill.unpublished{background:var(--surface-2);color:var(--muted)}
   .suggestions{display:grid;gap:10px}.suggestion{border-left:4px solid var(--accent);background:#f7fbfb;border-radius:0 8px 8px 0;padding:12px 14px}.suggestion p{margin:0;white-space:pre-wrap}.suggestion small{display:block;color:var(--muted);margin-top:5px}
-  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.chart-grid,#campaign-view,#readers-view{grid-template-columns:1fr}.full,#campaign-view>.card:nth-child(n),#readers-view>.card:nth-child(n){grid-column:auto}.filters{grid-template-columns:1fr 1fr}.wrap{padding-inline:16px}.tabs{overflow-x:auto;position:static}.tab{flex:0 0 auto}}
-  @media(max-width:520px){.kpis,.filters{grid-template-columns:1fr}.bar-row{grid-template-columns:minmax(95px,1.2fr) 2fr 44px}.form-row,.import-fields{align-items:stretch;flex-direction:column}.form-row .btn,.source-picker .btn{width:100%}.source-picker{grid-template-columns:1fr}.page-head .btn{width:100%}}
+  .dynamic-toolbar{display:grid;grid-template-columns:minmax(220px,2fr) minmax(110px,1fr) repeat(2,minmax(150px,1fr));gap:10px;align-items:end}
+  .dynamic-toolbar label{margin:0}.inline-check{display:flex;align-items:center;gap:7px;min-height:44px;font-weight:650}.inline-check input{width:18px;height:18px}
+  .selection-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 12px;margin:12px 0;background:var(--surface-2);border-radius:8px}
+  .selection-bar p{margin:0}.table-check{min-width:44px;width:44px}.table-check input{width:18px;height:18px}
+  details.schema-settings{margin-top:14px;border-top:1px solid var(--border);padding-top:12px}details.schema-settings summary{cursor:pointer;font-weight:750}
+  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.chart-grid,#campaign-view,#readers-view{grid-template-columns:1fr}.full,#campaign-view>.card:nth-child(n),#readers-view>.card:nth-child(n){grid-column:auto}.filters,.dynamic-toolbar{grid-template-columns:1fr 1fr}.wrap{padding-inline:16px}.tabs{overflow-x:auto;position:static}.tab{flex:0 0 auto}}
+  @media(max-width:520px){.kpis,.filters,.dynamic-toolbar{grid-template-columns:1fr}.bar-row{grid-template-columns:minmax(95px,1.2fr) 2fr 44px}.form-row,.import-fields{align-items:stretch;flex-direction:column}.form-row .btn,.source-picker .btn{width:100%}.source-picker{grid-template-columns:1fr}.page-head .btn{width:100%}}
   @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style>
 </head>
@@ -79,6 +85,39 @@
       <div class="actions"><button class="btn ghost" id="analytics-refresh">重新整理</button><button class="btn ghost" id="export-json">匯出 JSON</button><button class="btn ghost" id="export-csv">匯出 CSV</button><button class="btn" id="export-pdf">匯出 PDF</button></div>
     </div>
     <div class="msg" id="analytics-msg"></div>
+    <div class="card">
+      <div class="section-head">
+        <div><h2 style="margin:0">彈性表單分析</h2><p class="hint" style="margin:4px 0 0">欄位、圖表與匯出內容都依表單設定自動產生。</p></div>
+        <div class="actions"><button class="btn ghost" id="dynamic-json">匯出 JSON</button><button class="btn ghost" id="dynamic-csv">匯出 CSV</button><button class="btn" id="dynamic-pdf">匯出 PDF</button></div>
+      </div>
+      <div class="dynamic-toolbar" style="margin-top:14px">
+        <label>表單<select id="dynamic-form"></select></label>
+        <label>版本<select id="dynamic-version"></select></label>
+        <label class="inline-check"><input type="checkbox" id="dynamic-all-versions"> 合併全部版本</label>
+        <label>起日<input type="date" id="dynamic-from"></label>
+        <label>迄日<input type="date" id="dynamic-to"></label>
+        <label>來源<select id="dynamic-source"><option value="">全部</option></select></label>
+        <button class="btn ghost" id="dynamic-refresh">載入分析</button>
+      </div>
+      <p class="hint" id="dynamic-summary">表單清單載入中…</p>
+      <div class="chart-grid" id="dynamic-charts"></div>
+      <details class="schema-settings">
+        <summary>簡易欄位設定</summary>
+        <p class="hint">已發布版本不直接修改。請先建立新草稿版本，新增欄位後再發布。</p>
+        <div class="actions"><button class="btn ghost" id="form-create-version">建立新草稿版本</button><button class="btn" id="form-publish-version">發布目前草稿</button></div>
+        <div class="row">
+          <div><label for="field-key">欄位代稱</label><input type="text" id="field-key" placeholder="例如：company_size"></div>
+          <div><label for="field-label">顯示名稱</label><input type="text" id="field-label" placeholder="例如：公司規模"></div>
+          <div><label for="field-type">類型</label><select id="field-type"><option value="select">單選</option><option value="multi_select">多選</option><option value="short_text">短文字</option><option value="long_text">長文字</option><option value="number">數字</option><option value="rating">評分</option><option value="boolean">是／否</option><option value="date">日期</option></select></div>
+        </div>
+        <div class="row">
+          <div><label for="field-options">選項（每行一個）</label><textarea id="field-options" rows="3" placeholder="1–10 人&#10;11–50 人"></textarea></div>
+          <div><label for="field-fact-key">名單欄位代稱（選填）</label><input type="text" id="field-fact-key" placeholder="survey.company_size"><label class="inline-check"><input type="checkbox" id="field-required"> 必填</label><label class="inline-check"><input type="checkbox" id="field-public"> 可顯示在公開統計</label></div>
+        </div>
+        <button class="btn" id="field-add">新增欄位到目前草稿</button>
+        <div class="msg" id="schema-msg"></div>
+      </details>
+    </div>
     <div class="kpis">
       <div class="kpi"><div class="kpi-label">總回應數</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-note">資料庫全部紀錄</div></div>
       <div class="kpi"><div class="kpi-label">可寄送名單</div><div class="kpi-value" id="kpi-contactable">—</div><div class="kpi-note">已同意且未退訂</div></div>
@@ -114,7 +153,21 @@
   <section class="view" id="campaign-view" hidden>
     <div class="card"><h2>① 撰寫</h2><label for="subject">主旨</label><input type="text" id="subject" placeholder="電子報主旨"><label for="markdown">內文（Markdown）</label><textarea id="markdown" placeholder="# 標題&#10;&#10;支援 **粗體**、清單、[連結](https://...)"></textarea><button class="btn ghost" id="preview-btn" style="margin-top:12px">更新預覽</button><div class="msg err" id="compose-msg"></div></div>
     <div class="card"><h2>② 預覽</h2><iframe class="preview" id="preview" title="預覽"></iframe></div>
-    <div class="card"><h2>③ 發送對象</h2><div class="row"><div><label for="role">身分（不限留空）</label><select id="role"><option value="">不限</option></select></div><div><label for="interest">想學主題（不限留空）</label><select id="interest"><option value="">不限</option></select></div></div><p style="margin:14px 0 0">將寄給 <span class="count" id="rcount">—</span> 人　<button class="btn ghost" id="rcount-btn">更新人數</button></p><p class="hint" id="rsample"></p><p class="hint" id="quota-info">額度偵測中…</p><p class="warn" id="quota-warn" hidden></p></div>
+    <div class="card"><h2>③ 發送對象</h2><div class="row"><div><label for="role">身分（不限留空）</label><select id="role"><option value="">不限</option></select></div><div><label for="interest">想學主題（不限留空）</label><select id="interest"><option value="">不限</option></select></div></div>
+      <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700">更多名單條件與儲存分眾</summary>
+        <div class="row">
+          <div><label for="campaign-source">來源</label><select id="campaign-source"><option value="">不限</option></select></div>
+          <div><label for="campaign-consent">訂閱</label><select id="campaign-consent"><option value="">不限（寄送時仍只會取已確認）</option><option value="CONFIRMED">已確認</option></select></div>
+          <div><label for="campaign-vip">VIP</label><select id="campaign-vip"><option value="">不限</option><option value="ACTIVE">VIP 有效</option><option value="NONE">非 VIP</option></select></div>
+        </div>
+        <div class="row" style="align-items:flex-end">
+          <div><label for="campaign-segment">已儲存分眾</label><select id="campaign-segment"><option value="">不使用</option></select></div>
+          <div><label for="campaign-segment-name">將目前條件另存為</label><input type="text" id="campaign-segment-name" placeholder="例如：Exam 已確認 VIP"></div>
+          <div style="flex:0"><button class="btn ghost" id="campaign-segment-save">儲存分眾</button></div>
+        </div>
+        <div class="msg" id="campaign-segment-msg"></div>
+      </details>
+      <p style="margin:14px 0 0">將寄給 <span class="count" id="rcount">—</span> 人　<button class="btn ghost" id="rcount-btn">更新人數</button></p><p class="hint" id="rsample"></p><p class="hint" id="quota-info">額度偵測中…</p><p class="warn" id="quota-warn" hidden></p></div>
     <div class="card"><h2>④ 測試寄送（寄給自己）</h2><div class="row"><div><input type="email" id="test-to" placeholder="your@email.com"></div><div style="flex:0"><button class="btn ghost" id="test-btn">寄測試信</button></div></div><div class="msg" id="test-msg"></div></div>
     <div class="card"><h2>⑤ 發送</h2><div class="row" style="align-items:center"><div style="flex:0"><label style="display:inline;font-weight:400"><input type="radio" name="mode" value="now" checked> 立即發送</label><label style="display:inline;font-weight:400;margin-left:14px"><input type="radio" name="mode" value="schedule"> 排程</label></div><div><input type="datetime-local" id="sched" disabled></div></div>
       <div class="row" style="margin-top:14px">
@@ -204,19 +257,49 @@
       <div class="msg" id="import-msg"></div>
     </div>
 
-    <div class="card">
-      <h2>搜尋讀者</h2>
-      <div class="form-row">
-        <input type="text" id="reader-q" placeholder="輸入 email 片段">
-        <button class="btn" id="reader-search-btn">搜尋</button>
+    <div class="card full">
+      <h2>篩選讀者</h2>
+      <div class="filters">
+        <label><span class="hint">姓名或 Email</span><input type="text" id="reader-q" placeholder="輸入關鍵字"></label>
+        <label><span class="hint">名單來源</span><select id="reader-source"><option value="">全部</option></select></label>
+        <label><span class="hint">訂閱狀態</span><select id="reader-consent"><option value="">全部</option><option value="CONFIRMED">已確認</option><option value="PENDING">待確認</option><option value="UNSUBSCRIBED">已退訂</option></select></label>
+        <label><span class="hint">帳戶</span><select id="reader-account"><option value="">全部</option><option value="EXISTS">已有帳戶</option><option value="MISSING">尚無帳戶</option></select></label>
+        <label><span class="hint">VIP</span><select id="reader-vip"><option value="">全部</option><option value="ACTIVE">VIP 有效</option><option value="EXPIRED">VIP 過期</option><option value="NONE">非 VIP</option></select></label>
+        <label><span class="hint">每頁</span><select id="reader-size"><option>25</option><option selected>50</option><option>100</option><option>200</option></select></label>
+      </div>
+      <button class="btn" id="reader-search-btn">套用篩選</button>
+      <div class="selection-bar">
+        <p>共 <strong id="audience-total">0</strong> 人；已勾選 <strong id="audience-selected">0</strong> 人</p>
+        <div class="actions"><button class="btn ghost" id="audience-prev">上一頁</button><span class="hint" id="audience-page">第 1 頁</span><button class="btn ghost" id="audience-next">下一頁</button></div>
       </div>
       <div class="table-wrap">
         <table id="reader-table">
-          <thead><tr><th>Email</th><th>方案</th><th>VIP 到期</th><th>點數</th><th>最後登入</th><th></th></tr></thead>
+          <thead><tr><th class="table-check"><input type="checkbox" id="audience-check-all" aria-label="勾選本頁全部讀者"></th><th>Email／姓名</th><th>來源</th><th>訂閱</th><th>活動</th><th>帳戶／VIP</th><th>點數</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
       <div class="msg" id="reader-msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>依篩選批次贈點／VIP</h2>
+      <p class="hint">有勾選時只處理勾選人物；未勾選時使用目前全部篩選結果。系統會先建立 10 分鐘固定快照並顯示影響人數。</p>
+      <label for="bulk-action">操作</label><select id="bulk-action"><option value="GRANT_CREDITS">贈送／扣除點數</option><option value="GRANT_VIP">授予 VIP</option></select>
+      <div class="row">
+        <div><label for="bulk-credit-delta">點數</label><input type="number" id="bulk-credit-delta" value="100"></div>
+        <div><label for="bulk-vip-days">VIP 天數</label><input type="number" id="bulk-vip-days" value="30" min="1"></div>
+      </div>
+      <label for="bulk-note">操作原因（必填）</label><input type="text" id="bulk-note" placeholder="例如：2026 夏季班活動贈點">
+      <button class="btn ghost" id="bulk-preview" style="margin-top:12px">預覽影響人數</button>
+      <button class="btn" id="bulk-execute" style="margin-top:12px" disabled>確認執行</button>
+      <div class="msg" id="bulk-msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>同步 Exam 測驗名單</h2>
+      <p class="hint">先預覽 Exam 的新增、合併與作答筆數；確認後才寫入名單中心。重複同步不會新增重複作答。</p>
+      <div class="actions"><button class="btn ghost" id="exam-preview">預覽同步</button><button class="btn" id="exam-sync" disabled>確認同步</button></div>
+      <div class="msg" id="exam-msg"></div>
     </div>
 
     <div class="card">
@@ -256,6 +339,15 @@
       </div>
       <div class="msg" id="ledger-msg"></div>
     </div>
+
+    <div class="card">
+      <h2>個人資料匯出／刪除</h2>
+      <p class="hint">匯出包含人物、來源、同意、活動與 Fact。刪除會匿名化 Reader 並保留帳本；已退訂者只保留不可逆 hash，避免日後又被匯入。</p>
+      <label for="privacy-email">Email</label><input type="email" id="privacy-email" placeholder="reader@example.com">
+      <label for="privacy-reason">刪除原因</label><input type="text" id="privacy-reason" placeholder="使用者提出刪除要求">
+      <div class="actions" style="margin-top:12px"><button class="btn ghost" id="privacy-export">匯出 JSON</button><button class="btn danger" id="privacy-delete">刪除個資</button></div>
+      <div class="msg" id="privacy-msg"></div>
+    </div>
   </section>
 
   <section class="view" id="settings-view" hidden>
@@ -294,6 +386,14 @@
   const $=selector=>document.querySelector(selector);
   let surveyRows=[];
   let analyticsLoaded=false;
+  /** 後端表單 schema 與目前動態分析結果。 */
+  let formDefinitions=[];
+  let dynamicAnalytics=null;
+  /** 伺服器端名單分頁、跨頁勾選與批次快照狀態。 */
+  let audiencePage=0;
+  let audienceResult={items:[],total:0,size:50};
+  const selectedAudienceIds=new Set();
+  let bulkSelectionToken=null;
   // 「修改排程」模式：記住正在編輯的 campaign id，null 表示一般發送模式。
   let editingCampaignId=null;
 
@@ -342,7 +442,7 @@
   function showApp(){$('#gate').style.display='none';$('#app').hidden=false;}
 
   /** 切換分頁（問卷分析／電子報／讀者管理／參數設定）；參數設定首次進入時才載入欄位。 */
-  function switchView(name){document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!==name+'-view');document.querySelectorAll('.tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.view===name));if(name==='analytics'&&!analyticsLoaded)loadAnalytics();if(name==='settings'&&!loadSettings.done)loadSettings();}
+  function switchView(name){document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!==name+'-view');document.querySelectorAll('.tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.view===name));if(name==='analytics'&&!analyticsLoaded)loadAnalytics();if(name==='readers'&&!audienceResult.loaded)searchReaders();if(name==='settings'&&!loadSettings.done)loadSettings();}
 
   /** 把固定選項填入下拉選單。 */
   function fillSelect(selector,items){const el=$(selector);items.forEach(value=>{const option=document.createElement('option');option.value=value;option.textContent=value;el.appendChild(option);});}
@@ -372,6 +472,9 @@
       replaceSourceOptions('#import-source',sources);
       replaceSourceOptions('#invite-source',sources);
       replaceSourceOptions('#raw-source',sources,true);
+      replaceSourceOptions('#reader-source',sources,true);
+      replaceSourceOptions('#campaign-source',sources,true);
+      replaceSourceOptions('#dynamic-source',sources,true);
       if(selectedImportKey&&[...$('#import-source').options].some(option=>option.value===selectedImportKey)){
         $('#import-source').value=selectedImportKey;
       }
@@ -419,8 +522,11 @@
     document.querySelectorAll('.tab').forEach(tab=>tab.onclick=()=>switchView(tab.dataset.view));
     $('#lock-btn').onclick=()=>{sessionStorage.removeItem(KEY);location.reload();};
     $('#analytics-refresh').onclick=()=>loadAnalytics(true);$('#export-json').onclick=()=>downloadProtected('/api/admin/survey','survey-responses.json');$('#export-csv').onclick=()=>downloadProtected('/api/admin/survey?format=csv','survey-responses.csv');$('#export-pdf').onclick=exportPdf;
+    $('#dynamic-form').onchange=()=>{refreshDynamicVersions();loadDynamicAnalytics();};$('#dynamic-version').onchange=loadDynamicAnalytics;$('#dynamic-all-versions').onchange=loadDynamicAnalytics;['#dynamic-from','#dynamic-to','#dynamic-source'].forEach(selector=>$(selector).onchange=loadDynamicAnalytics);$('#dynamic-refresh').onclick=loadDynamicAnalytics;
+    $('#dynamic-json').onclick=()=>downloadDynamic('json');$('#dynamic-csv').onclick=()=>downloadDynamic('csv');$('#dynamic-pdf').onclick=exportDynamicPdf;
+    $('#form-create-version').onclick=createFormVersion;$('#form-publish-version').onclick=publishFormVersion;$('#field-add').onclick=addFormField;
     ['#raw-search','#raw-source','#raw-role','#raw-budget','#raw-subscription','#raw-sort'].forEach(selector=>$(selector).addEventListener(selector==='#raw-search'?'input':'change',renderRawTable));
-    $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=()=>{doCount();doQuota();};$('#role').onchange=doCount;$('#interest').onchange=doCount;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#publish-btn').onclick=doPublish;$('#hist-btn').onclick=doHistory;
+    $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=()=>{doCount();doQuota();};$('#role').onchange=doCount;$('#interest').onchange=doCount;['#campaign-source','#campaign-consent','#campaign-vip','#campaign-segment'].forEach(selector=>$(selector).onchange=doCount);$('#campaign-segment-save').onclick=saveCampaignSegment;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#publish-btn').onclick=doPublish;$('#hist-btn').onclick=doHistory;
     $('#invite-refresh').onclick=()=>{doInviteOverview();doQuota();};$('#invite-source').onchange=doInviteOverview;$('#invite-send-btn').onclick=doSendInvites;$('#invite-remind-btn').onclick=doSendReminders;
     $('#invite-tpl').addEventListener('toggle',()=>{if($('#invite-tpl').open)loadInviteTemplate();});$('#tpl-preview-btn').onclick=previewInviteTemplate;$('#tpl-save-btn').onclick=saveInviteTemplate;
     document.querySelectorAll('input[name=mode]').forEach(radio=>radio.onchange=()=>{$('#sched').disabled=mode()!=='schedule';});
@@ -431,9 +537,14 @@
     $('#source-create-cancel').onclick=()=>toggleSourceCreate(false);
     $('#source-create-save').onclick=createAudienceSource;
     $('#source-create-name').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();createAudienceSource();}});
-    $('#reader-search-btn').onclick=searchReaders;$('#vip-grant-btn').onclick=grantVip;$('#grant-btn').onclick=grantCredits;$('#ledger-btn').onclick=loadLedger;$('#settings-save-btn').onclick=saveSettings;
+    $('#reader-search-btn').onclick=()=>{audiencePage=0;selectedAudienceIds.clear();searchReaders();};$('#vip-grant-btn').onclick=grantVip;$('#grant-btn').onclick=grantCredits;$('#ledger-btn').onclick=loadLedger;$('#settings-save-btn').onclick=saveSettings;
+    ['#reader-source','#reader-consent','#reader-account','#reader-vip','#reader-size'].forEach(selector=>$(selector).onchange=()=>{audiencePage=0;selectedAudienceIds.clear();searchReaders();});
+    $('#audience-prev').onclick=()=>{if(audiencePage>0){audiencePage--;searchReaders();}};$('#audience-next').onclick=()=>{if((audiencePage+1)*audienceResult.size<audienceResult.total){audiencePage++;searchReaders();}};
+    $('#audience-check-all').onchange=toggleAudiencePage;$('#bulk-preview').onclick=previewBulk;$('#bulk-execute').onclick=executeBulk;$('#bulk-action').onchange=()=>{bulkSelectionToken=null;$('#bulk-execute').disabled=true;};
+    $('#exam-preview').onclick=previewExamSync;$('#exam-sync').onclick=executeExamSync;
     $('#reader-q').addEventListener('keydown',e=>{if(e.key==='Enter')searchReaders();});
     $('#ledger-email').addEventListener('keydown',e=>{if(e.key==='Enter')loadLedger();});
+    $('#privacy-export').onclick=exportAudienceData;$('#privacy-delete').onclick=deleteAudienceData;
     // 階段 D 才會實作「信件內只寄免費區」的折疊。在那之前，PREMIUM 文章若寄出
     // 會把受限區完整寄進信箱，paywall 形同虛設，故寄送端點有守門（回 400）。
     // 這裡先在 UI 說明，避免使用者選了 PREMIUM 才撞到 400。
@@ -473,7 +584,137 @@
     // 否則使用者只要沒動過分級下拉（BASIC 是預設值，最常見的情形）就永遠看不到現行提示，
     // 停在 HTML 裡那句寫死的舊文案上。與其把字串複製一份到 HTML，不如讓它自己算一次。
     $('#art-tier').dispatchEvent(new Event('change'));
-    buildRawHeader();doQuota();doCount();doHistory();doInviteOverview();switchView('analytics');
+    buildRawHeader();loadFormDefinitions();loadCampaignSegments();doQuota();doCount();doHistory();doInviteOverview();switchView('analytics');
+  }
+
+  /** 載入表單版本清單，讓 Admin 不再被固定問卷欄位綁死。 */
+  async function loadFormDefinitions(){
+    try{
+      formDefinitions=await api('/api/admin/forms');
+      const form=$('#dynamic-form'),current=form.value;
+      form.replaceChildren();
+      [...new Set(formDefinitions.map(item=>item.key))].forEach(key=>{
+        const definition=formDefinitions.find(item=>item.key===key);
+        form.add(new Option(definition?.title||key,key));
+      });
+      if([...form.options].some(option=>option.value===current))form.value=current;
+      refreshDynamicVersions();
+      if(form.value)await loadDynamicAnalytics();
+    }catch(error){if(error.message!=='401')$('#dynamic-summary').textContent='表單清單載入失敗：'+error.message;}
+  }
+
+  /** 依目前表單重建版本選單，標示草稿、發布與封存狀態。 */
+  function refreshDynamicVersions(preferredVersion){
+    const key=$('#dynamic-form').value,select=$('#dynamic-version'),current=preferredVersion??Number(select.value);
+    select.replaceChildren();
+    formDefinitions.filter(item=>item.key===key).sort((a,b)=>b.version-a.version).forEach(item=>{
+      select.add(new Option(`v${item.version} · ${item.status}`,String(item.version)));
+    });
+    if([...select.options].some(option=>Number(option.value)===Number(current)))select.value=String(current);
+  }
+
+  /** 讀取 schema 驅動統計並產生不限欄位數量的圖表。 */
+  async function loadDynamicAnalytics(){
+    const key=$('#dynamic-form').value,version=$('#dynamic-version').value;
+    if(!key||!version)return;
+    const query=dynamicQuery();
+    try{
+      dynamicAnalytics=await api(`/api/admin/analytics/forms/${encodeURIComponent(key)}?${query}`);
+      const summary=dynamicAnalytics.summary||{};
+      $('#dynamic-summary').textContent=`提交 ${summary.submissions||0} 筆 · 不重複人物 ${summary.uniquePeople||0} 人 · 完成率 ${Math.round(Number(summary.completionRate||0)*100)}%`;
+      const root=$('#dynamic-charts');root.replaceChildren();
+      (dynamicAnalytics.dimensions||[]).forEach((dimension,index)=>{
+        const card=document.createElement('article');card.className='card';
+        const title=document.createElement('h2');title.textContent=dimension.label;
+        const note=document.createElement('p');note.className='hint';note.textContent=`已填 ${dimension.answered||0} · 未填 ${dimension.missing||0}`;
+        const content=document.createElement('div');content.className=dimension.responses?'suggestions':'chart';content.id='dynamic-dimension-'+index;
+        card.append(title,note,content);root.append(card);
+        if(Array.isArray(dimension.responses)){
+          dimension.responses.forEach(value=>{const item=document.createElement('div');item.className='suggestion';const p=document.createElement('p');p.textContent=value;item.append(p);content.append(item);});
+          if(!dimension.responses.length)content.append(emptyNode('尚無文字回答'));
+        }else{
+          renderBars('#'+content.id,(dimension.values||[]).map(item=>[item.label,item.count]));
+        }
+      });
+      if(!(dynamicAnalytics.dimensions||[]).length)root.append(emptyNode('這個版本尚未設定可分析欄位'));
+    }catch(error){if(error.message!=='401')$('#dynamic-summary').textContent='分析載入失敗：'+error.message;}
+  }
+
+  /** 下載目前表單版本的動態原始資料。 */
+  function downloadDynamic(format){
+    const key=$('#dynamic-form').value,version=$('#dynamic-version').value;
+    if(!key||!version)return;
+    const query=dynamicQuery();query.set('format',format);
+    downloadProtected(`/api/admin/analytics/forms/${encodeURIComponent(key)}/records?${query}`,`${key}-v${version}.${format==='csv'?'csv':'json'}`);
+  }
+
+  /** 動態分析與匯出共用日期、來源與版本 query，避免畫面和下載資料範圍不同。 */
+  function dynamicQuery(){
+    const query=new URLSearchParams({version:$('#dynamic-version').value,allVersions:String($('#dynamic-all-versions').checked)});
+    if($('#dynamic-from').value)query.set('from',new Date($('#dynamic-from').value+'T00:00:00Z').toISOString());
+    if($('#dynamic-to').value){const exclusiveTo=new Date($('#dynamic-to').value+'T00:00:00Z');exclusiveTo.setUTCDate(exclusiveTo.getUTCDate()+1);query.set('to',exclusiveTo.toISOString());}
+    if($('#dynamic-source').value)query.set('source',$('#dynamic-source').value);
+    return query;
+  }
+
+  /** 用動態 dimension 產生列印報表，不再硬編碼身分、預算等舊題目。 */
+  function exportDynamicPdf(){
+    if(!dynamicAnalytics){showMsg('analytics-msg','請先載入彈性表單分析。',false);return;}
+    const form=dynamicAnalytics.form||{},summary=dynamicAnalytics.summary||{};
+    const sections=(dynamicAnalytics.dimensions||[]).map(dimension=>{
+      const rows=(dimension.values||[]).map(item=>`<li>${escText(item.label)}：${item.count}</li>`).join('');
+      const texts=(dimension.responses||[]).map(value=>`<li>${escText(value)}</li>`).join('');
+      return `<section><h2>${escText(dimension.label)}</h2><p>已填 ${dimension.answered||0} · 未填 ${dimension.missing||0}</p><ul>${rows||texts||'<li>尚無資料</li>'}</ul></section>`;
+    }).join('');
+    const html=`<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>${escText(form.title||'表單')}統計報告</title><style>@page{size:A4;margin:14mm}body{font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;color:#152521;line-height:1.6}header{border-bottom:3px solid #087f72}section{border:1px solid #d6e0dc;border-radius:8px;padding:10px 14px;margin:12px 0;break-inside:avoid}h1{font-size:22px}h2{font-size:15px;color:#08665c}p{color:#52645f}li{margin:3px 0}</style></head><body><header><h1>${escText(form.title||form.key||'表單')} · v${escText(form.version)}</h1><p>提交 ${summary.submissions||0} 筆 · 人物 ${summary.uniquePeople||0} 人 · 產生時間 ${escText(new Date().toLocaleString('zh-TW'))}</p></header>${sections}</body></html>`;
+    openPrintReport(html);
+  }
+
+  /** 共用列印視窗開啟流程。 */
+  function openPrintReport(html){
+    const url=URL.createObjectURL(new Blob([html],{type:'text/html'})),win=window.open(url,'_blank');
+    if(!win){URL.revokeObjectURL(url);showMsg('analytics-msg','瀏覽器阻擋了報表視窗，請允許彈出視窗後重試。',false);return;}
+    win.addEventListener('load',()=>setTimeout(()=>{win.focus();win.print();},250));
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }
+
+  /** 建立新草稿版本，發布中的表單仍可繼續收件。 */
+  async function createFormVersion(){
+    const key=$('#dynamic-form').value;
+    if(!key)return;
+    try{
+      const created=await api(`/api/admin/forms/${encodeURIComponent(key)}/versions`,{method:'POST',body:'{}'});
+      await loadFormDefinitions();refreshDynamicVersions(created.version);$('#dynamic-version').value=String(created.version);
+      showMsg('schema-msg',`已建立 v${created.version} 草稿，可新增欄位。`,true);
+    }catch(error){if(error.message!=='401')showMsg('schema-msg','建立草稿失敗：'+error.message,false);}
+  }
+
+  /** 新增欄位到目前草稿版本。 */
+  async function addFormField(){
+    const key=$('#dynamic-form').value,version=Number($('#dynamic-version').value),fieldKey=$('#field-key').value.trim(),label=$('#field-label').value.trim(),type=$('#field-type').value;
+    const current=formDefinitions.find(item=>item.key===key&&item.version===version);
+    if(!current||current.status!=='DRAFT'){showMsg('schema-msg','請先建立並選擇 DRAFT 草稿版本。',false);return;}
+    const options=$('#field-options').value.split('\n').map(value=>value.trim()).filter(Boolean);
+    const request={label,type,required:$('#field-required').checked,options,analyticsEnabled:true,analyticsView:['short_text','long_text'].includes(type)?'list':'bar',filterable:true,sensitive:false,publicAnalytics:$('#field-public').checked,displayOrder:(current.fields?.length||0)*10+10,factKey:$('#field-fact-key').value.trim()||null};
+    try{
+      await api(`/api/admin/forms/${encodeURIComponent(key)}/versions/${version}/fields/${encodeURIComponent(fieldKey)}`,{method:'POST',body:JSON.stringify(request)});
+      $('#field-key').value='';$('#field-label').value='';$('#field-options').value='';$('#field-fact-key').value='';
+      await loadFormDefinitions();refreshDynamicVersions(version);$('#dynamic-version').value=String(version);
+      showMsg('schema-msg',`欄位「${label}」已加入 v${version} 草稿。`,true);
+    }catch(error){if(error.message!=='401')showMsg('schema-msg','新增欄位失敗：'+error.message,false);}
+  }
+
+  /** 發布目前草稿，並讓新提交開始使用此版本。 */
+  async function publishFormVersion(){
+    const key=$('#dynamic-form').value,version=Number($('#dynamic-version').value);
+    const current=formDefinitions.find(item=>item.key===key&&item.version===version);
+    if(!current||current.status!=='DRAFT'){showMsg('schema-msg','目前選擇的不是 DRAFT 草稿。',false);return;}
+    if(!confirm(`確定發布 ${current.title} v${version}？目前發布版會改為封存。`))return;
+    try{
+      await api(`/api/admin/forms/${encodeURIComponent(key)}/versions/${version}/publish`,{method:'POST'});
+      await loadFormDefinitions();refreshDynamicVersions(version);$('#dynamic-version').value=String(version);
+      showMsg('schema-msg',`v${version} 已發布。`,true);
+    }catch(error){if(error.message!=='401')showMsg('schema-msg','發布失敗：'+error.message,false);}
   }
 
   /** 載入全部受保護問卷資料並重繪所有分析區塊。 */
@@ -690,8 +931,39 @@
         +`送出後只會寄給前 ${usable} 人，其餘 ${count-usable} 人本次不會收到。`;
     }
   }
-  /** 更新電子報收件人數與樣本。 */
-  async function doCount(){try{const q=new URLSearchParams();if($('#role').value)q.set('role',$('#role').value);if($('#interest').value)q.set('interest',$('#interest').value);const r=await api('/api/admin/recipients?'+q);$('#rcount').textContent=r.count;$('#rsample').textContent=r.sample.length?'樣本：'+r.sample.join(', '):'';renderQuotaWarn();}catch(e){if(e.message!=='401')$('#rcount').textContent='?';}}
+  /** 電子報目前的動態人物條件；寄送服務仍會強制只取 CONFIRMED。 */
+  function campaignAudienceFilters(){
+    const one=value=>value?[value]:[];
+    return {query:null,sourceKeys:one($('#campaign-source').value),consentStatus:one($('#campaign-consent').value),accountStatus:[],vipStatus:one($('#campaign-vip').value),creditsMin:null,creditsMax:null,survey:null,exam:null,activity:null};
+  }
+
+  /** 組合寄送用完整篩選，支援舊 role／interest、動態條件與保存分眾。 */
+  function campaignFilter(){
+    return {role:$('#role').value||null,interest:$('#interest').value||null,audience:campaignAudienceFilters(),savedSegmentId:$('#campaign-segment').value?Number($('#campaign-segment').value):null};
+  }
+
+  /** 載入可重用分眾條件。 */
+  async function loadCampaignSegments(preferredId){
+    try{
+      const segments=await api('/api/admin/audience/segments'),select=$('#campaign-segment'),current=preferredId??select.value;
+      select.replaceChildren(new Option('不使用',''));
+      segments.forEach(segment=>select.add(new Option(segment.label,String(segment.id))));
+      if([...select.options].some(option=>String(option.value)===String(current)))select.value=String(current);
+    }catch(error){if(error.message!=='401')showMsg('campaign-segment-msg','分眾清單載入失敗：'+error.message,false);}
+  }
+
+  /** 將目前動態條件存成日後可重用的分眾。 */
+  async function saveCampaignSegment(){
+    const label=$('#campaign-segment-name').value.trim();
+    if(!label){showMsg('campaign-segment-msg','請輸入分眾名稱。',false);return;}
+    try{
+      const segment=await api('/api/admin/audience/segments',{method:'POST',body:JSON.stringify({label,filters:campaignAudienceFilters()})});
+      $('#campaign-segment-name').value='';await loadCampaignSegments(segment.id);showMsg('campaign-segment-msg',`已儲存「${segment.label}」。`,true);doCount();
+    }catch(error){if(error.message!=='401')showMsg('campaign-segment-msg','儲存失敗：'+error.message,false);}
+  }
+
+  /** 更新電子報收件人數與樣本；與實際寄送共用同一份篩選物件。 */
+  async function doCount(){try{const r=await api('/api/admin/recipients/search',{method:'POST',body:JSON.stringify(campaignFilter())});$('#rcount').textContent=r.count;$('#rsample').textContent=r.sample.length?'樣本：'+r.sample.join(', '):'';renderQuotaWarn();}catch(e){if(e.message!=='401')$('#rcount').textContent='?';}}
   /** 寄送電子報測試信給指定信箱。 */
   async function doTest(){const m=$('#test-msg');m.className='msg';const to=$('#test-to').value.trim();if(!to){m.className='msg err';m.textContent='請填測試信箱';return;}try{await api('/api/admin/campaign/test',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,to})});m.className='msg ok';m.textContent='測試信已寄給 '+to;}catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='測試寄送失敗：'+e.message;}}}
   /** 確認後立即發送、排程電子報，或在修改模式下更新既有排程。 */
@@ -750,7 +1022,7 @@
     if(!confirm((editing?`確定更新批次 #${editingCampaignId} 的排程（取消舊排程信並以新內容重排給 ${count} 人）？`:`確定要${isSched?'排程':'立即'}發送給 ${count} 人嗎？`)+notice))return;
     $('#send-btn').disabled=true;
     try{
-      const filter={role:$('#role').value||null,interest:$('#interest').value||null};
+      const filter=campaignFilter();
       let r;
       if(editing){
         // 修改模式：呼叫 reschedule 端點（後端會先取消舊排程信再重排）
@@ -836,7 +1108,8 @@
       // 「只發布不寄送」的紀錄沒有寄送行為：成功/失敗顯示 0/0 會被讀成「寄了 0 封的失敗群發」，
       // 與事實（根本沒打算寄信）相反，故改為明確標示未寄送。
       tr.append(statusTd,cell(c.mode==='publish'?'—（未寄送）':c.acceptedCount+'/'+c.failedCount));
-      const actionTd=document.createElement('td');if(c.status==='scheduled'){const editBtn=document.createElement('button');editBtn.className='btn ghost';editBtn.textContent='修改';editBtn.onclick=()=>doEditSchedule(c);const btn=document.createElement('button');btn.className='btn danger';btn.style.marginLeft='8px';btn.textContent='取消排程';btn.onclick=()=>doCancel(c.id);actionTd.append(editBtn,btn);}
+      // 是否仍可操作由後端依伺服器時間判斷；不可只看 scheduled，否則已到期的舊資料仍會顯示按鈕。
+      const actionTd=document.createElement('td');if(c.canModifySchedule===true){const editBtn=document.createElement('button');editBtn.className='btn ghost';editBtn.textContent='修改';editBtn.onclick=()=>doEditSchedule(c);const btn=document.createElement('button');btn.className='btn danger';btn.style.marginLeft='8px';btn.textContent='取消排程';btn.onclick=()=>doCancel(c.id);actionTd.append(editBtn,btn);}
       // 已發布的文章給一顆「下架」：發布後價格或內文打錯時，這是唯一不必手動改資料庫的止血手段。
       // 條件仍同時看 publishedAt：狀態為 published 而 publishedAt 為 NULL 的列是本功能之前
       // 下架的舊資料（當時只清 published_at、沒改 status）。對它按下架其實會成功（回 200）
@@ -1006,40 +1279,116 @@
       $('#import-preview-table tbody').textContent='';
       $('#import-stats').textContent='';
       $('#import-file').value='';
-      showMsg('import-msg',`匯入完成：新增 ${result.imported} 筆，略過既有或無效資料 ${result.skipped} 筆。`,true);
+      showMsg('import-msg',`匯入完成：新人物 ${result.peopleCreated||0}、合併既有人物 ${result.peopleMerged||0}、新增來源紀錄 ${result.recordsCreated||0}、更新 ${result.recordsUpdated||0}、未變更 ${result.unchanged||0}、無效或同檔重複 ${result.invalid||0}。`,true);
     }catch(e){
       $('#import-confirm-btn').disabled=false;
       if(e.message!=='401')showMsg('import-msg','匯入失敗：'+e.message,false);
     }
   }
 
+  /** 由畫面欄位建立後端複合篩選；空陣列不會限制資料。 */
+  function currentAudienceFilters(){
+    const one=value=>value?[value]:[];
+    return {
+      query:$('#reader-q').value.trim()||null,
+      sourceKeys:one($('#reader-source').value),
+      consentStatus:one($('#reader-consent').value),
+      accountStatus:one($('#reader-account').value),
+      vipStatus:one($('#reader-vip').value),
+      creditsMin:null,creditsMax:null,survey:null,exam:null,activity:null
+    };
+  }
+
   /**
-   * 搜尋讀者並渲染表格。
-   * 每一格都用 textContent（cell()）寫入：email 與顯示名稱是使用者可控內容，
-   * 用字串拼 innerHTML 會讓一個惡意 email 在後台頁面上執行腳本。
+   * 伺服器端搜尋人物並渲染分頁；姓名、來源、同意、活動、VIP 與點數都在同一張表判讀。
+   * 所有個資仍以 textContent 建立，避免後台 XSS。
    */
   async function searchReaders(){
-    const q=$('#reader-q').value.trim();
-    if(!q){return;}
     try{
-      const rows=await api('/api/admin/readers?q='+encodeURIComponent(q));
-      const tbody=$('#reader-table tbody');tbody.textContent='';
-      rows.forEach(r=>{
-        const tr=document.createElement('tr');
-        tr.append(cell(r.email),cell(r.vipActive?'VIP':'一般'),cell(isoDate(r.vipExpiresAt,'—')),
-          cell(r.credits),cell(isoDate(r.lastLoginAt,'未登入')));
-        const actionTd=document.createElement('td');
-        if(r.vipActive){
-          const btn=document.createElement('button');btn.className='btn ghost';btn.textContent='取消 VIP';
-          // 直接綁 closure 而非 data-email 屬性：屬性要另外處理引號跳脫，閉包沒有這個風險
-          btn.onclick=()=>revokeVip(r.email);
-          actionTd.append(btn);
-        }
-        tr.append(actionTd);tbody.append(tr);
+      audienceResult=await api('/api/admin/audience/search',{
+        method:'POST',
+        body:JSON.stringify({filters:currentAudienceFilters(),sort:{field:'lastActivityAt',direction:'desc'},page:audiencePage,size:Number($('#reader-size').value)})
       });
-      if(!rows.length){const tr=document.createElement('tr'),td=cell('查無符合的讀者');td.colSpan=6;tr.append(td);tbody.append(tr);}
-      showMsg('reader-msg',`找到 ${rows.length} 位讀者。`,true);
+      audienceResult.loaded=true;
+      const tbody=$('#reader-table tbody');tbody.textContent='';
+      audienceResult.items.forEach(person=>{
+        const tr=document.createElement('tr');
+        const checkTd=document.createElement('td');checkTd.className='table-check';
+        const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=selectedAudienceIds.has(person.personId);checkbox.setAttribute('aria-label',`選取 ${person.email}`);
+        checkbox.onchange=()=>{checkbox.checked?selectedAudienceIds.add(person.personId):selectedAudienceIds.delete(person.personId);updateAudienceSelection();};
+        checkTd.append(checkbox);
+        tr.append(checkTd,cell([person.email,person.name].filter(Boolean).join('\n')),cell((person.sources||[]).map(sourceLabel).join('、')||'—'),
+          cell(consentLabel(person.consentStatus)),cell(`問卷 ${person.surveyCount||0}／測驗 ${person.examCount||0}\n${formatDate(person.lastActivityAt)||'尚無活動'}`),
+          cell(person.readerAccount?`${person.tier||'BASIC'}／${vipLabel(person.vipStatus)}`:'尚無帳戶'),cell(person.credits??'—'));
+        const actionTd=document.createElement('td');
+        if(person.vipStatus==='ACTIVE'){
+          const revoke=document.createElement('button');revoke.className='btn ghost';revoke.textContent='取消 VIP';revoke.onclick=()=>revokeVip(person.email);actionTd.append(revoke);
+        }
+        tr.append(actionTd);
+        tbody.append(tr);
+      });
+      if(!audienceResult.items.length){const tr=document.createElement('tr'),td=cell('沒有符合條件的人物');td.colSpan=8;tr.append(td);tbody.append(tr);}
+      $('#audience-total').textContent=audienceResult.total;$('#audience-page').textContent=`第 ${audiencePage+1} 頁`;
+      $('#audience-prev').disabled=audiencePage===0;$('#audience-next').disabled=(audiencePage+1)*audienceResult.size>=audienceResult.total;
+      $('#audience-check-all').checked=audienceResult.items.length>0&&audienceResult.items.every(person=>selectedAudienceIds.has(person.personId));
+      updateAudienceSelection();
+      showMsg('reader-msg',`目前條件共 ${audienceResult.total} 人，本頁顯示 ${audienceResult.items.length} 人。`,true);
     }catch(e){if(e.message!=='401')showMsg('reader-msg','搜尋失敗：'+e.message,false);}
+  }
+
+  /** 顯示同意狀態中文。 */
+  function consentLabel(value){return {CONFIRMED:'已確認',PENDING:'待確認',UNSUBSCRIBED:'已退訂'}[value]||value||'待確認';}
+  /** 顯示 VIP 狀態中文。 */
+  function vipLabel(value){return {ACTIVE:'VIP 有效',EXPIRED:'VIP 過期',NONE:'非 VIP'}[value]||value||'非 VIP';}
+  /** 勾選或取消本頁全部人物。 */
+  function toggleAudiencePage(event){audienceResult.items.forEach(person=>event.target.checked?selectedAudienceIds.add(person.personId):selectedAudienceIds.delete(person.personId));searchReaders();}
+  /** 更新勾選計數，篩選或勾選改變後舊快照必須失效。 */
+  function updateAudienceSelection(){$('#audience-selected').textContent=selectedAudienceIds.size;bulkSelectionToken=null;$('#bulk-execute').disabled=true;}
+
+  /** 建立批次固定快照並顯示可執行、跳過與建帳數量。 */
+  async function previewBulk(){
+    const action=$('#bulk-action').value,note=$('#bulk-note').value.trim();
+    if(!note){showMsg('bulk-msg','請填寫操作原因，方便日後對帳。',false);return;}
+    const request={action,personIds:[...selectedAudienceIds],filters:selectedAudienceIds.size?null:currentAudienceFilters(),creditDelta:Number($('#bulk-credit-delta').value),vipDays:Number($('#bulk-vip-days').value),note};
+    try{
+      const result=await api('/api/admin/readers/bulk/preview',{method:'POST',body:JSON.stringify(request)});
+      bulkSelectionToken=result.selectionToken;$('#bulk-execute').disabled=result.eligible===0;
+      showMsg('bulk-msg',`預覽完成：符合 ${result.targeted} 人，可執行 ${result.eligible} 人，跳過 ${result.skipped} 人，會新建帳戶 ${result.willCreateReaderAccounts} 人${action==='GRANT_CREDITS'?'，點數總變動 '+result.totalCreditDelta:''}。快照有效至 ${formatDate(result.expiresAt)}。`,true);
+    }catch(error){bulkSelectionToken=null;$('#bulk-execute').disabled=true;if(error.message!=='401')showMsg('bulk-msg','預覽失敗：'+error.message,false);}
+  }
+
+  /** 二次確認後以隨機冪等鍵執行固定快照。 */
+  async function executeBulk(){
+    if(!bulkSelectionToken){showMsg('bulk-msg','請先預覽影響人數。',false);return;}
+    if(!confirm('確定依剛才的固定名單執行批次操作？'))return;
+    $('#bulk-execute').disabled=true;
+    try{
+      const result=await api('/api/admin/readers/bulk/execute',{method:'POST',body:JSON.stringify({selectionToken:bulkSelectionToken,idempotencyKey:crypto.randomUUID()})});
+      showMsg('bulk-msg',`批次 ${result.status}：成功 ${result.succeeded}、失敗 ${result.failed}、跳過 ${result.skipped}。`,result.failed===0);
+      bulkSelectionToken=null;selectedAudienceIds.clear();await searchReaders();
+    }catch(error){if(error.message!=='401')showMsg('bulk-msg','執行失敗：'+error.message,false);}
+  }
+
+  /** 取得 Exam 增量同步摘要，但不寫入名單。 */
+  async function previewExamSync(){
+    $('#exam-sync').disabled=true;
+    try{
+      const result=await api('/api/admin/integrations/exam/preview',{method:'POST'});
+      $('#exam-sync').disabled=result.invalid>0||result.peopleCreated+result.peopleMerged+result.attempts===0;
+      showMsg('exam-msg',`預覽：新增人物 ${result.peopleCreated}、合併人物 ${result.peopleMerged}、測驗作答 ${result.attempts}、無效 ${result.invalid}。${result.errors?.length?'問題：'+result.errors.join('；'):''}`,result.invalid===0);
+    }catch(error){if(error.message!=='401')showMsg('exam-msg','Exam 預覽失敗：'+error.message,false);}
+  }
+
+  /** 確認寫入 Exam 增量資料並前進同步 cursor。 */
+  async function executeExamSync(){
+    if(!confirm('確定同步剛才預覽的 Exam 名單與測驗結果？'))return;
+    $('#exam-sync').disabled=true;
+    try{
+      const result=await api('/api/admin/integrations/exam/sync',{method:'POST'});
+      const summary=result.summary||{};
+      showMsg('exam-msg',`同步完成（批次 #${result.batchId}）：新增人物 ${summary.peopleCreated||0}、合併 ${summary.peopleMerged||0}、新增活動 ${summary.recordsCreated||0}、更新 ${summary.recordsUpdated||0}、未變更 ${summary.unchanged||0}。`,true);
+      await searchReaders();
+    }catch(error){if(error.message!=='401')showMsg('exam-msg','Exam 同步失敗：'+error.message,false);}
   }
 
   /** 取消某位讀者的 VIP（不刪讀者列，只改等級與到期日） */
@@ -1095,6 +1444,30 @@
       if(!rows.length){const tr=document.createElement('tr'),td=cell('此讀者尚無交易紀錄');td.colSpan=4;tr.append(td);tbody.append(tr);}
       showMsg('ledger-msg',`共 ${rows.length} 筆交易。`,true);
     }catch(e){if(e.message!=='401')showMsg('ledger-msg','查詢失敗：'+e.message,false);}
+  }
+
+  /** 匯出單一人物資料成 JSON 檔，不把 Admin 金鑰放入網址。 */
+  async function exportAudienceData(){
+    const email=$('#privacy-email').value.trim();
+    if(!email){showMsg('privacy-msg','請輸入 Email。',false);return;}
+    try{
+      const data=await api('/api/admin/audience/data/export?email='+encodeURIComponent(email));
+      const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+      const link=document.createElement('a');link.href=url;link.download='audience-data-'+email.replace(/[^a-z0-9.-]/gi,'_')+'.json';document.body.append(link);link.click();link.remove();URL.revokeObjectURL(url);
+      showMsg('privacy-msg','人物資料已匯出。',true);
+    }catch(error){if(error.message!=='401')showMsg('privacy-msg','匯出失敗：'+error.message,false);}
+  }
+
+  /** 二次確認後刪除個資；退訂抑制與財務帳本依後端政策保留。 */
+  async function deleteAudienceData(){
+    const email=$('#privacy-email').value.trim(),reason=$('#privacy-reason').value.trim();
+    if(!email||!reason){showMsg('privacy-msg','Email 與刪除原因都要填寫。',false);return;}
+    if(!confirm(`確定刪除 ${email} 的人物、來源與活動資料？此動作無法復原。`))return;
+    try{
+      const result=await api('/api/admin/audience/data?email='+encodeURIComponent(email)+'&reason='+encodeURIComponent(reason),{method:'DELETE'});
+      showMsg('privacy-msg',`刪除完成：人物 ${result.peopleDeleted}、匿名化 Reader ${result.readersAnonymized}；退訂抑制 ${result.suppressionPreserved?'已保留':'不需保留'}。`,true);
+      selectedAudienceIds.clear();await searchReaders();
+    }catch(error){if(error.message!=='401')showMsg('privacy-msg','刪除失敗：'+error.message,false);}
   }
 
   // ===== 參數設定 =====

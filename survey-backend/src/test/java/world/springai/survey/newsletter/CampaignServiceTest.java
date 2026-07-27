@@ -6,6 +6,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -127,7 +129,7 @@ class CampaignServiceTest {
     void rescheduleCancelsOldAndReschedulesInPlace() {
         Instant newAt = Instant.parse("2030-06-01T10:00:00Z");
         Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
-            null, 1, "scheduled");
+            OffsetDateTime.parse("2030-05-01T10:00:00Z"), 1, "scheduled");
         when(campaignRepository.findById(7L)).thenReturn(java.util.Optional.of(existing));
         when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
         when(emailLogRepository.findByCampaignIdAndStatus(7L, "scheduled"))
@@ -156,6 +158,65 @@ class CampaignServiceTest {
             () -> svc.reschedule(9L, "新主旨", "內文", null, null, Instant.parse("2030-01-01T00:00:00Z")));
         verify(mailSender, never()).schedule(any(), any());
         verify(mailSender, never()).cancelScheduled(any());
+    }
+
+    /** 修改排程：原排程時間已到時，即使狀態字串仍是 scheduled 也必須拒絕 */
+    @Test
+    void rescheduleRejectsElapsedScheduledCampaign() {
+        Campaign elapsed = new Campaign("主旨", "內文", "<p>x</p>", null, null, "schedule",
+            OffsetDateTime.parse("2000-01-01T00:00:00Z"), 1, "scheduled");
+        when(campaignRepository.findById(10L)).thenReturn(Optional.of(elapsed));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.reschedule(10L, "新主旨", "內文", null, null,
+                Instant.parse("2099-01-01T00:00:00Z")));
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+        verify(mailSender, never()).schedule(any(), any());
+        verify(mailSender, never()).cancelScheduled(any());
+    }
+
+    /** 修改排程：原排程仍有效，但新時間不是未來時回 400，且不先取消舊排程 */
+    @Test
+    void rescheduleRejectsPastReplacementTime() {
+        Campaign future = new Campaign("主旨", "內文", "<p>x</p>", null, null, "schedule",
+            OffsetDateTime.parse("2099-01-01T00:00:00Z"), 1, "scheduled");
+        when(campaignRepository.findById(12L)).thenReturn(Optional.of(future));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.reschedule(12L, "新主旨", "內文", null, null,
+                Instant.parse("2000-01-01T00:00:00Z")));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        verify(mailSender, never()).schedule(any(), any());
+        verify(mailSender, never()).cancelScheduled(any());
+    }
+
+    /** 取消排程：排程時間已到時不得再呼叫寄信商的取消 API */
+    @Test
+    void cancelRejectsElapsedScheduledCampaign() {
+        Campaign elapsed = new Campaign("主旨", "內文", "<p>x</p>", null, null, "schedule",
+            OffsetDateTime.parse("2000-01-01T00:00:00Z"), 1, "scheduled");
+        when(campaignRepository.findById(11L)).thenReturn(Optional.of(elapsed));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.cancelSchedule(11L));
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+        verify(emailLogRepository, never()).findByCampaignIdAndStatus(any(), anyString());
+        verify(mailSender, never()).cancelScheduled(any());
+    }
+
+    /** 歷史列表：讀取前先把已到期的 scheduled 批次原子更新為 sent */
+    @Test
+    void listReconcilesElapsedSchedulesBeforeReadingHistory() {
+        when(campaignRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of());
+
+        assertTrue(svc.list().isEmpty());
+
+        verify(campaignRepository).markElapsedSchedules(
+            eq("scheduled"), eq("sent"), any(OffsetDateTime.class));
+        verify(campaignRepository).findAllByOrderByCreatedAtDesc();
     }
 
     /** 批量丟例外：整批記 failed、不中斷 */
@@ -942,7 +1003,7 @@ class CampaignServiceTest {
     @Test
     void reschedulePremiumTierIsRejectedByFoldingGuard() {
         Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
-            null, 1, "scheduled");
+            OffsetDateTime.parse("2098-01-01T00:00:00Z"), 1, "scheduled");
         existing.setTier(Campaign.TIER_PREMIUM);
         existing.setCreditCost(10);
         when(campaignRepository.findById(11L)).thenReturn(Optional.of(existing));
@@ -991,7 +1052,7 @@ class CampaignServiceTest {
     void rescheduleTruncatesToMarketingQuota() {
         Instant newAt = Instant.parse("2030-06-01T10:00:00Z");
         Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
-            null, 5, "scheduled");
+            OffsetDateTime.parse("2030-05-01T10:00:00Z"), 5, "scheduled");
         when(campaignRepository.findById(21L)).thenReturn(Optional.of(existing));
         when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
         when(emailLogRepository.findByCampaignIdAndStatus(21L, "scheduled")).thenReturn(List.of());
@@ -1013,7 +1074,7 @@ class CampaignServiceTest {
     @Test
     void rescheduleIsRejectedWhenNoMarketingQuota() {
         Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
-            null, 2, "scheduled");
+            OffsetDateTime.parse("2030-05-01T10:00:00Z"), 2, "scheduled");
         when(campaignRepository.findById(22L)).thenReturn(Optional.of(existing));
         when(emailLogRepository.findByCampaignIdAndStatus(22L, "scheduled")).thenReturn(List.of());
         when(recipientService.recipients(null, null)).thenReturn(List.of("a@b.com", "c@b.com"));
@@ -1055,7 +1116,7 @@ class CampaignServiceTest {
     void rescheduleInvalidatesQuotaCacheAfterSending() {
         Instant newAt = Instant.parse("2030-06-01T10:00:00Z");
         Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
-            null, 1, "scheduled");
+            OffsetDateTime.parse("2030-05-01T10:00:00Z"), 1, "scheduled");
         when(campaignRepository.findById(23L)).thenReturn(Optional.of(existing));
         when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
         when(emailLogRepository.findByCampaignIdAndStatus(23L, "scheduled")).thenReturn(List.of());

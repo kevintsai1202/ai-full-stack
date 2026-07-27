@@ -17,6 +17,7 @@ import java.util.regex.Pattern;
 
 import world.springai.survey.AdminSettingController;
 import world.springai.survey.ReaderSiteLinks;
+import world.springai.survey.audience.AudienceSearchService;
 import world.springai.survey.audience.RecipientService;
 import world.springai.survey.audience.SubscriptionLinkBuilder;
 import world.springai.survey.mail.EmailLog;
@@ -116,6 +117,17 @@ public class CampaignService {
     public SendResult send(String subject, String markdown, String role, String interest,
                            String mode, Instant scheduledAt,
                            String tier, Integer creditCost, String slug, Instant publishedAt) {
+        return send(subject, markdown, role, interest, mode, scheduledAt,
+            tier, creditCost, slug, publishedAt, null, null);
+    }
+
+    /**
+     * 發送電子報並支援動態／保存分眾；舊簽名委派到此方法以維持 API 與測試相容。
+     */
+    public SendResult send(String subject, String markdown, String role, String interest,
+                           String mode, Instant scheduledAt,
+                           String tier, Integer creditCost, String slug, Instant publishedAt,
+                           AudienceSearchService.Filters audienceFilters, Long savedSegmentId) {
         // 驗證並正規化發布欄位，須在建立 campaign 前完成，否則會讓 DB 約束以 500 的形式失敗
         String normalizedTier = validateTier(tier);
         int normalizedCreditCost = validateCreditCost(normalizedTier, creditCost);
@@ -142,7 +154,8 @@ public class CampaignService {
         }
 
         // 取得收件人清單
-        List<String> recipients = recipientService.recipients(role, interest);
+        List<String> recipients = recipients(
+            role, interest, audienceFilters, savedSegmentId);
 
         // 保留交易信額度（spec §6）：群發不得吃掉登入信與確認信的可用量，
         // 否則讀者收不到 magic link 就整個登不進讀者端。
@@ -163,6 +176,8 @@ public class CampaignService {
         campaign.setCreditCost(normalizedCreditCost);
         campaign.setSlug(normalizedSlug);
         campaign.setPublishedAt(normalizedPublishedAt);
+        campaign.setFilterJson(audienceFilters);
+        campaign.setSavedSegmentId(savedSegmentId);
         campaign = campaignRepository.save(campaign);
         Long campaignId = campaign.getId();
 
@@ -512,16 +527,18 @@ public class CampaignService {
 
     /** 取消某 campaign 的所有排程信 */
     public Map<String, Integer> cancelSchedule(Long campaignId) {
+        Campaign campaign = campaignRepository.findById(campaignId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到此電子報批次"));
+        requireModifiableSchedule(campaign, OffsetDateTime.now(ZoneOffset.UTC));
+
         int[] rc = cancelProviderScheduled(campaignId);
         int cancelled = rc[0];
         int failed = rc[1];
         // 僅在確實有排程信被取消時才把 campaign 標為 cancelled；
         // 對「已立即寄出」或無排程信的 campaign 呼叫取消則為 no-op，不誤改其狀態
         if (cancelled > 0) {
-            campaignRepository.findById(campaignId).ifPresent(c -> {
-                c.setStatus("cancelled");
-                campaignRepository.save(c);
-            });
+            campaign.setStatus(Campaign.STATUS_CANCELLED);
+            campaignRepository.save(campaign);
         }
         return Map.of("cancelled", cancelled, "failed", failed);
     }
@@ -533,10 +550,21 @@ public class CampaignService {
      */
     public SendResult reschedule(Long campaignId, String subject, String markdown,
                                  String role, String interest, Instant scheduledAt) {
+        return reschedule(
+            campaignId, subject, markdown, role, interest, scheduledAt, null, null);
+    }
+
+    /** 修改排程並可切換為動態／保存分眾。 */
+    public SendResult reschedule(Long campaignId, String subject, String markdown,
+                                 String role, String interest, Instant scheduledAt,
+                                 AudienceSearchService.Filters audienceFilters,
+                                 Long savedSegmentId) {
         Campaign campaign = campaignRepository.findById(campaignId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到此電子報批次"));
-        if (!"scheduled".equals(campaign.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "只能修改尚未寄出的排程");
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        requireModifiableSchedule(campaign, now);
+        if (scheduledAt == null || !scheduledAt.isAfter(now.toInstant())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "新的排程時間需為未來");
         }
         // 守門：重排仍會實際寄出信件，同 send() 的理由——階段 D 的信件折疊尚未實作前，
         // 非 BASIC 的 campaign 一律拒絕重排寄送。此檢查待 foldedHtml 實作後可移除。
@@ -549,7 +577,8 @@ public class CampaignService {
         cancelProviderScheduled(campaignId);
 
         // 2. 以新篩選當下重查名單、渲染新內文並重排
-        List<String> recipients = recipientService.recipients(role, interest);
+        List<String> recipients = recipients(
+            role, interest, audienceFilters, savedSegmentId);
 
         // 保留交易信額度（spec §6）：重排仍會實際寄出信件，同 send() 的理由。
         // 與 send() 共用同一份判斷（applyMarketingQuota），避免兩條路徑各改一邊。
@@ -567,6 +596,8 @@ public class CampaignService {
         campaign.setBodyHtml(bodyHtml);
         campaign.setFilterRole(role);
         campaign.setFilterInterest(interest);
+        campaign.setFilterJson(audienceFilters);
+        campaign.setSavedSegmentId(savedSegmentId);
         campaign.setScheduledAt(OffsetDateTime.ofInstant(scheduledAt, ZoneOffset.UTC));
         campaign.setRecipientCount(recipients.size());
         campaign.setAcceptedCount(rc[0]);
@@ -671,7 +702,26 @@ public class CampaignService {
 
     /** 歷史列表（依建立時間降冪） */
     public List<Campaign> list() {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        int reconciled = campaignRepository.markElapsedSchedules(
+            Campaign.STATUS_SCHEDULED, Campaign.STATUS_SENT, now);
+        if (reconciled > 0) {
+            log.info("整理已到期電子報排程：{} 個批次由 scheduled 更新為 sent", reconciled);
+        }
         return campaignRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    /**
+     * 排程操作守門：只有狀態仍為 scheduled 且排程時間晚於後端目前時間才可操作。
+     *
+     * <p>這道檢查必須留在後端；即使 Admin 頁面已隱藏按鈕，使用者仍可能停留在
+     * 舊頁面，或直接呼叫 API。排程時間剛好跨過時，以後端收到請求的時間為準。</p>
+     */
+    private void requireModifiableSchedule(Campaign campaign, OffsetDateTime now) {
+        if (!campaign.canModifyScheduleAt(now)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "此排程已到寄送時間或不再是待寄狀態，無法修改或取消");
+        }
     }
 
     /** 驗證並正規化 tier：null 視為未指定 → 預設 BASIC；非 BASIC/PREMIUM 回 400 */
@@ -728,6 +778,17 @@ public class CampaignService {
      * <p>上限 20 次重試後拋例外而非無窮迴圈：撞 20 次代表隨機源壞了或資料異常，
      * 靜默重試到天荒地老只會把問題藏起來。</p>
      */
+    /** 沒有新式條件時沿用舊查詢入口，維持既有寄送與測試相容。 */
+    private List<String> recipients(
+            String role,
+            String interest,
+            AudienceSearchService.Filters audienceFilters,
+            Long savedSegmentId) {
+        return audienceFilters == null && savedSegmentId == null
+            ? recipientService.recipients(role, interest)
+            : recipientService.recipients(role, interest, audienceFilters, savedSegmentId);
+    }
+
     private String generateSlug() {
         java.security.SecureRandom random = new java.security.SecureRandom();
         String alphabet = "abcdefghjkmnpqrstuvwxyz23456789"; // 避開 i/l/o/0/1，肉眼核對網址時不易看錯

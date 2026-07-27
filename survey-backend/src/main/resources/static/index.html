@@ -224,6 +224,9 @@
       <label class="q" for="name">稱呼</label>
       <input type="text" id="name" name="name" placeholder="怎麼稱呼你" />
 
+      <!-- Schema 載入成功後由 JavaScript 產生欄位；載入失敗時保留既有表單作為安全 fallback。 -->
+      <div id="dynamic-schema-fields" hidden></div>
+      <div id="legacy-schema-fields">
       <label class="q" for="role">你的身分／職業</label>
       <select id="role" name="role">
         <option value="">請選擇</option>
@@ -306,6 +309,7 @@
 
       <label class="q" for="suggestion">有什麼建議，或還想多學的技術？<span class="hint">— 自由填寫，讓我知道你最想學什麼</span></label>
       <textarea id="suggestion" name="suggestion" rows="3" placeholder="例如：想多講 RAG 的進階調校、想學 Kafka 串接、Docker / K8s 部署，或任何建議都歡迎…"></textarea>
+      </div>
 
       <!-- 蜜罐欄位：一般使用者看不到，機器人才會填 -->
       <div class="hp"><label>Website</label><input type="text" id="website" name="website" tabindex="-1" autocomplete="off" /></div>
@@ -360,6 +364,131 @@
   function readUtm() {
     try { return JSON.parse(sessionStorage.getItem('utm') || '{}'); } catch (e) { return {}; }
   }
+
+  const FORM_KEY = 'fullstack-course-interest';
+  let activeFormSchema = null;
+
+  /** 建立欄位標題；必填資訊同時寫入文字與原生 required，方便手機與輔助工具理解。 */
+  function dynamicLabel(field, inputId) {
+    var label = document.createElement('label');
+    label.className = 'q';
+    label.htmlFor = inputId;
+    label.textContent = field.label + (field.required ? '（必填）' : '');
+    return label;
+  }
+
+  /** 依後端 schema 建立一個公開問卷欄位，不把欄位代稱或選項寫死在頁面。 */
+  function renderDynamicField(container, field) {
+    var inputId = 'dynamic-' + field.key;
+    var options = Array.isArray(field.options) ? field.options : [];
+    container.appendChild(dynamicLabel(field, inputId));
+
+    if (field.type === 'multi_select') {
+      var group = document.createElement('div');
+      group.className = 'opts grid2';
+      group.id = inputId;
+      options.forEach(function (value) {
+        var optionLabel = document.createElement('label');
+        optionLabel.className = 'opt';
+        var input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = value;
+        input.dataset.fieldKey = field.key;
+        optionLabel.append(input, document.createTextNode(' ' + value));
+        group.appendChild(optionLabel);
+      });
+      if (!options.length) {
+        var fallback = document.createElement('input');
+        fallback.type = 'text';
+        fallback.id = inputId;
+        fallback.dataset.fieldKey = field.key;
+        fallback.required = field.required;
+        container.appendChild(fallback);
+        return;
+      }
+      container.appendChild(group);
+      return;
+    }
+
+    if (field.type === 'boolean') {
+      var booleanWrap = document.createElement('label');
+      booleanWrap.className = 'opt';
+      var booleanInput = document.createElement('input');
+      booleanInput.type = 'checkbox';
+      booleanInput.id = inputId;
+      booleanInput.dataset.fieldKey = field.key;
+      booleanWrap.append(booleanInput, document.createTextNode(' 是'));
+      container.appendChild(booleanWrap);
+      return;
+    }
+
+    var input;
+    if (field.type === 'select' && options.length) {
+      input = document.createElement('select');
+      var placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = '請選擇';
+      input.appendChild(placeholder);
+      options.forEach(function (value) {
+        var option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        input.appendChild(option);
+      });
+    } else if (field.type === 'long_text') {
+      input = document.createElement('textarea');
+      input.rows = 3;
+    } else {
+      input = document.createElement('input');
+      input.type = field.type === 'date' ? 'date'
+        : (field.type === 'number' || field.type === 'rating') ? 'number' : 'text';
+      if (field.type === 'rating') {
+        input.min = '1';
+        input.max = '5';
+      }
+    }
+    input.id = inputId;
+    input.dataset.fieldKey = field.key;
+    input.required = field.required;
+    container.appendChild(input);
+  }
+
+  /** 載入目前發布版本；失敗時不阻擋填寫，繼續使用頁面內的舊欄位。 */
+  async function loadFormSchema() {
+    try {
+      var response = await fetch(API_BASE + '/api/forms/' + FORM_KEY, { cache: 'no-store' });
+      if (!response.ok) return;
+      var schema = await response.json();
+      if (!schema.fields || !schema.fields.length) return;
+      var container = document.getElementById('dynamic-schema-fields');
+      container.textContent = '';
+      schema.fields.forEach(function (field) { renderDynamicField(container, field); });
+      activeFormSchema = schema;
+      container.hidden = false;
+      document.getElementById('legacy-schema-fields').hidden = true;
+    } catch (e) { /* 保留舊表單 fallback，避免設定服務暫時失效時整頁不可填 */ }
+  }
+
+  /** 依目前 schema 收集答案；多選永遠傳陣列，其餘空值不送出。 */
+  function dynamicAnswers() {
+    var answers = {};
+    activeFormSchema.fields.forEach(function (field) {
+      var selector = '[data-field-key="' + CSS.escape(field.key) + '"]';
+      var inputs = Array.from(document.querySelectorAll(selector));
+      var value;
+      if (field.type === 'multi_select' && inputs.length > 1) {
+        value = inputs.filter(function (input) { return input.checked; }).map(function (input) { return input.value; });
+      } else if (field.type === 'boolean') {
+        value = inputs[0] ? inputs[0].checked : false;
+      } else if (inputs[0]) {
+        value = inputs[0].value.trim();
+      }
+      if (Array.isArray(value) || value !== '') answers[field.key] = value;
+    });
+    return answers;
+  }
+
+  loadFormSchema();
 
   /* ── 即時統計：抓公開聚合端點，畫成右側長條圖 ── */
 
@@ -419,7 +548,15 @@
       msg.className = 'msg err'; msg.textContent = '請先勾選同意接收課程資訊。'; return;
     }
     var statusEl = document.querySelector('#status input:checked');
-    var payload = {
+    var usingDynamicSchema = Boolean(activeFormSchema);
+    var payload = usingDynamicSchema ? {
+      email: document.getElementById('email').value.trim(),
+      name: document.getElementById('name').value.trim() || null,
+      answers: dynamicAnswers(),
+      utm: readUtm(),
+      consent: true,
+      website: document.getElementById('website').value
+    } : {
       email: document.getElementById('email').value.trim(),
       name: document.getElementById('name').value.trim() || null,
       role: document.getElementById('role').value || null,
@@ -441,7 +578,10 @@
     };
     btn.disabled = true; btn.textContent = '送出中…';
     try {
-      var res = await fetch(API_BASE + '/api/survey', {
+      var submitPath = usingDynamicSchema
+        ? '/api/forms/' + FORM_KEY + '/submissions'
+        : '/api/survey';
+      var res = await fetch(API_BASE + submitPath, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
       });
       if (res.ok) {

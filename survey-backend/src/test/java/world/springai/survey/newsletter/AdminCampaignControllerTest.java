@@ -10,6 +10,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
+import java.time.OffsetDateTime;
 
 import world.springai.survey.AdminKeyGuard;
 import world.springai.survey.audience.RecipientService;
@@ -235,6 +236,21 @@ class AdminCampaignControllerTest {
            .andExpect(jsonPath("$.count").value(2));
     }
 
+    /** 寄送歷史：後端明確回傳排程是否仍可修改，前端不可自行猜測 */
+    @Test
+    void campaignHistoryReturnsServerSideScheduleActionability() throws Exception {
+        Campaign future = new Campaign("未寄出", "內文", "<p>x</p>", null, null, "schedule",
+            OffsetDateTime.parse("2099-01-01T00:00:00Z"), 1, "scheduled");
+        Campaign elapsed = new Campaign("已到期", "內文", "<p>x</p>", null, null, "schedule",
+            OffsetDateTime.parse("2000-01-01T00:00:00Z"), 1, "scheduled");
+        when(campaignService.list()).thenReturn(List.of(future, elapsed));
+
+        mvc.perform(get("/api/admin/campaigns").header("X-Admin-Key", "test-key"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$[0].canModifySchedule").value(true))
+           .andExpect(jsonPath("$[1].canModifySchedule").value(false));
+    }
+
     /** 預覽：回渲染後 HTML */
     @Test
     void previewReturnsHtml() throws Exception {
@@ -250,7 +266,7 @@ class AdminCampaignControllerTest {
     @Test
     void sendNowReturnsSummary() throws Exception {
         when(campaignService.send(eq("主旨"), eq("內文"), any(), any(), eq("now"), any(),
-                any(), any(), any(), any()))
+                any(), any(), any(), any(), any(), any()))
             .thenReturn(new CampaignService.SendResult(7L, 3, 3, 0, 0));
         mvc.perform(post("/api/admin/campaign/send").header("X-Admin-Key", "test-key")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -264,7 +280,7 @@ class AdminCampaignControllerTest {
     @Test
     void sendWithPublishFieldsDelegatesAllFields() throws Exception {
         when(campaignService.send(eq("主旨"), eq("內文"), any(), any(), eq("now"), any(),
-                eq("PREMIUM"), eq(10), eq("hello-world"), any()))
+                eq("PREMIUM"), eq(10), eq("hello-world"), any(), any(), any()))
             .thenReturn(new CampaignService.SendResult(8L, 1, 1, 0, 0));
         mvc.perform(post("/api/admin/campaign/send").header("X-Admin-Key", "test-key")
                 .contentType(MediaType.APPLICATION_JSON)

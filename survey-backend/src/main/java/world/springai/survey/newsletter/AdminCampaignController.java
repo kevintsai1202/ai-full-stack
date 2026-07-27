@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 import world.springai.survey.AdminKeyGuard;
+import world.springai.survey.audience.AudienceSearchService;
 import world.springai.survey.audience.RecipientService;
 import world.springai.survey.mail.MailQuotaService;
 import world.springai.survey.mail.MailTemplate;
@@ -57,8 +58,18 @@ public class AdminCampaignController {
     /** 測試寄送請求：主旨、markdown 內文、目標信箱 */
     public record TestRequest(String subject, String markdown, String to) {}
 
-    /** 收件人篩選條件：職業角色、興趣主題 */
-    public record Filter(String role, String interest) {}
+    /** 收件人篩選：保留舊 role/interest，並支援動態條件或保存分眾 ID。 */
+    public record Filter(
+            String role,
+            String interest,
+            AudienceSearchService.Filters audience,
+            Long savedSegmentId) {
+
+        /** 舊測試與 Java 呼叫相容建構式。 */
+        public Filter(String role, String interest) {
+            this(role, interest, null, null);
+        }
+    }
 
     /**
      * 發送請求：主旨、markdown 內文、篩選條件、發送模式、排程時間（ISO-8601）。
@@ -78,6 +89,19 @@ public class AdminCampaignController {
             @RequestParam(required = false) String interest) {
         guard.verify(key);
         List<String> all = recipientService.recipients(role, interest);
+        return Map.of("count", all.size(), "sample", all.stream().limit(5).toList());
+    }
+
+    /** 以和實際寄送相同的動態條件／保存分眾計算人數，避免預覽與寄送名單不同。 */
+    @PostMapping("/api/admin/recipients/search")
+    public Map<String, Object> recipients(
+            @RequestHeader(value = KEY_HEADER, required = false) String key,
+            @RequestBody(required = false) Filter filter) {
+        guard.verify(key);
+        List<String> all = filter == null
+            ? recipientService.recipients(null, null)
+            : recipientService.recipients(
+                filter.role(), filter.interest(), filter.audience(), filter.savedSegmentId());
         return Map.of("count", all.size(), "sample", all.stream().limit(5).toList());
     }
 
@@ -125,7 +149,9 @@ public class AdminCampaignController {
         }
 
         return campaignService.send(req.subject(), req.markdown(), role, interest, req.mode(), scheduledAt,
-            req.tier(), req.creditCost(), req.slug(), parsePublishedAt(req.publishedAt()));
+            req.tier(), req.creditCost(), req.slug(), parsePublishedAt(req.publishedAt()),
+            req.filter() == null ? null : req.filter().audience(),
+            req.filter() == null ? null : req.filter().savedSegmentId());
     }
 
     /**
@@ -366,17 +392,18 @@ public class AdminCampaignController {
             @PathVariable Long id,
             @RequestBody RescheduleRequest req) {
         guard.verify(key);
-        // scheduledAt 必填且須為未來時間
+        // scheduledAt 必填；「舊排程是否仍可操作」與「新時間是否為未來」都由
+        // CampaignService 依同一個後端時間點判斷，避免跨過排程時間時先回錯誤的 400。
         if (req.scheduledAt() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "排程模式需要 scheduledAt");
         }
         Instant scheduledAt = Instant.parse(req.scheduledAt());
-        if (!scheduledAt.isAfter(Instant.now())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "排程時間需為未來");
-        }
         // 從篩選條件取出 role / interest（允許 filter 為 null）
         String role = req.filter() == null ? null : req.filter().role();
         String interest = req.filter() == null ? null : req.filter().interest();
-        return campaignService.reschedule(id, req.subject(), req.markdown(), role, interest, scheduledAt);
+        return campaignService.reschedule(
+            id, req.subject(), req.markdown(), role, interest, scheduledAt,
+            req.filter() == null ? null : req.filter().audience(),
+            req.filter() == null ? null : req.filter().savedSegmentId());
     }
 }

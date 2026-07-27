@@ -42,6 +42,7 @@ class SubscriptionRoutingTest {
     @Autowired MockMvc mvc;
     @Autowired UnsubscribeTokenService tokenService;
     @MockBean SurveyResponseRepository repository;
+    @MockBean AudiencePlatformService audiencePlatformService;
 
     /** builder 產生的確認連結必須真的能被 controller 接受，並真的觸發 repository 寫入 */
     @Test

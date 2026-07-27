@@ -44,6 +44,7 @@ class SurveyControllerTest {
     @Autowired SurveyController controller; // 供直接呼叫 stats() 的測試使用（@WebMvcTest 下 controller 本身是真實 bean）
     @MockBean SurveyResponseRepository repository;
     @MockBean WelcomeMailService welcomeMailService;
+    @MockBean SurveySubmissionService surveySubmissionService;
 
     @Test
     void validSurveyReturns201() throws Exception {

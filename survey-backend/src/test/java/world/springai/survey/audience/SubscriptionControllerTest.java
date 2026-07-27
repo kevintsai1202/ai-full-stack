@@ -28,6 +28,7 @@ class SubscriptionControllerTest {
     private SurveyResponseRepository repository;
     private UnsubscribeTokenService tokenService;
     private ApplicationEventPublisher publisher;
+    private AudiencePlatformService audiencePlatformService;
     private SubscriptionController controller;
 
     @BeforeEach
@@ -35,7 +36,9 @@ class SubscriptionControllerTest {
         repository = mock(SurveyResponseRepository.class);
         tokenService = mock(UnsubscribeTokenService.class);
         publisher = mock(ApplicationEventPublisher.class);
-        controller = new SubscriptionController(repository, tokenService, publisher);
+        audiencePlatformService = mock(AudiencePlatformService.class);
+        controller = new SubscriptionController(
+            repository, tokenService, publisher, audiencePlatformService);
     }
 
     /** 簽章正確時確認訂閱，並發布事件供 reader 發放推薦獎勵；回應頁必須真的是確認成功頁（正向內容） */

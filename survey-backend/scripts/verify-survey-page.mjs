@@ -65,6 +65,23 @@ async function main() {
         { label: "非本科轉職者", count: 12 }, { label: "技術主管／PM", count: 10 }
       ]
     };
+    // 動態表單 schema：驗證公開頁確實依 API 產生欄位，而不是只保留固定 HTML。
+    const mockSchema = {
+      key: "fullstack-course-interest",
+      version: 2,
+      title: "全端課程興趣新版",
+      status: "PUBLISHED",
+      fields: [
+        {
+          key: "role", label: "身分／職業", type: "select", required: false,
+          options: ["後端工程師", "全端工程師"]
+        },
+        {
+          key: "companySize", label: "公司規模", type: "select", required: true,
+          options: ["1-10", "11-50"]
+        }
+      ]
+    };
 
     for (const p of profiles) {
       const page = await browser.newPage({ viewport: p.viewport });
@@ -75,7 +92,16 @@ async function main() {
       });
       await page.route("**/api/survey/stats", (route) =>
         route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockStats) }));
+      await page.route("**/api/forms/fullstack-course-interest", (route) =>
+        route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockSchema) }));
       await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle" });
+      await page.waitForSelector("#dynamic-companySize");
+      if (!(await page.locator("#legacy-schema-fields").isHidden())) {
+        throw new Error("動態 schema 載入後，舊固定欄位仍然可見");
+      }
+      if ((await page.locator("#dynamic-schema-fields [data-field-key]").count()) !== 2) {
+        throw new Error("公開問卷未依 schema 產生預期欄位");
+      }
       await page.waitForTimeout(900); // 等長條圖寬度動畫完成再截圖
       await page.screenshot({ path: path.join(shotDir, `survey-${p.id}.png`), fullPage: true });
       console.log(`✓ 截圖完成: survey-${p.id}.png`);

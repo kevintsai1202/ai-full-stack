@@ -42,16 +42,19 @@ public class SurveyController {
     private final ObjectMapper objectMapper;
     private final WelcomeMailService welcomeMailService;    // 問卷送出後寄歡迎信
     private final AdminKeyGuard adminKeyGuard;              // 集中管理 X-Admin-Key 驗證
+    private final SurveySubmissionService submissionService; // 舊端點同步寫入彈性資料模型
 
-    /** 注入資料層、JSON 序列化器、歡迎信服務與管理金鑰守衛 */
+    /** 注入資料層、JSON 序列化器、歡迎信、管理金鑰守衛與彈性寫入服務。 */
     public SurveyController(SurveyResponseRepository repository,
                             ObjectMapper objectMapper,
                             WelcomeMailService welcomeMailService,
-                            AdminKeyGuard adminKeyGuard) {
+                            AdminKeyGuard adminKeyGuard,
+                            SurveySubmissionService submissionService) {
         this.repository = repository;
         this.objectMapper = objectMapper;
         this.welcomeMailService = welcomeMailService;
         this.adminKeyGuard = adminKeyGuard;
+        this.submissionService = submissionService;
     }
 
     /** 接收問卷；蜜罐有值則略過寫入（回 204），否則驗證後寫入（回 201） */
@@ -91,7 +94,9 @@ public class SurveyController {
         if (SOURCE_NEWSLETTER.equals(req.getSource())) {
             entity.setSource(SOURCE_NEWSLETTER);
         }
-        repository.save(entity);
+        SurveyResponse saved = repository.save(entity);
+        // 舊 API 保留，但資料同時進入新版人物／活動／Fact；交易失敗時不留下半套資料。
+        submissionService.mirrorLegacySubmission(saved);
         // 寫入成功後寄歡迎信；sendWelcome 內部已 try/catch，失敗不影響此回應
         welcomeMailService.sendWelcome(entity.getEmail());
         return ResponseEntity.status(HttpStatus.CREATED).build();

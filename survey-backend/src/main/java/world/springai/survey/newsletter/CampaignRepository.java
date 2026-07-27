@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -82,6 +83,22 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long> {
 
     /** 依建立時間新到舊列出（歷史頁用） */
     List<Campaign> findAllByOrderByCreatedAtDesc();
+
+    /**
+     * 將已到寄送時間但仍停在 scheduled 的舊資料整理為 sent。
+     *
+     * <p>只更新狀態欄位，不以 {@code save(entity)} 整列寫回，避免覆蓋同時間其他請求
+     * 更新的主旨、內文或統計。條件包含原狀態與排程時間，重複執行是冪等的。</p>
+     *
+     * @return 本次被整理的批次數
+     */
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query("update Campaign c set c.status = :newStatus "
+        + "where c.status = :expectedStatus and c.scheduledAt is not null and c.scheduledAt <= :now")
+    int markElapsedSchedules(@Param("expectedStatus") String expectedStatus,
+                             @Param("newStatus") String newStatus,
+                             @Param("now") OffsetDateTime now);
 
     /**
      * archive 列表：只列「真正可開啟」的已發布文章，新到舊。
