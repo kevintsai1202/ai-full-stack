@@ -8,16 +8,17 @@
      這也是與 login.html 一致的作法（同樣是 noindex）。 -->
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="/r/reader.css">
+<script src="/r/reader-nav.js" defer></script>
 </head>
 <body>
 <header class="site-head">
   <div class="site-head-inner">
     <a class="brand" href="/r/">凱文大叔的電子報</a>
-    <!-- 導覽刻意寫死成「歷史內容」而不隨登入狀態變化（作法同 login.html）：
+    <!-- 導覽刻意使用固定的公開選單而不隨登入狀態變化（作法同 login.html）：
          這一頁對所有人都是同一份內容，不需要解析 reader_session cookie。
          這條路徑任何人都能用任意 slug 打，少一次 JWT 解析與資料庫查詢就少一分
          被當成廉價 DoS 面的空間。 -->
-    <nav><a href="/r/archive">歷史內容</a></nav>
+    <nav><a href="/r/">首頁</a><a href="/r/archive">歷史內容</a><a href="/r/rules">遊戲規則</a></nav>
   </div>
 </header>
 

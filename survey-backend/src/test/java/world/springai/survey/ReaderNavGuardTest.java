@@ -45,6 +45,10 @@ class ReaderNavGuardTest {
     private static final Path READER_STATIC_ROOT =
         Path.of("src/main/resources/templates/reader");
 
+    /** 依 URL 套用選取狀態的共用導覽腳本。 */
+    private static final Path READER_NAV_SCRIPT =
+        Path.of("src/main/resources/static/reader/reader-nav.js");
+
     /**
      * 只能出現在 {@code ReaderNav.java} 裡的三個逐字字串（Java 原始碼中雙引號會被
      * 跳脫成 {@code \"}，故此處的比對字面值同樣使用跳脫後的形式，才對得上原始檔案
@@ -137,6 +141,25 @@ class ReaderNavGuardTest {
         assertTrue(violations.isEmpty(),
             "reader 模板的 <nav> 必須只用 ReaderNav 動態注入的佔位符，不得寫死連結：\n"
                 + String.join("\n", violations));
+    }
+
+    /** 每一份讀者 HTML 都必須載入共用導覽腳本，避免部分頁面沒有 icon 高亮語意。 */
+    @Test
+    void everyReaderTemplateLoadsNavigationEnhancement() throws IOException {
+        List<String> violations = new ArrayList<>();
+        try (Stream<Path> files = Files.list(READER_STATIC_ROOT)) {
+            for (Path htmlFile : files.filter(p -> p.toString().endsWith(".html")).toList()) {
+                String content = Files.readString(htmlFile, StandardCharsets.UTF_8);
+                if (!content.contains("<script src=\"/r/reader-nav.js\" defer></script>")) {
+                    violations.add(htmlFile.getFileName().toString());
+                }
+            }
+        }
+        String script = Files.readString(READER_NAV_SCRIPT, StandardCharsets.UTF_8);
+        assertTrue(script.contains("aria-current"),
+            "reader-nav.js 必須同步 aria-current，不能只有視覺 class");
+        assertTrue(violations.isEmpty(),
+            "下列讀者模板未載入共用導覽強化腳本：" + violations);
     }
 
     /**

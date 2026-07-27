@@ -61,6 +61,13 @@
 - Archive 摘要只從 `ContentSplitter.freeMarkdown()` 產生，受限區永遠不進入列表 HTML。
 - 文章與列表仍使用 `private, no-store` 與 `Vary: Cookie`，不改變既有 paywall 安全模型。
 
+### 讀者導覽視覺
+
+- 公開與登入後選單均提供「首頁」入口，每個選單使用內建 CSS 向量 icon，不依賴第三方字型或外部 CDN。
+- `reader-nav.js` 依目前 URL 加上 `aria-current="page"` 與高亮樣式；文章詳情歸類為「歷史內容」。
+- 桌面使用毛玻璃頁首與膠囊選單，手機維持 sticky 雙列頁首；選單可水平滑動且不造成整頁水平溢出。
+- 鍵盤焦點、減少動態效果偏好與未執行 JavaScript 時的基本連結能力均保留。
+
 ## 驗證
 
 - `mvn test`：完整測試套件通過。
@@ -71,3 +78,4 @@
   - 編輯器快捷列、Emoji、預設與自訂 hashtag 可操作。
   - 進階讀者交叉篩選只留下目標人物，詳細視窗正確顯示 `SENT` 與 `#RAG` 解鎖紀錄。
   - 收件人管理預設顯示新加入者；切到 `SENT` 後已寄者核取方塊為 disabled。
+  - 讀者導覽在 1440px 與 390px 均無整頁水平溢出；首頁、歷史內容、遊戲規則與登入頁各自只有一個正確的 `aria-current`，實際點選後高亮會隨 URL 切換。

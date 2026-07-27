@@ -43,6 +43,9 @@ final class ReaderNav {
     private ReaderNav() {
     }
 
+    /** 首頁：讓訂閱入口在導覽列中有明確位置，也能呈現目前頁面的選取狀態。 */
+    private static final String HOME = "<a href=\"/r/\">首頁</a>";
+
     /** 歷史內容：所有頁面都有，放第一個（既有四份實作一致的唯一一項） */
     private static final String ARCHIVE = "<a href=\"/r/archive\">歷史內容</a>";
 
@@ -72,8 +75,8 @@ final class ReaderNav {
      */
     static String links(boolean loggedIn) {
         if (loggedIn) {
-            return ARCHIVE + RULES + ME + INVITE;
+            return HOME + ARCHIVE + RULES + ME + INVITE;
         }
-        return ARCHIVE + RULES + LOGIN;
+        return HOME + ARCHIVE + RULES + LOGIN;
     }
 }
