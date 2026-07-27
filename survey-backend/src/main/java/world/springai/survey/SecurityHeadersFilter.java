@@ -43,6 +43,8 @@ public class SecurityHeadersFilter extends OncePerRequestFilter {
         response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
         response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
         response.setHeader("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+        // 瀏覽器只會在 HTTPS 回應採納 HSTS；本機 HTTP 測試收到此標頭也不會被套用。
+        response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
 
         String path = request.getRequestURI();
         if (path.startsWith("/api/admin/") || path.startsWith("/api/reader/")) {

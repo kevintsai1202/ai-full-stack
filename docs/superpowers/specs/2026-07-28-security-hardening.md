@@ -30,7 +30,7 @@ Flyway `V13__login_abuse_guard.sql` 會建立 `login_request_attempt` 與查詢�
 
 ## HTTP 與預覽隔離
 
-所有回應加入 CSP、`X-Content-Type-Options`、`X-Frame-Options`、Referrer Policy 與 Permissions Policy。管理及讀者 API 使用 `Cache-Control: private, no-store`；管理 API 另加入 `Vary: X-Admin-Key`。後台兩個 `srcdoc` 預覽 iframe 使用空 sandbox，避免預覽內容執行腳本或存取父頁。
+所有回應加入 CSP、`X-Content-Type-Options`、`X-Frame-Options`、Referrer Policy、Permissions Policy 與一年期 HSTS。管理及讀者 API 使用 `Cache-Control: private, no-store`；管理 API 另加入 `Vary: X-Admin-Key`。後台兩個 `srcdoc` 預覽 iframe 使用空 sandbox，避免預覽內容執行腳本或存取父頁。
 
 ## 依賴版本
 
@@ -45,13 +45,15 @@ Flyway `V13__login_abuse_guard.sql` 會建立 `login_request_attempt` 與查詢�
 
 2026-07-28 本機驗證結果：
 
-- Maven：633 tests、0 failures、0 errors、0 skipped。
-- OSV：84 個 runtime dependencies、0 筆已知 advisory。
+- Maven：650 tests、0 failures、0 errors、0 skipped。
+- CycloneDX + OSV：115 個 runtime dependencies、0 筆已知 advisory；未使用的 AWS Apache／Netty client 已排除。
 - 弱預設密鑰：服務拒絕啟動。
 - 舊 `dev-admin-key`：管理 API 回應 401。
 - 舊預設 JWT secret 偽造 token：讀者 API 回應 401。
 - 強管理密鑰：管理 API 回應 200。
-- 實際回應包含 `Cache-Control: private, no-store`、`Vary: X-Admin-Key`、CSP 與 `X-Frame-Options: DENY`。
+- 實際回應包含 `Cache-Control: private, no-store`、`Vary: X-Admin-Key`、CSP、HSTS 與 `X-Frame-Options: DENY`。
+- `reader.springai.world/admin.html` 與 `admin.springai.world/r/archive` 均回 404，讀者站與管理站入口互相隔離。
+- MinIO 公開物件只允許匿名 GET；匿名 PUT 與 bucket list 均回 403。
 - 後台兩個預覽 iframe 均有空 sandbox。
 
 Zeabur 發佈前必須確認三組正式密鑰已設定、彼此不同，且未設定 `APP_ALLOW_INSECURE_DEV_SECRETS=true`；發佈後需重新驗證公開頁 200、舊管理密鑰 401、安全標頭與健康狀態。

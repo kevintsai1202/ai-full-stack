@@ -37,5 +37,7 @@ class SecurityHeadersFilterTest {
         assertEquals("DENY", response.getHeader("X-Frame-Options"));
         assertTrue(response.getHeader("Content-Security-Policy").contains("frame-ancestors 'none'"));
         assertEquals("nosniff", response.getHeader("X-Content-Type-Options"));
+        assertEquals("max-age=31536000; includeSubDomains",
+            response.getHeader("Strict-Transport-Security"));
     }
 }
