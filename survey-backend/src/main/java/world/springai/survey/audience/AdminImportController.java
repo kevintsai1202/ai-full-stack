@@ -6,6 +6,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -23,11 +25,16 @@ public class AdminImportController {
 
     private final SurveyResponseRepository repository;
     private final AdminKeyGuard guard;
+    private final AudienceSpreadsheetReader spreadsheetReader;
 
-    /** 注入資料層與金鑰守衛 */
-    public AdminImportController(SurveyResponseRepository repository, AdminKeyGuard guard) {
+    /** 注入資料層、金鑰守衛與 XLSX 解析器。 */
+    public AdminImportController(
+            SurveyResponseRepository repository,
+            AdminKeyGuard guard,
+            AudienceSpreadsheetReader spreadsheetReader) {
         this.repository = repository;
         this.guard = guard;
+        this.spreadsheetReader = spreadsheetReader;
     }
 
     /** 匯入的單一人員：email 必填，name 選填 */
@@ -35,6 +42,22 @@ public class AdminImportController {
 
     /** 匯入請求：來源標記（如 exam）與人員清單 */
     public record ImportRequest(String source, List<Person> people) {}
+
+    /**
+     * 預覽 XLSX 名單，不寫入資料庫。
+     * 回傳合法人員清單與無效／重複計數，確認後再交給既有 JSON 匯入 API。
+     */
+    @PostMapping(value = "/api/admin/import/xlsx/preview", consumes = "multipart/form-data")
+    public AudienceSpreadsheetReader.Preview previewSpreadsheet(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key,
+            @RequestPart("file") MultipartFile file) {
+        guard.verify(key);
+        try {
+            return spreadsheetReader.read(file);
+        } catch (AudienceSpreadsheetReader.SpreadsheetException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage());
+        }
+    }
 
     /**
      * 匯入外部名單：每筆以 consent=false（待確認）寫入並標記來源；

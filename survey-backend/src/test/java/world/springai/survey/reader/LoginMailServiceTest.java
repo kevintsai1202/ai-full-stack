@@ -3,6 +3,7 @@ package world.springai.survey.reader;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import world.springai.survey.ReaderSiteLinks;
 import world.springai.survey.mail.EmailLog;
 import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.MailSender;
@@ -36,7 +37,7 @@ class LoginMailServiceTest {
         mailSender = mock(MailSender.class);
         emailLogRepository = mock(EmailLogRepository.class);
         service = new LoginMailService(tokenService, mailSender, emailLogRepository,
-            "https://news.example.com");
+            new ReaderSiteLinks("https://reader.example.com"));
     }
 
     /** 正常寄送：信中含帶 token 的登入連結 */
@@ -53,7 +54,7 @@ class LoginMailServiceTest {
 
         ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
         verify(mailSender).send(eq("user@example.com"), anyString(), html.capture());
-        assertTrue(html.getValue().contains("https://news.example.com/api/reader/login/verify?t=RAW-TOKEN-123"),
+        assertTrue(html.getValue().contains("https://reader.example.com/api/reader/login/verify?t=RAW-TOKEN-123"),
             "信中必須含帶 token 的登入連結");
     }
 

@@ -16,12 +16,13 @@
 </header>
 
 <div class="wrap">
-  <h1 style="font-size:1.5rem">我的帳戶</h1>
+  <p class="page-kicker">Reader account</p>
+  <h1 class="page-title compact">我的帳戶</h1>
 
   <div class="card">
     <h2>點數餘額</h2>
     <p class="balance"><!--CREDITS--> 點</p>
-    <p style="color:var(--muted);font-size:.92rem">
+    <p class="muted">
       進階內容<!--PREMIUM_COST_PHRASE-->，實際點數以各篇文章頁顯示為準；一次解鎖永久可讀。<a href="/r/rules">看遊戲規則</a>
     </p>
     <p style="margin-top:12px"><a class="btn ghost" href="/r/invite">邀請朋友賺點數</a></p>
@@ -29,8 +30,8 @@
 
   <div class="card">
     <h2>帳戶資訊</h2>
-    <p style="color:var(--muted);font-size:.92rem">Email：<!--EMAIL--></p>
-    <p style="color:var(--muted);font-size:.92rem">方案：<!--TIER_STATUS--></p>
+    <p class="muted">Email：<!--EMAIL--></p>
+    <p class="muted">方案：<!--TIER_STATUS--></p>
     <label for="display-name">顯示名稱</label>
     <div class="form-row">
       <input type="text" id="display-name" value="<!--DISPLAY_NAME-->" maxlength="40" placeholder="想讓我怎麼稱呼你？">
@@ -41,7 +42,7 @@
 
   <div class="card">
     <h2>交易明細</h2>
-    <p style="color:var(--muted);font-size:.85rem;margin:0 0 12px">只顯示最近 50 筆。</p>
+    <p class="fine-print">只顯示最近 50 筆。</p>
     <!--TXN_LIST-->
   </div>
 

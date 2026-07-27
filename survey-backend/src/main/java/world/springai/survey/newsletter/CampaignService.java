@@ -2,7 +2,6 @@ package world.springai.survey.newsletter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -17,6 +16,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 import world.springai.survey.AdminSettingController;
+import world.springai.survey.ReaderSiteLinks;
 import world.springai.survey.audience.RecipientService;
 import world.springai.survey.audience.SubscriptionLinkBuilder;
 import world.springai.survey.mail.EmailLog;
@@ -49,8 +49,8 @@ public class CampaignService {
      * 才能保證「後台認定有 gate」與「讀者頁真的渲染 gate」是同一個判斷。</p>
      */
     private final ContentSplitter contentSplitter;
-    /** 對外網址前綴，用於回傳文章公開網址；全專案唯一設定來源 app.public-base-url */
-    private final String publicBaseUrl;
+    /** 讀者網站公開連結的唯一組裝入口。 */
+    private final ReaderSiteLinks readerSiteLinks;
 
     public CampaignService(MailSender mailSender,
                            RecipientService recipientService,
@@ -61,9 +61,9 @@ public class CampaignService {
                            SubscriptionLinkBuilder linkBuilder,
                            MailQuotaService mailQuotaService,
                            ContentSplitter contentSplitter,
-                           @Value("${app.public-base-url}") String publicBaseUrl) {
+                           ReaderSiteLinks readerSiteLinks) {
         this.contentSplitter = contentSplitter;
-        this.publicBaseUrl = publicBaseUrl;
+        this.readerSiteLinks = readerSiteLinks;
         this.mailSender = mailSender;
         this.recipientService = recipientService;
         this.campaignRepository = campaignRepository;
@@ -85,12 +85,13 @@ public class CampaignService {
     /** 預覽：把 markdown 渲染並套外框（用示意退訂連結） */
     public String preview(String subject, String markdown) {
         String body = markdownRenderer.toHtml(markdown);
-        return emailTemplate.wrap(body, linkBuilder.previewUnsubscribeLink());
+        return emailTemplate.wrapCampaign(body, linkBuilder.previewUnsubscribeLink(),
+            readerSiteLinks.archive(), readerSiteLinks.login("/r/archive"));
     }
 
     /** 寄一封測試信給指定信箱（立即、單封） */
     public String sendTest(String subject, String markdown, String to) {
-        String html = renderFor(markdownRenderer.toHtml(markdown), to);
+        String html = renderFor(markdownRenderer.toHtml(markdown), to, null);
         return mailSender.send(to, subject, html);
     }
 
@@ -170,7 +171,7 @@ public class CampaignService {
 
         if (scheduled) {
             // 排程模式：每封個別呼叫 schedule API（邏輯抽到 scheduleAll 供 reschedule 共用）
-            int[] rc = scheduleAll(campaignId, subject, bodyHtml, recipients, scheduledAt);
+            int[] rc = scheduleAll(campaignId, subject, bodyHtml, recipients, scheduledAt, normalizedSlug);
             accepted = rc[0];
             failed = rc[1];
         } else {
@@ -179,7 +180,8 @@ public class CampaignService {
                 List<String> chunk = recipients.subList(i, Math.min(i + BATCH_SIZE, recipients.size()));
                 List<MailSender.Email> emails = new ArrayList<>();
                 for (String email : chunk) {
-                    emails.add(new MailSender.Email(email, subject, renderFor(bodyHtml, email)));
+                    emails.add(new MailSender.Email(email, subject,
+                        renderFor(bodyHtml, email, normalizedSlug)));
                 }
                 try {
                     String jobId = mailSender.sendBatch(emails);
@@ -505,11 +507,7 @@ public class CampaignService {
      * 避免產生 {@code https://host//r/news/x} 這種在某些反向代理下會 404 的網址。</p>
      */
     private String articleUrl(String slug) {
-        String base = publicBaseUrl == null ? "" : publicBaseUrl.trim();
-        while (base.endsWith("/")) {
-            base = base.substring(0, base.length() - 1);
-        }
-        return base + "/r/news/" + slug;
+        return readerSiteLinks.article(slug);
     }
 
     /** 取消某 campaign 的所有排程信 */
@@ -560,7 +558,8 @@ public class CampaignService {
         int skippedForQuota = limited.skippedForQuota();
 
         String bodyHtml = markdownRenderer.toHtml(markdown);
-        int[] rc = scheduleAll(campaignId, subject, bodyHtml, recipients, scheduledAt);
+        int[] rc = scheduleAll(campaignId, subject, bodyHtml, recipients, scheduledAt,
+            campaign.getSlug());
 
         // 3. 就地更新同一筆 campaign 的內容、篩選、時間與統計
         campaign.setSubject(subject);
@@ -627,13 +626,13 @@ public class CampaignService {
      * 供立即發送的排程分支與 reschedule 共用。
      */
     private int[] scheduleAll(Long campaignId, String subject, String bodyHtml,
-                              List<String> recipients, Instant scheduledAt) {
+                              List<String> recipients, Instant scheduledAt, String slug) {
         int accepted = 0;
         int failed = 0;
         for (String email : recipients) {
             try {
                 String id = mailSender.schedule(
-                    new MailSender.Email(email, subject, renderFor(bodyHtml, email)), scheduledAt);
+                    new MailSender.Email(email, subject, renderFor(bodyHtml, email, slug)), scheduledAt);
                 emailLogRepository.save(new EmailLog(email, subject, "campaign", id, "scheduled", null, campaignId));
                 accepted++;
             } catch (Exception e) {
@@ -775,9 +774,15 @@ public class CampaignService {
         return null;
     }
 
-    /** 把內文 HTML 套上「該收件人」的個人化退訂連結 */
-    private String renderFor(String bodyHtml, String email) {
-        return emailTemplate.wrap(bodyHtml, linkBuilder.unsubscribeLink(email));
+    /**
+     * 把內文 HTML 套上個人化退訂連結、文章直達按鈕與登入入口。
+     * 測試信沒有實際文章 slug，因此改導向歷史內容。
+     */
+    private String renderFor(String bodyHtml, String email, String slug) {
+        String path = slug == null ? "/r/archive" : "/r/news/" + slug;
+        String articleLink = slug == null ? readerSiteLinks.archive() : readerSiteLinks.article(slug);
+        return emailTemplate.wrapCampaign(bodyHtml, linkBuilder.unsubscribeLink(email),
+            articleLink, readerSiteLinks.login(path));
     }
 
     /** 依是否排程與成敗決定最終狀態字串 */

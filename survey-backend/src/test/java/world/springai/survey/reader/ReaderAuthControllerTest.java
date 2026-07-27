@@ -201,7 +201,36 @@ class ReaderAuthControllerTest {
     void loginPageRenders() throws Exception {
         mvc.perform(get("/r/login"))
            .andExpect(status().isOk())
-           .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML));
+           .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
+           .andExpect(header().string("Cache-Control", "private, no-store"));
+    }
+
+    /** 已登入者點信件中的登入連結時，直接回到原文章，不重寄登入信。 */
+    @Test
+    void loginPageRedirectsLoggedInReaderToRequestedArticle() throws Exception {
+        when(readerContext.resolve("VALID-SESSION"))
+            .thenReturn(Optional.of(new ReaderContext.Current(reader(), true)));
+
+        mvc.perform(get("/r/login")
+                .param("redirect", "/r/news/hello-world")
+                .cookie(new jakarta.servlet.http.Cookie(
+                    ReaderSessionService.COOKIE_NAME, "VALID-SESSION")))
+           .andExpect(status().isFound())
+           .andExpect(header().string("Location", "/r/news/hello-world"));
+    }
+
+    /** 已登入者帶站外 redirect 時仍只回預設站內頁，避免登入頁成為開放式轉址。 */
+    @Test
+    void loginPageRejectsUnsafeRedirectForLoggedInReader() throws Exception {
+        when(readerContext.resolve("VALID-SESSION"))
+            .thenReturn(Optional.of(new ReaderContext.Current(reader(), true)));
+
+        mvc.perform(get("/r/login")
+                .param("redirect", "https://evil.example.com")
+                .cookie(new jakarta.servlet.http.Cookie(
+                    ReaderSessionService.COOKIE_NAME, "VALID-SESSION")))
+           .andExpect(status().isFound())
+           .andExpect(header().string("Location", "/r/archive"));
     }
 
     /**

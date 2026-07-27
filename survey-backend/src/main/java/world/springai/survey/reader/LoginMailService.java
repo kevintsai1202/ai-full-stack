@@ -2,14 +2,12 @@ package world.springai.survey.reader;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import world.springai.survey.ReaderSiteLinks;
 import world.springai.survey.mail.EmailLog;
 import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.MailSender;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 
 /**
@@ -37,18 +35,18 @@ public class LoginMailService {
     private final LoginTokenService tokenService;
     private final MailSender mailSender;
     private final EmailLogRepository emailLogRepository;
-    /** 組登入連結用的對外網址 */
-    private final String publicBaseUrl;
+    /** 讀者網站連結組裝器。 */
+    private final ReaderSiteLinks readerSiteLinks;
 
-    /** 注入 token 服務、寄信、寄送記錄與對外網址 */
+    /** 注入 token 服務、寄信、寄送記錄與讀者網站連結組裝器。 */
     public LoginMailService(LoginTokenService tokenService,
                            MailSender mailSender,
                            EmailLogRepository emailLogRepository,
-                           @Value("${app.public-base-url}") String publicBaseUrl) {
+                           ReaderSiteLinks readerSiteLinks) {
         this.tokenService = tokenService;
         this.mailSender = mailSender;
         this.emailLogRepository = emailLogRepository;
-        this.publicBaseUrl = publicBaseUrl;
+        this.readerSiteLinks = readerSiteLinks;
     }
 
     /**
@@ -87,18 +85,8 @@ public class LoginMailService {
 
     /** 組登入連結；只接受站內相對路徑作為 redirect */
     private String buildLoginLink(String rawToken, String redirect) {
-        StringBuilder link = new StringBuilder(publicBaseUrl)
-            .append("/api/reader/login/verify?t=")
-            .append(URLEncoder.encode(rawToken, StandardCharsets.UTF_8));
-        if (RedirectGuard.isSafe(redirect)) {
-            // 放進連結的是「原始值」而非正規化後的值：RedirectGuard.isSafe 已確認
-            // 正規化後（反斜線轉斜線）的樣子不含 scheme/host/authority，
-            // 而若原始值含反斜線，瀏覽器解析時本來就會等價地轉成斜線，
-            // 所以放原始值不會讓使用者實際跳轉到與正規化判斷不同的地方，
-            // 且能保留使用者原本輸入的路徑字面樣式（例如大小寫、既有跳脫）。
-            link.append("&redirect=").append(URLEncoder.encode(redirect, StandardCharsets.UTF_8));
-        }
-        return link.toString();
+        String safeRedirect = RedirectGuard.isSafe(redirect) ? redirect : null;
+        return readerSiteLinks.verifyLogin(rawToken, safeRedirect);
     }
 
     /** 組登入信 HTML；刻意不含退訂連結（交易信） */

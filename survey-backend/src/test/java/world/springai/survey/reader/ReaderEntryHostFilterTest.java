@@ -15,10 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 /**
  * 讀者入口網域導向的行為測試。
  *
- * <p>核心性質：<b>只有</b>「讀者入口網域 × 根路徑」這一個組合會被導向，
- * 其他任何組合（問卷網域的根路徑、讀者網域的其他路徑、未設定 entry-host）
- * 都必須原樣放行——信件裡的 confirm／unsubscribe 連結不論從哪個網域進來
- * 都不能被這個 filter 動到。</p>
+ * <p>核心性質：讀者 Host 只公開讀者頁、讀者 API 與訂閱送出；
+ * 問卷／Admin 路徑不可因為兩個網域共用同一服務而跟著曝光。</p>
  */
 class ReaderEntryHostFilterTest {
 
@@ -28,8 +26,14 @@ class ReaderEntryHostFilterTest {
     /** 執行 filter 並回傳 response；chain 是 MockFilterChain，可由 getRequest() 判斷是否被放行 */
     private MockHttpServletResponse run(String entryHost, String serverName, String uri,
                                         MockFilterChain chain) throws ServletException, IOException {
+        return run(entryHost, serverName, "GET", uri, chain);
+    }
+
+    /** 可指定 HTTP method 的 filter 執行器，用來驗證訂閱 POST 的精準例外。 */
+    private MockHttpServletResponse run(String entryHost, String serverName, String method, String uri,
+                                        MockFilterChain chain) throws ServletException, IOException {
         ReaderEntryHostFilter filter = new ReaderEntryHostFilter(entryHost);
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", uri);
+        MockHttpServletRequest request = new MockHttpServletRequest(method, uri);
         request.setServerName(serverName);
         MockHttpServletResponse response = new MockHttpServletResponse();
         filter.doFilter(request, response, chain);
@@ -65,15 +69,44 @@ class ReaderEntryHostFilterTest {
         assertEquals(302, response.getStatus());
     }
 
-    /** 讀者網域的其他路徑一律放行：confirm/unsubscribe 等信件連結不論從哪個網域進來都要能用 */
+    /** 讀者頁與讀者 API 在讀者網域正常放行。 */
     @Test
-    void readerHostOtherPathsPassThrough() throws Exception {
-        for (String path : new String[] {"/r/", "/r/rules", "/api/survey/confirm", "/api/survey/stats"}) {
+    void readerPathsPassThrough() throws Exception {
+        for (String path : new String[] {"/r/", "/r/rules", "/api/reader/me"}) {
             MockFilterChain chain = new MockFilterChain();
             MockHttpServletResponse response = run(READER_HOST, READER_HOST, path, chain);
 
             assertEquals(200, response.getStatus(), path + " 不得被導向");
             assertNotNull(chain.getRequest(), path + " 必須繼續走 chain");
+        }
+    }
+
+    /** 讀者首頁的訂閱 POST 仍要能寫入，但同路徑的 GET 不得放行。 */
+    @Test
+    void readerHostAllowsOnlyPostForSurveySubscription() throws Exception {
+        MockFilterChain postChain = new MockFilterChain();
+        MockHttpServletResponse postResponse =
+            run(READER_HOST, READER_HOST, "POST", "/api/survey", postChain);
+        assertEquals(200, postResponse.getStatus());
+        assertNotNull(postChain.getRequest());
+
+        MockFilterChain getChain = new MockFilterChain();
+        MockHttpServletResponse getResponse =
+            run(READER_HOST, READER_HOST, "GET", "/api/survey", getChain);
+        assertEquals(404, getResponse.getStatus());
+        assertNull(getChain.getRequest());
+    }
+
+    /** Admin 與問卷統計不可透過讀者網域開啟。 */
+    @Test
+    void readerHostBlocksNonReaderFeatures() throws Exception {
+        for (String path : new String[] {"/admin.html", "/api/survey/stats", "/api/admin/campaigns"}) {
+            MockFilterChain chain = new MockFilterChain();
+            MockHttpServletResponse response = run(READER_HOST, READER_HOST, path, chain);
+
+            assertEquals(404, response.getStatus(), path + " 應在讀者 Host 隱藏");
+            assertNull(chain.getRequest(), path + " 不得進入應用端點");
+            assertEquals("no-store", response.getHeader("Cache-Control"));
         }
     }
 

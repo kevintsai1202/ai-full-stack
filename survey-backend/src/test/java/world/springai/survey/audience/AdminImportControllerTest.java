@@ -9,8 +9,11 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 
 import world.springai.survey.AdminKeyGuard;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -18,6 +21,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -31,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AdminImportControllerTest {
     @Autowired MockMvc mvc;
     @MockBean SurveyResponseRepository repository;
+    @MockBean AudienceSpreadsheetReader spreadsheetReader;
 
     /** 未帶金鑰應回 401，不寫入任何資料 */
     @Test
@@ -93,5 +98,61 @@ class AdminImportControllerTest {
                 .contentType(MediaType.APPLICATION_JSON).content(body))
            .andExpect(status().isBadRequest());
         verify(repository, never()).save(any());
+    }
+
+    /** XLSX 預覽需通過管理金鑰，且只回傳解析結果、不寫入資料庫。 */
+    @Test
+    void previewSpreadsheetReturnsParsedPeopleWithoutSaving() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "Dify 學員.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                new byte[] {1, 2, 3});
+        AudienceSpreadsheetReader.Preview preview = new AudienceSpreadsheetReader.Preview(
+                "學員", 3, 2, 1, 0,
+                List.of(
+                        new AudienceSpreadsheetReader.Person("one@example.com", "王小明"),
+                        new AudienceSpreadsheetReader.Person("two@example.com", null)));
+        when(spreadsheetReader.read(any())).thenReturn(preview);
+
+        mvc.perform(multipart("/api/admin/import/xlsx/preview")
+                .file(file)
+                .header("X-Admin-Key", "test-key"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.sheetName").value("學員"))
+           .andExpect(jsonPath("$.validCount").value(2))
+           .andExpect(jsonPath("$.invalidCount").value(1))
+           .andExpect(jsonPath("$.people[0].name").value("王小明"))
+           .andExpect(jsonPath("$.people[0].email").value("one@example.com"));
+        verify(repository, never()).save(any());
+    }
+
+    /** 未帶管理金鑰不可預覽 XLSX。 */
+    @Test
+    void previewSpreadsheetWithoutKeyReturns401() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "Dify 學員.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                new byte[] {1});
+
+        mvc.perform(multipart("/api/admin/import/xlsx/preview").file(file))
+           .andExpect(status().isUnauthorized());
+        verify(spreadsheetReader, never()).read(any());
+    }
+
+    /** 解析器回報的檔案問題應轉為可讀的 400，而不是伺服器錯誤。 */
+    @Test
+    void previewSpreadsheetInvalidFileReturns400() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "bad.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                new byte[] {1});
+        when(spreadsheetReader.read(any())).thenThrow(
+                new AudienceSpreadsheetReader.SpreadsheetException("找不到 Email 欄位"));
+
+        mvc.perform(multipart("/api/admin/import/xlsx/preview")
+                .file(file)
+                .header("X-Admin-Key", "test-key"))
+           .andExpect(status().isBadRequest())
+           .andExpect(jsonPath("$.detail").value("找不到 Email 欄位"));
     }
 }

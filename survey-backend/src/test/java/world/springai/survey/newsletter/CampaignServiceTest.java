@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import world.springai.survey.ReaderSiteLinks;
 import world.springai.survey.audience.RecipientService;
 import world.springai.survey.audience.SubscriptionLinkBuilder;
 import world.springai.survey.mail.EmailLog;
@@ -49,11 +50,13 @@ class CampaignServiceTest {
     // 用真實實作而非 mock：發布守門要問的正是「讀者端會不會渲染 gate」，
     // 而那個判斷就是這個類別。mock 掉就只是在驗自己的假設。
     private final ContentSplitter contentSplitter = new ContentSplitter();
+    private final ReaderSiteLinks readerSiteLinks =
+        new ReaderSiteLinks("https://reader.example.com");
 
     private final CampaignService svc = new CampaignService(
         mailSender, recipientService, campaignRepository, emailLogRepository,
         markdownRenderer, emailTemplate, linkBuilder, mailQuotaService, contentSplitter,
-        "https://news.example.com");
+        readerSiteLinks);
 
     {
         // 除非測試特別 stub 更小的量，否則額度視為充足——避免所有既有發送測試
@@ -97,6 +100,10 @@ class CampaignServiceTest {
         assertTrue(sent.get(0).html().contains("https://x/unsubscribe?u=a"), sent.get(0).html());
         assertTrue(sent.get(1).html().contains("https://x/unsubscribe?u=b"), sent.get(1).html());
         assertTrue(sent.get(0).html().contains("內文"));
+        assertTrue(sent.get(0).html().contains("https://reader.example.com/r/news/"),
+            "正式電子報必須含文章直達連結");
+        assertTrue(sent.get(0).html().contains("https://reader.example.com/r/login?redirect="),
+            "正式電子報必須含登入讀者中心連結");
         verify(mailSender, never()).schedule(any(), any());
     }
 
@@ -343,7 +350,7 @@ class CampaignServiceTest {
         assertEquals(10, r.creditCost());
         assertEquals("premium-web-only", r.slug());
         assertEquals(publishedAt, r.publishedAt().toInstant());
-        assertEquals("https://news.example.com/r/news/premium-web-only", r.url());
+        assertEquals("https://reader.example.com/r/news/premium-web-only", r.url());
 
         Campaign saved = captor.getValue();
         assertEquals(Campaign.TIER_PREMIUM, saved.getTier());
@@ -518,14 +525,14 @@ class CampaignServiceTest {
         CampaignService withSlash = new CampaignService(
             mailSender, recipientService, campaignRepository, emailLogRepository,
             markdownRenderer, emailTemplate, linkBuilder, mailQuotaService, contentSplitter,
-            "https://news.example.com/");
+            new ReaderSiteLinks("https://reader.example.com/"));
         when(campaignRepository.findBySlug("slash")).thenReturn(Optional.empty());
         when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
 
         CampaignService.PublishResult r = withSlash.publish("主旨", "內文",
             Campaign.TIER_BASIC, null, "slash", null);
 
-        assertEquals("https://news.example.com/r/news/slash", r.url());
+        assertEquals("https://reader.example.com/r/news/slash", r.url());
     }
 
     /**
@@ -747,7 +754,7 @@ class CampaignServiceTest {
 
         assertEquals(21L, r.campaignId());
         assertEquals("to-republish", r.slug());
-        assertEquals("https://news.example.com/r/news/to-republish", r.url());
+        assertEquals("https://reader.example.com/r/news/to-republish", r.url());
         // 發布時間是「當下」而非下架前的舊值
         assertNotNull(r.publishedAt());
         assertTrue(!r.publishedAt().isBefore(before), "publishedAt 應為呼叫當下的時間：" + r.publishedAt());

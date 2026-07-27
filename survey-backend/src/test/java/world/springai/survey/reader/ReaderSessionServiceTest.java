@@ -34,6 +34,20 @@ class ReaderSessionServiceTest {
         assertEquals(Optional.of(42L), readerId);
     }
 
+    /**
+     * 同一帳戶可在手機與電腦各自持有有效 Session；
+     * 簽發新 Session 不會撤銷另一台裝置既有的 Session。
+     */
+    @Test
+    void multipleDeviceSessionsRemainValidTogether() {
+        ReaderSessionService service = httpsService();
+        String phoneJwt = service.issueJwt(42L, NOW);
+        String desktopJwt = service.issueJwt(42L, NOW.plusMinutes(1));
+
+        assertEquals(Optional.of(42L), service.readReaderId(phoneJwt, NOW.plusHours(1)));
+        assertEquals(Optional.of(42L), service.readReaderId(desktopJwt, NOW.plusHours(1)));
+    }
+
     /** 被篡改的 JWT 必須拒絕 */
     @Test
     void tamperedJwtIsRejected() {

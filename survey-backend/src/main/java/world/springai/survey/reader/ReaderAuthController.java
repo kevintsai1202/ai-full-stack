@@ -54,11 +54,25 @@ public class ReaderAuthController {
     /** 登入請求：email 必填且需為合法格式，redirect 選填 */
     public record LoginRequest(@NotBlank @Email String email, String redirect) {}
 
-    /** 登入頁（無動態內容，但需由 controller 提供以支援 /r/login 這種無副檔名路徑） */
+    /**
+     * 登入頁。已有有效 session 時直接前往原目標，避免重寄 Magic Link；
+     * 未登入才顯示表單，並禁止共享快取保存個別登入狀態。
+     */
     @GetMapping(value = "/r/login", produces = MediaType.TEXT_HTML_VALUE)
-    public String loginPage() {
-        return htmlTemplate.render("templates/reader/login.html",
+    public ResponseEntity<String> loginPage(
+            @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie,
+            @RequestParam(value = "redirect", required = false) String redirect) {
+        if (sessionCookie != null && readerContext.resolve(sessionCookie).isPresent()) {
+            return ResponseEntity.status(302)
+                .header(HttpHeaders.LOCATION, safeRedirect(redirect))
+                .build();
+        }
+        String html = htmlTemplate.render("templates/reader/login.html",
             Map.of("<!--PAGE_TITLE-->", "登入｜凱文大叔的電子報"));
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+            .header(HttpHeaders.VARY, HttpHeaders.COOKIE)
+            .body(html);
     }
 
     /**
