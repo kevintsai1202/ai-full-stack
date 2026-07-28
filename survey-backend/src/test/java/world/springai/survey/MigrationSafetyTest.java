@@ -105,7 +105,7 @@ class MigrationSafetyTest {
             .load()
             .migrate();
 
-        // 三種代表性的既有名單：已確認訂閱、待確認匯入、已退訂；外加一筆既有 campaign
+        // 三種代表性的既有名單，以及正式環境中需要 V16 精準補資料的歷史 campaign。
         try (Connection c = connect(); Statement st = c.createStatement()) {
             st.execute("""
                 INSERT INTO survey_response (email, consent, unsubscribed, source) VALUES
@@ -117,6 +117,24 @@ class MigrationSafetyTest {
                 INSERT INTO campaign (subject, markdown, mode, recipient_count,
                                       accepted_count, failed_count, status)
                 VALUES ('既有電子報', '# 內容', 'now', 1, 1, 0, 'sent')
+                """);
+            st.execute("""
+                INSERT INTO campaign (
+                    id, subject, markdown, mode, recipient_count,
+                    accepted_count, failed_count, status, created_at
+                ) VALUES
+                  (3, '我自己寫了一套問卷＋電子報系統，這是我學到的事',
+                      '# 已取消', 'schedule', 0, 0, 0, 'cancelled',
+                      TIMESTAMPTZ '2026-07-23 23:56:31Z'),
+                  (4, '我自己寫了一套問卷＋電子報系統，這是我學到的事',
+                      '# 已寄出', 'schedule', 62, 62, 0, 'sent',
+                      TIMESTAMPTZ '2026-07-24 10:44:17Z'),
+                  (7, 'RAG的應用範例',
+                      '# 已取消', 'schedule', 0, 0, 0, 'cancelled',
+                      TIMESTAMPTZ '2026-07-26 19:58:43Z'),
+                  (8, 'RAG的應用範例',
+                      '# 已寄出', 'now', 78, 78, 0, 'sent',
+                      TIMESTAMPTZ '2026-07-26 20:08:47Z')
                 """);
         }
 
@@ -277,18 +295,59 @@ class MigrationSafetyTest {
             "SELECT value FROM app_setting WHERE setting_key = 'engagement.sunset_days'"));
     }
 
-    /** 既有 campaign 應取得新欄位的預設值，不得為 NULL；slug／published_at 應維持 NULL（尚未設定） */
+    /** 非 V16 精準回填目標的既有 campaign 應取得新欄位預設值，且不得被自動發布。 */
     @Test
     void existingCampaignGetsColumnDefaults() throws SQLException {
         assertEquals(0, queryInt("""
             SELECT count(*) FROM campaign
-             WHERE tier IS DISTINCT FROM 'BASIC'
-                OR credit_cost <> 0
-                OR filter_levels IS DISTINCT FROM 'active'
-                OR vip_full_in_mail IS DISTINCT FROM FALSE
-                OR slug IS NOT NULL
-                OR published_at IS NOT NULL
+             WHERE id NOT IN (4, 8)
+               AND (tier IS DISTINCT FROM 'BASIC'
+                OR  credit_cost <> 0
+                OR  filter_levels IS DISTINCT FROM 'active'
+                OR  vip_full_in_mail IS DISTINCT FROM FALSE
+                OR  slug IS NOT NULL
+                OR  published_at IS NOT NULL)
             """), "既有 campaign 未取得新欄位的預設值");
+    }
+
+    /** V16 只發布兩篇已寄出但缺少公開欄位的歷史文章，並補上 Emoji 與 hashtag。 */
+    @Test
+    void historicalArticlesAreBackfilledWithMetadata() throws SQLException {
+        assertEquals("survey-newsletter-system-lessons-20260724", queryString(
+            "SELECT slug FROM campaign WHERE id = 4"));
+        assertEquals("rag-law-powers-ai-verification-20260726", queryString(
+            "SELECT slug FROM campaign WHERE id = 8"));
+        assertEquals(2, queryInt("""
+            SELECT count(*) FROM campaign
+             WHERE id IN (4, 8)
+               AND published_at = created_at
+               AND cover_emoji IS NOT NULL
+            """), "兩篇遺漏文章未完整補上發布時間與 Emoji");
+        assertEquals("全端開發,電子報經營", queryString("""
+            SELECT string_agg(t.normalized_key, ',' ORDER BY t.sort_order)
+              FROM campaign_tag ct
+              JOIN content_tag t ON t.id = ct.tag_id
+             WHERE ct.campaign_id = 4
+            """));
+        assertEquals("ai,ai agent,rag", queryString("""
+            SELECT string_agg(t.normalized_key, ',' ORDER BY t.sort_order)
+              FROM campaign_tag ct
+              JOIN content_tag t ON t.id = ct.tag_id
+             WHERE ct.campaign_id = 8
+            """));
+    }
+
+    /** 同主旨的 cancelled 排程只是重複草稿，V16 不得把它們發布或加上中繼資料。 */
+    @Test
+    void cancelledCampaignDuplicatesStayHidden() throws SQLException {
+        assertEquals(0, queryInt("""
+            SELECT count(*) FROM campaign
+             WHERE id IN (3, 7)
+               AND (slug IS NOT NULL OR published_at IS NOT NULL OR cover_emoji IS NOT NULL)
+            """), "已取消的重複排程不應被發布");
+        assertEquals(0, queryInt(
+            "SELECT count(*) FROM campaign_tag WHERE campaign_id IN (3, 7)"),
+            "已取消的重複排程不應取得 hashtag");
     }
 
     /** PREMIUM 卻沒有解鎖成本必須被 CHECK 約束擋下——否則進階內容會全面免費外洩 */
