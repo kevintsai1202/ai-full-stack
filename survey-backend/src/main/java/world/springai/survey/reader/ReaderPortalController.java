@@ -1,6 +1,5 @@
 package world.springai.survey.reader;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -13,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import world.springai.survey.audience.SurveyResponse;
 import world.springai.survey.audience.SurveyResponseRepository;
+import world.springai.survey.ReaderSiteLinks;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -59,8 +59,8 @@ public class ReaderPortalController {
     private final PremiumCostDisplay premiumCostDisplay;
     /** 個人資料寫入；交易邊界在它身上（見 {@link #updateProfile}） */
     private final ReaderProfileService readerProfileService;
-    /** 對外公開的網域（含 scheme），組出可貼給別人的完整邀請連結時要用 */
-    private final String publicBaseUrl;
+    /** 讀者站公開網址的唯一組裝入口。 */
+    private final ReaderSiteLinks readerSiteLinks;
 
     /**
      * 注入渲染、身分解析、帳本、名單中心、邀請統計、點數參數、進階文章點數區間、
@@ -74,7 +74,7 @@ public class ReaderPortalController {
                                  CreditPolicy creditPolicy,
                                  PremiumCostDisplay premiumCostDisplay,
                                  ReaderProfileService readerProfileService,
-                                 @Value("${app.public-base-url}") String publicBaseUrl) {
+                                 ReaderSiteLinks readerSiteLinks) {
         this.htmlTemplate = htmlTemplate;
         this.readerContext = readerContext;
         this.creditTxnRepository = creditTxnRepository;
@@ -83,7 +83,7 @@ public class ReaderPortalController {
         this.creditPolicy = creditPolicy;
         this.premiumCostDisplay = premiumCostDisplay;
         this.readerProfileService = readerProfileService;
-        this.publicBaseUrl = publicBaseUrl;
+        this.readerSiteLinks = readerSiteLinks;
     }
 
     /** 個人資料更新請求；目前只開放顯示名稱 */
@@ -133,7 +133,7 @@ public class ReaderPortalController {
         vars.put("<!--REWARD_INTRO-->", rewardIntro(reward));
         // 完整網址：讀者要把它貼給別人，相對路徑沒有用
         vars.put("<!--INVITE_LINK-->",
-            HtmlTemplate.escapeHtml(publicBaseUrl + "/r/?ref=" + reader.getReferralCode()));
+            HtmlTemplate.escapeHtml(readerSiteLinks.subscribeWithReferral(reader.getReferralCode())));
         vars.put("<!--REFERRAL_CODE-->", HtmlTemplate.escapeHtml(reader.getReferralCode()));
         vars.put("<!--STATS_BLOCK-->", renderStats(stats));
 

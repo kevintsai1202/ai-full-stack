@@ -47,6 +47,13 @@ public class SurveyRequest {
      * 在此加 @Pattern 反而會讓亂改連結的人收到 400，訂閱直接失敗。</p>
      */
     private String ref;
+    /**
+     * 文章分享來源（文章 slug）。
+     *
+     * <p>只用於轉換歸因，不參與發獎判定；後端只會在同時帶有推薦碼且格式安全時採信，
+     * 避免任意外部輸入被寫進系統欄位。</p>
+     */
+    private String share;
 
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
@@ -74,4 +81,6 @@ public class SurveyRequest {
     public void setSource(String source) { this.source = source; }
     public String getRef() { return ref; }
     public void setRef(String ref) { this.ref = ref; }
+    public String getShare() { return share; }
+    public void setShare(String share) { this.share = share; }
 }

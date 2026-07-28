@@ -353,6 +353,45 @@ class ReaderPageControllerTest {
         assertTrue(body.contains("&lt;img src=x onerror"), "應為跳脫後的形式");
     }
 
+    /** 登入讀者的文章分享連結必須帶自己的推薦碼，才能在確認訂閱後獲得點數。 */
+    @Test
+    void loggedInReaderGetsPersonalizedArticleShareLink() throws Exception {
+        when(campaignRepository.findBySlug("test-article"))
+            .thenReturn(Optional.of(gatedArticle(Campaign.TIER_BASIC, 0)));
+        when(readerContext.resolve(any()))
+            .thenReturn(Optional.of(new ReaderContext.Current(reader(Reader.TIER_FREE, 300), true)));
+        stubDecision(AccessDecisionService.Access.FULL, AccessDecisionService.Reason.BASIC_OPEN, 0);
+
+        String body = mvc.perform(get("/r/news/test-article"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(body.contains("data-share-url=\"/r/news/test-article?ref=CODE1234\""),
+            "文章分享網址必須帶登入讀者的推薦碼");
+        assertTrue(body.contains("/r/reader-share.js"), "文章頁必須載入分享互動腳本");
+        assertTrue(body.contains("data-platform=\"facebook\""));
+        assertTrue(body.contains("data-platform=\"instagram\""));
+        assertTrue(body.contains("data-platform=\"threads\""));
+    }
+
+    /** 從專屬文章連結進站的匿名訪客，訂閱 CTA 必須把推薦碼與文章來源帶到訂閱頁。 */
+    @Test
+    void sharedArticleVisitorGetsAttributedSubscribeCta() throws Exception {
+        when(campaignRepository.findBySlug("test-article"))
+            .thenReturn(Optional.of(gatedArticle(Campaign.TIER_BASIC, 0)));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+
+        String body = mvc.perform(get("/r/news/test-article").param("ref", "CODE1234"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(body.contains("/r/?ref=CODE1234&amp;share=test-article"),
+            "訂閱 CTA 必須保留推薦碼與文章 slug，否則轉換後無法發點或分析來源");
+        assertFalse(body.contains("data-share-url=\"/r/news/test-article?ref=CODE1234\""),
+            "匿名訪客不應把原推薦人的專屬連結當成自己的分享連結");
+    }
+
     /**
      * 登入者的導覽列要顯示「我的帳戶」（{@code /r/me}）且不含未登入版連結，
      * 未登入則顯示「登入」（{@code /r/login}）且不含已登入版連結。

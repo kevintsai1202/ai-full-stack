@@ -272,6 +272,45 @@ input::placeholder { color:#71817c; }
   margin-top: 16px;
 }
 
+/* 病毒分享元件：連結、可編輯貼文範本與平台按鈕共用同一視覺節奏。 */
+.viral-share { overflow:hidden; }
+.article-share { margin-top:28px; }
+.share-label { margin:20px 0 9px; color:var(--muted); font-size:.9rem; font-weight:700; }
+.share-template-tabs { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:10px; }
+.share-template-tabs button {
+  border:1px solid var(--border); border-radius:var(--r-pill); background:var(--surface);
+  color:var(--muted); padding:7px 12px; font:inherit; font-size:.84rem; font-weight:750; cursor:pointer;
+}
+.share-template-tabs button:hover,.share-template-tabs button.active {
+  color:#fff; background:var(--accent-deep); border-color:var(--accent-deep);
+}
+.share-post-input {
+  width:100%; min-height:128px; resize:vertical; border:1px solid var(--border);
+  border-radius:var(--r-md); padding:13px 14px; background:var(--surface-2);
+  color:var(--fg); font:inherit; line-height:1.65;
+}
+.share-post-input:focus,.share-link-input:focus { outline:3px solid var(--accent-soft); border-color:var(--accent); }
+.share-actions { display:flex; flex-wrap:wrap; align-items:center; gap:9px; margin-top:12px; }
+.social-share {
+  display:inline-flex; align-items:center; gap:7px; min-height:40px; padding:8px 13px;
+  border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--fg);
+  font:inherit; font-size:.86rem; font-weight:800; cursor:pointer; transition:transform .15s ease,box-shadow .15s ease;
+}
+.social-share:hover { transform:translateY(-1px); box-shadow:var(--shadow-sm); }
+.social-share svg { width:19px; height:19px; fill:currentColor; stroke:currentColor; stroke-width:1.7; }
+.social-share.facebook { color:#1877f2; }
+.social-share.instagram { color:#c13584; }
+.social-share.instagram svg { fill:none; }
+.social-share.threads { color:var(--fg); }
+.share-status { width:100%; }
+.share-subscribe-cta {
+  display:flex; align-items:center; justify-content:space-between; gap:18px; margin-top:28px;
+  padding:20px 22px; border-radius:var(--r-md); background:linear-gradient(135deg,var(--accent-soft),#fff8e5);
+  border:1px solid color-mix(in srgb,var(--accent) 30%,var(--border));
+}
+.share-subscribe-cta div { display:flex; flex-direction:column; gap:3px; }
+.share-subscribe-cta span { color:var(--muted); font-size:.92rem; }
+
 .card h2 {
   font-size: 1.05rem;
   margin: 0 0 10px;
@@ -346,6 +385,9 @@ input::placeholder { color:#71817c; }
   .site-head nav::-webkit-scrollbar { display:none; }
   .site-head nav a { min-height:36px; padding:6px 10px; }
   .form-row .btn { width:100%; }
+  .share-actions > * { flex:1 1 calc(50% - 9px); justify-content:center; }
+  .share-subscribe-cta { align-items:stretch; flex-direction:column; }
+  .share-subscribe-cta .btn { text-align:center; }
   .card { border-radius:12px; }
   .article-grid { grid-template-columns:1fr; }
   .article-cover { min-height:120px; }

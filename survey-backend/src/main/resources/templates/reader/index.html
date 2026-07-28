@@ -47,6 +47,7 @@
   // 獎勵在被邀者點確認信後才發（見 /r/rules）
   const params = new URLSearchParams(location.search);
   const ref = params.get('ref');
+  const share = params.get('share');
 
   const form = document.getElementById('subscribe-form');
   const msg = document.getElementById('msg');
@@ -66,6 +67,8 @@
       // 避免電子報訂閱者污染 /api/survey/stats 對外公開的問卷統計
       const body = { email: document.getElementById('email').value, consent: true, source: 'newsletter' };
       if (ref) { body.ref = ref; }
+      // 文章來源只與推薦碼一起送出；後端會再次驗證 slug 格式。
+      if (ref && share) { body.share = share; }
       const res = await fetch('/api/survey', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

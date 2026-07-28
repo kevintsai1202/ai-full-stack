@@ -30,4 +30,13 @@ class ReaderSiteLinksTest {
                 + "&redirect=%2Fr%2Fnews%2Fhello",
             links.verifyLogin("TOKEN", "/r/news/hello"));
     }
+
+    /** 邀請連結必須使用讀者站網域，並安全編碼推薦碼。 */
+    @Test
+    void buildsReaderReferralSubscriptionUrl() {
+        ReaderSiteLinks links = new ReaderSiteLinks("https://reader.springai.world/");
+
+        assertEquals("https://reader.springai.world/r/?ref=CODE%2B123",
+            links.subscribeWithReferral("CODE+123"));
+    }
 }

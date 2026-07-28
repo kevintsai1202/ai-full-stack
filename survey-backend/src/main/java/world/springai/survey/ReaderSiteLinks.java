@@ -38,6 +38,12 @@ public class ReaderSiteLinks {
         return baseUrl + "/r/archive";
     }
 
+    /** 組出帶推薦碼的讀者站訂閱入口。 */
+    public String subscribeWithReferral(String referralCode) {
+        return baseUrl + "/r/?ref="
+            + URLEncoder.encode(referralCode, StandardCharsets.UTF_8);
+    }
+
     /**
      * 組出登入頁網址，並保留登入後要回去的站內路徑。
      *

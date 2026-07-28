@@ -368,6 +368,22 @@ credits >= campaign.credit_cost           → PARTIAL + CAN_UNLOCK（顯示解�
   → confirm 成功的同一交易內：推薦人 +100 點（credit_txn reason='REFERRAL'）
 ```
 
+#### 5.4.1 文章分享與病毒轉換歸因（2026-07-28）
+
+- 登入讀者在單篇文章取得專屬網址：`{reader-base}/r/news/{slug}?ref={referral_code}`。
+- 匿名訪客從專屬文章連結進站時，文章底部顯示訂閱 CTA；CTA 前往
+  `/r/?ref={referral_code}&share={slug}`，訂閱表單把兩個參數一起送到既有
+  `/api/survey`。
+- `_ref` 仍是發獎的唯一歸因依據；`share` 經 slug 白名單驗證後寫入
+  `answers._share_article`，只供辨識「哪篇文章帶來轉換」，不影響點數與冪等鍵。
+- 發獎條件完全不放寬：點擊文章、點擊訂閱 CTA、送出 email 都不發點，只有被邀者
+  完成信箱確認後才走既有 `ReferralService` 發放 `REFERRAL` 點數。
+- `/r/invite` 的完整網址必須使用 `app.reader.base-url`（正式環境為
+  `https://reader.springai.world`），不可使用問卷／API 網域的 `app.public-base-url`。
+- 邀請頁與文章頁提供三組可編輯貼文範本，以及 Facebook、Instagram、Threads 圖示。
+  Facebook 使用分享視窗、Threads 使用 Web Intent；Instagram 因沒有通用的網頁發文
+  intent，支援 Web Share API 時開啟裝置分享選單，否則複製貼文讓讀者貼入 App。
+
 **防刷**：獎勵只在被邀者真的點了自己信箱裡的確認信時發放，填假 email 拿不到點數。此機制沿用既有 confirm 閉環，不需額外防刷設施。第一版**不設邀請人數上限**（只有 admin 能批次匯入名單，讀者無此能力，濫用面很窄）；`credit_txn` 帳本可事後查出異常集中的 REFERRAL 紀錄。
 
 **待歸因關係的儲存**：confirm 時被邀者可能還沒有 `reader` 列（`reader` 只在首次登入才建立），因此歸因必須先存在名單中心側。做法：訂閱寫入 `survey_response` 時，把推薦碼放進 `answers` jsonb 的 `_ref` 鍵（既有欄位，不需新 migration）。

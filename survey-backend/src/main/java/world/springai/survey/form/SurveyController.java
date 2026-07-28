@@ -37,6 +37,8 @@ public class SurveyController {
      * 所有底線開頭的鍵，否則推薦碼會出現在對外公開的統計圖表裡。</p>
      */
     static final String REF_KEY = "_ref";
+    /** 文章分享轉換來源；底線前綴確保不進入公開問卷統計。 */
+    static final String SHARE_ARTICLE_KEY = "_share_article";
 
     private final SurveyResponseRepository repository;
     private final ObjectMapper objectMapper;
@@ -82,6 +84,11 @@ public class SurveyController {
                 ? new HashMap<>()
                 : new HashMap<>(entity.getAnswers());
             answers.put(REF_KEY, req.getRef().trim());
+            // 文章來源只在推薦碼存在時才有歸因意義；格式不合直接忽略，
+            // 不因被竄改的分享參數讓合法 email 訂閱整筆失敗。
+            if (isSafeArticleSlug(req.getShare())) {
+                answers.put(SHARE_ARTICLE_KEY, req.getShare().trim());
+            }
             entity.setAnswers(answers);
         }
         entity.setInterest(req.getInterest());
@@ -153,6 +160,12 @@ public class SurveyController {
             return null;
         }
         return r.getAnswers().get(key);
+    }
+
+    /** 僅接受站內文章 slug，避免把任意長字串或控制字元寫入歸因欄位。 */
+    private static boolean isSafeArticleSlug(String value) {
+        return StringUtils.hasText(value)
+            && value.trim().matches("[a-z0-9][a-z0-9-]{0,159}");
     }
 
     /** 將字串串流計數後，去除空白值，依數量由多到少排序並取前 limit 名 */

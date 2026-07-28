@@ -148,7 +148,8 @@ public class ReaderPageController {
      */
     @GetMapping(value = "/r/news/{slug}", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> article(@PathVariable String slug,
-                         @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
+                         @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie,
+                         @RequestParam(required = false) String ref) {
         // 未發布（含已下架）與不存在一律走同一條 404 路徑：兩者若給出不同回應，
         // 這個公開端點就成了「這個 slug 存在嗎」的探測器。
         Optional<Campaign> found = campaignRepository.findBySlug(slug).filter(Campaign::isPublished);
@@ -186,6 +187,9 @@ public class ReaderPageController {
         vars.put("<!--ARTICLE_COVER-->", renderArticleCover(campaign));
         vars.put("<!--ARTICLE_CONTENT-->", contentHtml); // 已是渲染後的 HTML，不可再跳脫
         vars.put("<!--NAV_LINKS-->", ReaderNav.links(current.isPresent()));
+        vars.put("<!--SHARE_URL-->", articleSharePath(slug, reader));
+        vars.put("<!--SHARE_NOTE-->", articleShareNote(slug, reader));
+        vars.put("<!--SUBSCRIBE_CTA-->", renderSharedArticleSubscribeCta(slug, ref, current.isPresent()));
         // 只有「未取得全文且該文章真的有受限區」時才需要 paywall 區塊
         boolean gateRendered = !full && split.hasGate();
         vars.put("<!--GATE_BLOCK-->", gateRendered ? renderGate(decision, campaign, slug) : "");
@@ -204,6 +208,55 @@ public class ReaderPageController {
             .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
             .header(HttpHeaders.VARY, HttpHeaders.COOKIE)
             .body(html);
+    }
+
+    /**
+     * 組出文章分享路徑；登入讀者帶自己的推薦碼，匿名訪客只分享一般文章網址。
+     *
+     * <p>這裡刻意輸出站內路徑，完整 origin 由瀏覽器依正式環境組成，避免測試站或
+     * 自訂網域把部署設定中的另一個 host 分享出去。</p>
+     */
+    private String articleSharePath(String slug, Reader reader) {
+        String path = "/r/news/" + java.net.URLEncoder.encode(slug, java.nio.charset.StandardCharsets.UTF_8);
+        if (reader == null || reader.getReferralCode() == null || reader.getReferralCode().isBlank()) {
+            return HtmlTemplate.escapeHtml(path);
+        }
+        return HtmlTemplate.escapeHtml(path + "?ref="
+            + java.net.URLEncoder.encode(reader.getReferralCode(), java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    /** 依登入狀態說明文章分享是否會累積邀請點數。 */
+    private String articleShareNote(String slug, Reader reader) {
+        if (reader == null) {
+            String redirect = java.net.URLEncoder.encode(
+                "/r/news/" + slug, java.nio.charset.StandardCharsets.UTF_8);
+            return "分享這篇文章給朋友；登入後可取得會累積邀請點數的專屬連結。"
+                + " <a href=\"/r/login?redirect=" + HtmlTemplate.escapeHtml(redirect)
+                + "\">登入取得專屬連結</a>";
+        }
+        return "這是你的專屬文章連結。朋友從連結訂閱並完成信箱確認後，邀請點數會自動入帳。";
+    }
+
+    /**
+     * 被分享連結帶進來的匿名訪客會看到可完成歸因的訂閱入口。
+     *
+     * <p>推薦碼只放進 URL、最終仍由確認信與既有 ReferralService 驗證；此處不查
+     * 推薦碼是否存在，避免公開文章端點成為推薦碼有效性的探測器。</p>
+     */
+    private String renderSharedArticleSubscribeCta(String slug, String ref, boolean loggedIn) {
+        if (loggedIn || ref == null || ref.isBlank() || ref.length() > 128) {
+            return "";
+        }
+        String href = "/r/?ref="
+            + java.net.URLEncoder.encode(ref.trim(), java.nio.charset.StandardCharsets.UTF_8)
+            + "&share="
+            + java.net.URLEncoder.encode(slug, java.nio.charset.StandardCharsets.UTF_8);
+        return """
+            <aside class="share-subscribe-cta">
+              <div><strong>喜歡這篇內容？</strong><span>訂閱後，新文章會直接寄到你的信箱。</span></div>
+              <a class="btn" href="%s">免費訂閱</a>
+            </aside>
+            """.formatted(HtmlTemplate.escapeHtml(href));
     }
 
     /**

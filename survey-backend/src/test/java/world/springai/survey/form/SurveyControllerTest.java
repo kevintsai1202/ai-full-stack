@@ -28,6 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -275,6 +276,57 @@ class SurveyControllerTest {
         assertEquals("WXYZ6789", captor.getValue().getAnswers().get("_ref"));
     }
 
+    /** 文章分享訂閱應同時保存推薦碼與文章來源，供後續轉換分析。 */
+    @Test
+    void articleShareAttributionIsStoredWithReferral() throws Exception {
+        mvc.perform(post("/api/survey")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"shared@example.com","consent":true,"source":"newsletter",
+                     "ref":"ABCD2345","share":"spring-ai-agent-notes"}
+                    """))
+           .andExpect(status().isCreated());
+
+        org.mockito.ArgumentCaptor<SurveyResponse> captor = org.mockito.ArgumentCaptor.forClass(SurveyResponse.class);
+        verify(repository).save(captor.capture());
+        assertEquals("ABCD2345", captor.getValue().getAnswers().get("_ref"));
+        assertEquals("spring-ai-agent-notes", captor.getValue().getAnswers().get("_share_article"));
+    }
+
+    /** 沒有推薦碼時不得單獨保存文章分享歸因，避免把普通流量誤算成推薦轉換。 */
+    @Test
+    void articleShareAttributionWithoutReferralIsIgnored() throws Exception {
+        mvc.perform(post("/api/survey")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"organic@example.com","consent":true,"source":"newsletter",
+                     "share":"spring-ai-agent-notes"}
+                    """))
+           .andExpect(status().isCreated());
+
+        org.mockito.ArgumentCaptor<SurveyResponse> captor = org.mockito.ArgumentCaptor.forClass(SurveyResponse.class);
+        verify(repository).save(captor.capture());
+        Map<String, Object> answers = captor.getValue().getAnswers();
+        assertTrue(answers == null || !answers.containsKey("_share_article"));
+    }
+
+    /** 被竄改的文章來源只忽略歸因，不可讓合法訂閱失敗。 */
+    @Test
+    void unsafeArticleShareAttributionIsIgnoredWithoutRejectingSubscription() throws Exception {
+        mvc.perform(post("/api/survey")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"email":"safe@example.com","consent":true,"source":"newsletter",
+                     "ref":"ABCD2345","share":"../admin.html"}
+                    """))
+           .andExpect(status().isCreated());
+
+        org.mockito.ArgumentCaptor<SurveyResponse> captor = org.mockito.ArgumentCaptor.forClass(SurveyResponse.class);
+        verify(repository).save(captor.capture());
+        assertEquals("ABCD2345", captor.getValue().getAnswers().get("_ref"));
+        assertFalse(captor.getValue().getAnswers().containsKey("_share_article"));
+    }
+
     /** 沒有 ref 時不可留下空的 _ref 鍵，否則後續「有沒有推薦人」的判斷要多處理空字串 */
     @Test
     void absentRefLeavesNoUnderscoreRefKey() throws Exception {
@@ -317,7 +369,10 @@ class SurveyControllerTest {
     void statsExcludeUnderscorePrefixedSystemKeys() {
         SurveyResponse withRef = new SurveyResponse();
         withRef.setSource("survey_form");
-        withRef.setAnswers(Map.of("status", "在職", "_ref", "ABCD2345"));
+        withRef.setAnswers(Map.of(
+            "status", "在職",
+            "_ref", "ABCD2345",
+            "_share_article", "spring-ai-agent-notes"));
         when(repository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(withRef));
 
         SurveyStats stats = controller.stats();
@@ -336,6 +391,8 @@ class SurveyControllerTest {
         // 對 answerOf 斷言，契約才真的被鎖住。
         assertNull(SurveyController.answerOf(withRef, "_ref"),
             "底線開頭的系統鍵必須被視為不存在，否則推薦碼會出現在無需金鑰的公開統計中");
+        assertNull(SurveyController.answerOf(withRef, "_share_article"),
+            "文章分享來源也是系統鍵，不得出現在無需金鑰的公開統計中");
         assertEquals("在職", SurveyController.answerOf(withRef, "status"),
             "一般問卷鍵仍必須讀得到，過濾不可過寬");
     }

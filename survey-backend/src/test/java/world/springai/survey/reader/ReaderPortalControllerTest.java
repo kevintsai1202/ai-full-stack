@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import world.springai.survey.audience.SurveyResponse;
 import world.springai.survey.audience.SurveyResponseRepository;
+import world.springai.survey.ReaderSiteLinks;
 import world.springai.survey.newsletter.Campaign;
 import world.springai.survey.newsletter.CampaignRepository;
 
@@ -83,7 +84,7 @@ class ReaderPortalControllerTest {
                 // campaign.credit_cost 的區間查詢——而那正是本次修正的全部目的。
                 new PremiumCostDisplay(campaignRepository, creditPolicy),
                 new ReaderProfileService(surveyResponseRepository),
-                "https://survey.example.com"))
+                new ReaderSiteLinks("https://reader.example.com")))
             .setMessageConverters(
                 new StringHttpMessageConverter(StandardCharsets.UTF_8),
                 new MappingJackson2HttpMessageConverter())
@@ -604,7 +605,7 @@ class ReaderPortalControllerTest {
 
         mvc.perform(get("/r/invite").cookie(cookie()))
            .andExpect(status().isOk())
-           .andExpect(content().string(containsString("https://survey.example.com/r/?ref=CODE1234")));
+           .andExpect(content().string(containsString("https://reader.example.com/r/?ref=CODE1234")));
     }
 
     /** 顯示邀請成效：人數與累計點數 */
