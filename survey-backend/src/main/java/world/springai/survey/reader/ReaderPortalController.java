@@ -1,6 +1,7 @@
 package world.springai.survey.reader;
 
 import org.springframework.data.domain.PageRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -61,6 +62,8 @@ public class ReaderPortalController {
     private final ReaderProfileService readerProfileService;
     /** 讀者站公開網址的唯一組裝入口。 */
     private final ReaderSiteLinks readerSiteLinks;
+    /** 病毒成長里程碑與活動；舊隔離測試未提供時維持空區塊。 */
+    private final ReferralGrowthService referralGrowthService;
 
     /**
      * 注入渲染、身分解析、帳本、名單中心、邀請統計、點數參數、進階文章點數區間、
@@ -75,6 +78,23 @@ public class ReaderPortalController {
                                  PremiumCostDisplay premiumCostDisplay,
                                  ReaderProfileService readerProfileService,
                                  ReaderSiteLinks readerSiteLinks) {
+        this(htmlTemplate, readerContext, creditTxnRepository, surveyResponseRepository,
+            referralService, creditPolicy, premiumCostDisplay, readerProfileService,
+            readerSiteLinks, null);
+    }
+
+    /** 正式環境建構子，加入里程碑與活動資料。 */
+    @Autowired
+    public ReaderPortalController(HtmlTemplate htmlTemplate,
+                                 ReaderContext readerContext,
+                                 CreditTxnRepository creditTxnRepository,
+                                 SurveyResponseRepository surveyResponseRepository,
+                                 ReferralService referralService,
+                                 CreditPolicy creditPolicy,
+                                 PremiumCostDisplay premiumCostDisplay,
+                                 ReaderProfileService readerProfileService,
+                                 ReaderSiteLinks readerSiteLinks,
+                                 ReferralGrowthService referralGrowthService) {
         this.htmlTemplate = htmlTemplate;
         this.readerContext = readerContext;
         this.creditTxnRepository = creditTxnRepository;
@@ -84,6 +104,7 @@ public class ReaderPortalController {
         this.premiumCostDisplay = premiumCostDisplay;
         this.readerProfileService = readerProfileService;
         this.readerSiteLinks = readerSiteLinks;
+        this.referralGrowthService = referralGrowthService;
     }
 
     /** 個人資料更新請求；目前只開放顯示名稱 */
@@ -136,6 +157,10 @@ public class ReaderPortalController {
             HtmlTemplate.escapeHtml(readerSiteLinks.subscribeWithReferral(reader.getReferralCode())));
         vars.put("<!--REFERRAL_CODE-->", HtmlTemplate.escapeHtml(reader.getReferralCode()));
         vars.put("<!--STATS_BLOCK-->", renderStats(stats));
+        vars.put("<!--MILESTONE_BLOCK-->", referralGrowthService == null ? ""
+            : renderMilestones(stats.invitedCount(), referralGrowthService.milestones(reader.getId())));
+        vars.put("<!--ACTIVE_CAMPAIGN_BLOCK-->", referralGrowthService == null ? ""
+            : renderActiveCampaigns(referralGrowthService.activeCampaigns()));
 
         return privatePage(htmlTemplate.render("templates/reader/invite.html", vars));
     }
@@ -197,6 +222,40 @@ public class ReaderPortalController {
             <p class="balance">%d 人</p>
             <p style="color:var(--muted);font-size:.92rem">累計獲得 %d 點</p>
             """.formatted(stats.invitedCount(), stats.earnedCredits());
+    }
+
+    /** 顯示已取得徽章與下一階進度，不包含任何被邀者個資。 */
+    private String renderMilestones(int invitedCount,
+                                    List<ReferralGrowthService.MilestoneView> milestones) {
+        StringBuilder html = new StringBuilder("<div class=\"card\"><h2>邀請里程碑</h2><div class=\"milestone-grid\">");
+        for (ReferralGrowthService.MilestoneView item : milestones) {
+            int progress = Math.min(100, invitedCount * 100 / item.milestone());
+            html.append("<div class=\"milestone ")
+                .append(item.earned() ? "earned" : "")
+                .append("\"><span class=\"milestone-icon\">")
+                .append(item.earned() ? "🏅" : "🔒")
+                .append("</span><strong>")
+                .append(HtmlTemplate.escapeHtml(item.badgeName()))
+                .append("</strong><small>")
+                .append(item.milestone()).append(" 人");
+            if (item.bonusCredits() > 0) {
+                html.append("・+").append(item.bonusCredits()).append(" 點");
+            }
+            html.append("</small><div class=\"milestone-bar\"><i style=\"width:")
+                .append(progress).append("%\"></i></div></div>");
+        }
+        return html.append("</div></div>").toString();
+    }
+
+    /** 顯示進行中的加碼活動。 */
+    private String renderActiveCampaigns(List<ReferralCampaign> campaigns) {
+        if (campaigns.isEmpty()) return "";
+        StringBuilder html = new StringBuilder("<aside class=\"campaign-banner\"><strong>限時加碼進行中</strong><ul>");
+        for (ReferralCampaign campaign : campaigns) {
+            html.append("<li>").append(HtmlTemplate.escapeHtml(campaign.getName()))
+                .append("：邀請獎勵 ×").append(campaign.getMultiplier()).append("</li>");
+        }
+        return html.append("</ul></aside>").toString();
     }
 
     /**
@@ -333,6 +392,8 @@ public class ReaderPortalController {
         return switch (reason) {
             case CreditTxn.REASON_SIGNUP_GRANT -> "初始贈點";
             case CreditTxn.REASON_REFERRAL -> "邀請獎勵";
+            case CreditTxn.REASON_REFERRAL_INVITEE -> "受邀確認加碼";
+            case CreditTxn.REASON_REFERRAL_MILESTONE -> "邀請里程碑";
             case CreditTxn.REASON_READ -> "解鎖文章";
             case CreditTxn.REASON_ADMIN_GRANT -> "站方贈點";
             default -> "點數調整";

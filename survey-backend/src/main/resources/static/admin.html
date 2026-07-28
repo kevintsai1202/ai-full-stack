@@ -45,8 +45,8 @@
   .media-panel{margin:12px 0;padding:14px;border:1px solid var(--border);border-radius:10px;background:#f8fbfa}.media-upload{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:end}.media-library{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:12px;max-height:330px;overflow:auto}.media-item{min-width:0;border:1px solid var(--border);border-radius:9px;background:#fff;overflow:hidden}.media-thumb{display:grid;place-items:center;aspect-ratio:16/9;background:var(--surface-2);color:var(--muted);font-size:1.8rem}.media-thumb img{width:100%;height:100%;object-fit:cover}.media-info{padding:9px}.media-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem;font-weight:750}.media-meta{font-size:.74rem;color:var(--muted)}.media-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}.media-actions .btn{min-height:30px;padding:4px 7px;font-size:.76rem}.cover-selection{display:flex;align-items:center;gap:10px;margin-top:10px;padding:9px;border:1px dashed var(--border-strong);border-radius:9px}.cover-selection img{width:92px;aspect-ratio:16/9;object-fit:cover;border-radius:6px}.cover-selection .cover-copy{min-width:0;flex:1}.cover-selection strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .msg{margin-top:12px;padding:10px 12px;border-radius:8px;display:none}.msg.ok{display:block;background:var(--accent-soft);color:var(--accent-deep)}.msg.err{display:block;background:#fde8e8;color:var(--danger)}
   .gate{position:fixed;inset:0;background:rgba(16,32,51,.66);display:flex;align-items:center;justify-content:center;z-index:50}.gate .box{background:#fff;border-radius:var(--r);padding:28px;max-width:400px;width:90%;box-shadow:0 24px 70px rgba(0,0,0,.22)}
-  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px}
-  .kpi-label{font-size:.8rem;color:var(--muted);font-weight:800;letter-spacing:.05em}.kpi-value{font-size:1.8rem;font-weight:900;margin-top:4px}.kpi-note{font-size:.8rem;color:var(--muted)}
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}.growth-kpis{grid-template-columns:repeat(5,minmax(0,1fr))}.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px}
+  .kpi-label{display:block;font-size:.8rem;color:var(--muted);font-weight:800;letter-spacing:.05em}.kpi-value{display:block;font-size:1.8rem;font-weight:900;margin-top:4px}.kpi-note{font-size:.8rem;color:var(--muted)}
   .chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.chart-grid .card{margin:0}.chart{display:grid;gap:10px}.bar-row{display:grid;grid-template-columns:minmax(110px,1.2fr) 3fr 54px;gap:10px;align-items:center;font-size:.88rem}.bar-label{overflow-wrap:anywhere}.bar-track{height:9px;border-radius:999px;background:var(--surface-2);overflow:hidden}.bar-fill{height:100%;background:var(--accent);border-radius:inherit}.bar-value{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
   .full{grid-column:1/-1}.filters{display:grid;grid-template-columns:minmax(240px,2fr) repeat(5,minmax(120px,1fr));gap:10px;margin:12px 0}.filters label{margin:0}.table-wrap{width:100%;max-width:100%;min-width:0;overflow:auto;border:1px solid var(--border);border-radius:10px;max-height:680px}
   table{width:100%;border-collapse:separate;border-spacing:0;font-size:.84rem}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;min-width:110px;max-width:300px;overflow-wrap:anywhere}
@@ -60,8 +60,8 @@
   .advanced-filters{margin:12px 0;padding:12px;border:1px solid var(--border);border-radius:10px;background:#f8fbfa}.advanced-filters summary{cursor:pointer;font-weight:800;color:var(--accent-deep)}
   .reader-detail-dialog{width:min(1040px,94vw);max-height:90vh;border:0;border-radius:14px;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.28)}.reader-detail-dialog::backdrop{background:rgba(16,32,51,.62)}.reader-detail-dialog h3{margin:22px 0 8px}
   details.schema-settings{margin-top:14px;border-top:1px solid var(--border);padding-top:12px}details.schema-settings summary{cursor:pointer;font-weight:750}
-  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.chart-grid,#campaign-view,#readers-view{grid-template-columns:1fr}.full,#campaign-view>.card:nth-child(n),#readers-view>.card:nth-child(n){grid-column:auto}.filters,.dynamic-toolbar{grid-template-columns:1fr 1fr}.media-library{grid-template-columns:repeat(2,minmax(0,1fr))}.wrap{padding-inline:16px}.tabs{overflow-x:auto;position:static}.tab{flex:0 0 auto}}
-  @media(max-width:520px){.kpis,.filters,.dynamic-toolbar,.media-upload,.media-library{grid-template-columns:1fr}.bar-row{grid-template-columns:minmax(95px,1.2fr) 2fr 44px}.form-row,.import-fields{align-items:stretch;flex-direction:column}.form-row .btn,.source-picker .btn,.media-upload .btn{width:100%}.source-picker{grid-template-columns:1fr}.page-head .btn{width:100%}}
+  @media(max-width:900px){.kpis,.growth-kpis{grid-template-columns:repeat(2,1fr)}.chart-grid,#campaign-view,#readers-view{grid-template-columns:1fr}.full,#campaign-view>.card:nth-child(n),#readers-view>.card:nth-child(n){grid-column:auto}.filters,.dynamic-toolbar{grid-template-columns:1fr 1fr}.media-library{grid-template-columns:repeat(2,minmax(0,1fr))}.wrap{padding-inline:16px}.tabs{overflow-x:auto;position:static}.tab{flex:0 0 auto}}
+  @media(max-width:520px){.kpis,.growth-kpis,.filters,.dynamic-toolbar,.media-upload,.media-library{grid-template-columns:1fr}.bar-row{grid-template-columns:minmax(95px,1.2fr) 2fr 44px}.form-row,.import-fields{align-items:stretch;flex-direction:column}.form-row .btn,.source-picker .btn,.media-upload .btn{width:100%}.source-picker{grid-template-columns:1fr}.page-head .btn{width:100%}}
   @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style>
 </head>
@@ -86,6 +86,7 @@
     <button class="tab active" id="tab-analytics" data-view="analytics">問卷分析</button>
     <button class="tab" id="tab-campaign" data-view="campaign">電子報寄送</button>
     <button class="tab" id="tab-readers" data-view="readers">讀者管理</button>
+    <button class="tab" id="tab-growth" data-view="growth">病毒成長</button>
     <button class="tab" id="tab-settings" data-view="settings">參數設定</button>
   </nav>
 
@@ -473,6 +474,39 @@
     </div>
   </section>
 
+  <section class="view" id="growth-view" hidden>
+    <div class="card section-head">
+      <div><h2 style="margin:0">分享漏斗</h2><p class="hint">分享點擊 → 填表 → 信箱確認；點擊採每日唯一訪客計數。</p></div>
+      <button class="btn ghost" id="growth-refresh">重新整理</button>
+    </div>
+    <div id="growth-kpis" class="kpis growth-kpis"></div>
+    <div class="card">
+      <h2>熱門文章</h2>
+      <div class="table-wrap"><table id="growth-articles"><thead><tr><th>來源</th><th>點擊</th><th>填表</th><th>確認</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="card">
+      <h2>待人工審核</h2>
+      <p class="hint">超過每日上限或確認速度異常時不先發點；核准後才原子發放雙邊與里程碑獎勵。</p>
+      <div class="table-wrap"><table id="growth-reviews"><thead><tr><th>確認時間</th><th>被邀者</th><th>文章</th><th>風險</th><th>預計獎勵</th><th>操作</th></tr></thead><tbody></tbody></table></div>
+      <div class="msg" id="growth-msg"></div>
+    </div>
+    <div class="card">
+      <h2>新增限時加碼</h2>
+      <div class="form-row">
+        <div><label for="growth-name">活動名稱</label><input id="growth-name" placeholder="本週 AI Agent 分享加碼"></div>
+        <div><label for="growth-tag">hashtag slug</label><input id="growth-tag" placeholder="ai-agent"></div>
+        <div><label for="growth-article">或文章 slug</label><input id="growth-article" placeholder="article-slug"></div>
+        <div><label for="growth-multiplier">倍率</label><select id="growth-multiplier"><option value="2">×2</option><option value="3">×3</option></select></div>
+      </div>
+      <div class="form-row">
+        <div><label for="growth-start">開始</label><input id="growth-start" type="datetime-local"></div>
+        <div><label for="growth-end">結束</label><input id="growth-end" type="datetime-local"></div>
+        <div style="flex:0"><button class="btn" id="growth-create">建立活動</button></div>
+      </div>
+      <div class="table-wrap"><table id="growth-campaigns"><thead><tr><th>活動</th><th>範圍</th><th>倍率</th><th>期間</th><th>狀態</th><th></th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
   <section class="view" id="settings-view" hidden>
     <div class="card">
       <h2>可調參數</h2>
@@ -576,7 +610,7 @@
   function showApp(){$('#gate').style.display='none';$('#app').hidden=false;}
 
   /** 切換分頁（問卷分析／電子報／讀者管理／參數設定）；參數設定首次進入時才載入欄位。 */
-  function switchView(name){document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!==name+'-view');document.querySelectorAll('.tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.view===name));if(name==='analytics'&&!analyticsLoaded)loadAnalytics();if(name==='readers'&&!audienceResult.loaded)searchReaders();if(name==='settings'&&!loadSettings.done)loadSettings();}
+  function switchView(name){document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!==name+'-view');document.querySelectorAll('.tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.view===name));if(name==='analytics'&&!analyticsLoaded)loadAnalytics();if(name==='readers'&&!audienceResult.loaded)searchReaders();if(name==='growth'&&!loadGrowth.done)loadGrowth();if(name==='settings'&&!loadSettings.done)loadSettings();}
 
   /** 把固定選項填入下拉選單。 */
   function fillSelect(selector,items){const el=$(selector);items.forEach(value=>{const option=document.createElement('option');option.value=value;option.textContent=value;el.appendChild(option);});}
@@ -683,6 +717,7 @@
     $('#source-create-save').onclick=createAudienceSource;
     $('#source-create-name').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();createAudienceSource();}});
     $('#reader-search-btn').onclick=()=>{audiencePage=0;selectedAudienceIds.clear();searchReaders();};$('#vip-grant-btn').onclick=grantVip;$('#grant-btn').onclick=grantCredits;$('#ledger-btn').onclick=loadLedger;$('#settings-save-btn').onclick=saveSettings;
+    $('#growth-refresh').onclick=loadGrowth;$('#growth-create').onclick=createGrowthCampaign;
     ['#reader-source','#reader-consent','#reader-account','#reader-vip','#reader-size',
       '#reader-delivery-campaign','#reader-delivery-status','#reader-delivery-from','#reader-delivery-to','#reader-delivery-min','#reader-delivery-never',
       '#reader-unlock-campaign','#reader-unlock-tag','#reader-unlock-from','#reader-unlock-to','#reader-unlock-min','#reader-unlock-never'
@@ -2079,8 +2114,54 @@
     'credit.signup_grant':['初始贈點','首次登入時發放；設 0 可關閉贈點'],
     'credit.premium_cost':['進階文章單篇點數','文章可個別覆寫，此為預設值'],
     'credit.referral_reward':['邀請成功獎勵','被邀者點確認信後發放；設 0 可關閉'],
+    'credit.referral_invitee_reward':['被邀者確認加碼','確認後發放；尚未建帳時於首次登入補發'],
+    'credit.referral_milestone_3':['3 人里程碑','開路者徽章的額外點數'],
+    'credit.referral_milestone_5':['5 人里程碑','成長推手徽章的額外點數'],
+    'credit.referral_milestone_10':['10 人里程碑','社群領航員徽章的額外點數'],
+    'referral.daily_auto_approve_limit':['每日自動核准上限','每位推薦人超過後轉人工審核'],
+    'referral.velocity_review_threshold':['10 分鐘速度門檻','達到此確認數就轉人工審核'],
     'vip.default_days':['VIP 預設效期（天）','授予 VIP 時未指定天數就用這個值']
   };
+
+  /** 載入分享漏斗、熱門文章、人工審核與活動。 */
+  async function loadGrowth(){
+    try{
+      const data=await api('/api/admin/referrals/dashboard'),f=data.funnel;
+      const root=$('#growth-kpis');root.replaceChildren();
+      [['分享點擊',f.clicks],['完成填表',f.submitted],['信箱確認',f.confirmed],['點擊→填表',f.clickToSubmitRate+'%'],['填表→確認',f.submitToConfirmRate+'%']]
+        .forEach(([label,value])=>{const box=document.createElement('div');box.className='kpi';const strong=document.createElement('strong');strong.className='kpi-value';strong.textContent=value;const span=document.createElement('span');span.className='kpi-label';span.textContent=label;box.append(span,strong);root.append(box);});
+      const articles=$('#growth-articles tbody');articles.replaceChildren();
+      data.topArticles.forEach(row=>{const tr=document.createElement('tr');tr.append(cell(row.source),cell(row.clicks),cell(row.submissions),cell(row.confirmations));articles.append(tr);});
+      const reviews=$('#growth-reviews tbody');reviews.replaceChildren();
+      if(!data.reviews.length){const tr=document.createElement('tr'),td=cell('目前沒有待審核邀請');td.colSpan=6;tr.append(td);reviews.append(tr);}
+      data.reviews.forEach(row=>{const tr=document.createElement('tr'),actions=document.createElement('td');
+        ['approve','reject'].forEach(action=>{const button=document.createElement('button');button.className=action==='approve'?'btn':'btn ghost';button.textContent=action==='approve'?'核准':'拒絕';button.onclick=()=>reviewGrowth(row.id,action);actions.append(button);});
+        tr.append(cell(formatDate(row.confirmedAt)),cell(row.invitee),cell(row.sourceSlug||'一般邀請'),cell(row.riskReasons||row.riskScore),cell(`推薦人 ${row.referrerReward}／被邀者 ${row.inviteeReward}`),actions);reviews.append(tr);});
+      const campaignBody=$('#growth-campaigns tbody');campaignBody.replaceChildren();
+      data.campaigns.forEach(item=>{const tr=document.createElement('tr'),action=document.createElement('td');
+        if(item.active){const button=document.createElement('button');button.className='btn ghost';button.textContent='停用';button.onclick=()=>deactivateGrowthCampaign(item.id);action.append(button);}
+        tr.append(cell(item.name),cell(item.articleSlug?`文章：${item.articleSlug}`:`#${item.tagSlug}`),cell('×'+item.multiplier),cell(`${formatDate(item.startsAt)} ～ ${formatDate(item.endsAt)}`),cell(item.active?'啟用':'已停用'),action);campaignBody.append(tr);});
+      loadGrowth.done=true;
+    }catch(e){if(e.message!=='401')showMsg('growth-msg','載入失敗：'+e.message,false);}
+  }
+
+  /** 執行人工核准或拒絕，要求輸入簡短備註以保留稽核脈絡。 */
+  async function reviewGrowth(id,action){
+    const note=prompt(action==='approve'?'核准備註（可留空）':'拒絕原因（建議填寫）','')??null;if(note===null)return;
+    try{await api(`/api/admin/referrals/reviews/${id}`,{method:'POST',body:JSON.stringify({action,note})});showMsg('growth-msg',action==='approve'?'已核准並發放獎勵。':'已拒絕，未發放獎勵。',true);await loadGrowth();}catch(e){if(e.message!=='401')showMsg('growth-msg','審核失敗：'+e.message,false);}
+  }
+
+  /** 建立文章或 hashtag 範圍的限時倍率活動。 */
+  async function createGrowthCampaign(){
+    const startsAt=$('#growth-start').value,end=$('#growth-end').value;
+    try{await api('/api/admin/referrals/campaigns',{method:'POST',body:JSON.stringify({name:$('#growth-name').value,articleSlug:$('#growth-article').value,tagSlug:$('#growth-tag').value,multiplier:Number($('#growth-multiplier').value),startsAt:startsAt?new Date(startsAt).toISOString():null,endsAt:end?new Date(end).toISOString():null})});showMsg('growth-msg','活動已建立。',true);await loadGrowth();}catch(e){if(e.message!=='401')showMsg('growth-msg','建立失敗：'+e.message,false);}
+  }
+
+  /** 停用活動但保留歷史。 */
+  async function deactivateGrowthCampaign(id){
+    if(!confirm('確定停用此活動？已發出的歷史獎勵不會回收。'))return;
+    try{await api(`/api/admin/referrals/campaigns/${id}/deactivate`,{method:'POST'});await loadGrowth();}catch(e){if(e.message!=='401')showMsg('growth-msg','停用失敗：'+e.message,false);}
+  }
 
   /**
    * GET /api/admin/settings 的回應快取（每個鍵為 {value,min,max}）；null 表示尚未載入。

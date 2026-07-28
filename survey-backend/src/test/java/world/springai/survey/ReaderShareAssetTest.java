@@ -26,5 +26,9 @@ class ReaderShareAssetTest {
             "不支援原生分享時必須能複製貼文");
         assertTrue(script.contains("AbortError"),
             "使用者取消原生分享不是錯誤，不應顯示失敗訊息");
+        assertTrue(script.contains("location.pathname === '/r/'"),
+            "一般邀請連結也必須記錄進分享漏斗");
+        assertTrue(script.contains("slug: match ? match[1] : null"),
+            "一般邀請點擊必須以空文章來源送出，不可偽裝成文章分享");
     }
 }

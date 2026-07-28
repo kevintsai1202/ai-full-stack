@@ -66,6 +66,31 @@ function initializeReaderShareCards() {
       showStatus(copied ? '貼文內容已複製。' : '貼文已選取，請按 Ctrl+C 複製。', copied);
     });
 
+    const storyButton = card.querySelector('[data-action="story-card"]');
+    if (storyButton && storyButton.dataset.cardUrl) {
+      storyButton.addEventListener('click', async () => {
+        try {
+          const response = await fetch(storyButton.dataset.cardUrl);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const blob = await response.blob();
+          const file = new File([blob], 'springai-story.png', { type: 'image/png' });
+          if (navigator.share && navigator.canShare?.({ files: [file] })) {
+            await navigator.share({ files: [file], title, text: postInput.value });
+            showStatus('已開啟分享選單，選擇 Instagram 限時動態即可。');
+            return;
+          }
+          const anchor = document.createElement('a');
+          anchor.href = URL.createObjectURL(blob);
+          anchor.download = file.name;
+          anchor.click();
+          URL.revokeObjectURL(anchor.href);
+          showStatus('限時動態圖卡已下載。');
+        } catch (error) {
+          if (error.name !== 'AbortError') showStatus('圖卡暫時無法下載，請稍後再試。', false);
+        }
+      });
+    }
+
     card.querySelector('[data-platform="facebook"]').addEventListener('click', () => {
       window.open(
         `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
@@ -104,4 +129,54 @@ function initializeReaderShareCards() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', initializeReaderShareCards);
+/** 記錄帶推薦碼的一般邀請或文章落地點擊；隨機代碼不含 email、IP 或裝置指紋。 */
+async function trackReferralLanding() {
+  const params = new URLSearchParams(location.search);
+  const ref = params.get('ref');
+  const match = location.pathname.match(/^\/r\/news\/([a-z0-9][a-z0-9-]{0,99})$/);
+  const isInviteLanding = location.pathname === '/r/' || location.pathname === '/r';
+  if (!ref || (!match && !isInviteLanding)) return;
+  let visitorKey = localStorage.getItem('springai_ref_visitor');
+  if (!visitorKey) {
+    visitorKey = crypto.randomUUID().replaceAll('-', '');
+    localStorage.setItem('springai_ref_visitor', visitorKey);
+  }
+  try {
+    await fetch('/api/referrals/click', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ref, slug: match ? match[1] : null, visitorKey }),
+      keepalive: true
+    });
+  } catch (error) {
+    // 分析資料不可阻斷閱讀；離線或追蹤被封鎖時安靜略過。
+  }
+}
+
+/** 讀到文末才顯示低干擾提示；可關閉，點擊後平滑捲到完整分享工具。 */
+function initializeCompletionShare() {
+  const sentinel = document.querySelector('#reading-complete-sentinel');
+  const prompt = document.querySelector('#completion-share');
+  const shareCard = document.querySelector('.article-share');
+  if (!sentinel || !prompt || !shareCard || !('IntersectionObserver' in window)) return;
+  const observer = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) {
+      prompt.hidden = false;
+      observer.disconnect();
+    }
+  }, { threshold: 0.5 });
+  observer.observe(sentinel);
+  prompt.querySelector('[data-action="open-share"]').addEventListener('click', () => {
+    prompt.hidden = true;
+    shareCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  prompt.querySelector('.completion-close').addEventListener('click', () => {
+    prompt.hidden = true;
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initializeReaderShareCards();
+  trackReferralLanding();
+  initializeCompletionShare();
+});

@@ -97,6 +97,20 @@ class ReaderEntryHostFilterTest {
         assertNull(getChain.getRequest());
     }
 
+    /** 分享點擊只放行精準 POST；GET 不可藉此擴大讀者網域 API 面。 */
+    @Test
+    void readerHostAllowsOnlyPostForReferralClick() throws Exception {
+        MockFilterChain postChain = new MockFilterChain();
+        assertEquals(200, run(READER_HOST, READER_HOST, "POST",
+            "/api/referrals/click", postChain).getStatus());
+        assertNotNull(postChain.getRequest());
+
+        MockFilterChain getChain = new MockFilterChain();
+        assertEquals(404, run(READER_HOST, READER_HOST, "GET",
+            "/api/referrals/click", getChain).getStatus());
+        assertNull(getChain.getRequest());
+    }
+
     /** Admin 與問卷統計不可透過讀者網域開啟。 */
     @Test
     void readerHostBlocksNonReaderFeatures() throws Exception {

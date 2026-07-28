@@ -33,6 +33,12 @@ public class ReaderSiteLinks {
         return baseUrl + "/r/news/" + slug;
     }
 
+    /** 組出文章社群預覽 PNG。 */
+    public String shareCard(String slug, String layout) {
+        return baseUrl + "/r/share-card/" + slug + ".png?layout="
+            + URLEncoder.encode(layout, StandardCharsets.UTF_8);
+    }
+
     /** 組出歷史文章入口。 */
     public String archive() {
         return baseUrl + "/r/archive";

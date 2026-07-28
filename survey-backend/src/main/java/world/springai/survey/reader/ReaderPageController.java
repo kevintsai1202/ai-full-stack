@@ -17,6 +17,7 @@ import world.springai.survey.newsletter.ContentSplitter;
 import world.springai.survey.newsletter.MarkdownRenderer;
 import world.springai.survey.newsletter.PublicCampaignTagService;
 import world.springai.survey.media.MediaAssetService;
+import world.springai.survey.ReaderSiteLinks;
 
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -51,6 +52,8 @@ public class ReaderPageController {
     private final HtmlTemplate htmlTemplate;
     private final PublicCampaignTagService campaignTagService;
     private final MediaAssetService mediaAssetService;
+    /** 社群 meta 與圖卡使用的正式讀者網域。 */
+    private final ReaderSiteLinks readerSiteLinks;
 
     /**
      * 注入內容、授權與渲染所需的服務。
@@ -68,7 +71,8 @@ public class ReaderPageController {
                                ReaderContext readerContext,
                                HtmlTemplate htmlTemplate,
                                ObjectProvider<PublicCampaignTagService> campaignTagServiceProvider,
-                               MediaAssetService mediaAssetService) {
+                               MediaAssetService mediaAssetService,
+                               ObjectProvider<ReaderSiteLinks> readerSiteLinksProvider) {
         this.campaignRepository = campaignRepository;
         this.markdownRenderer = markdownRenderer;
         this.contentSplitter = contentSplitter;
@@ -78,6 +82,7 @@ public class ReaderPageController {
         this.htmlTemplate = htmlTemplate;
         this.campaignTagService = campaignTagServiceProvider.getIfAvailable();
         this.mediaAssetService = mediaAssetService;
+        this.readerSiteLinks = readerSiteLinksProvider.getIfAvailable();
     }
 
     /** 舊單元測試相容建構式；沒有標籤服務時維持原本列表行為。 */
@@ -97,6 +102,7 @@ public class ReaderPageController {
         this.htmlTemplate = htmlTemplate;
         this.campaignTagService = null;
         this.mediaAssetService = null;
+        this.readerSiteLinks = null;
     }
 
     /** 歷史內容列表：只列已發布者，登入者會看到自己的解鎖狀態 */
@@ -181,6 +187,7 @@ public class ReaderPageController {
         Map<String, String> vars = new HashMap<>();
         vars.put("<!--PAGE_TITLE-->", HtmlTemplate.escapeHtml(campaign.getSubject()) + "｜凱文大叔的電子報");
         vars.put("<!--PAGE_DESCRIPTION-->", HtmlTemplate.escapeHtml(summaryOf(split.freeMarkdown())));
+        vars.put("<!--SOCIAL_META-->", renderSocialMeta(campaign, summaryOf(split.freeMarkdown())));
         vars.put("<!--ARTICLE_TITLE-->", HtmlTemplate.escapeHtml(campaign.getSubject()));
         vars.put("<!--ARTICLE_META-->", renderMeta(campaign));
         vars.put("<!--ARTICLE_TAGS-->", renderArticleTags(campaign.getId()));
@@ -189,6 +196,8 @@ public class ReaderPageController {
         vars.put("<!--NAV_LINKS-->", ReaderNav.links(current.isPresent()));
         vars.put("<!--SHARE_URL-->", articleSharePath(slug, reader));
         vars.put("<!--SHARE_NOTE-->", articleShareNote(slug, reader));
+        vars.put("<!--STORY_CARD_URL-->", readerSiteLinks == null ? ""
+            : HtmlTemplate.escapeHtml(readerSiteLinks.shareCard(slug, "story")));
         vars.put("<!--SUBSCRIBE_CTA-->", renderSharedArticleSubscribeCta(slug, ref, current.isPresent()));
         // 只有「未取得全文且該文章真的有受限區」時才需要 paywall 區塊
         boolean gateRendered = !full && split.hasGate();
@@ -237,6 +246,25 @@ public class ReaderPageController {
         return "這是你的專屬文章連結。朋友從連結訂閱並完成信箱確認後，邀請點數會自動入帳。";
     }
 
+    /** Open Graph 使用絕對 URL 與 1200×630 PNG，讓社群抓取器不依賴目前 Host。 */
+    private String renderSocialMeta(Campaign campaign, String description) {
+        if (readerSiteLinks == null) return "";
+        String title = HtmlTemplate.escapeHtml(campaign.getSubject());
+        String desc = HtmlTemplate.escapeHtml(description);
+        String url = HtmlTemplate.escapeHtml(readerSiteLinks.article(campaign.getSlug()));
+        String image = HtmlTemplate.escapeHtml(readerSiteLinks.shareCard(campaign.getSlug(), "og"));
+        return """
+            <meta property="og:type" content="article">
+            <meta property="og:title" content="%s">
+            <meta property="og:description" content="%s">
+            <meta property="og:url" content="%s">
+            <meta property="og:image" content="%s">
+            <meta property="og:image:width" content="1200">
+            <meta property="og:image:height" content="630">
+            <meta name="twitter:card" content="summary_large_image">
+            """.formatted(title, desc, url, image);
+    }
+
     /**
      * 被分享連結帶進來的匿名訪客會看到可完成歸因的訂閱入口。
      *
@@ -253,7 +281,7 @@ public class ReaderPageController {
             + java.net.URLEncoder.encode(slug, java.nio.charset.StandardCharsets.UTF_8);
         return """
             <aside class="share-subscribe-cta">
-              <div><strong>喜歡這篇內容？</strong><span>訂閱後，新文章會直接寄到你的信箱。</span></div>
+              <div><strong>還沒訂閱或建立帳號？</strong><span>免費訂閱後，新文章會寄到信箱，之後可用同一個 Email 登入。</span></div>
               <a class="btn" href="%s">免費訂閱</a>
             </aside>
             """.formatted(HtmlTemplate.escapeHtml(href));

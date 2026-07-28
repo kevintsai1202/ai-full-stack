@@ -19,7 +19,8 @@ import java.io.IOException;
  * 綁成同一個 app 的第二個網域，由本 filter 依 Host 判斷：來自讀者入口網域的
  * 根路徑請求導向 {@code /r/}，問卷網域則完全不受影響。</p>
  *
- * <p><b>讀者 Host 採允許清單</b>：只放行 {@code /r/**}、{@code /api/reader/**}
+ * <p><b>讀者 Host 採允許清單</b>：只放行 {@code /r/**}、{@code /api/reader/**}、
+ * 分享點擊的 {@code POST /api/referrals/click}
  * 與首頁訂閱所需的 {@code POST /api/survey}。Admin、問卷統計與其他營運端點
  * 即使部署在同一個 app，也不可經由讀者網域存取。</p>
  *
@@ -91,6 +92,7 @@ public class ReaderEntryHostFilter extends OncePerRequestFilter {
                 || path.equals("/api/reader") || path.startsWith("/api/reader/")) {
             return true;
         }
-        return "POST".equalsIgnoreCase(request.getMethod()) && "/api/survey".equals(path);
+        return "POST".equalsIgnoreCase(request.getMethod())
+            && ("/api/survey".equals(path) || "/api/referrals/click".equals(path));
     }
 }

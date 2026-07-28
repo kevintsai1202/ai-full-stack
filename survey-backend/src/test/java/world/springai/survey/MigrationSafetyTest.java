@@ -69,21 +69,21 @@ class MigrationSafetyTest {
     private static final String TEST_URL = "jdbc:postgresql://" + DB_HOST + ":" + DB_PORT + "/" + TEST_DB;
 
     /**
-     * 既有資料的指紋：涵蓋整列（排除本次新增的 last_engaged_at 欄位）。
+     * 既有資料的指紋：涵蓋整列（排除新增的 last_engaged_at 與 version 欄位）。
      *
-     * <p>用 {@code to_jsonb(t) - 'last_engaged_at'} 而非列出個別欄位，是為了讓這道防線
+     * <p>用 {@code to_jsonb(t) - 'last_engaged_at' - 'version'} 而非列出個別欄位，是為了讓這道防線
      * 自動涵蓋所有既有欄位（name／role／experience／frontend_experience／interest／
      * budget／utm／answers／source／created_at…），不會因為漏列某個欄位而讓誤改寫
      * 的資料矇混過關。jsonb 序列化的 key 順序是決定性的，指紋才會穩定。</p>
      *
-     * <p>減掉 {@code last_engaged_at} 是因為它是 V8 本次新增的欄位，migration 後
+     * <p>減掉 {@code last_engaged_at} 是因為它是 V8 新增的欄位，migration 後
      * 必然從 NULL 被 backfill 成非 NULL（見 confirmedSubscribersAreBackfilled），
-     * 屬於預期中的變動，不應被既有資料指紋擋下。<b>未來若再新增欄位，一律在
+     * 屬於預期中的變動；{@code version} 則是 V15 的樂觀鎖欄位。兩者不應被既有資料指紋擋下。<b>未來若再新增欄位，一律在
      * 減號後面補上欄名</b>（例如 {@code to_jsonb(t) - 'last_engaged_at' - 'new_col'}），
      * 這樣既有欄位才會持續全數在防線內，不需要每次手動加回歸斷言。</p>
      */
     private static final String CHECKSUM_SQL = """
-        SELECT md5(string_agg((to_jsonb(t) - 'last_engaged_at')::text, ',' ORDER BY t.id))
+        SELECT md5(string_agg((to_jsonb(t) - 'last_engaged_at' - 'version')::text, ',' ORDER BY t.id))
           FROM survey_response t
         """;
 

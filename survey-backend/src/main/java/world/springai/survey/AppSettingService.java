@@ -35,6 +35,18 @@ public class AppSettingService {
     public static final String CREDIT_PREMIUM_COST = "credit.premium_cost";
     /** 邀請成功的獎勵點數 */
     public static final String CREDIT_REFERRAL_REWARD = "credit.referral_reward";
+    /** 被邀者完成確認後的加碼點數 */
+    public static final String CREDIT_REFERRAL_INVITEE_REWARD = "credit.referral_invitee_reward";
+    /** 3 人里程碑獎勵 */
+    public static final String CREDIT_REFERRAL_MILESTONE_3 = "credit.referral_milestone_3";
+    /** 5 人里程碑獎勵 */
+    public static final String CREDIT_REFERRAL_MILESTONE_5 = "credit.referral_milestone_5";
+    /** 10 人里程碑獎勵 */
+    public static final String CREDIT_REFERRAL_MILESTONE_10 = "credit.referral_milestone_10";
+    /** 每位推薦人每日可自動核准的確認人數 */
+    public static final String REFERRAL_DAILY_AUTO_APPROVE_LIMIT = "referral.daily_auto_approve_limit";
+    /** 十分鐘內達到此確認數即轉人工審核 */
+    public static final String REFERRAL_VELOCITY_REVIEW_THRESHOLD = "referral.velocity_review_threshold";
     /** VIP 預設效期天數 */
     public static final String VIP_DEFAULT_DAYS = "vip.default_days";
 

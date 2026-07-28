@@ -96,22 +96,34 @@ public class AdminSettingController {
      * 這個欄位，與 {@link #DISPLAY_DEFAULTS}、{@link #ordered()} 的 keySet 互相釘住
      * （三者理應描述同一批可調參數，只往其中一個加鍵會讓另外兩個悄悄漏掉）。</p>
      */
-    static final Map<String, Bound> ADJUSTABLE = Map.of(
-        AppSettingService.CREDIT_SIGNUP_GRANT, new Bound(0, CREDIT_MAX),
-        AppSettingService.CREDIT_PREMIUM_COST, new Bound(1, CREDIT_MAX),
-        AppSettingService.CREDIT_REFERRAL_REWARD, new Bound(0, CREDIT_MAX),
-        AppSettingService.VIP_DEFAULT_DAYS, new Bound(1, VIP_MAX_DAYS));
+    static final Map<String, Bound> ADJUSTABLE = Map.ofEntries(
+        Map.entry(AppSettingService.CREDIT_SIGNUP_GRANT, new Bound(0, CREDIT_MAX)),
+        Map.entry(AppSettingService.CREDIT_PREMIUM_COST, new Bound(1, CREDIT_MAX)),
+        Map.entry(AppSettingService.CREDIT_REFERRAL_REWARD, new Bound(0, CREDIT_MAX)),
+        Map.entry(AppSettingService.CREDIT_REFERRAL_INVITEE_REWARD, new Bound(0, CREDIT_MAX)),
+        Map.entry(AppSettingService.CREDIT_REFERRAL_MILESTONE_3, new Bound(0, CREDIT_MAX)),
+        Map.entry(AppSettingService.CREDIT_REFERRAL_MILESTONE_5, new Bound(0, CREDIT_MAX)),
+        Map.entry(AppSettingService.CREDIT_REFERRAL_MILESTONE_10, new Bound(0, CREDIT_MAX)),
+        Map.entry(AppSettingService.REFERRAL_DAILY_AUTO_APPROVE_LIMIT, new Bound(1, 100)),
+        Map.entry(AppSettingService.REFERRAL_VELOCITY_REVIEW_THRESHOLD, new Bound(2, 50)),
+        Map.entry(AppSettingService.VIP_DEFAULT_DAYS, new Bound(1, VIP_MAX_DAYS)));
 
     /**
      * 各參數在查無設定時顯示的預設值（與 {@code CreditPolicy} 的後備值一致）。
      *
      * <p>刻意不加 {@code private}：理由與 {@link #ADJUSTABLE} 相同。</p>
      */
-    static final Map<String, Integer> DISPLAY_DEFAULTS = Map.of(
-        AppSettingService.CREDIT_SIGNUP_GRANT, 300,
-        AppSettingService.CREDIT_PREMIUM_COST, 10,
-        AppSettingService.CREDIT_REFERRAL_REWARD, 100,
-        AppSettingService.VIP_DEFAULT_DAYS, 365);
+    static final Map<String, Integer> DISPLAY_DEFAULTS = Map.ofEntries(
+        Map.entry(AppSettingService.CREDIT_SIGNUP_GRANT, 300),
+        Map.entry(AppSettingService.CREDIT_PREMIUM_COST, 10),
+        Map.entry(AppSettingService.CREDIT_REFERRAL_REWARD, 100),
+        Map.entry(AppSettingService.CREDIT_REFERRAL_INVITEE_REWARD, 20),
+        Map.entry(AppSettingService.CREDIT_REFERRAL_MILESTONE_3, 50),
+        Map.entry(AppSettingService.CREDIT_REFERRAL_MILESTONE_5, 100),
+        Map.entry(AppSettingService.CREDIT_REFERRAL_MILESTONE_10, 300),
+        Map.entry(AppSettingService.REFERRAL_DAILY_AUTO_APPROVE_LIMIT, 10),
+        Map.entry(AppSettingService.REFERRAL_VELOCITY_REVIEW_THRESHOLD, 3),
+        Map.entry(AppSettingService.VIP_DEFAULT_DAYS, 365));
 
     private final AdminKeyGuard guard;
     private final AppSettingService settings;
@@ -220,6 +232,12 @@ public class AdminSettingController {
             AppSettingService.CREDIT_SIGNUP_GRANT,
             AppSettingService.CREDIT_PREMIUM_COST,
             AppSettingService.CREDIT_REFERRAL_REWARD,
+            AppSettingService.CREDIT_REFERRAL_INVITEE_REWARD,
+            AppSettingService.CREDIT_REFERRAL_MILESTONE_3,
+            AppSettingService.CREDIT_REFERRAL_MILESTONE_5,
+            AppSettingService.CREDIT_REFERRAL_MILESTONE_10,
+            AppSettingService.REFERRAL_DAILY_AUTO_APPROVE_LIMIT,
+            AppSettingService.REFERRAL_VELOCITY_REVIEW_THRESHOLD,
             AppSettingService.VIP_DEFAULT_DAYS);
     }
 }

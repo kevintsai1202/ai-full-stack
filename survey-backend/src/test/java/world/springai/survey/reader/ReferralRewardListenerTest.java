@@ -53,6 +53,8 @@ class ReferralRewardListenerTest {
 
     /** 把真正的發放邏輯換成 mock：本測試只關心「監聽器有沒有被呼叫」 */
     @MockBean ReferralService referralService;
+    /** 正式監聽器優先走新版成長引擎，本測試同樣只驗證事件接線。 */
+    @MockBean ReferralGrowthService growthService;
 
     /**
      * 發布事件後，監聽器必須真的被呼叫。
@@ -63,12 +65,12 @@ class ReferralRewardListenerTest {
      */
     @Test
     void listenerIsActuallyInvokedByPublishedEvent() {
-        when(referralService.rewardFor(anyString()))
-            .thenReturn(ReferralService.RewardOutcome.NO_REFERRER);
+        when(growthService.confirmAndReward(anyString()))
+            .thenReturn(ReferralGrowthService.Outcome.NO_REFERRER);
 
         publisher.publishEvent(new SubscriptionConfirmedEvent("invitee@example.com"));
 
-        verify(referralService).rewardFor("invitee@example.com");
+        verify(growthService).confirmAndReward("invitee@example.com");
     }
 
     /**
@@ -79,13 +81,13 @@ class ReferralRewardListenerTest {
      */
     @Test
     void listenerSwallowsExceptionsSoPublisherIsUnaffected() {
-        when(referralService.rewardFor(anyString()))
+        when(growthService.confirmAndReward(anyString()))
             .thenThrow(new RuntimeException("模擬帳本寫入失敗"));
 
         // 不應拋出：監聽器內部必須自行吞掉
         publisher.publishEvent(new SubscriptionConfirmedEvent("invitee@example.com"));
 
-        verify(referralService).rewardFor("invitee@example.com");
+        verify(growthService).confirmAndReward("invitee@example.com");
     }
 
     /**
@@ -110,7 +112,7 @@ class ReferralRewardListenerTest {
      */
     @Test
     void listenerTreatsUniqueViolationAsAlreadyRewarded() {
-        when(referralService.rewardFor(anyString()))
+        when(growthService.confirmAndReward(anyString()))
             .thenThrow(new DataIntegrityViolationException("uq_credit_txn_referral_note"));
 
         // 掛一個 ListAppender 到監聽器自己的 logger，攔下本事件產生的所有紀錄。
@@ -128,7 +130,7 @@ class ReferralRewardListenerTest {
             appender.stop();
         }
 
-        verify(referralService).rewardFor("invitee@example.com");
+        verify(growthService).confirmAndReward("invitee@example.com");
 
         List<ILoggingEvent> events = appender.list;
         assertTrue(events.stream().noneMatch(e -> e.getLevel() == Level.ERROR),
@@ -137,8 +139,7 @@ class ReferralRewardListenerTest {
                 + "實際紀錄：" + describe(events));
         assertTrue(events.stream().anyMatch(
                 e -> e.getLevel() == Level.INFO
-                    && e.getFormattedMessage().contains(
-                        ReferralService.RewardOutcome.ALREADY_REWARDED.name())),
+                    && e.getFormattedMessage().contains("已處理")),
             "沒有任何一行 INFO 說明這是「已發過」：冪等命中若完全不留痕跡，"
                 + "客訴時無法分辨「發過了」與「根本沒收到事件」。實際紀錄：" + describe(events));
     }

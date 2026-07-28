@@ -24,6 +24,10 @@ public class CreditTxn {
     public static final String REASON_SIGNUP_GRANT = "SIGNUP_GRANT";
     /** 邀請成功獎勵（被邀者點確認信後才發） */
     public static final String REASON_REFERRAL = "REFERRAL";
+    /** 被邀者完成確認後的雙邊加碼。 */
+    public static final String REASON_REFERRAL_INVITEE = "REFERRAL_INVITEE";
+    /** 推薦人達成 3／5／10 人里程碑的額外獎勵。 */
+    public static final String REASON_REFERRAL_MILESTONE = "REFERRAL_MILESTONE";
     /** 閱讀進階文章扣點 */
     public static final String REASON_READ = "READ";
     /** 後台手動加點（如贈與上課學員） */

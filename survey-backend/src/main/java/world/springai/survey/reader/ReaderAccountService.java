@@ -40,16 +40,29 @@ public class ReaderAccountService {
     private final CreditTxnRepository creditTxnRepository;
     private final SurveyResponseRepository surveyResponseRepository;
     private final CreditPolicy creditPolicy;
+    /** 已確認邀請在首次建帳時補發被邀者加碼；舊隔離測試可不注入。 */
+    private final ReferralGrowthService referralGrowthService;
 
     /** 注入讀者、帳本、名單中心與點數參數唯一來源 */
     public ReaderAccountService(ReaderRepository readerRepository,
                                CreditTxnRepository creditTxnRepository,
                                SurveyResponseRepository surveyResponseRepository,
                                CreditPolicy creditPolicy) {
+        this(readerRepository, creditTxnRepository, surveyResponseRepository, creditPolicy, null);
+    }
+
+    /** 正式環境建構子，加入雙邊獎勵補發服務。 */
+    @org.springframework.beans.factory.annotation.Autowired
+    public ReaderAccountService(ReaderRepository readerRepository,
+                               CreditTxnRepository creditTxnRepository,
+                               SurveyResponseRepository surveyResponseRepository,
+                               CreditPolicy creditPolicy,
+                               ReferralGrowthService referralGrowthService) {
         this.readerRepository = readerRepository;
         this.creditTxnRepository = creditTxnRepository;
         this.surveyResponseRepository = surveyResponseRepository;
         this.creditPolicy = creditPolicy;
+        this.referralGrowthService = referralGrowthService;
     }
 
     /**
@@ -134,6 +147,13 @@ public class ReaderAccountService {
             creditTxnRepository.save(new CreditTxn(
                 reader.getId(), grant, CreditTxn.REASON_SIGNUP_GRANT, null, "首次登入初始贈點"));
             reader.setCredits(grant);
+        }
+
+        // 被邀者通常在確認訂閱時還沒有 reader 列；首次登入建帳後立即補發，
+        // 並由 referral_conversion 與部分唯一索引保證只發一次。
+        if (referralGrowthService != null) {
+            int inviteeBonus = referralGrowthService.grantPendingInviteeReward(reader);
+            reader.setCredits(reader.getCredits() + inviteeBonus);
         }
 
         log.info("建立讀者帳戶 {} 並發放初始贈點 {} 點", email, grant);

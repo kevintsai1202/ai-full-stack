@@ -77,10 +77,21 @@ public class ReferralRewardListener {
     private static final Logger log = LoggerFactory.getLogger(ReferralRewardListener.class);
 
     private final ReferralService referralService;
+    /** 新版成長引擎；舊單元測試使用單參數建構子時為 null。 */
+    private final ReferralGrowthService growthService;
 
     /** 注入獎勵發放服務 */
     public ReferralRewardListener(ReferralService referralService) {
         this.referralService = referralService;
+        this.growthService = null;
+    }
+
+    /** 正式環境注入新版成長引擎，保留舊服務供相容測試與補救工具使用。 */
+    @org.springframework.beans.factory.annotation.Autowired
+    public ReferralRewardListener(ReferralService referralService,
+                                  ReferralGrowthService growthService) {
+        this.referralService = referralService;
+        this.growthService = growthService;
     }
 
     /**
@@ -102,6 +113,22 @@ public class ReferralRewardListener {
      */
     @EventListener
     public void onSubscriptionConfirmed(SubscriptionConfirmedEvent event) {
+        if (growthService != null) {
+            try {
+                ReferralGrowthService.Outcome outcome = growthService.confirmAndReward(event.email());
+                if (outcome != ReferralGrowthService.Outcome.NO_REFERRER) {
+                    log.info("確認訂閱後的成長獎勵結果：{}（{}）",
+                        outcome, ReferralGrowthService.maskEmail(event.email()));
+                }
+            } catch (DataIntegrityViolationException e) {
+                log.info("確認訂閱後的成長獎勵已處理（{}）",
+                    ReferralGrowthService.maskEmail(event.email()));
+            } catch (Exception e) {
+                log.error("成長獎勵發放失敗（確認訂閱已完成，可由後台審核補發）：{}",
+                    ReferralGrowthService.maskEmail(event.email()), e);
+            }
+            return;
+        }
         try {
             ReferralService.RewardOutcome outcome = referralService.rewardFor(event.email());
             // NO_REFERRER 是絕大多數訂閱者的情形，不值得每次都寫一行 log

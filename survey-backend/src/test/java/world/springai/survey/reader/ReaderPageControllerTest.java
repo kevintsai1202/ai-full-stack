@@ -372,6 +372,8 @@ class ReaderPageControllerTest {
         assertTrue(body.contains("data-platform=\"facebook\""));
         assertTrue(body.contains("data-platform=\"instagram\""));
         assertTrue(body.contains("data-platform=\"threads\""));
+        assertFalse(body.contains("class=\"share-subscribe-cta\""),
+            "已登入讀者不應看到重複訂閱入口");
     }
 
     /** 從專屬文章連結進站的匿名訪客，訂閱 CTA 必須把推薦碼與文章來源帶到訂閱頁。 */
@@ -388,6 +390,15 @@ class ReaderPageControllerTest {
 
         assertTrue(body.contains("/r/?ref=CODE1234&amp;share=test-article"),
             "訂閱 CTA 必須保留推薦碼與文章 slug，否則轉換後無法發點或分析來源");
+        int firstCta = body.indexOf("class=\"share-subscribe-cta\"");
+        int lastCta = body.lastIndexOf("class=\"share-subscribe-cta\"");
+        int articleBody = body.indexOf("class=\"article-body\"");
+        assertTrue(firstCta >= 0 && firstCta < articleBody,
+            "分享連結訪客必須在文章開頭就看到訂閱入口，不能只藏在長文底部");
+        assertTrue(lastCta > articleBody && lastCta != firstCta,
+            "文章底部仍應保留第二次訂閱機會");
+        assertTrue(body.contains("還沒訂閱或建立帳號？"),
+            "CTA 應明確告知未建帳號的訪客可以先免費訂閱");
         assertFalse(body.contains("data-share-url=\"/r/news/test-article?ref=CODE1234\""),
             "匿名訪客不應把原推薦人的專屬連結當成自己的分享連結");
     }

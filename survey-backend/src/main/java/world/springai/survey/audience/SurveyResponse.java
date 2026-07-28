@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import java.time.OffsetDateTime;
@@ -19,6 +20,10 @@ public class SurveyResponse {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    /** 樂觀鎖版本，避免日後整列更新靜默覆蓋同意狀態。 */
+    @Version
+    @Column(nullable = false)
+    private long version;
     @Column(nullable = false)
     private String email;
     private String name;
@@ -54,6 +59,7 @@ public class SurveyResponse {
     private OffsetDateTime createdAt;
 
     public Long getId() { return id; }
+    public long getVersion() { return version; }
     public void setId(Long id) { this.id = id; }
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }

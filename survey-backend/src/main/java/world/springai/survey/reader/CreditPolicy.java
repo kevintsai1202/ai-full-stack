@@ -28,6 +28,8 @@ public class CreditPolicy {
     static final int DEFAULT_PREMIUM_COST = 10;
     /** 邀請成功獎勵的後備值 */
     static final int DEFAULT_REFERRAL_REWARD = 100;
+    /** 被邀者確認加碼的後備值 */
+    static final int DEFAULT_INVITEE_REWARD = 20;
     /** VIP 預設效期天數的後備值 */
     static final int DEFAULT_VIP_DAYS = 365;
 
@@ -59,6 +61,41 @@ public class CreditPolicy {
     public int referralReward() {
         return Math.max(0, appSettingService.getInt(
             AppSettingService.CREDIT_REFERRAL_REWARD, DEFAULT_REFERRAL_REWARD));
+    }
+
+    /** 被邀者完成信箱確認後的加碼；0 可關閉雙邊獎勵。 */
+    public int referralInviteeReward() {
+        return Math.max(0, appSettingService.getInt(
+            AppSettingService.CREDIT_REFERRAL_INVITEE_REWARD, DEFAULT_INVITEE_REWARD));
+    }
+
+    /** 指定里程碑的額外點數；未知里程碑不發點。 */
+    public int referralMilestoneReward(int milestone) {
+        String key = switch (milestone) {
+            case 3 -> AppSettingService.CREDIT_REFERRAL_MILESTONE_3;
+            case 5 -> AppSettingService.CREDIT_REFERRAL_MILESTONE_5;
+            case 10 -> AppSettingService.CREDIT_REFERRAL_MILESTONE_10;
+            default -> null;
+        };
+        int fallback = switch (milestone) {
+            case 3 -> 50;
+            case 5 -> 100;
+            case 10 -> 300;
+            default -> 0;
+        };
+        return key == null ? 0 : Math.max(0, appSettingService.getInt(key, fallback));
+    }
+
+    /** 每日自動核准上限，至少 1 人，避免錯誤設定讓所有邀請停擺。 */
+    public int referralDailyLimit() {
+        return Math.max(1, appSettingService.getInt(
+            AppSettingService.REFERRAL_DAILY_AUTO_APPROVE_LIMIT, 10));
+    }
+
+    /** 十分鐘速度審核門檻，至少 2 人。 */
+    public int referralVelocityThreshold() {
+        return Math.max(2, appSettingService.getInt(
+            AppSettingService.REFERRAL_VELOCITY_REVIEW_THRESHOLD, 3));
     }
 
     /** VIP 預設效期天數；永遠 ≥ 1，否則後台授予 VIP 後會立即過期 */
