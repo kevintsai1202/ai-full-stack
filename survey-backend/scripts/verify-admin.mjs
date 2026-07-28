@@ -94,21 +94,53 @@ try {
   }
   console.log('OK 分隔線與付費牆插入真正換行');
 
-  // 7. 撰寫 + 付費牆預覽 → iframe 應顯示免費區、分界與付費內容預覽
+  // 7. 同類格式群組：H2 與 Java fenced code 都能在目前選取範圍正確插入
+  await page.fill('#markdown', '段落標題');
+  await page.locator('.format-group').filter({ hasText: '標題 H' }).locator('summary').click();
+  await page.getByRole('button', { name: 'H2　段落標題', exact: true }).click();
+  if (await page.inputValue('#markdown') !== '## 段落標題') fail('H2 群組插入格式錯誤');
+  await page.fill('#markdown', 'System.out.println("Hello");');
+  await page.locator('#markdown').evaluate((editor) => editor.setSelectionRange(0, editor.value.length));
+  await page.locator('.format-group').filter({ hasText: '程式碼' }).locator('summary').click();
+  await page.getByRole('button', { name: 'Java 區塊', exact: true }).click();
+  const codeMarkdown = await page.inputValue('#markdown');
+  if (codeMarkdown !== '```java\nSystem.out.println("Hello");\n```\n\n') {
+    fail(`Java 程式碼插入格式錯誤：${JSON.stringify(codeMarkdown)}`);
+  }
+  console.log('OK H1–H3 與多語言程式碼群組可操作');
+
+  // 8. 預覽框要比舊版高且可調整，避免只能在 360px 小視窗內反覆捲動
+  const previewStyle = await page.locator('#preview').evaluate((frame) => {
+    const style = getComputedStyle(frame);
+    return { minHeight: parseFloat(style.minHeight), resize: style.resize };
+  });
+  if (previewStyle.minHeight < 620 || previewStyle.resize !== 'vertical') {
+    fail(`預覽尺寸不符：${JSON.stringify(previewStyle)}`);
+  }
+  console.log('OK 預覽高度至少 620px 並可垂直拉伸');
+
+  // 9. 撰寫 + 付費牆 + 中繼資料預覽：封面／hashtag／圖片限制都要進入 iframe
   await page.fill('#subject', '驗證用主旨');
-  await page.fill('#markdown', '# Hello\n\n免費內容\n\n<!--paywall-->\n\n付費內容');
+  await page.selectOption('#cover-emoji', '🚀');
+  const firstTag = page.locator('#campaign-tag-options input').first();
+  if (await firstTag.count()) await firstTag.check();
+  await page.fill('#markdown',
+    '# Hello\n\n![大圖](https://example.com/large.png)\n\n免費內容\n\n<!--paywall-->\n\n付費內容');
   await page.click('#preview-btn');
   await page.waitForFunction(() => {
     const f = document.querySelector('#preview');
     return f && f.srcdoc
       && f.srcdoc.includes('Hello')
+      && f.srcdoc.includes('🚀')
+      && f.srcdoc.includes('文章 Hashtag')
+      && f.srcdoc.includes('max-width:100%')
       && f.srcdoc.includes('付費牆分界')
       && f.srcdoc.includes('付費內容預覽')
       && !f.srcdoc.includes('<!--paywall-->');
   }, null, { timeout: 15000 });
-  console.log('OK 付費牆預覽渲染成功');
+  console.log('OK 封面、Hashtag、響應式圖片與付費牆預覽渲染成功');
 
-  // 8. 回到分析頁並截圖留存
+  // 10. 回到分析頁並截圖留存
   await page.click('#tab-analytics');
   await mkdir('output/playwright', { recursive: true });
   await page.screenshot({ path: 'output/playwright/survey-admin-verify.png', fullPage: true });

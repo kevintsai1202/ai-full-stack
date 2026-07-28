@@ -73,11 +73,13 @@ public class AdminCampaignController {
         this.metadataService = null;
     }
 
-    /** 預覽用請求：主旨與 markdown 內文 */
-    public record PreviewRequest(String subject, String markdown) {}
+    /** 預覽用請求：主旨、markdown 與文章封面／hashtag。 */
+    public record PreviewRequest(String subject, String markdown, String coverEmoji,
+                                 List<String> tags, Long coverMediaId) {}
 
-    /** 測試寄送請求：主旨、markdown 內文、目標信箱 */
-    public record TestRequest(String subject, String markdown, String to) {}
+    /** 測試寄送請求：主旨、markdown、目標信箱與文章封面／hashtag。 */
+    public record TestRequest(String subject, String markdown, String to, String coverEmoji,
+                              List<String> tags, Long coverMediaId) {}
 
     /** 收件人篩選：保留舊 role/interest，並支援動態條件或保存分眾 ID。 */
     public record Filter(
@@ -150,7 +152,12 @@ public class AdminCampaignController {
             @RequestHeader(value = KEY_HEADER, required = false) String key,
             @RequestBody PreviewRequest req) {
         guard.verify(key);
-        return Map.of("html", campaignService.preview(req.subject(), req.markdown()));
+        if (metadataService == null) {
+            return Map.of("html", campaignService.preview(req.subject(), req.markdown()));
+        }
+        validateMetadata(req.coverEmoji(), req.tags(), req.coverMediaId());
+        return Map.of("html", campaignService.preview(req.subject(), req.markdown(),
+            req.coverEmoji(), req.tags(), metadataService.coverUrl(req.coverMediaId())));
     }
 
     /** 寄一封測試信到指定信箱，需提供有效金鑰 */
@@ -159,7 +166,13 @@ public class AdminCampaignController {
             @RequestHeader(value = KEY_HEADER, required = false) String key,
             @RequestBody TestRequest req) {
         guard.verify(key);
-        return Map.of("providerId", campaignService.sendTest(req.subject(), req.markdown(), req.to()));
+        if (metadataService == null) {
+            return Map.of("providerId",
+                campaignService.sendTest(req.subject(), req.markdown(), req.to()));
+        }
+        validateMetadata(req.coverEmoji(), req.tags(), req.coverMediaId());
+        return Map.of("providerId", campaignService.sendTest(req.subject(), req.markdown(), req.to(),
+            req.coverEmoji(), req.tags(), metadataService.coverUrl(req.coverMediaId())));
     }
 
     /**

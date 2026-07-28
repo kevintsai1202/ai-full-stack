@@ -103,6 +103,68 @@ class CampaignServiceTest {
         assertTrue(!html.contains("付費牆分界"), html);
     }
 
+    /** 預覽應呈現伺服器解析的封面、文章主旨與 hashtag。 */
+    @Test
+    void previewShowsCoverAndHashtags() {
+        when(linkBuilder.previewUnsubscribeLink()).thenReturn("https://example.com/unsubscribe");
+
+        String html = svc.preview("Java 電子報", "內文", "🚀",
+            List.of("Java", "#Spring AI"), "https://media.example.com/cover.png");
+
+        assertTrue(html.contains("https://media.example.com/cover.png"), html);
+        assertTrue(html.contains("Java 電子報"), html);
+        assertTrue(html.contains("#Java"), html);
+        assertTrue(html.contains("#Spring AI"), html);
+        assertTrue(html.contains("max-width:560px"), html);
+        assertTrue(!html.contains("🚀"), "圖片封面存在時應優先於 Emoji");
+    }
+
+    /** 主旨、hashtag 與封面網址都必須逸出，不能把中繼資料變成可執行 HTML。 */
+    @Test
+    void previewEscapesArticleMetadata() {
+        when(linkBuilder.previewUnsubscribeLink()).thenReturn("https://example.com/unsubscribe");
+
+        String html = svc.preview("<img src=x onerror=alert(1)>", "安全內文", null,
+            List.of("\"><script>alert(2)</script>"),
+            "https://media.example.com/x\" onerror=\"alert(3)");
+
+        assertTrue(!html.contains("<script>alert(2)</script>"), html);
+        assertTrue(!html.contains("<img src=x onerror=alert(1)>"), html);
+        assertTrue(!html.contains("onerror=\"alert(3)"), html);
+        assertTrue(html.contains("&lt;img"), html);
+        assertTrue(html.contains("&quot;"), html);
+    }
+
+    /** 空白主旨要在呼叫郵件供應商前回 400，避免供應商錯誤被包成 500。 */
+    @Test
+    void testSendRejectsBlankSubjectBeforeProviderCall() {
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+            () -> svc.sendTest(" ", "內文", "me@example.com"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertEquals("請先填寫主旨", exception.getReason());
+        verify(mailSender, never()).send(any(), any(), any());
+    }
+
+    /** 合法測試信加上明確前綴，並使用與預覽相同的封面與 hashtag。 */
+    @Test
+    void testSendUsesDecoratedPreviewAndTestPrefix() {
+        when(linkBuilder.unsubscribeLink("me@example.com"))
+            .thenReturn("https://example.com/unsubscribe");
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("provider-1");
+
+        String providerId = svc.sendTest("每週摘要", "正文", "me@example.com", "🚀",
+            List.of("Java"), null);
+
+        assertEquals("provider-1", providerId);
+        ArgumentCaptor<String> subject = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+        verify(mailSender).send(eq("me@example.com"), subject.capture(), html.capture());
+        assertEquals("[測試] 每週摘要", subject.getValue());
+        assertTrue(html.getValue().contains("🚀"), html.getValue());
+        assertTrue(html.getValue().contains("#Java"), html.getValue());
+    }
+
     /** 立即發送：呼叫 sendBatch，每封 html 含該收件人的退訂連結，campaign 記為 sent、accepted=2 */
     @Test
     void immediateSendUsesBatchWithPersonalizedLinks() {

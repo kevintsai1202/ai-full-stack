@@ -4,7 +4,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.util.HtmlUtils;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -90,11 +92,20 @@ public class CampaignService {
      * 此視覺提示只存在於管理後台預覽，不會進入測試信或正式寄送內容。</p>
      */
     public String preview(String subject, String markdown) {
+        return preview(subject, markdown, null, null, null);
+    }
+
+    /**
+     * 預覽電子報與文章中繼資料；封面 URL 必須由伺服器依媒體 ID 解析後傳入。
+     */
+    public String preview(String subject, String markdown, String coverEmoji,
+                          List<String> tags, String coverUrl) {
         ContentSplitter.Split split = contentSplitter.split(markdown);
         String body = split.hasGate()
             ? paywallPreview(split)
             : markdownRenderer.toHtml(markdown);
-        return emailTemplate.wrapCampaign(body, linkBuilder.previewUnsubscribeLink(),
+        return emailTemplate.wrapCampaign(articlePreview(subject, body, coverEmoji, tags, coverUrl),
+            linkBuilder.previewUnsubscribeLink(),
             readerSiteLinks.archive(), readerSiteLinks.login("/r/archive"));
     }
 
@@ -118,8 +129,70 @@ public class CampaignService {
 
     /** 寄一封測試信給指定信箱（立即、單封） */
     public String sendTest(String subject, String markdown, String to) {
-        String html = renderFor(markdownRenderer.toHtml(markdown), to, null);
-        return mailSender.send(to, subject, html);
+        return sendTest(subject, markdown, to, null, null, null);
+    }
+
+    /**
+     * 寄一封包含目前封面與 hashtag 的測試信；先做應用層驗證，避免把供應商 400
+     * 誤包成無法理解的 500。
+     */
+    public String sendTest(String subject, String markdown, String to, String coverEmoji,
+                           List<String> tags, String coverUrl) {
+        if (subject == null || subject.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "請先填寫主旨");
+        }
+        if (markdown == null || markdown.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "請先填寫內文");
+        }
+        if (to == null || to.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "請填寫測試信箱");
+        }
+        String body = articlePreview(subject, markdownRenderer.toHtml(markdown),
+            coverEmoji, tags, coverUrl);
+        String html = renderFor(body, to.strip(), null);
+        String testSubject = subject.strip().startsWith("[測試]")
+            ? subject.strip()
+            : "[測試] " + subject.strip();
+        try {
+            return mailSender.send(to.strip(), testSubject, html);
+        } catch (RestClientResponseException exception) {
+            log.warn("測試寄送遭郵件服務拒絕 status={}", exception.getStatusCode().value());
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                "郵件服務拒絕測試信，請檢查寄件設定或稍後重試");
+        }
+    }
+
+    /**
+     * 將封面、主旨與 hashtag 組成預覽／測試信共用的安全 HTML 區塊。
+     */
+    private String articlePreview(String subject, String bodyHtml, String coverEmoji,
+                                  List<String> tags, String coverUrl) {
+        StringBuilder html = new StringBuilder();
+        if (coverUrl != null && !coverUrl.isBlank()) {
+            html.append("<img src=\"").append(HtmlUtils.htmlEscape(coverUrl)).append("\" alt=\"\" ")
+                .append("style=\"display:block;width:100%;max-width:560px;max-height:360px;")
+                .append("object-fit:contain;height:auto;margin:0 auto 22px;border-radius:14px\">");
+        } else if (coverEmoji != null && !coverEmoji.isBlank()) {
+            html.append("<div aria-hidden=\"true\" style=\"font-size:48px;line-height:1;")
+                .append("margin:0 0 18px\">")
+                .append(HtmlUtils.htmlEscape(coverEmoji.strip())).append("</div>");
+        }
+        if (subject != null && !subject.isBlank()) {
+            html.append("<h1 style=\"margin:0 0 14px;font-size:28px;line-height:1.3\">")
+                .append(HtmlUtils.htmlEscape(subject.strip())).append("</h1>");
+        }
+        if (tags != null && !tags.isEmpty()) {
+            html.append("<div aria-label=\"文章 Hashtag\" style=\"margin:0 0 22px\">");
+            tags.stream().filter(java.util.Objects::nonNull).map(String::strip)
+                .map(tag -> tag.startsWith("#") ? tag.substring(1).strip() : tag)
+                .filter(tag -> !tag.isBlank()).distinct().limit(8)
+                .forEach(tag -> html.append("<span style=\"display:inline-block;margin:0 7px 7px 0;")
+                    .append("padding:4px 10px;border-radius:999px;background:#e4f5f1;")
+                    .append("color:#08665c;font-size:13px;font-weight:700\">#")
+                    .append(HtmlUtils.htmlEscape(tag)).append("</span>"));
+            html.append("</div>");
+        }
+        return html.append(bodyHtml == null ? "" : bodyHtml).toString();
     }
 
     /**

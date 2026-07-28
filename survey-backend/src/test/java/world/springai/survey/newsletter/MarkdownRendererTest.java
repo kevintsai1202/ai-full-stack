@@ -30,4 +30,20 @@ class MarkdownRendererTest {
         String html = renderer.toHtml("第一行\n第二行");
         assertTrue(html.contains("第一行<br />\n第二行"), html);
     }
+
+    /** 圖片必須用 inline style 限制在信件容器內，不能只依賴瀏覽器 CSS。 */
+    @Test
+    void constrainsImagesToContainer() {
+        String html = renderer.toHtml("![封面](https://example.com/very-large.png)");
+        assertTrue(html.contains("max-width:100%"), html);
+        assertTrue(html.contains("height:auto"), html);
+    }
+
+    /** fenced code 應保留語言 class，並限制長行不撐破容器。 */
+    @Test
+    void rendersLanguageAwareCodeBlock() {
+        String html = renderer.toHtml("```java\nSystem.out.println(\"Hi\");\n```");
+        assertTrue(html.contains("class=\"language-java\""), html);
+        assertTrue(html.contains("overflow-x:auto"), html);
+    }
 }

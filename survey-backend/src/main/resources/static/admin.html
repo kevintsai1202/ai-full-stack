@@ -35,7 +35,13 @@
   .form-row{display:flex;gap:10px;align-items:center;margin-bottom:12px}.form-row input{flex:1}
   .source-picker{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:stretch}.source-create{margin-top:10px;padding:14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)}.source-create label{margin-top:0}.source-create[hidden]{display:none}.source-create-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
   .actions{display:flex;gap:8px;flex-wrap:wrap}.count{font-weight:800;color:var(--accent-deep);font-size:1.1rem}iframe.preview{width:100%;height:360px;border:1px solid var(--border);border-radius:8px;background:#fff}
-  .editor-toolbar{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0}.editor-toolbar .btn{min-height:34px;padding:5px 9px}.tag-options{display:flex;gap:7px;flex-wrap:wrap;margin:7px 0 10px}.tag-option{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border:1px solid var(--border);border-radius:999px;background:var(--surface)}.tag-option input{width:16px;height:16px}
+  iframe.campaign-preview{display:block;height:min(78vh,820px);min-height:620px;resize:vertical;overflow:auto}
+  .preview-card .section-head{margin-bottom:10px}.preview-card .section-head h2{margin:0}
+  .editor-toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start;margin:7px 0}.editor-toolbar .btn{min-height:34px;padding:5px 9px}
+  .format-group{position:relative}.format-group>summary{list-style:none}.format-group>summary::-webkit-details-marker{display:none}
+  .format-menu{position:absolute;z-index:12;top:calc(100% + 5px);left:0;display:grid;min-width:170px;padding:6px;border:1px solid var(--border);border-radius:9px;background:var(--surface);box-shadow:var(--shadow)}
+  .format-menu .btn{width:100%;justify-content:flex-start;text-align:left;border:0;border-radius:6px}
+  .tag-options{display:flex;gap:7px;flex-wrap:wrap;margin:7px 0 10px}.tag-option{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border:1px solid var(--border);border-radius:999px;background:var(--surface)}.tag-option input{width:16px;height:16px}
   .media-panel{margin:12px 0;padding:14px;border:1px solid var(--border);border-radius:10px;background:#f8fbfa}.media-upload{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:end}.media-library{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:12px;max-height:330px;overflow:auto}.media-item{min-width:0;border:1px solid var(--border);border-radius:9px;background:#fff;overflow:hidden}.media-thumb{display:grid;place-items:center;aspect-ratio:16/9;background:var(--surface-2);color:var(--muted);font-size:1.8rem}.media-thumb img{width:100%;height:100%;object-fit:cover}.media-info{padding:9px}.media-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem;font-weight:750}.media-meta{font-size:.74rem;color:var(--muted)}.media-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}.media-actions .btn{min-height:30px;padding:4px 7px;font-size:.76rem}.cover-selection{display:flex;align-items:center;gap:10px;margin-top:10px;padding:9px;border:1px dashed var(--border-strong);border-radius:9px}.cover-selection img{width:92px;aspect-ratio:16/9;object-fit:cover;border-radius:6px}.cover-selection .cover-copy{min-width:0;flex:1}.cover-selection strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .msg{margin-top:12px;padding:10px 12px;border-radius:8px;display:none}.msg.ok{display:block;background:var(--accent-soft);color:var(--accent-deep)}.msg.err{display:block;background:#fde8e8;color:var(--danger)}
   .gate{position:fixed;inset:0;background:rgba(16,32,51,.66);display:flex;align-items:center;justify-content:center;z-index:50}.gate .box{background:#fff;border-radius:var(--r);padding:28px;max-width:400px;width:90%;box-shadow:0 24px 70px rgba(0,0,0,.22)}
@@ -159,13 +165,32 @@
       <label for="subject">主旨</label><input type="text" id="subject" placeholder="電子報主旨">
       <label for="markdown">內文（Markdown，單一換行會保留）</label>
       <div class="editor-toolbar" role="toolbar" aria-label="Markdown 快速格式">
-        <button type="button" class="btn ghost format-btn" data-prefix="# " title="標題">H1</button>
+        <details class="format-group">
+          <summary class="btn ghost" title="選擇標題層級">標題 H ▾</summary>
+          <div class="format-menu" role="group" aria-label="標題層級">
+            <button type="button" class="btn ghost format-btn" data-heading="1">H1　主標題</button>
+            <button type="button" class="btn ghost format-btn" data-heading="2">H2　段落標題</button>
+            <button type="button" class="btn ghost format-btn" data-heading="3">H3　小標題</button>
+          </div>
+        </details>
         <button type="button" class="btn ghost format-btn" data-wrap="**" title="粗體"><strong>B</strong></button>
         <button type="button" class="btn ghost format-btn" data-wrap="*" title="斜體"><em>I</em></button>
         <button type="button" class="btn ghost format-btn" data-prefix="> " title="引用">❝</button>
         <button type="button" class="btn ghost format-btn" data-prefix="- " title="項目清單">• 清單</button>
         <button type="button" class="btn ghost format-btn" data-prefix="1. " title="編號清單">1. 清單</button>
-        <button type="button" class="btn ghost format-btn" data-wrap="`" title="行內程式碼">&lt;/&gt;</button>
+        <details class="format-group">
+          <summary class="btn ghost" title="選擇程式碼格式">程式碼 ▾</summary>
+          <div class="format-menu" role="group" aria-label="程式碼語言">
+            <button type="button" class="btn ghost format-btn" data-wrap="`">行內程式碼</button>
+            <button type="button" class="btn ghost format-btn" data-code-language="java">Java 區塊</button>
+            <button type="button" class="btn ghost format-btn" data-code-language="javascript">JavaScript 區塊</button>
+            <button type="button" class="btn ghost format-btn" data-code-language="html">HTML 區塊</button>
+            <button type="button" class="btn ghost format-btn" data-code-language="python">Python 區塊</button>
+            <button type="button" class="btn ghost format-btn" data-code-language="json">JSON 區塊</button>
+            <button type="button" class="btn ghost format-btn" data-code-language="sql">SQL 區塊</button>
+            <button type="button" class="btn ghost format-btn" data-code-language="bash">Bash 區塊</button>
+          </div>
+        </details>
         <button type="button" class="btn ghost format-btn" data-template="[連結文字](https://)" title="連結">連結</button>
         <button type="button" class="btn ghost format-btn" data-template="![圖片說明](https://)" title="圖片">圖片</button>
         <button type="button" class="btn ghost format-btn" data-block="---" title="分隔線">分隔線</button>
@@ -193,7 +218,7 @@
       <div class="form-row"><input type="text" id="campaign-custom-tag" maxlength="30" placeholder="自訂 hashtag（不用輸入 #）"><button type="button" class="btn ghost" id="campaign-add-tag">加入</button></div>
       <p class="hint">內容會自動暫存於本機；輸入後約半秒更新右側預覽。</p>
       <button class="btn ghost" id="preview-btn" style="margin-top:12px">立即更新預覽</button><div class="msg err" id="compose-msg"></div></div>
-    <div class="card"><h2>② 預覽</h2><iframe class="preview" id="preview" title="預覽" sandbox=""></iframe></div>
+    <div class="card preview-card"><div class="section-head"><h2>② 預覽</h2><span class="hint">可拖曳右下角調整高度</span></div><iframe class="preview campaign-preview" id="preview" title="預覽" sandbox=""></iframe></div>
     <div class="card"><h2>③ 發送對象</h2><div class="row"><div><label for="role">身分（不限留空）</label><select id="role"><option value="">不限</option></select></div><div><label for="interest">想學主題（不限留空）</label><select id="interest"><option value="">不限</option></select></div></div>
       <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700">更多名單條件與儲存分眾</summary>
         <div class="row">
@@ -972,15 +997,50 @@
   function emptyNode(text){const node=document.createElement('div');node.className='empty';node.textContent=text;return node;}
   /** 取得目前電子報發送模式。 */
   function mode(){return document.querySelector('input[name=mode]:checked').value;}
-  /** 呼叫後端渲染電子報預覽。 */
-  async function doPreview(){const m=$('#compose-msg');m.className='msg';try{const r=await api('/api/admin/campaign/preview',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value})});$('#preview').srcdoc=r.html;}catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='預覽失敗：'+e.message;}}}
+  /** 組合預覽與測試信共用的文章中繼資料。 */
+  function previewMetadata(){
+    return {coverEmoji:$('#cover-emoji').value||null,tags:[...selectedCampaignTags],
+      coverMediaId:selectedCoverMediaId};
+  }
+
+  /** 呼叫後端渲染含封面與 hashtag 的電子報預覽。 */
+  async function doPreview(){const m=$('#compose-msg');m.className='msg';try{const r=await api('/api/admin/campaign/preview',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,...previewMetadata()})});$('#preview').srcdoc=r.html;}catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='預覽失敗：'+e.message;}}}
+
+  /**
+   * 將區塊標記放到獨立段落，回傳插入文字及區塊在插入文字中的起點。
+   * 分隔線、付費牆與 fenced code 共用這份換行規則，避免再次插入字面 "\n"。
+   */
+  function markdownBlock(value,start,end,block){
+    const before=value.slice(0,start),after=value.slice(end);
+    const leading=!before?'':before.endsWith('\n\n')?'':before.endsWith('\n')?'\n':'\n\n';
+    const trailing=!after?'\n\n':after.startsWith('\n\n')?'':after.startsWith('\n')?'\n':'\n\n';
+    return {text:leading+block+trailing,blockStart:leading.length};
+  }
 
   /** 在游標或選取文字套用 Markdown 格式，並維持焦點與選取位置。 */
   function applyMarkdownFormat(button){
     const editor=$('#markdown'),start=editor.selectionStart,end=editor.selectionEnd;
     const selected=editor.value.slice(start,end),prefix=button.dataset.prefix;
     let inserted,cursorStart,cursorEnd;
-    if(button.dataset.wrap){
+    if(button.dataset.heading){
+      const lineStart=editor.value.lastIndexOf('\n',Math.max(0,start-1))+1;
+      const lineEnd=editor.value.indexOf('\n',start);
+      const currentLine=editor.value.slice(lineStart,lineEnd<0?editor.value.length:lineEnd);
+      const existing=currentLine.match(/^#{1,6}\s+/)?.[0]||'';
+      const heading='#'.repeat(Number(button.dataset.heading))+' ';
+      editor.setRangeText(heading,lineStart,lineStart+existing.length,'end');editor.focus();
+      const delta=heading.length-existing.length;
+      editor.setSelectionRange(Math.max(lineStart+heading.length,start+delta),
+        Math.max(lineStart+heading.length,end+delta));
+      button.closest('details')?.removeAttribute('open');composeChanged();return;
+    }else if(button.dataset.codeLanguage){
+      const language=button.dataset.codeLanguage;
+      const fenced='```'+language+'\n'+selected+'\n```';
+      const block=markdownBlock(editor.value,start,end,fenced);
+      inserted=block.text;
+      cursorStart=start+block.blockStart+language.length+4;
+      cursorEnd=cursorStart+selected.length;
+    }else if(button.dataset.wrap){
       const wrap=button.dataset.wrap;inserted=wrap+selected+wrap;
       cursorStart=start+wrap.length;cursorEnd=cursorStart+selected.length;
     }else if(prefix!=null){
@@ -988,18 +1048,15 @@
       editor.setRangeText(prefix,lineStart,lineStart,'end');editor.focus();
       editor.setSelectionRange(start+prefix.length,end+prefix.length);composeChanged();return;
     }else if(button.dataset.block!=null){
-      // 分隔線與付費牆都是區塊標記，必須各自位於獨立一行。
-      // 依游標前後既有換行補足空白行，避免插入字面 "\n" 或黏在正文同一行。
-      const before=editor.value.slice(0,start),after=editor.value.slice(end);
-      const leading=!before?'':before.endsWith('\n\n')?'':before.endsWith('\n')?'\n':'\n\n';
-      const trailing=!after?'\n\n':after.startsWith('\n\n')?'':after.startsWith('\n')?'\n':'\n\n';
-      inserted=leading+button.dataset.block+trailing;
+      const block=markdownBlock(editor.value,start,end,button.dataset.block);
+      inserted=block.text;
       cursorStart=cursorEnd=start+inserted.length;
     }else{
       inserted=button.dataset.template||'';cursorStart=start;cursorEnd=start+inserted.length;
     }
     editor.setRangeText(inserted,start,end,'end');editor.focus();
-    editor.setSelectionRange(cursorStart,cursorEnd);composeChanged();
+    editor.setSelectionRange(cursorStart,cursorEnd);
+    button.closest('details')?.removeAttribute('open');composeChanged();
   }
 
   /** 插入 Emoji 到目前游標位置。 */
@@ -1294,8 +1351,22 @@
 
   /** 更新電子報收件人數與樣本；與實際寄送共用同一份篩選物件。 */
   async function doCount(){try{const r=await api('/api/admin/recipients/search',{method:'POST',body:JSON.stringify(campaignFilter())});$('#rcount').textContent=r.count;$('#rsample').textContent=r.sample.length?'樣本：'+r.sample.join(', '):'';renderQuotaWarn();}catch(e){if(e.message!=='401')$('#rcount').textContent='?';}}
-  /** 寄送電子報測試信給指定信箱。 */
-  async function doTest(){const m=$('#test-msg');m.className='msg';const to=$('#test-to').value.trim();if(!to){m.className='msg err';m.textContent='請填測試信箱';return;}try{await api('/api/admin/campaign/test',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,to})});m.className='msg ok';m.textContent='測試信已寄給 '+to;}catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='測試寄送失敗：'+e.message;}}}
+  /** 寄送電子報測試信；先擋下供應商必定拒絕的空白主旨／內文。 */
+  async function doTest(){
+    const m=$('#test-msg'),subject=$('#subject').value.trim(),markdown=$('#markdown').value.trim(),
+      to=$('#test-to').value.trim();
+    m.className='msg';
+    if(!subject){m.className='msg err';m.textContent='請先填寫主旨';$('#subject').focus();return;}
+    if(!markdown){m.className='msg err';m.textContent='請先填寫內文';$('#markdown').focus();return;}
+    if(!to){m.className='msg err';m.textContent='請填測試信箱';$('#test-to').focus();return;}
+    try{
+      await api('/api/admin/campaign/test',{method:'POST',
+        body:JSON.stringify({subject,markdown,to,...previewMetadata()})});
+      m.className='msg ok';m.textContent='測試信已寄給 '+to;
+    }catch(e){
+      if(e.message!=='401'){m.className='msg err';m.textContent='測試寄送失敗：'+e.message;}
+    }
+  }
   /** 確認後立即發送、排程電子報，或在修改模式下更新既有排程。 */
   /**
    * 送出前的截斷預告：收件人數超過行銷可用額度時，後端會靜默截斷，

@@ -111,6 +111,16 @@ public class CampaignMetadataService {
         validate(coverEmoji, requestedTags, null);
     }
 
+    /**
+     * 取得已驗證封面圖片的公開網址，供後台預覽與測試信使用。
+     *
+     * <p>網址必須由伺服器依媒體 ID 解析，不能信任前端直接傳入任意 URL。</p>
+     */
+    public String coverUrl(Long coverMediaId) {
+        mediaAssetService.requireImage(coverMediaId);
+        return mediaAssetService.publicUrl(coverMediaId).orElse(null);
+    }
+
     /** 將自訂標籤轉為可放在查詢參數中的穩定 slug。 */
     private String slug(String normalizedKey) {
         String value = normalizedKey.replaceAll("\\s+", "-")
