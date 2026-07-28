@@ -312,13 +312,51 @@ input::placeholder { color:#71817c; }
 .share-subscribe-cta span { color:var(--muted); font-size:.92rem; }
 .campaign-banner { margin:18px 0 22px; padding:16px 18px; border:1px solid #f0cf84; border-radius:14px; background:#fff8df; }
 .campaign-banner ul { margin:6px 0 0; padding-left:20px; }
-.milestone-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
-.milestone { padding:15px; border:1px solid var(--border); border-radius:12px; opacity:.72; }
-.milestone.earned { border-color:var(--accent); background:var(--accent-soft); opacity:1; }
-.milestone-icon { display:block; font-size:1.4rem; margin-bottom:6px; }
-.milestone small { display:block; color:var(--muted); margin-top:3px; }
-.milestone-bar { height:5px; margin-top:10px; border-radius:999px; background:var(--border); overflow:hidden; }
-.milestone-bar i { display:block; height:100%; background:var(--accent); }
+.milestone-card { overflow:hidden; }
+.milestone-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; }
+.milestone-heading h2 { margin-bottom:4px; }
+.milestone-heading p { margin:0; color:var(--muted); font-size:.92rem; }
+.milestone-heading > strong {
+  flex:0 0 auto; padding:7px 11px; border-radius:999px;
+  color:var(--accent); background:var(--accent-soft); font-size:.86rem;
+}
+.milestone-progress { margin-top:24px; padding:10px 0 4px; }
+.milestone-rail { position:relative; height:142px; margin:0 76px; }
+.milestone-track {
+  position:absolute; z-index:0; top:65px; left:0; width:100%; height:8px;
+  overflow:hidden; border-radius:999px; background:#dce5e2;
+  box-shadow:inset 0 1px 2px rgba(20,50,44,.08);
+}
+.milestone-track i {
+  display:block; width:var(--milestone-progress); height:100%;
+  border-radius:inherit; background:linear-gradient(90deg,#2d9d8e,var(--accent));
+  transition:width .45s ease;
+}
+.milestone-node {
+  position:absolute; z-index:1; top:0; left:var(--milestone-position);
+  width:150px; transform:translateX(-50%); text-align:center;
+}
+.milestone-trophy {
+  display:flex; width:42px; height:42px; margin:0 auto 7px; align-items:center; justify-content:center;
+  opacity:.62; filter:grayscale(.16); transform:translateY(2px) scale(.9);
+  transition:opacity .2s ease,filter .2s ease,transform .2s ease;
+}
+.milestone-trophy svg { width:38px; height:38px; fill:currentColor; filter:drop-shadow(0 3px 4px rgba(24,36,33,.16)); }
+.milestone-bronze .milestone-trophy { color:#b96f38; }
+.milestone-silver .milestone-trophy { color:#8b99a8; }
+.milestone-gold .milestone-trophy { color:#d6a41f; }
+.milestone-node.earned .milestone-trophy { opacity:1; filter:none; transform:none; }
+.milestone-dot {
+  display:block; width:18px; height:18px; margin:0 auto 9px; border:4px solid var(--surface);
+  border-radius:50%; background:#cbd7d3; box-shadow:0 0 0 2px #cbd7d3;
+}
+.milestone-node.earned .milestone-dot {
+  background:var(--accent); box-shadow:0 0 0 2px var(--accent),0 0 0 7px var(--accent-soft);
+}
+.milestone-copy { display:flex; flex-direction:column; gap:2px; }
+.milestone-copy strong { color:var(--muted); font-size:.95rem; }
+.milestone-node.earned .milestone-copy strong { color:var(--fg); }
+.milestone-copy small { color:var(--muted); white-space:nowrap; }
 .completion-share {
   position:fixed; left:50%; bottom:18px; z-index:30; transform:translateX(-50%);
   width:min(720px,calc(100% - 28px)); display:flex; align-items:center; gap:14px;
@@ -407,7 +445,24 @@ input::placeholder { color:#71817c; }
   .form-row .btn { width:100%; }
   .share-actions > * { flex:1 1 calc(50% - 9px); justify-content:center; }
   .share-subscribe-cta { align-items:stretch; flex-direction:column; }
-  .milestone-grid { grid-template-columns:1fr; }
+  .milestone-heading { align-items:stretch; flex-direction:column; gap:10px; }
+  .milestone-heading > strong { align-self:flex-start; }
+  .milestone-progress { margin-top:16px; padding:0; }
+  .milestone-rail { height:330px; margin:18px 0 10px 48px; }
+  .milestone-track { top:0; left:0; width:8px; height:100%; }
+  .milestone-track i { width:100%; height:var(--milestone-progress); transition:height .45s ease; }
+  .milestone-node {
+    top:var(--milestone-position); left:4px; width:calc(100% - 20px);
+    transform:translateY(-50%); text-align:left;
+  }
+  .milestone-trophy {
+    position:absolute; top:50%; left:-22px; width:36px; height:36px;
+    margin:0; transform:translate(-100%,-50%) scale(.9);
+  }
+  .milestone-node.earned .milestone-trophy { transform:translate(-100%,-50%); }
+  .milestone-trophy svg { width:33px; height:33px; }
+  .milestone-dot { position:absolute; top:50%; left:0; margin:0; transform:translate(-50%,-50%); }
+  .milestone-copy { padding-left:28px; }
   .completion-share { align-items:stretch; flex-wrap:wrap; }
   .completion-share span { flex-basis:calc(100% - 30px); }
   .share-subscribe-cta .btn { text-align:center; }

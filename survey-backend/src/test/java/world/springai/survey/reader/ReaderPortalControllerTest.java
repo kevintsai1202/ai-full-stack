@@ -46,6 +46,7 @@ class ReaderPortalControllerTest {
     private ReferralService referralService;
     private CreditPolicy creditPolicy;
     private CampaignRepository campaignRepository;
+    private ReaderPortalController controller;
     private MockMvc mvc;
 
     @BeforeEach
@@ -76,7 +77,7 @@ class ReaderPortalControllerTest {
         // surveyResponseRepository 的實際寫入，把服務 mock 掉會讓那些斷言全部落空。
         // 注意這裡沒有 Spring proxy，所以它的 @Transactional 在本檔完全不參與——
         // 交易是否真的生效由 ReaderProfileTransactionTest 負責。
-        mvc = MockMvcBuilders.standaloneSetup(new ReaderPortalController(
+        controller = new ReaderPortalController(
                 new HtmlTemplate(), readerContext, creditTxnRepository,
                 surveyResponseRepository, referralService, creditPolicy,
                 // PremiumCostDisplay 用真貨、只 mock 掉 CampaignRepository：把它整個 mock 掉
@@ -84,11 +85,35 @@ class ReaderPortalControllerTest {
                 // campaign.credit_cost 的區間查詢——而那正是本次修正的全部目的。
                 new PremiumCostDisplay(campaignRepository, creditPolicy),
                 new ReaderProfileService(surveyResponseRepository),
-                new ReaderSiteLinks("https://reader.example.com")))
+                new ReaderSiteLinks("https://reader.example.com"));
+        mvc = MockMvcBuilders.standaloneSetup(controller)
             .setMessageConverters(
                 new StringHttpMessageConverter(StandardCharsets.UTF_8),
                 new MappingJackson2HttpMessageConverter())
             .build();
+    }
+
+    /** 邀請里程碑應共用一條進度軸，並依序顯示銅、銀、金獎盃。 */
+    @Test
+    void rendersMilestonesAsSingleProgressTrackWithMetalTrophies() {
+        List<ReferralGrowthService.MilestoneView> milestones = List.of(
+            new ReferralGrowthService.MilestoneView(3, "pioneer", "開路者", 50, true),
+            new ReferralGrowthService.MilestoneView(5, "growth_guide", "成長推手", 100, false),
+            new ReferralGrowthService.MilestoneView(10, "community_leader", "社群領航員", 300, false)
+        );
+
+        String html = ReflectionTestUtils.invokeMethod(
+            controller, "renderMilestones", 4, milestones);
+
+        org.assertj.core.api.Assertions.assertThat(html)
+            .contains("role=\"progressbar\"")
+            .contains("aria-valuenow=\"4\"")
+            .contains("--milestone-progress:40%")
+            .contains("milestone-bronze earned")
+            .contains("milestone-silver")
+            .contains("milestone-gold")
+            .contains("再邀請 1 人，即可解鎖「成長推手」")
+            .doesNotContain("milestone-grid", "🔒");
     }
 
     /**

@@ -224,27 +224,97 @@ public class ReaderPortalController {
             """.formatted(stats.invitedCount(), stats.earnedCredits());
     }
 
-    /** 顯示已取得徽章與下一階進度，不包含任何被邀者個資。 */
+    /**
+     * 將 3／5／10 人里程碑顯示成同一條進度軸，不包含任何被邀者個資。
+     *
+     * <p>獎盃使用行內 SVG，讓銅、銀、金顏色能由 CSS 穩定控制；原生 emoji
+     * 會依作業系統繪製，無法可靠套用金屬色。</p>
+     */
     private String renderMilestones(int invitedCount,
                                     List<ReferralGrowthService.MilestoneView> milestones) {
-        StringBuilder html = new StringBuilder("<div class=\"card\"><h2>邀請里程碑</h2><div class=\"milestone-grid\">");
-        for (ReferralGrowthService.MilestoneView item : milestones) {
-            int progress = Math.min(100, invitedCount * 100 / item.milestone());
-            html.append("<div class=\"milestone ")
-                .append(item.earned() ? "earned" : "")
-                .append("\"><span class=\"milestone-icon\">")
-                .append(item.earned() ? "🏅" : "🔒")
-                .append("</span><strong>")
+        if (milestones.isEmpty()) {
+            return "";
+        }
+
+        int safeInvitedCount = Math.max(0, invitedCount);
+        int finalMilestone = milestones.get(milestones.size() - 1).milestone();
+        int progress = Math.min(100, safeInvitedCount * 100 / finalMilestone);
+        int accessibleProgress = Math.min(safeInvitedCount, finalMilestone);
+        String progressHint = milestoneProgressHint(safeInvitedCount, milestones);
+
+        StringBuilder html = new StringBuilder("""
+            <div class="card milestone-card">
+              <div class="milestone-heading">
+                <div><h2>邀請里程碑</h2><p>%s</p></div>
+                <strong>成功邀請 %d 人</strong>
+              </div>
+              <div class="milestone-progress" role="progressbar"
+                   aria-label="邀請里程碑進度" aria-valuemin="0" aria-valuemax="%d"
+                   aria-valuenow="%d" aria-valuetext="成功邀請 %d 人"
+                   style="--milestone-progress:%d%%">
+                <div class="milestone-rail">
+                  <div class="milestone-track" aria-hidden="true"><i></i></div>
+            """.formatted(
+                HtmlTemplate.escapeHtml(progressHint),
+                safeInvitedCount,
+                finalMilestone,
+                accessibleProgress,
+                safeInvitedCount,
+                progress));
+
+        for (int index = 0; index < milestones.size(); index++) {
+            ReferralGrowthService.MilestoneView item = milestones.get(index);
+            int position = Math.min(100, item.milestone() * 100 / finalMilestone);
+            html.append("<div class=\"milestone-node ")
+                .append(milestoneMetalClass(index, milestones.size()))
+                .append(item.earned() ? " earned" : "")
+                .append("\" style=\"--milestone-position:")
+                .append(position)
+                .append("%\"><span class=\"milestone-trophy\" aria-hidden=\"true\">")
+                .append(trophySvg())
+                .append("</span><span class=\"milestone-dot\" aria-hidden=\"true\"></span>")
+                .append("<div class=\"milestone-copy\"><strong>")
                 .append(HtmlTemplate.escapeHtml(item.badgeName()))
                 .append("</strong><small>")
                 .append(item.milestone()).append(" 人");
             if (item.bonusCredits() > 0) {
                 html.append("・+").append(item.bonusCredits()).append(" 點");
             }
-            html.append("</small><div class=\"milestone-bar\"><i style=\"width:")
-                .append(progress).append("%\"></i></div></div>");
+            html.append("</small></div></div>");
         }
-        return html.append("</div></div>").toString();
+        return html.append("</div></div></div>").toString();
+    }
+
+    /** 依里程碑順序套用銅、銀、金獎盃樣式。 */
+    private String milestoneMetalClass(int index, int milestoneCount) {
+        if (index == 0) {
+            return "milestone-bronze";
+        }
+        if (index == milestoneCount - 1) {
+            return "milestone-gold";
+        }
+        return "milestone-silver";
+    }
+
+    /** 顯示下一個可達成目標；全數完成後改為完成訊息。 */
+    private String milestoneProgressHint(int invitedCount,
+                                         List<ReferralGrowthService.MilestoneView> milestones) {
+        for (ReferralGrowthService.MilestoneView item : milestones) {
+            if (invitedCount < item.milestone()) {
+                int remaining = item.milestone() - invitedCount;
+                return "再邀請 %d 人，即可解鎖「%s」".formatted(remaining, item.badgeName());
+            }
+        }
+        return "全部里程碑已完成，感謝你一起擴大社群！";
+    }
+
+    /** 回傳可由 CSS 著色的獎盃圖示。 */
+    private String trophySvg() {
+        return """
+            <svg viewBox="0 0 64 64" focusable="false">
+              <path d="M20 8h24v8h10v8c0 9.5-6.7 17.5-15.6 19.5A18 18 0 0 1 36 48v4h10v6H18v-6h10v-4a18 18 0 0 1-2.4-4.5C16.7 41.5 10 33.5 10 24v-8h10V8Zm0 14h-4v2c0 5.5 3.2 10.3 8 12.5A18 18 0 0 1 20 25v-3Zm24 3a18 18 0 0 1-4 11.5c4.8-2.2 8-7 8-12.5v-2h-4v3Z"/>
+            </svg>
+            """;
     }
 
     /** 顯示進行中的加碼活動。 */
