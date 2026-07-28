@@ -7,6 +7,7 @@
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="/r/reader.css">
 <script src="/r/reader-nav.js" defer></script>
+<script src="/r/reader-share.js" defer></script>
 </head>
 <body>
 <header class="site-head">
@@ -19,14 +20,21 @@
 <div class="wrap">
   <p class="page-kicker">Reader account</p>
   <h1 class="page-title compact">我的帳戶</h1>
+  <p class="page-intro">管理帳戶資料、點數與邀請獎勵。</p>
 
-  <div class="card">
+  <div class="account-jump" aria-label="帳戶頁區段">
+    <a href="#overview">帳戶總覽</a>
+    <a href="#invite">邀請與獎勵</a>
+    <a href="#transactions">點數明細</a>
+  </div>
+
+  <div class="card" id="overview">
     <h2>點數餘額</h2>
     <p class="balance"><!--CREDITS--> 點</p>
     <p class="muted">
       進階內容<!--PREMIUM_COST_PHRASE-->，實際點數以各篇文章頁顯示為準；一次解鎖永久可讀。<a href="/r/rules">看遊戲規則</a>
     </p>
-    <p style="margin-top:12px"><a class="btn ghost" href="/r/invite">邀請朋友賺點數</a></p>
+    <p style="margin-top:12px"><a class="btn ghost" href="#invite">邀請朋友賺點數</a></p>
   </div>
 
   <div class="card">
@@ -41,7 +49,59 @@
     <div class="msg" id="profile-msg"></div>
   </div>
 
-  <div class="card">
+  <section class="account-section" id="invite">
+    <div class="account-section-head">
+      <p class="page-kicker">Referral</p>
+      <h2>邀請與獎勵</h2>
+      <p><!--REWARD_INTRO--></p>
+    </div>
+    <!--ACTIVE_CAMPAIGN_BLOCK-->
+
+    <div class="card viral-share" data-share-kind="invite" data-share-title="凱文大叔的電子報"
+         data-share-url="<!--INVITE_LINK-->">
+      <h2>分享你的邀請連結</h2>
+      <div class="form-row">
+        <input class="share-link-input" type="text" value="" readonly aria-label="邀請連結">
+        <button class="btn" type="button" data-action="copy-link">複製連結</button>
+      </div>
+      <p class="share-label">選一個貼文範本，也可以直接修改：</p>
+      <div class="share-template-tabs" role="group" aria-label="社群貼文範本">
+        <button type="button" class="active" data-template-index="0">完整推薦</button>
+        <button type="button" data-template-index="1">朋友口吻</button>
+        <button type="button" data-template-index="2">短版</button>
+      </div>
+      <textarea class="share-post-input" rows="5" aria-label="社群貼文內容"></textarea>
+      <div class="share-actions">
+        <button class="social-share facebook" type="button" data-platform="facebook" aria-label="分享到 Facebook">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 8h3V4h-3c-3 0-5 2-5 5v2H6v4h3v7h4v-7h3l1-4h-4V9c0-.7.3-1 1-1Z"/></svg><span>Facebook</span>
+        </button>
+        <button class="social-share instagram" type="button" data-platform="instagram" aria-label="分享到 Instagram">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg><span>Instagram</span>
+        </button>
+        <button class="social-share threads" type="button" data-platform="threads" aria-label="分享到 Threads">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c5.3 0 8.5 3.1 8.5 8.6 0 5.9-3.6 9.4-8.8 9.4-5.1 0-8.2-3.3-8.2-8.5C3.5 7 6.7 3 12 3Zm.1 4.2c-2.5 0-4 1.4-4.4 3.5l3 .5c.2-1 .7-1.5 1.6-1.5 1.2 0 1.8.7 1.9 2-4.7-.2-7 1.5-7 4.1 0 2.1 1.7 3.5 4.1 3.5 3.2 0 5.5-2 5.7-5.3 1 .6 1.5 1.5 1.5 2.7h2.6c0-2.7-1.5-4.4-4.1-5.1-.4-2.9-2.1-4.4-4.9-4.4Zm2.1 6.8c-.1 1.8-1.1 2.9-2.7 2.9-.9 0-1.5-.5-1.5-1.2 0-1.2 1.3-1.8 4.2-1.7Z"/></svg><span>Threads</span>
+        </button>
+        <button class="btn secondary" type="button" data-action="copy-post">複製貼文</button>
+      </div>
+      <div class="share-status msg" role="status" aria-live="polite"></div>
+      <p class="fine-print">邀請碼：<strong><!--REFERRAL_CODE--></strong></p>
+    </div>
+
+    <div class="card">
+      <h2>邀請成效</h2>
+      <!--STATS_BLOCK-->
+    </div>
+    <!--MILESTONE_BLOCK-->
+
+    <div class="card">
+      <h2>怎麼算成功？</h2>
+      <p>對方用你的連結填了 email 之後，<strong>還要點開自己信箱裡的確認信</strong>，才算一次成功邀請。</p>
+      <p class="muted">這樣設計是為了避免有人填假 email 刷點數。若朋友說已經訂閱但你的點數沒增加，通常是確認信還沒點——請他找一下信箱（有時會在促銷或垃圾郵件匣）。</p>
+      <p style="margin-top:12px"><a href="/r/rules">看完整遊戲規則</a></p>
+    </div>
+  </section>
+
+  <div class="card" id="transactions">
     <h2>交易明細</h2>
     <p class="fine-print">只顯示最近 50 筆。</p>
     <!--TXN_LIST-->

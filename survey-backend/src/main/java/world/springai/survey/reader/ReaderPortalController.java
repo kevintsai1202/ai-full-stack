@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 讀者自助頁面：我的帳戶與我的邀請。
+ * 讀者自助頁面：帳戶資料、點數、邀請與交易明細。
  *
  * <p>與 {@link ReaderPageController}（內容頁）、{@link ReaderAuthController}
  * （登入流程）分開：這裡處理的是「讀者對自己帳戶的操作」，依賴組合完全不同。</p>
@@ -110,7 +110,7 @@ public class ReaderPortalController {
     /** 個人資料更新請求；目前只開放顯示名稱 */
     public record ProfileRequest(String name) {}
 
-    /** 我的帳戶：餘額、方案、交易明細、顯示名稱編輯 */
+    /** 我的帳戶：餘額、方案、顯示名稱、邀請與交易明細的單一個人中心。 */
     @GetMapping(value = "/r/me", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> me(
             @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
@@ -132,11 +132,14 @@ public class ReaderPortalController {
         // 重度讀者若一次撈全部帳本，頁面會逐漸變慢
         vars.put("<!--TXN_LIST-->", renderTransactions(
             creditTxnRepository.findByReaderIdOrderByCreatedAtDesc(reader.getId(), PageRequest.of(0, TXN_DISPLAY_LIMIT))));
+        putInviteVariables(vars, reader);
 
         return privatePage(htmlTemplate.render("templates/reader/me.html", vars));
     }
 
-    /** 我的邀請：邀請連結、邀請碼與成效 */
+    /**
+     * 舊邀請頁相容入口：登入後導向帳戶頁的邀請區，避免既有書籤或信件連結失效。
+     */
     @GetMapping(value = "/r/invite", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> invite(
             @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
@@ -144,13 +147,18 @@ public class ReaderPortalController {
         if (current.isEmpty()) {
             return redirectToLogin("/r/invite");
         }
-        Reader reader = current.get().reader();
+        return ResponseEntity.status(HttpStatus.FOUND)
+            .header(HttpHeaders.LOCATION, "/r/me#invite")
+            .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+            .header(HttpHeaders.VARY, HttpHeaders.COOKIE)
+            .build();
+    }
+
+    /** 將邀請連結、成效、里程碑與活動資料填入帳戶頁模板。 */
+    private void putInviteVariables(Map<String, String> vars, Reader reader) {
         ReferralService.ReferralStats stats = referralService.stats(reader.getId());
         int reward = creditPolicy.referralReward();
 
-        Map<String, String> vars = new HashMap<>();
-        // 固定傳 true：未登入者在上面就被導向登入頁了，走到這裡必然是已登入狀態
-        vars.put("<!--NAV_LINKS-->", ReaderNav.links(true));
         vars.put("<!--REWARD_INTRO-->", rewardIntro(reward));
         // 完整網址：讀者要把它貼給別人，相對路徑沒有用
         vars.put("<!--INVITE_LINK-->",
@@ -161,8 +169,6 @@ public class ReaderPortalController {
             : renderMilestones(stats.invitedCount(), referralGrowthService.milestones(reader.getId())));
         vars.put("<!--ACTIVE_CAMPAIGN_BLOCK-->", referralGrowthService == null ? ""
             : renderActiveCampaigns(referralGrowthService.activeCampaigns()));
-
-        return privatePage(htmlTemplate.render("templates/reader/invite.html", vars));
     }
 
     /**
@@ -179,7 +185,7 @@ public class ReaderPortalController {
      * <ul>
      *   <li><b>獎勵 &gt; 0</b>（本方法的 else 分支）：帳本在被邀者<b>點確認信的那一刻</b>
      *       就寫入，所以人數立刻成長，<b>不需要</b>「首次登入」這個附註。頁面靜態文案
-     *       （{@code invite.html} 的「還要點開確認信才算一次成功邀請」）因此是準確的。</li>
+     *       （帳戶頁邀請區的「還要點開確認信才算一次成功邀請」）因此是準確的。</li>
      *   <li><b>獎勵 = 0</b>：{@code rewardFor} 在 {@code reward <= 0} 時完全不寫帳本
      *       （刻意，避免占用冪等鍵），聯集只剩 {@code referred_by} 那一邊，而它是在被邀者
      *       <b>首次登入建立帳戶</b>時才寫入。因此 0 值文案的「並首次登入」

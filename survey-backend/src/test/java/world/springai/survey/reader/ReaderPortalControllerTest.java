@@ -590,9 +590,8 @@ class ReaderPortalControllerTest {
      * 頁面模板的佔位符（{@code <!--NAV_LINKS-->}、{@code <!--TXN_LIST-->} 等）
      * 一定要被實際內容取代；漏 put 任何一個都會讓 HTML 注解字面殘留在回應裡。
      *
-     * <p>注意：不能直接斷言「回應不含 {@code <!--}」——{@code me.html} 本身還有一句
-     * 與 {@code /r/invite} 暫時 404 有關的、真正的 HTML 註解（非佔位符），
-     * 那句不該被當成缺陷。因此逐一比對本頁用到的六個佔位符字面值。</p>
+     * <p>注意：不能直接斷言「回應不含 {@code <!--}」，因此逐一比對本頁用到的
+     * 佔位符字面值。</p>
      */
     @Test
     void noTemplatePlaceholderIsLeftUnfilled() throws Exception {
@@ -610,7 +609,7 @@ class ReaderPortalControllerTest {
     }
 
     // ------------------------------------------------------------------
-    // /r/invite：我的邀請
+    // /r/me#invite：帳戶頁內的邀請與獎勵
     // ------------------------------------------------------------------
 
     /** 未登入導向登入頁並帶回跳目標 */
@@ -623,12 +622,23 @@ class ReaderPortalControllerTest {
            .andExpect(header().string("Location", "/r/login?redirect=/r/invite"));
     }
 
+    /** 已登入使用舊邀請網址時，導向合併後的帳戶邀請區。 */
+    @Test
+    void loggedInInviteRedirectsToAccountInviteSection() throws Exception {
+        givenLoggedIn(reader(300));
+
+        mvc.perform(get("/r/invite").cookie(cookie()))
+           .andExpect(status().isFound())
+           .andExpect(header().string("Location", "/r/me#invite"))
+           .andExpect(header().string("Cache-Control", "private, no-store"));
+    }
+
     /** 顯示完整的邀請連結（含 ?ref= 與讀者自己的邀請碼） */
     @Test
     void showsFullInviteLinkWithReferralCode() throws Exception {
         givenLoggedIn(reader(300));
 
-        mvc.perform(get("/r/invite").cookie(cookie()))
+        mvc.perform(get("/r/me").cookie(cookie()))
            .andExpect(status().isOk())
            .andExpect(content().string(containsString("https://reader.example.com/r/?ref=CODE1234")));
     }
@@ -640,7 +650,7 @@ class ReaderPortalControllerTest {
         when(referralService.stats(READER_ID))
             .thenReturn(new ReferralService.ReferralStats(3, 300));
 
-        String html = mvc.perform(get("/r/invite").cookie(cookie()))
+        String html = mvc.perform(get("/r/me").cookie(cookie()))
             .andReturn().getResponse().getContentAsString();
 
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("3"));
@@ -658,7 +668,7 @@ class ReaderPortalControllerTest {
         givenLoggedIn(reader(300));
         when(creditPolicy.referralReward()).thenReturn(55);
 
-        mvc.perform(get("/r/invite").cookie(cookie()))
+        mvc.perform(get("/r/me").cookie(cookie()))
            .andExpect(content().string(containsString("55")));
     }
 
@@ -669,7 +679,7 @@ class ReaderPortalControllerTest {
         when(referralService.stats(READER_ID))
             .thenReturn(new ReferralService.ReferralStats(0, 0));
 
-        mvc.perform(get("/r/invite").cookie(cookie()))
+        mvc.perform(get("/r/me").cookie(cookie()))
            .andExpect(content().string(containsString("還沒有人")));
     }
 
@@ -691,7 +701,7 @@ class ReaderPortalControllerTest {
         when(referralService.stats(READER_ID))
             .thenReturn(new ReferralService.ReferralStats(0, 100));
 
-        String html = mvc.perform(get("/r/invite").cookie(cookie()))
+        String html = mvc.perform(get("/r/me").cookie(cookie()))
             .andReturn().getResponse().getContentAsString();
 
         org.junit.jupiter.api.Assertions.assertFalse(html.contains("還沒有人"),
@@ -713,13 +723,13 @@ class ReaderPortalControllerTest {
         givenLoggedIn(reader(300));
         when(creditPolicy.referralReward()).thenReturn(0);
 
-        mvc.perform(get("/r/invite").cookie(cookie()))
+        mvc.perform(get("/r/me").cookie(cookie()))
            .andExpect(content().string(not(containsString("拿到 0 點"))))
            .andExpect(content().string(containsString("暫停發放")));
     }
 
     /**
-     * 獎勵為 0 時，{@code /r/invite} 的文案必須與同一頁下半部的成效區塊一致。
+     * 獎勵為 0 時，帳戶頁邀請區的文案必須與同區的成效區塊一致。
      *
      * <p>成效人數是「帳本 REFERRAL 的 note」與 {@code reader.referred_by} 的聯集，
      * 所以「仍會計入邀請人數」不是空頭承諾，可以講。但<b>獎勵為 0 時帳本那一邊完全
@@ -736,7 +746,7 @@ class ReaderPortalControllerTest {
         givenLoggedIn(reader(300));
         when(creditPolicy.referralReward()).thenReturn(0);
 
-        String html = mvc.perform(get("/r/invite").cookie(cookie()))
+        String html = mvc.perform(get("/r/me").cookie(cookie()))
             .andReturn().getResponse().getContentAsString();
 
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("暫停發放"));
@@ -778,22 +788,22 @@ class ReaderPortalControllerTest {
     void explainsConfirmationRequirement() throws Exception {
         givenLoggedIn(reader(300));
 
-        mvc.perform(get("/r/invite").cookie(cookie()))
+        mvc.perform(get("/r/me").cookie(cookie()))
            .andExpect(content().string(containsString("確認信")));
     }
 
-    /** 邀請頁同樣不可被共享快取（含個人邀請碼） */
+    /** 合併後的帳戶頁不可被共享快取（含個人邀請碼）。 */
     @Test
     void invitePageIsNeverSharedCached() throws Exception {
         givenLoggedIn(reader(300));
 
-        mvc.perform(get("/r/invite").cookie(cookie()))
+        mvc.perform(get("/r/me").cookie(cookie()))
            .andExpect(header().string("Cache-Control", "private, no-store"))
            .andExpect(header().string("Vary", "Cookie"));
     }
 
     /**
-     * 個資防線：/r/invite 只能顯示彙總數字，絕不能出現任何被邀者的 email
+     * 個資防線：帳戶邀請區只能顯示彙總數字，絕不能出現任何被邀者的 email
      * （即使 local part）。{@link ReferralService.ReferralStats} 本身不帶
      * email，此測試釘住這個契約，避免日後有人「順手」改成直接查帳本明細
      * 並把 note（存的是被邀者 email）顯示出來。
@@ -806,7 +816,7 @@ class ReaderPortalControllerTest {
         when(creditTxnRepository.findByReaderIdOrderByCreatedAtDesc(anyLong(), any(Pageable.class)))
             .thenReturn(List.of(new CreditTxn(READER_ID, 100, CreditTxn.REASON_REFERRAL, null, "friend@example.com")));
 
-        String html = mvc.perform(get("/r/invite").cookie(cookie()))
+        String html = mvc.perform(get("/r/me").cookie(cookie()))
             .andReturn().getResponse().getContentAsString();
 
         org.junit.jupiter.api.Assertions.assertFalse(html.contains("friend@example.com"), "不得洩漏完整 email");
@@ -821,7 +831,7 @@ class ReaderPortalControllerTest {
     void inviteNoTemplatePlaceholderIsLeftUnfilled() throws Exception {
         givenLoggedIn(reader(300));
 
-        String html = mvc.perform(get("/r/invite").cookie(cookie()))
+        String html = mvc.perform(get("/r/me").cookie(cookie()))
             .andReturn().getResponse().getContentAsString();
 
         for (String placeholder : List.of(
@@ -833,46 +843,47 @@ class ReaderPortalControllerTest {
     }
 
     /**
-     * 導覽列的四個連結（{@code ReaderNav} 產生的形式）。
+     * 導覽列連結（{@code ReaderNav} 產生的形式）。
      *
      * <p>刻意在測試裡另寫一份字串而不引用 {@code ReaderNav} 的常數：讀同一份
      * 實作的斷言恆為真，把連結刪掉也不會變紅。比對整個 {@code <a>} 標籤而不是
      * 只比對路徑，這樣「導覽列少了某一項、但頁面內文剛好也連向同一個路徑」
      * 不會讓斷言假通過。</p>
      */
+    private static final String NAV_HOME = "<a href=\"/r/\">首頁</a>";
     private static final String NAV_ARCHIVE = "<a href=\"/r/archive\">歷史內容</a>";
     private static final String NAV_RULES = "<a href=\"/r/rules\">遊戲規則</a>";
     private static final String NAV_ME = "<a href=\"/r/me\">我的帳戶</a>";
-    private static final String NAV_INVITE = "<a href=\"/r/invite\">我的邀請</a>";
     private static final String NAV_LOGIN = "<a href=\"/r/login\">登入</a>";
 
     /**
-     * {@code /r/me} 與 {@code /r/invite} 的導覽列必須是完整的登入版本。
+     * 登入版導覽只保留一個個人中心，且補充性的遊戲規則固定放在最後。
      *
-     * <p>這兩頁在此之前各自拼了一份不同的導覽列（{@code /r/me} 只連「我的邀請」、
-     * {@code /r/invite} 只連「我的帳戶」），而且兩份都沒有測試守著，於是
-     * 「登入後看得到哪些功能」在兩頁之間不一致，規則頁也兩邊都連不到。</p>
-     *
-     * <p><b>雙向斷言</b>：除了要有四個登入版連結，還要<b>沒有</b>「登入」連結
-     * ——只驗前者的話，把 {@code ReaderNav} 改成無條件回傳「登入版 + 登入」
-     * （即完全不看登入狀態）仍會全綠。這兩頁只有登入者到得了（未登入會被
+     * <p><b>雙向斷言</b>：除了要有登入版連結，還要沒有「登入」與獨立的
+     * 「我的邀請」入口。帳戶頁只有登入者到得了（未登入會被
      * 導向登入頁，見 {@link #anonymousIsRedirectedToLoginWithRedirectBack}），
      * 出現「登入」連結就是導覽列沒有反映登入狀態。</p>
      */
     @Test
-    void navIsTheSharedLoggedInSetOnBothPages() throws Exception {
+    void loggedInNavKeepsRulesLastAndUsesOneAccountEntry() throws Exception {
         givenLoggedIn(reader(300));
 
-        for (String path : List.of("/r/me", "/r/invite")) {
-            String html = mvc.perform(get(path).cookie(cookie()))
-                .andReturn().getResponse().getContentAsString();
+        String html = mvc.perform(get("/r/me").cookie(cookie()))
+            .andReturn().getResponse().getContentAsString();
 
-            for (String link : List.of(NAV_ARCHIVE, NAV_RULES, NAV_ME, NAV_INVITE)) {
-                org.junit.jupiter.api.Assertions.assertTrue(html.contains(link),
-                    path + " 的導覽列少了 " + link);
-            }
-            org.junit.jupiter.api.Assertions.assertFalse(html.contains(NAV_LOGIN),
-                path + " 只有登入者到得了，導覽列不該出現登入連結");
+        for (String link : List.of(NAV_HOME, NAV_ARCHIVE, NAV_ME, NAV_RULES)) {
+            org.junit.jupiter.api.Assertions.assertTrue(html.contains(link),
+                "登入版導覽列少了 " + link);
         }
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains(NAV_LOGIN),
+            "帳戶頁只有登入者到得了，導覽列不該出現登入連結");
+        org.junit.jupiter.api.Assertions.assertFalse(
+            html.contains("<a href=\"/r/invite\">我的邀請</a>"),
+            "邀請已併入帳戶頁，不應再佔一個導覽入口");
+        org.junit.jupiter.api.Assertions.assertTrue(
+            html.indexOf(NAV_HOME) < html.indexOf(NAV_ARCHIVE)
+                && html.indexOf(NAV_ARCHIVE) < html.indexOf(NAV_ME)
+                && html.indexOf(NAV_ME) < html.indexOf(NAV_RULES),
+            "登入版導覽順序應為首頁、歷史內容、我的帳戶、遊戲規則");
     }
 }

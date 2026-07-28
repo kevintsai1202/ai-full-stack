@@ -555,7 +555,7 @@ class ReaderPageControllerTest {
         // 頁面就能長期顯示與實際扣點不同的數字（spec §5.11 最在意的信任缺陷）。
         assertTrue(html.contains("解鎖需要 10 點"), "應顯示取自 resolveCost 的成本");
         assertTrue(html.contains("還差 7 點"), "應顯示差額");
-        assertTrue(html.contains("/r/invite"), "應引導去邀請頁賺點數");
+        assertTrue(html.contains("/r/me#invite"), "應引導到帳戶頁的邀請區賺點數");
         assertTrue(html.contains("/r/rules"), "gate 區塊必須附規則頁連結");
         assertFalse(html.contains("id=\"unlock-btn\""), "餘額不足時不可出現解鎖按鈕");
         assertFalse(html.contains(SENTINEL), "受限區絕不可出現在 PARTIAL 回應中");

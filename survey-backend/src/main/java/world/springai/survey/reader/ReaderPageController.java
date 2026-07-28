@@ -486,7 +486,7 @@ public class ReaderPageController {
             case NEEDS_CREDITS -> gateHtml("這是進階內容",
                 "解鎖需要 " + cost + " 點，你還差 " + decision.shortfall() + " 點。"
                     + "邀請朋友訂閱可以獲得點數。",
-                "<a class=\"btn\" href=\"/r/invite\">看我的邀請連結</a>" + rulesHint());
+                "<a class=\"btn\" href=\"/r/me#invite\">看我的邀請連結</a>" + rulesHint());
             // 窮舉列出而非 default -> ""：這個方法只在 !full 時被呼叫（見呼叫端
             // gateRendered 的判斷），這幾個 reason 代表「本來就不需要顯示
             // paywall」的情況，理論上不會在此出現，仍需明列而不是 default，

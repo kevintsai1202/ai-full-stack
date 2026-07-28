@@ -170,8 +170,10 @@ class RulesPageControllerTest {
     @Test
     void navReflectsLoginState() throws Exception {
         String anonymous = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
-        org.junit.jupiter.api.Assertions.assertTrue(anonymous.contains("/r/login"));
-        org.junit.jupiter.api.Assertions.assertFalse(anonymous.contains("/r/me"));
+        org.junit.jupiter.api.Assertions.assertTrue(
+            anonymous.contains("<a href=\"/r/login\">登入</a>"));
+        org.junit.jupiter.api.Assertions.assertFalse(
+            anonymous.contains("<a href=\"/r/me\">我的帳戶</a>"));
 
         // 讓 resolve 回傳非 empty，模擬已登入讀者
         Reader loggedInReader = new Reader("user@example.com", "CODE1234");
@@ -180,8 +182,10 @@ class RulesPageControllerTest {
             .thenReturn(Optional.of(new ReaderContext.Current(loggedInReader, true)));
 
         String loggedIn = mvc.perform(get("/r/rules")).andReturn().getResponse().getContentAsString();
-        org.junit.jupiter.api.Assertions.assertTrue(loggedIn.contains("/r/me"));
-        org.junit.jupiter.api.Assertions.assertFalse(loggedIn.contains("/r/login"));
+        org.junit.jupiter.api.Assertions.assertTrue(
+            loggedIn.contains("<a href=\"/r/me\">我的帳戶</a>"));
+        org.junit.jupiter.api.Assertions.assertFalse(
+            loggedIn.contains("<a href=\"/r/login\">登入</a>"));
     }
 
     /**
