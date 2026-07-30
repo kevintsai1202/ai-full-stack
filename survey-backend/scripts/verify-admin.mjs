@@ -94,6 +94,16 @@ try {
   }
   console.log('OK 分隔線與付費牆插入真正換行');
 
+  // 6.5 工商區塊按鈕：選取文字要被成對 promo 標記包成獨立段落
+  await page.fill('#markdown', '工商內容');
+  await page.locator('#markdown').evaluate((editor) => editor.setSelectionRange(0, editor.value.length));
+  await page.getByRole('button', { name: '工商', exact: true }).click();
+  const promoMarkdown = await page.inputValue('#markdown');
+  if (promoMarkdown !== '<!--promo-->\n\n工商內容\n\n<!--/promo-->\n\n') {
+    fail(`工商區塊插入格式錯誤：${JSON.stringify(promoMarkdown)}`);
+  }
+  console.log('OK 工商區塊插入成對 promo 標記');
+
   // 7. 同類格式群組：H2 與 Java fenced code 都能在目前選取範圍正確插入
   await page.fill('#markdown', '段落標題');
   await page.locator('.format-group').filter({ hasText: '標題 H' }).locator('summary').click();
@@ -125,7 +135,8 @@ try {
   const firstTag = page.locator('#campaign-tag-options input').first();
   if (await firstTag.count()) await firstTag.check();
   await page.fill('#markdown',
-    '# Hello\n\n![大圖](https://example.com/large.png)\n\n免費內容\n\n<!--paywall-->\n\n付費內容');
+    '# Hello\n\n![大圖](https://example.com/large.png)\n\n免費內容\n\n'
+    + '<!--promo-->\n\n工商卡片內容\n\n<!--/promo-->\n\n<!--paywall-->\n\n付費內容');
   await page.click('#preview-btn');
   await page.waitForFunction(() => {
     const f = document.querySelector('#preview');
@@ -136,9 +147,13 @@ try {
       && f.srcdoc.includes('max-width:100%')
       && f.srcdoc.includes('付費牆分界')
       && f.srcdoc.includes('付費內容預覽')
-      && !f.srcdoc.includes('<!--paywall-->');
+      && !f.srcdoc.includes('<!--paywall-->')
+      // promo 區塊要渲染成優惠卡片（左側綠條），標記註解不可殘留
+      && f.srcdoc.includes('border-left:5px solid #087f72')
+      && f.srcdoc.includes('工商卡片內容')
+      && !f.srcdoc.includes('<!--promo-->');
   }, null, { timeout: 15000 });
-  console.log('OK 封面、Hashtag、響應式圖片與付費牆預覽渲染成功');
+  console.log('OK 封面、Hashtag、響應式圖片、工商卡片與付費牆預覽渲染成功');
 
   // 10. 回到分析頁並截圖留存
   await page.click('#tab-analytics');

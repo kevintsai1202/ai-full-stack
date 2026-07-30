@@ -196,6 +196,7 @@
         <button type="button" class="btn ghost format-btn" data-template="![圖片說明](https://)" title="圖片">圖片</button>
         <button type="button" class="btn ghost format-btn" data-block="---" title="分隔線">分隔線</button>
         <button type="button" class="btn ghost format-btn" data-block="<!--paywall-->" title="付費牆">付費牆</button>
+        <button type="button" class="btn ghost format-btn" data-block-start="<!--promo-->" data-block-end="<!--/promo-->" title="工商區塊：選取內容會被包成優惠卡片（渲染成帶綠條的底色卡片）">工商</button>
       </div>
       <textarea id="markdown" placeholder="# 標題&#10;&#10;支援 **粗體**、清單、[連結](https://...)"></textarea>
       <details class="media-panel" id="media-panel" open>
@@ -1082,6 +1083,15 @@
       const lineStart=editor.value.lastIndexOf('\n',Math.max(0,start-1))+1;
       editor.setRangeText(prefix,lineStart,lineStart,'end');editor.focus();
       editor.setSelectionRange(start+prefix.length,end+prefix.length);composeChanged();return;
+    }else if(button.dataset.blockStart){
+      // 成對區塊標記（如工商區塊）：把選取內容包在起訖標記之間，各自獨立成段；
+      // 未選取時填入佔位文字並保持選取，方便直接改寫
+      const inner=selected||'工商內容';
+      const composite=button.dataset.blockStart+'\n\n'+inner+'\n\n'+button.dataset.blockEnd;
+      const block=markdownBlock(editor.value,start,end,composite);
+      inserted=block.text;
+      cursorStart=start+block.blockStart+button.dataset.blockStart.length+2;
+      cursorEnd=cursorStart+inner.length;
     }else if(button.dataset.block!=null){
       const block=markdownBlock(editor.value,start,end,button.dataset.block);
       inserted=block.text;
