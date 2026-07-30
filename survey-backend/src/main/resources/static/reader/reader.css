@@ -493,3 +493,8 @@ input::placeholder { color:#71817c; }
   html { scroll-behavior:auto; }
   .btn, .site-head nav a { transition:none; }
 }
+
+/* 頁尾：合作與聯絡資訊（mailto），所有讀者頁共用 */
+.site-foot { margin-top:56px; padding:26px 16px 34px; border-top:1px solid var(--border); text-align:center; color:var(--muted); font-size:.92rem; }
+.site-foot p { margin:0; }
+.site-foot a { color:var(--accent-deep); font-weight:600; }
