@@ -23,12 +23,66 @@ public class MarkdownRenderer {
         .attributeProviderFactory(context -> this::responsiveAttributes)
         .build();
 
+    /** 工商區塊起始標記；與 {@code <!--paywall-->} 同為「整行單獨存在」的內容標記慣例 */
+    public static final String PROMO_START = "<!--promo-->";
+    /** 工商區塊結束標記 */
+    public static final String PROMO_END = "<!--/promo-->";
+
+    /**
+     * 工商卡片容器的開頭 HTML。
+     *
+     * <p>用單格 table + inline style 而非 div + class：信件端沒有外部 CSS，
+     * 且 Outlook 桌面版對 div 樣式支援不佳，table 是 Email 相容度最高的容器。
+     * 配色沿用讀者頁 reader.css 的主題色（--accent:#087f72、--accent-soft:#d9f1ec），
+     * 讓信件與網頁版視覺一致。</p>
+     */
+    private static final String PROMO_CARD_OPEN =
+        "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\""
+            + " style=\"margin:28px 0;border-collapse:separate;\"><tr>"
+            + "<td bgcolor=\"#d9f1ec\" style=\"border:1px solid #9fd6cc;"
+            + "border-left:5px solid #087f72;border-radius:10px;padding:20px 24px;\">";
+    private static final String PROMO_CARD_CLOSE = "</td></tr></table>";
+
     /** Markdown 轉 HTML；null 視為空字串 */
     public String toHtml(String markdown) {
         if (markdown == null) {
             return "";
         }
-        return renderer.render(parser.parse(markdown));
+        return wrapPromoBlocks(renderer.render(parser.parse(markdown)));
+    }
+
+    /**
+     * 把渲染後 HTML 中成對的 promo 標記換成工商卡片容器。
+     *
+     * <p>在「渲染後」處理而非操作 AST：commonmark 會把 HTML 註解原樣輸出，
+     * 字串層級的成對替換即可，且信件、後台預覽、讀者頁都經過 {@link #toHtml}，
+     * 一處實作三條路徑同時生效。</p>
+     *
+     * <p><b>不成對的標記刻意不轉換</b>：ContentSplitter 在渲染前就以
+     * {@code <!--paywall-->} 切分內文，若 promo 區塊橫跨 paywall，切分後兩側
+     * 各只剩單邊標記；此時保留原樣（HTML 註解對讀者不可見）是安全的降級，
+     * 若硬包卡片反而會產生未閉合的 table。</p>
+     */
+    private String wrapPromoBlocks(String html) {
+        StringBuilder result = new StringBuilder(html.length());
+        int cursor = 0;
+        while (true) {
+            int start = html.indexOf(PROMO_START, cursor);
+            if (start < 0) {
+                break;
+            }
+            int end = html.indexOf(PROMO_END, start + PROMO_START.length());
+            if (end < 0) {
+                // 只有開頭沒有結尾：不轉換，讓標記以無害註解的形式留在輸出中
+                break;
+            }
+            result.append(html, cursor, start)
+                .append(PROMO_CARD_OPEN)
+                .append(html, start + PROMO_START.length(), end)
+                .append(PROMO_CARD_CLOSE);
+            cursor = end + PROMO_END.length();
+        }
+        return result.append(html, cursor, html.length()).toString();
     }
 
     /**

@@ -46,4 +46,41 @@ class MarkdownRendererTest {
         assertTrue(html.contains("class=\"language-java\""), html);
         assertTrue(html.contains("overflow-x:auto"), html);
     }
+
+    /** 成對的 promo 標記應把中間內容包成工商卡片（Email 相容的 table + inline style）。 */
+    @Test
+    void wrapsPromoMarkersAsCard() {
+        String html = renderer.toHtml(
+            "<!--promo-->\n\n**工商時間**\n\n優惠碼 PUBAI85\n\n<!--/promo-->");
+        assertTrue(html.contains("border-left:5px solid #087f72"), html);
+        assertTrue(html.contains("<strong>工商時間</strong>"), html);
+        assertTrue(html.contains("PUBAI85"), html);
+        // 標記本身不應殘留在輸出中
+        assertTrue(!html.contains("<!--promo-->"), html);
+        assertTrue(!html.contains("<!--/promo-->"), html);
+        // 內容必須位於卡片容器之內
+        assertTrue(html.indexOf("border-left:5px solid #087f72") < html.indexOf("工商時間"), html);
+        assertTrue(html.indexOf("工商時間") < html.indexOf("</table>"), html);
+    }
+
+    /** 不成對的 promo 標記（如被 paywall 切分）不轉換，保留為無害的 HTML 註解。 */
+    @Test
+    void leavesUnpairedPromoMarkerUntouched() {
+        String html = renderer.toHtml("<!--promo-->\n\n只有開頭標記");
+        assertTrue(html.contains("<!--promo-->"), html);
+        assertTrue(!html.contains("border-left:5px solid #087f72"), html);
+    }
+
+    /** 同一篇內文允許多個 promo 區塊，各自獨立包卡片。 */
+    @Test
+    void wrapsEachPromoPairSeparately() {
+        String html = renderer.toHtml(
+            "<!--promo-->\n\n第一段\n\n<!--/promo-->\n\n正文\n\n<!--promo-->\n\n第二段\n\n<!--/promo-->");
+        int first = html.indexOf("border-left:5px solid #087f72");
+        int second = html.indexOf("border-left:5px solid #087f72", first + 1);
+        assertTrue(first >= 0 && second > first, html);
+        // 兩張卡片之間的正文不應被包進卡片
+        int firstClose = html.indexOf("</table>");
+        assertTrue(firstClose < html.indexOf("正文"), html);
+    }
 }
