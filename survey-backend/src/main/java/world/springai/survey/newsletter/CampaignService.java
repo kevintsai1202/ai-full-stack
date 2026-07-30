@@ -135,6 +135,10 @@ public class CampaignService {
     /**
      * 寄一封包含目前封面與 hashtag 的測試信；先做應用層驗證，避免把供應商 400
      * 誤包成無法理解的 500。
+     *
+     * <p>內容含 {@code <!--paywall-->} 時模擬讀者「未解鎖」視角：只寄免費區＋解鎖卡片，
+     * 受限區內容絕不進入信件。與後台預覽（兩側都顯示）刻意不同——預覽是給管理員
+     * 校對全文用的，測試信是驗證讀者實際收到／看到什麼用的。</p>
      */
     public String sendTest(String subject, String markdown, String to, String coverEmoji,
                            List<String> tags, String coverUrl) {
@@ -147,8 +151,12 @@ public class CampaignService {
         if (to == null || to.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "請填寫測試信箱");
         }
-        String body = articlePreview(subject, markdownRenderer.toHtml(markdown),
-            coverEmoji, tags, coverUrl);
+        // 有付費牆 → 只渲染免費區並接上解鎖卡片；無付費牆 → 全文照寄（維持既有行為）
+        ContentSplitter.Split split = contentSplitter.split(markdown);
+        String bodyHtml = split.hasGate()
+            ? markdownRenderer.toHtml(split.freeMarkdown()) + testGateCard()
+            : markdownRenderer.toHtml(markdown);
+        String body = articlePreview(subject, bodyHtml, coverEmoji, tags, coverUrl);
         String html = renderFor(body, to.strip(), null);
         String testSubject = subject.strip().startsWith("[測試]")
             ? subject.strip()
@@ -160,6 +168,31 @@ public class CampaignService {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                 "郵件服務拒絕測試信，請檢查寄件設定或稍後重試");
         }
+    }
+
+    /**
+     * 測試信版的解鎖卡片：模擬讀者在網頁上遇到付費牆的樣子。
+     *
+     * <p>Email 相容性：容器用單格 table＋inline style（Outlook 對 div 支援差），
+     * 配色沿用讀者頁主題綠。測試信沒有實際文章 slug，CTA 沿用
+     * {@link #renderFor} 的慣例導向歷史內容頁。</p>
+     */
+    private String testGateCard() {
+        return """
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" \
+            style="margin:28px 0"><tr><td style="padding:24px 20px;\
+            border:2px dashed #0f766e;border-radius:12px;background:#f0fdfa;\
+            color:#134e4a;text-align:center">
+              <strong style="display:block;font-size:16px">🔒 這是進階內容</strong>
+              <span style="display:block;margin-top:8px;font-size:13px">\
+            解鎖後才能繼續閱讀。此測試信模擬讀者未解鎖時看到的範圍，受限區內容不會寄出。</span>
+              <a href="\
+            """ + readerSiteLinks.archive() + """
+            " style="display:inline-block;margin-top:14px;\
+            background:#0f766e;color:#ffffff;padding:10px 22px;border-radius:8px;\
+            text-decoration:none;font-weight:700">前往網站解鎖閱讀</a>
+            </td></tr></table>
+            """;
     }
 
     /**

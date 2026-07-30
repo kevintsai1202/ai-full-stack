@@ -165,6 +165,42 @@ class CampaignServiceTest {
         assertTrue(html.getValue().contains("#Java"), html.getValue());
     }
 
+    /** 含付費牆的測試信要模擬讀者未解鎖視角：只寄免費區＋解鎖卡片，受限區絕不可進信件。 */
+    @Test
+    void testSendWithPaywallSendsOnlyFreeSectionAndGateCard() {
+        when(linkBuilder.unsubscribeLink("me@example.com"))
+            .thenReturn("https://example.com/unsubscribe");
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("provider-2");
+
+        svc.sendTest("進階主題", "免費導讀\n\n<!--paywall-->\n\n祕密付費內容", "me@example.com");
+
+        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+        verify(mailSender).send(eq("me@example.com"), anyString(), html.capture());
+        assertTrue(html.getValue().contains("免費導讀"), html.getValue());
+        assertTrue(!html.getValue().contains("祕密付費內容"),
+            "受限區內容不可出現在測試信中：" + html.getValue());
+        assertTrue(!html.getValue().contains("<!--paywall-->"), html.getValue());
+        assertTrue(html.getValue().contains("這是進階內容"), html.getValue());
+        assertTrue(html.getValue().contains("https://reader.example.com/r/archive"),
+            "解鎖卡片應含前往網站的連結（測試信無 slug，導向歷史內容）：" + html.getValue());
+    }
+
+    /** 無付費牆的測試信維持既有行為：全文照寄、不出現解鎖卡片。 */
+    @Test
+    void testSendWithoutPaywallKeepsFullContent() {
+        when(linkBuilder.unsubscribeLink("me@example.com"))
+            .thenReturn("https://example.com/unsubscribe");
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("provider-3");
+
+        svc.sendTest("一般主題", "第一段\n\n第二段", "me@example.com");
+
+        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+        verify(mailSender).send(eq("me@example.com"), anyString(), html.capture());
+        assertTrue(html.getValue().contains("第一段"), html.getValue());
+        assertTrue(html.getValue().contains("第二段"), html.getValue());
+        assertTrue(!html.getValue().contains("這是進階內容"), html.getValue());
+    }
+
     /** 立即發送：呼叫 sendBatch，每封 html 含該收件人的退訂連結，campaign 記為 sent、accepted=2 */
     @Test
     void immediateSendUsesBatchWithPersonalizedLinks() {
