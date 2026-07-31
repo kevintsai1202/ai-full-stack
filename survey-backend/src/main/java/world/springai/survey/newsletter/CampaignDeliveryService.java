@@ -49,6 +49,8 @@ public class CampaignDeliveryService {
     private final SubscriptionLinkBuilder linkBuilder;
     private final ReaderSiteLinks readerSiteLinks;
     private final JdbcTemplate jdbc;
+    /** 信件版內文的唯一產生點：補寄一律由 markdown 重新折疊，不信任存下來的 body_html */
+    private final MailBodyRenderer mailBodyRenderer;
 
     /** 注入寄送、名單、稽核與文章連結依賴。 */
     public CampaignDeliveryService(
@@ -62,7 +64,9 @@ public class CampaignDeliveryService {
             EmailTemplate emailTemplate,
             SubscriptionLinkBuilder linkBuilder,
             ReaderSiteLinks readerSiteLinks,
-            JdbcTemplate jdbc) {
+            JdbcTemplate jdbc,
+            MailBodyRenderer mailBodyRenderer) {
+        this.mailBodyRenderer = mailBodyRenderer;
         this.campaignRepository = campaignRepository;
         this.batchRepository = batchRepository;
         this.recipientRepository = recipientRepository;
@@ -377,7 +381,14 @@ public class CampaignDeliveryService {
         return new int[] { accepted, failed };
     }
 
-    /** 建立含個人退訂連結、文章直達與登入入口的完整信件 HTML。 */
+    /**
+     * 建立含個人退訂連結、文章直達與登入入口的完整信件 HTML。
+     *
+     * <p><b>內文由 markdown 重新折疊，不使用 {@code campaign.getBodyHtml()}</b>：
+     * 那個欄位在折疊功能存在之前寫入的每一列都存著全文，直接重播等於把受限區
+     * 補寄出去。而且「重新渲染」也讓這條路徑不必依賴任何寫入端記得先折疊——
+     * 正確性由這裡自己保證，不是靠上游的善意。</p>
+     */
     private String renderFor(Campaign campaign, String email) {
         String slug = campaign.getSlug();
         String path = slug == null ? "/r/archive" : "/r/news/" + slug;
@@ -385,7 +396,7 @@ public class CampaignDeliveryService {
             ? readerSiteLinks.archive()
             : readerSiteLinks.article(slug);
         return emailTemplate.wrapCampaign(
-            campaign.getBodyHtml(),
+            mailBodyRenderer.html(campaign.getMarkdown(), slug),
             linkBuilder.unsubscribeLink(email),
             articleLink,
             readerSiteLinks.login(path));

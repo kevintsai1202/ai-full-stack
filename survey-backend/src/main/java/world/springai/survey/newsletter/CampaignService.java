@@ -54,6 +54,8 @@ public class CampaignService {
     private final ContentSplitter contentSplitter;
     /** 讀者網站公開連結的唯一組裝入口。 */
     private final ReaderSiteLinks readerSiteLinks;
+    /** 信件版內文（含付費牆折疊）的唯一產生點，與補寄路徑共用 */
+    private final MailBodyRenderer mailBodyRenderer;
 
     public CampaignService(MailSender mailSender,
                            RecipientService recipientService,
@@ -64,9 +66,11 @@ public class CampaignService {
                            SubscriptionLinkBuilder linkBuilder,
                            MailQuotaService mailQuotaService,
                            ContentSplitter contentSplitter,
-                           ReaderSiteLinks readerSiteLinks) {
+                           ReaderSiteLinks readerSiteLinks,
+                           MailBodyRenderer mailBodyRenderer) {
         this.contentSplitter = contentSplitter;
         this.readerSiteLinks = readerSiteLinks;
+        this.mailBodyRenderer = mailBodyRenderer;
         this.mailSender = mailSender;
         this.recipientService = recipientService;
         this.campaignRepository = campaignRepository;
@@ -151,12 +155,9 @@ public class CampaignService {
         if (to == null || to.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "請填寫測試信箱");
         }
-        // 有付費牆 → 只渲染免費區並接上解鎖卡片；無付費牆 → 全文照寄（維持既有行為）
-        ContentSplitter.Split split = contentSplitter.split(markdown);
-        String bodyHtml = split.hasGate()
-            ? markdownRenderer.toHtml(split.freeMarkdown()) + testGateCard()
-            : markdownRenderer.toHtml(markdown);
-        String body = articlePreview(subject, bodyHtml, coverEmoji, tags, coverUrl);
+        // 測試信沒有實際文章 slug，解鎖卡片的 CTA 因此導向歷史內容
+        String body = articlePreview(subject, mailBodyHtml(markdown, null),
+            coverEmoji, tags, coverUrl);
         String html = renderFor(body, to.strip(), null);
         String testSubject = subject.strip().startsWith("[測試]")
             ? subject.strip()
@@ -171,28 +172,14 @@ public class CampaignService {
     }
 
     /**
-     * 測試信版的解鎖卡片：模擬讀者在網頁上遇到付費牆的樣子。
+     * 產生「信件版內文」，委派給 {@link MailBodyRenderer}——那是折疊的唯一決策點，
+     * 補寄路徑（{@link CampaignDeliveryService}）也用同一份。
      *
-     * <p>Email 相容性：容器用單格 table＋inline style（Outlook 對 div 支援差），
-     * 配色沿用讀者頁主題綠。測試信沒有實際文章 slug，CTA 沿用
-     * {@link #renderFor} 的慣例導向歷史內容頁。</p>
+     * <p>保留這個私有轉接方法只是為了讓本類的三個呼叫點讀起來短一些；
+     * 任何新的寄送路徑都應該直接注入 {@link MailBodyRenderer}，不要再抄一份判斷。</p>
      */
-    private String testGateCard() {
-        return """
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" \
-            style="margin:28px 0"><tr><td style="padding:24px 20px;\
-            border:2px dashed #0f766e;border-radius:12px;background:#f0fdfa;\
-            color:#134e4a;text-align:center">
-              <strong style="display:block;font-size:16px">🔒 這是進階內容</strong>
-              <span style="display:block;margin-top:8px;font-size:13px">\
-            解鎖後才能繼續閱讀。此測試信模擬讀者未解鎖時看到的範圍，受限區內容不會寄出。</span>
-              <a href="\
-            """ + readerSiteLinks.archive() + """
-            " style="display:inline-block;margin-top:14px;\
-            background:#0f766e;color:#ffffff;padding:10px 22px;border-radius:8px;\
-            text-decoration:none;font-weight:700">前往網站解鎖閱讀</a>
-            </td></tr></table>
-            """;
+    private String mailBodyHtml(String markdown, String slug) {
+        return mailBodyRenderer.html(markdown, slug);
     }
 
     /**
@@ -276,13 +263,21 @@ public class CampaignService {
         // 已無可達路徑，故移除；publishedAt 有值時沿用呼叫端指定的時間發布。
         OffsetDateTime normalizedPublishedAt = resolvePublishedAt(normalizedSlug, publishedAt);
 
-        // 守門：階段 D（依 tier 產生折疊版內文 foldedHtml）完成前，PREMIUM 內容一旦寄出，
-        // markdownRenderer.toHtml(markdown) 會把受限區塊與 <!--paywall--> 之後的全文一併渲染
-        // 給「所有」收件人 —— 網頁端擋得再嚴，信件端都已外流付費內容。
-        // 待 CampaignService 補上 foldedHtml（依 tier 分兩種內文：全文版／折疊版）後，此檢查方可移除。
+        // 守門：PREMIUM 不走寄送路徑。
+        //
+        // 注意此檢查的理由已經改變。原本的理由是「信件端會把受限區寄給所有收件人」，
+        // 那個缺陷已由 mailBodyHtml() 修掉——現在任何含 <!--paywall--> 的內容，
+        // 無論 tier 為何，寄出的都只有免費區。所以這道守門<b>不再是</b>防外洩的最後防線。
+        //
+        // 保留它是刻意的範圍決定，不是還沒做完：解除等於開放一條新的 PREMIUM 發布路徑，
+        // 而那條路徑還有沒想清楚的部分——寄出的信對所有人長得一樣，VIP 與已解鎖的讀者
+        // 同樣只收到免費區，得自己點回網站才看得到本來就有權讀的內容。要不要為此做
+        // per-recipient 渲染（技術上可行，sendBatch 本來就逐一組裝每封信）是獨立的產品決定。
+        // 決定要開放時，移除這個 if 即可，不需要再補折疊邏輯。
         if (!Campaign.TIER_BASIC.equals(normalizedTier)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "目前僅支援 BASIC 內容寄送；PREMIUM 內容需等信件折疊功能（階段 D）實作後才能發布");
+                "目前僅支援 BASIC 內容寄送；PREMIUM 內容請用「只發布不寄送」放上網頁，"
+                    + "再另寄一封 BASIC 通知信導流");
         }
 
         // 取得收件人清單
@@ -295,8 +290,11 @@ public class CampaignService {
         recipients = limited.recipients();
         int skippedForQuota = limited.skippedForQuota();
 
-        // 渲染 markdown 為 HTML 內文
-        String bodyHtml = markdownRenderer.toHtml(markdown);
+        // 渲染信件版 HTML 內文：有付費牆標記時只取免費區＋解鎖卡片（見 mailBodyHtml）。
+        // 存進 campaign.body_html 的也是這一份——那個欄位的語意就是「信件版內文」，
+        // 存全文等於在資料庫裡留一份現成的外洩來源。網頁端渲染讀的是 markdown 原文
+        // 再經 ContentSplitter 切分，與 body_html 無關，所以受限區不會因此消失。
+        String bodyHtml = mailBodyHtml(markdown, normalizedSlug);
         boolean scheduled = "schedule".equals(mode);
 
         // 建立 campaign 紀錄並預存（之後更新統計）
@@ -376,11 +374,9 @@ public class CampaignService {
     /**
      * 只發布到網頁、<b>完全不寄送任何信件</b>。
      *
-     * <p><b>為什麼需要這條路徑</b>：{@link #send} 對非 BASIC 的 tier 無條件回 400，
-     * 因為階段 D 的信件折疊（依 tier 產生折疊版內文）尚未實作，PREMIUM 內容一旦寄出
-     * 就會把受限區完整送進<b>所有</b>收件人的信箱。那個守門是正確的，但副作用是
-     * PREMIUM 文章連 API 都沒有建立路徑，只剩手動 {@code INSERT INTO campaign}——
-     * 整套點數機制沒有任何操作人員能讓它跑起來。</p>
+     * <p><b>為什麼需要這條路徑</b>：{@link #send} 對非 BASIC 的 tier 無條件回 400
+     * （理由見該處註解），副作用是 PREMIUM 文章連 API 都沒有建立路徑，
+     * 只剩手動 {@code INSERT INTO campaign}——整套點數機制沒有任何操作人員能讓它跑起來。</p>
      *
      * <p><b>為什麼 PREMIUM 在這裡可以放行</b>：不寄信就沒有「信件端外流付費內容」
      * 這個風險。網頁端的受限區由 {@code ReaderPageController} 依授權結果決定是否
@@ -698,11 +694,12 @@ public class CampaignService {
         if (scheduledAt == null || !scheduledAt.isAfter(now.toInstant())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "新的排程時間需為未來");
         }
-        // 守門：重排仍會實際寄出信件，同 send() 的理由——階段 D 的信件折疊尚未實作前，
-        // 非 BASIC 的 campaign 一律拒絕重排寄送。此檢查待 foldedHtml 實作後可移除。
+        // 守門：重排仍會實際寄出信件，故與 send() 保持一致（理由見該處註解——
+        // 現在是範圍決定而非防外洩，折疊本身已由 mailBodyHtml() 無條件生效）。
         if (!Campaign.TIER_BASIC.equals(campaign.getTier())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "目前僅支援 BASIC 內容寄送；PREMIUM 內容需等信件折疊功能（階段 D）實作後才能發布");
+                "目前僅支援 BASIC 內容寄送；PREMIUM 內容請用「只發布不寄送」放上網頁，"
+                    + "再另寄一封 BASIC 通知信導流");
         }
 
         // 1. 取消舊的 provider 排程信（把舊 email_log 標 cancelled）
@@ -718,7 +715,9 @@ public class CampaignService {
         recipients = limited.recipients();
         int skippedForQuota = limited.skippedForQuota();
 
-        String bodyHtml = markdownRenderer.toHtml(markdown);
+        // 與 send() 共用同一份折疊判斷：重排看起來只是「改時間」，實際上會用新內容
+        // 重寄整批，只修 send() 而漏掉這裡就是一條繞過折疊的後門。
+        String bodyHtml = mailBodyHtml(markdown, campaign.getSlug());
         int[] rc = scheduleAll(campaignId, subject, bodyHtml, recipients, scheduledAt,
             campaign.getSlug());
 

@@ -238,7 +238,7 @@ public class AdminCampaignController {
      * 需提供有效金鑰。
      *
      * <p><b>與 {@code /api/admin/campaign/send} 的差異與存在理由</b>：send 對 PREMIUM
-     * 無條件回 400（階段 D 的信件折疊未完成前必要的守門），於是 PREMIUM 文章原本
+     * 無條件回 400（理由見 {@code CampaignService.send} 的註解），於是 PREMIUM 文章原本
      * 只能手動寫資料庫才能上線。這條端點不寄信，因此沒有「信件端外流付費內容」的
      * 風險，PREMIUM 可以放行——這是它存在的全部目的。</p>
      *

@@ -58,7 +58,8 @@ class CampaignServiceTest {
     private final CampaignService svc = new CampaignService(
         mailSender, recipientService, campaignRepository, emailLogRepository,
         markdownRenderer, emailTemplate, linkBuilder, mailQuotaService, contentSplitter,
-        readerSiteLinks);
+        readerSiteLinks,
+        new MailBodyRenderer(contentSplitter, markdownRenderer, readerSiteLinks));
 
     {
         // 除非測試特別 stub 更小的量，否則額度視為充足——避免所有既有發送測試
@@ -199,6 +200,139 @@ class CampaignServiceTest {
         assertTrue(html.getValue().contains("第一段"), html.getValue());
         assertTrue(html.getValue().contains("第二段"), html.getValue());
         assertTrue(!html.getValue().contains("這是進階內容"), html.getValue());
+    }
+
+    /**
+     * 正式群發含付費牆時，受限區<b>絕不可</b>進入信件——與測試信同一份判斷。
+     *
+     * <p>這是本組測試的核心：在此之前 {@code send()} 直接渲染整份 markdown，
+     * 而測試信卻會折疊，等於「按下發送前看到的最後一個證據是假的」。</p>
+     */
+    @Test
+    void immediateSendWithPaywallSendsOnlyFreeSectionAndGateCard() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@x.com"));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(mailSender.sendBatch(anyList())).thenReturn("job-1");
+        when(linkBuilder.unsubscribeLink("a@x.com")).thenReturn("https://x/unsubscribe?u=a");
+
+        svc.send("進階主題", "免費導讀\n\n<!--paywall-->\n\n祕密付費內容",
+            null, null, "now", null);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<MailSender.Email>> captor = ArgumentCaptor.forClass(List.class);
+        verify(mailSender).sendBatch(captor.capture());
+        String html = captor.getValue().get(0).html();
+        assertTrue(html.contains("免費導讀"), html);
+        assertTrue(!html.contains("祕密付費內容"),
+            "受限區內容不可出現在正式群發的信件中：" + html);
+        assertTrue(!html.contains("<!--paywall-->"),
+            "控制標記不可洩漏到信件原始碼中：" + html);
+        assertTrue(html.contains("這是進階內容"), "折疊後必須附上解鎖卡片：" + html);
+    }
+
+    /**
+     * 群發的解鎖卡片要指向這篇文章本身，而不是歷史列表。
+     *
+     * <p>測試信沒有 slug 才退而導向 {@code /r/archive}；群發一定有 slug
+     * （未指定時 {@code send()} 會自動產生），把讀者丟到列表再自己找回這篇
+     * 是可以避免的摩擦。</p>
+     */
+    @Test
+    void immediateSendGateCardLinksToTheArticleItself() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@x.com"));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(mailSender.sendBatch(anyList())).thenReturn("job-1");
+        when(linkBuilder.unsubscribeLink("a@x.com")).thenReturn("https://x/unsubscribe?u=a");
+
+        svc.send("進階主題", "免費導讀\n\n<!--paywall-->\n\n祕密付費內容",
+            null, null, "now", null, Campaign.TIER_BASIC, 0, "my-article", null);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<MailSender.Email>> captor = ArgumentCaptor.forClass(List.class);
+        verify(mailSender).sendBatch(captor.capture());
+        String html = captor.getValue().get(0).html();
+        int cardStart = html.indexOf("這是進階內容");
+        assertTrue(cardStart >= 0, "應有解鎖卡片：" + html);
+        assertTrue(html.indexOf("https://reader.example.com/r/news/my-article", cardStart) > 0,
+            "解鎖卡片的 CTA 應指向這篇文章：" + html);
+    }
+
+    /**
+     * 存進 {@code campaign.body_html} 的必須是折疊版。
+     *
+     * <p>那個欄位的語意就是「信件版內文」；存全文等於在資料庫裡留一份現成的
+     * 外洩來源，任何日後「拿 bodyHtml 直接重寄」的程式碼都會繞過折疊。
+     * {@code publish()} 刻意把它留 null 也是同一個理由。</p>
+     */
+    @Test
+    void immediateSendWithPaywallPersistsFoldedBodyHtml() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@x.com"));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(mailSender.sendBatch(anyList())).thenReturn("job-1");
+        when(linkBuilder.unsubscribeLink("a@x.com")).thenReturn("https://x/unsubscribe?u=a");
+
+        svc.send("進階主題", "免費導讀\n\n<!--paywall-->\n\n祕密付費內容",
+            null, null, "now", null);
+
+        ArgumentCaptor<Campaign> saved = ArgumentCaptor.forClass(Campaign.class);
+        verify(campaignRepository, atLeastOnce()).save(saved.capture());
+        Campaign campaign = saved.getValue();
+        assertTrue(!campaign.getBodyHtml().contains("祕密付費內容"),
+            "body_html 是信件版內文，不可存入受限區：" + campaign.getBodyHtml());
+        assertTrue(campaign.getBodyHtml().contains("免費導讀"), campaign.getBodyHtml());
+        // markdown 原文必須完整保留：讀者網頁端要靠它渲染受限區給已授權的人
+        assertTrue(campaign.getMarkdown().contains("祕密付費內容"),
+            "markdown 原文不可被折疊，否則網頁端永遠拿不到受限區");
+    }
+
+    /**
+     * 重排排程同樣會實際寄出信件，折疊判斷必須一致。
+     *
+     * <p>reschedule 看起來只是「改時間」，實際上會用新內容重寄整批——
+     * 只修 send() 而漏掉這裡，就等於留了一條繞過折疊的後門。</p>
+     */
+    @Test
+    void rescheduleWithPaywallSchedulesOnlyFreeSection() {
+        Instant newAt = Instant.parse("2030-06-01T10:00:00Z");
+        Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
+            OffsetDateTime.parse("2030-05-01T10:00:00Z"), 1, "scheduled");
+        when(campaignRepository.findById(21L)).thenReturn(Optional.of(existing));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(emailLogRepository.findByCampaignIdAndStatus(21L, "scheduled")).thenReturn(List.of());
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@x.com"));
+        when(mailSender.schedule(any(), eq(newAt))).thenReturn("sched-9");
+
+        svc.reschedule(21L, "進階主題", "免費導讀\n\n<!--paywall-->\n\n祕密付費內容",
+            null, null, newAt);
+
+        ArgumentCaptor<MailSender.Email> mail = ArgumentCaptor.forClass(MailSender.Email.class);
+        verify(mailSender).schedule(mail.capture(), eq(newAt));
+        String html = mail.getValue().html();
+        assertTrue(html.contains("免費導讀"), html);
+        assertTrue(!html.contains("祕密付費內容"),
+            "受限區內容不可出現在重排寄出的信件中：" + html);
+        assertTrue(html.contains("這是進階內容"), "折疊後必須附上解鎖卡片：" + html);
+        assertTrue(!existing.getBodyHtml().contains("祕密付費內容"),
+            "重排後存回的 body_html 同樣不可含受限區：" + existing.getBodyHtml());
+    }
+
+    /** 無付費牆的正式群發維持既有行為：全文照寄、不出現解鎖卡片。 */
+    @Test
+    void immediateSendWithoutPaywallKeepsFullContent() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@x.com"));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(mailSender.sendBatch(anyList())).thenReturn("job-1");
+        when(linkBuilder.unsubscribeLink("a@x.com")).thenReturn("https://x/unsubscribe?u=a");
+
+        svc.send("一般主題", "第一段\n\n第二段", null, null, "now", null);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<MailSender.Email>> captor = ArgumentCaptor.forClass(List.class);
+        verify(mailSender).sendBatch(captor.capture());
+        String html = captor.getValue().get(0).html();
+        assertTrue(html.contains("第一段"), html);
+        assertTrue(html.contains("第二段"), html);
+        assertTrue(!html.contains("這是進階內容"), html);
     }
 
     /** 立即發送：呼叫 sendBatch，每封 html 含該收件人的退訂連結，campaign 記為 sent、accepted=2 */
@@ -707,10 +841,12 @@ class CampaignServiceTest {
     /** 公開網址：設定值帶結尾斜線時不得產生雙斜線（某些反向代理下會 404） */
     @Test
     void publishUrlHandlesTrailingSlashInBaseUrl() {
+        ReaderSiteLinks trailingSlashLinks = new ReaderSiteLinks("https://reader.example.com/");
         CampaignService withSlash = new CampaignService(
             mailSender, recipientService, campaignRepository, emailLogRepository,
             markdownRenderer, emailTemplate, linkBuilder, mailQuotaService, contentSplitter,
-            new ReaderSiteLinks("https://reader.example.com/"));
+            trailingSlashLinks,
+            new MailBodyRenderer(contentSplitter, markdownRenderer, trailingSlashLinks));
         when(campaignRepository.findBySlug("slash")).thenReturn(Optional.empty());
         when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
 

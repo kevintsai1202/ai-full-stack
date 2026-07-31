@@ -729,19 +729,19 @@
     $('#reader-q').addEventListener('keydown',e=>{if(e.key==='Enter')searchReaders();});
     $('#ledger-email').addEventListener('keydown',e=>{if(e.key==='Enter')loadLedger();});
     $('#privacy-export').onclick=exportAudienceData;$('#privacy-delete').onclick=deleteAudienceData;
-    // 階段 D 才會實作「信件內只寄免費區」的折疊。在那之前，PREMIUM 文章若寄出
-    // 會把受限區完整寄進信箱，paywall 形同虛設，故寄送端點有守門（回 400）。
-    // 這裡先在 UI 說明，避免使用者選了 PREMIUM 才撞到 400。
+    // 寄送端點對 PREMIUM 回 400，這裡先在 UI 說明，避免使用者選了 PREMIUM 才撞到。
+    // 注意理由已經改變：信件端的折疊（只寄免費區＋解鎖卡片）已由 CampaignService
+    // 的 mailBodyHtml() 無條件實作，任何含 <!--paywall--> 的內容都不會把受限區寄出，
+    // 與 tier 無關。守門保留的是 PREMIUM 這條寄送路徑本身的產品決定，不是外洩風險。
     $('#art-tier').addEventListener('change',e=>{
       const hint=$('#tier-hint');
       if(e.target.value==='PREMIUM'){
         // 文案必須與後端行為一致：「發送」打 /api/admin/campaign/send，該端點對 PREMIUM
         // 無條件回 400（與有沒有設 slug 無關）；「只發布不寄送」打
-        // /api/admin/campaign/publish，該端點接受 PREMIUM（不寄信就沒有信件端外洩）。
-        // 「可發布到網頁」與「可寄送」是兩回事，後者仍待階段 D 的信件折疊。
+        // /api/admin/campaign/publish，該端點接受 PREMIUM。
         hint.textContent='PREMIUM 可以發布到網頁（請按「只發布不寄送」，slug 必填），'
-          +'但還不能寄送：按「發送」會被拒絕（400），因為信件端的折疊（只寄免費區）'
-          +'要到階段 D 才實作，現在寄出會把受限區完整寄進所有人的信箱。';
+          +'但還不能寄送：按「發送」會被拒絕（400）。PREMIUM 的價值是點數解鎖，'
+          +'而群發的信對所有人長得一樣，VIP 與已解鎖的讀者也只會收到免費區。';
         hint.className='warn';
         // 價格凍結警告綁在「PREMIUM 狀態」而非「預填事件」上：欄位已有值時預填函式
         // 會直接 return，若警告只在預填成功時出現，操作者恰好在最需要警告的情境
@@ -1528,19 +1528,16 @@
       link.href=r.url;link.textContent=r.url;link.target='_blank';link.rel='noopener';
       m.append(link);
       // 「只發布不寄送」名副其實：訂閱者不會收到任何通知，文章就靜靜躺在網頁上。
-      // 這是階段 D 的信件折疊完成前唯一能發布 PREMIUM 的路徑，所以要主動告知，
-      // 否則操作者會以為發布等於通知，等著看開信率。
-      // 通知信必須是 BASIC：PREMIUM 走寄送會讓 markdownRenderer.toHtml(markdown)
-      // 把受限區完整渲染給所有收件人，paywall 形同虛設（send 端點對 PREMIUM 回 400
-      // 就是為了擋這件事）。上面那條連結可直接複製進通知信。
+      // 這是目前唯一能發布 PREMIUM 的路徑，所以要主動告知，否則操作者會以為
+      // 發布等於通知，等著看開信率。上面那條連結可直接複製進通知信。
       const notice=document.createElement('p');
       notice.className='hint';notice.style.margin='8px 0 0';
-      // 指引依 tier 分支：BASIC 文章本來就沒有受限區，對它顯示「受限內容不要貼進信裡」
+      // 指引依 tier 分支：BASIC 文章不一定有受限區，對它顯示付費牆相關的提醒
       // 會讓操作者誤以為自己剛發布的東西有外洩風險。
       notice.textContent=r.tier==='PREMIUM'
         ?('訂閱者不會自動收到通知。想通知的話，另外建一篇 BASIC 通知信'
-          +'（內文放摘要與上面這條文章連結即可，受限內容不要貼進信裡——PREMIUM 寄送'
-          +'會把受限區完整寄給所有收件人）。')
+          +'（內文放摘要與上面這條文章連結即可）。就算不小心把受限內容貼進去也不會外洩：'
+          +'寄送時 <!--paywall--> 之後的內容一律折疊，只寄免費區＋解鎖卡片。')
         :'訂閱者不會自動收到通知；需要的話可另寄一封含這條連結的信。';
       m.append(notice);
       // slug 在 campaign 表有 UNIQUE 約束：留著上一篇的值，下一篇必定撞 400「slug 已被使用」
