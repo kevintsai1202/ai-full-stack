@@ -70,3 +70,21 @@ land-page/screenshots/hero-verify/
 
 # 管理後台驗證截圖與統計報告 PDF（含線上個資，嚴禁提交）
 output/
+
+# 大型影音與素材：不進 git（單檔逾 100MB 會被 GitHub 拒絕，且會永久膨脹 repo）
+# 需要版控時改用 Git LFS 或物件儲存（本專案已有 MinIO 服務）
+experiments/
+hahow宣傳內容/
+short/
+subtitles/
+artifacts/
+幻燈片8.mp4
+AI Full Stack 宣傳動畫.zip
+
+# 學員名單（姓名／Email／電話），本 repo 為 public，嚴禁提交
+survey-backend/Dify 學員.xlsx
+
+# 指令誤輸入產生的暫存檔
+$null
+389，Failures
+cover-test.txt
