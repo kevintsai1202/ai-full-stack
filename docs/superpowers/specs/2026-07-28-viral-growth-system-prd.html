@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>病毒成長系統 PRD</title>
+  <style>
+    :root{--ink:#172321;--muted:#60706c;--line:#dbe5e1;--paper:#fff;--wash:#f3f8f6;--accent:#087f73}
+    *{box-sizing:border-box}body{margin:0;background:var(--wash);color:var(--ink);font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}
+    main{max-width:980px;margin:36px auto;padding:44px;background:var(--paper);border:1px solid var(--line);border-radius:20px}
+    header{border-bottom:1px solid var(--line);padding-bottom:20px}h1{font-size:34px;line-height:1.2;margin:6px 0 10px}h2{font-size:22px;margin:32px 0 12px}
+    .meta,.muted{color:var(--muted)}.status{display:inline-block;color:#fff;background:var(--accent);padding:3px 10px;border-radius:999px;font-size:13px}
+    .summary{font-size:18px;max-width:760px}blockquote{margin:16px 0;padding:14px 18px;border-left:4px solid var(--accent);background:var(--wash)}
+    table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted)}
+    ul{padding-left:22px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}@media(max-width:720px){main{margin:0;padding:24px;border:0;border-radius:0}.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="status">開發中</span>
+    <h1>電子報病毒成長系統</h1>
+    <p class="meta">2026-07-28 · Owner：SpringAI Newsletter</p>
+    <p class="summary">把單一邀請獎勵升級成可衡量、可活動化、可人工審核的成長循環。先守住帳務與濫用風險，再以雙邊獎勵、里程碑、文章分享與社群圖卡提高自然擴散。</p>
+  </header>
+  <section>
+    <h2>問題</h2>
+    <blockquote>需要邀請里程碑、雙邊獎勵、分享漏斗、閱讀後提示、社群分享圖卡、限時加碼，以及每日上限、異常速度偵測與人工審核。</blockquote>
+    <p>目前只能知道確認後是否發過推薦人獎勵，無法量化點擊至確認的流失，也無法在擴大獎勵時攔下高速或超量邀請。</p>
+  </section>
+  <div class="grid">
+    <section><h2>目標</h2><ul><li>雙邊獎勵與 3／5／10 人徽章</li><li>點擊 → 填表 → 確認漏斗</li><li>限時倍率活動與熱門文章</li><li>每日上限、速度規則與人工審核</li><li>完讀分享提示與兩種社群圖卡</li></ul></section>
+    <section><h2>非目標</h2><ul><li>分享當下不直接發點</li><li>不追蹤社群平台內部曝光</li><li>不做現金、轉讓或兌現</li><li>不使用侵入式裝置指紋</li></ul></section>
+  </div>
+  <section>
+    <h2>成功指標</h2>
+    <table><thead><tr><th>指標</th><th>定義</th><th>目標</th></tr></thead><tbody>
+      <tr><td>填表率</td><td>有推薦碼填表 ÷ 唯一分享點擊</td><td>建立基線</td></tr>
+      <tr><td>確認率</td><td>已確認歸因 ÷ 有推薦碼填表</td><td>≥ 55%</td></tr>
+      <tr><td>分享採用率</td><td>完讀後啟動分享 ÷ 完讀登入讀者</td><td>≥ 8%</td></tr>
+      <tr><td>重複發點</td><td>重複被邀者或里程碑帳本列</td><td>0</td></tr>
+    </tbody></table>
+  </section>
+  <section>
+    <h2>安全預設</h2>
+    <p>被邀者 20 點；3／5／10 人額外 50／100／300 點與徽章；每日自動核准 10 人；10 分鐘高速確認進審核；活動倍率最高 3 倍。所有營運值由後台設定。</p>
+  </section>
+  <section>
+    <h2>里程碑</h2>
+    <table><tbody><tr><th>M1</th><td>歸因資料、冪等帳本、雙邊獎勵、里程碑與風控</td></tr><tr><th>M2</th><td>漏斗儀表板、待審核與活動管理</td></tr><tr><th>M3</th><td>讀者提示、邀請進度、Open Graph 與限動圖卡</td></tr></tbody></table>
+  </section>
+  <section>
+    <h2>待驗證</h2>
+    <p class="muted">上線後依真實分布校準每日上限與速度門檻；比較活動帶來的確認率，而非只看點擊成長。</p>
+  </section>
+</main>
+</body>
+</html>

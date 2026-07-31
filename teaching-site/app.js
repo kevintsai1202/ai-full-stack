@@ -180,6 +180,29 @@ function parseMarkdown(mdText) {
     const trimmed = line.trim();
     if (!trimmed) { flushList(); continue; }
 
+    // Markdown 管道表格：偵測「表頭行 + 分隔行(|---|---|)」開頭的連續表格區塊，轉成 HTML <table>
+    const isTableRow = (s) => s.trim().startsWith("|") && s.includes("|");
+    const isDivider = (s) => { const t = s.trim(); return t.includes("|") && t.includes("-") && /^[\s|:-]+$/.test(t); };
+    if (isTableRow(line) && i + 1 < lines.length && isDivider(lines[i + 1])) {
+      flushList();
+      // 拆解單列儲存格：去除首尾管線後以 | 切分並修剪空白
+      const splitRow = (s) => {
+        let t = s.trim();
+        if (t.startsWith("|")) t = t.slice(1);
+        if (t.endsWith("|")) t = t.slice(0, -1);
+        return t.split("|").map((cell) => cell.trim());
+      };
+      const headers = splitRow(line);
+      const bodyRows = [];
+      let j = i + 2;
+      while (j < lines.length && isTableRow(lines[j])) { bodyRows.push(splitRow(lines[j])); j++; }
+      const thead = `<thead><tr>${headers.map((h) => `<th>${inlineMarkdown(h)}</th>`).join("")}</tr></thead>`;
+      const tbody = `<tbody>${bodyRows.map((row) => `<tr>${row.map((cell) => `<td>${inlineMarkdown(cell)}</td>`).join("")}</tr>`).join("")}</tbody>`;
+      parts.push(`<div class="content-table-wrap"><table class="content-table">${thead}${tbody}</table></div>`);
+      i = j - 1;
+      continue;
+    }
+
     if (line.startsWith("# "))   { flushList(); parts.push(`<h1>${inlineMarkdown(line.slice(2))}</h1>`); continue; }
     if (line.startsWith("## "))  { flushList(); parts.push(`<h2>${inlineMarkdown(line.slice(3))}</h2>`); continue; }
     if (line.startsWith("### ")) { flushList(); parts.push(`<h3>${inlineMarkdown(line.slice(4))}</h3>`); continue; }

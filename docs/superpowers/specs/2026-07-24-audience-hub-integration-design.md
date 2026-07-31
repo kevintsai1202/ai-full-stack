@@ -17,8 +17,10 @@
 | 線上課系統 | 未來 | 無 |
 
 **已完成（Phase 0，2026-07-24）**：
-- `survey_response.source` 欄位（V5 migration）：`survey_form` / `exam`
+- `survey_response.source` 欄位（V5 migration）：`survey_form` / `exam` / `dify`
 - `POST /api/admin/import`：外部名單匯入為待確認（consent=false）
+- Admin「讀者管理」支援 `.xlsx` 名單預覽與匯入：主要欄位為姓名與 Email；預覽會略過格式錯誤及檔案內重複資料，確認後才呼叫既有匯入 API
+- XLSX 匯入的 Dify 名單標記為 `source=dify`、`consent=false`；匯入不會自動寄信，仍須由管理員寄出二次確認邀請
 - `POST /api/admin/campaign/invite`：二次確認邀請信（limit 分批＋email_log 冪等跳過）
 - `GET /api/survey/confirm`：HMAC 確認訂閱閉環
 - exam 名單 254 筆已匯入，每日 50 封邀請排程執行中（claude.ai routine `trig_01UcKL8HK18yMiKNWtVowC6Y`）

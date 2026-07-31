@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>彈性受眾資料與 Exam 匯入 PRD</title>
+  <style>
+    :root{--ink:#172033;--muted:#667085;--line:#dfe5ee;--paper:#f5f7fb;--card:#fff;--accent:#3157d5;--ok:#067647}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.65 system-ui,"Noto Sans TC",sans-serif}
+    main{width:min(1180px,calc(100% - 32px));margin:32px auto 64px}.hero,.panel{background:var(--card);border:1px solid var(--line);border-radius:16px}
+    .hero{padding:28px 32px;border-top:5px solid var(--accent)}.meta{display:flex;gap:10px;flex-wrap:wrap;color:var(--muted)}
+    .pill{padding:3px 10px;border-radius:999px;background:#eef2ff;color:var(--accent);font-weight:700}h1{margin:12px 0 8px;font-size:30px;line-height:1.25}
+    h2{font-size:18px;margin:0 0 12px}h3{font-size:15px;margin:0 0 8px}.summary{font-size:17px;max-width:850px}
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;margin-top:16px}.panel{padding:20px}.half{grid-column:span 6}.third{grid-column:span 4}.full{grid-column:1/-1}
+    ul{margin:6px 0 0;padding-left:20px}.quote{border-left:4px solid var(--accent);padding:8px 14px;background:#f8faff}
+    table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted)}
+    .flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.node{border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:#fafbff}.arrow{color:var(--accent);font-weight:800}
+    .phase{border-left:3px solid var(--line);padding-left:12px;margin:12px 0}.phase strong{color:var(--accent)}.ok{color:var(--ok);font-weight:700}
+    @media(max-width:800px){.half,.third{grid-column:1/-1}.hero{padding:22px}h1{font-size:25px}}
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div class="meta"><span class="pill">Draft</span><span>2026-07-27</span><span>Owner：名單中心</span></div>
+    <h1>彈性受眾資料與 Exam 測驗匯入</h1>
+    <p class="summary">把「人物」與「每次問卷／測驗」拆開：人物依 Email 合併，但每次活動完整保留。Admin 統計依 Survey schema 自動呈現，並可篩選讀者後安全批次贈送點數或 VIP。</p>
+  </header>
+
+  <section class="grid">
+    <article class="panel half">
+      <h2>問題</h2>
+      <p>目前 <code>survey_response</code> 同時放人物、同意狀態與固定問卷答案；匯入遇到既有 Email 就整筆略過，無法加入同一人的新測驗紀錄。</p>
+      <p class="quote">「不是重複的人就沒有新資料；同一個人可能填多份問卷、參加多場測驗。」</p>
+    </article>
+    <article class="panel half">
+      <h2>已驗證資料量</h2>
+      <table><tr><th>Exam 資料</th><th>數量</th></tr><tr><td>人物主檔</td><td>259</td></tr><tr><td>測驗紀錄</td><td>288</td></tr><tr><td>測驗</td><td>17</td></tr><tr><td>逐題答案</td><td>764</td></tr></table>
+    </article>
+
+    <article class="panel half">
+      <h2>Goals</h2>
+      <ul><li>新增 Survey 欄位不需 DB migration</li><li>同一人保留多次問卷與測驗</li><li>依答案、分數、來源與活動分眾</li><li>所有資料可追溯來源與匯入批次</li></ul>
+    </article>
+    <article class="panel half">
+      <h2>Non-goals</h2>
+      <ul><li>不合併 Survey 與 Exam 資料庫</li><li>不啟用 Exam 寄信功能</li><li>不因參加測驗自動取得行銷同意</li><li>第一版不做完整拖拉式表單設計器</li></ul>
+    </article>
+
+    <article class="panel full">
+      <h2>目標模型</h2>
+      <div class="flow">
+        <span class="node">Audience Person<br>唯一人物</span><span class="arrow">→</span>
+        <span class="node">Consent<br>訂閱／退訂</span><span class="arrow">＋</span>
+        <span class="node">Identity<br>外部系統 ID</span><span class="arrow">＋</span>
+        <span class="node">Record<br>每次問卷／測驗</span><span class="arrow">＋</span>
+        <span class="node">Fact<br>可搜尋資訊</span>
+      </div>
+    </article>
+
+    <article class="panel third">
+      <h2>User story：管理員</h2>
+      <p>身為管理員，我希望按一下同步 Exam，先預覽新增、合併與錯誤筆數，再確認匯入，以便安全取得完整測驗名單。</p>
+    </article>
+    <article class="panel third">
+      <h2>User story：行銷</h2>
+      <p>身為內容經營者，我希望篩出「參加特定測驗且低於 60 分」的人，以便寄送適合的補充教材。</p>
+    </article>
+    <article class="panel third">
+      <h2>User story：開發</h2>
+      <p>身為開發者，我希望新增問卷題目只需更新 schema 與 mapping，不必修改 Entity、migration 與每個匯出器。</p>
+    </article>
+
+    <article class="panel half">
+      <h2>匯入規則</h2>
+      <ul><li>Email 已存在：合併人物，仍新增測驗 record</li><li>Exam attempt ID 已存在：依 payload hash 判定更新或 unchanged</li><li>無 Email：列入錯誤，不建立行銷人物</li><li>無 consent timestamp＋version：維持 pending</li></ul>
+    </article>
+    <article class="panel half">
+      <h2>成功指標</h2>
+      <table><tr><th>指標</th><th>目標</th></tr><tr><td>新欄位 migration</td><td>0</td></tr><tr><td>重跑重複活動</td><td>0</td></tr><tr><td>訂閱狀態遺失</td><td>0</td></tr><tr><td>有效 Exam profile 成功率</td><td>≥ 99%</td></tr></table>
+    </article>
+
+    <article class="panel half">
+      <h2>彈性 Survey 統計</h2>
+      <p>圖表、篩選器、原始資料欄位與 PDF 共用 form schema。不同題型依欄位類型自動選擇呈現，不再把題目名稱寫死於 Admin HTML。</p>
+    </article>
+    <article class="panel half">
+      <h2>讀者篩選與批次贈送</h2>
+      <p>可依訂閱、來源、VIP、點數、Survey、Exam 與最近活動篩選。批次操作先建立目標快照並預覽，再以 idempotency key 執行，避免重複發放。</p>
+    </article>
+
+    <article class="panel full">
+      <h2>排程寄送完成後移除操作 <span class="ok">已完成</span></h2>
+      <p>只有尚未到寄送時間的排程可以修改或取消。排程時間一到，寄送歷史必須移除「修改」與「取消排程」按鈕；後端 API 也要以伺服器時間再次檢查並拒絕逾時操作，避免舊頁面或直接呼叫 API 繞過限制。</p>
+      <ul><li>可操作條件：<code>status = scheduled</code> 且 <code>scheduledAt &gt; now</code></li><li>到期後整理顯示狀態，不再持續顯示 <code>scheduled</code></li><li>逾時修改／取消回傳 <code>409 Conflict</code></li><li>未到期、已到期、跨時點競態與時區皆需測試</li></ul>
+    </article>
+
+    <article class="panel full">
+      <h2>Rollout</h2>
+      <div class="phase"><strong>Phase 0（已完成）</strong> — 修正寄送歷史排程生命週期；到期後移除修改／取消按鈕，API 同步拒絕逾時操作。</div>
+      <div class="phase"><strong>Phase 1</strong> — 建立人物、同意、活動、Fact 與匯入稽核底座，回填現有 Survey。</div>
+      <div class="phase"><strong>Phase 2</strong> — Admin 手動同步 Exam，匯入人物、填寫資料、結果與逐題答案。</div>
+      <div class="phase"><strong>Phase 3</strong> — Survey schema 化，Admin 統計與匯出依 schema 自動呈現。</div>
+      <div class="phase"><strong>Phase 4</strong> — 讀者動態篩選、選取快照與點數／VIP 批次操作。</div>
+      <div class="phase"><strong>Phase 5</strong> — Campaign 動態分眾與 Exam cursor 排程同步。</div>
+    </article>
+
+    <article class="panel full">
+      <h2>待確認</h2>
+      <ol><li>逐題答案匯入，但只在人物詳情展開。</li><li>Exam 參與者預設不等於訂閱者。</li><li>第一版做 schema 設定，不做拖拉設計器。</li><li>保留既有 <code>/api/survey</code> 相容入口。</li><li>Exam 透過 API 匯出，不直接共用資料庫。</li><li>Admin 統計與所有匯出共用 schema。</li><li>批次點數只處理既有 Reader；VIP 可建帳戶並採延長效期。</li></ol>
+      <p class="ok">以上七點確認後再進入實作。</p>
+    </article>
+  </section>
+</main>
+</body>
+</html>

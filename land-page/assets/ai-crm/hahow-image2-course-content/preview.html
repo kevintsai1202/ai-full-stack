@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hahow 課程內容圖獨立預覽</title>
+  <style>
+    body { margin: 0; font-family: system-ui, "Microsoft JhengHei", sans-serif; background: #f5fbfa; color: #102a2e; }
+    main { max-width: 1180px; margin: 0 auto; padding: 36px 18px; }
+    h1 { margin: 0 0 10px; font-size: clamp(1.7rem, 4vw, 2.5rem); }
+    p { margin: 0 0 24px; color: #52666b; line-height: 1.8; }
+    h2 { margin: 32px 0 16px; font-size: 1.45rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
+    figure { margin: 0; }
+    img { width: 100%; height: auto; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 10px; border: 1px solid rgba(15, 42, 46, .12); box-shadow: 0 18px 46px rgba(16,42,46,.12); }
+    .cover-grid img { aspect-ratio: auto; object-fit: contain; background: #fff; }
+    figure.wide { grid-column: 1 / -1; }
+    figure.wide img { aspect-ratio: 1600 / 420; object-fit: cover; }
+    figcaption { margin-top: 10px; color: #52666b; font-weight: 800; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Hahow 課程內容圖獨立預覽</h1>
+    <p>此頁只用於素材檢查，不會被接回 <code>land-page/index.html</code>。</p>
+    <h2>封面圖</h2>
+    <section class="grid cover-grid">
+    <figure>
+      <picture>
+        <source srcset="cover-wide-title.webp" type="image/webp" />
+        <img src="cover-wide-title.png" alt="Hahow 長方形封面 1000x620" />
+      </picture>
+      <figcaption>Hahow 長方形封面 1000x620</figcaption>
+    </figure>
+  
+
+    <figure>
+      <picture>
+        <source srcset="cover-square-title.webp" type="image/webp" />
+        <img src="cover-square-title.png" alt="Hahow 方形封面 800x800" />
+      </picture>
+      <figcaption>Hahow 方形封面 800x800</figcaption>
+    </figure>
+  </section>
+    <h2>直式文字圖</h2>
+    <section class="grid">
+    <figure>
+      <picture>
+        <source srcset="01-ai-crm-project-course.webp" type="image/webp" />
+        <img src="01-ai-crm-project-course.png" width="941" height="1672" alt="課程主軸：做出一套 AI CRM" />
+      </picture>
+      <figcaption>課程主軸 · 從後端、前端到 AI 助理</figcaption>
+    </figure>
+  
+
+    <figure>
+      <picture>
+        <source srcset="02-eight-unit-roadmap-course.webp" type="image/webp" />
+        <img src="02-eight-unit-roadmap-course.png" width="941" height="1672" alt="課程內容：8 大單元 章章相連" />
+      </picture>
+      <figcaption>課程內容 · 每章都回到同一套專案</figcaption>
+    </figure>
+  
+
+    <figure>
+      <picture>
+        <source srcset="03-rag-tool-calling-course.webp" type="image/webp" />
+        <img src="03-rag-tool-calling-course.png" width="941" height="1672" alt="AI 落地：RAG + Tool Calling" />
+      </picture>
+      <figcaption>AI 落地 · 讓回答接回真實資料</figcaption>
+    </figure>
+  
+
+    <figure>
+      <picture>
+        <source srcset="04-demo-day-outcome-course.webp" type="image/webp" />
+        <img src="04-demo-day-outcome-course.png" width="941" height="1672" alt="結訓成果：Demo Day 跑給別人看" />
+      </picture>
+      <figcaption>結訓成果 · 完課就是可展示作品</figcaption>
+    </figure>
+  </section>
+    <h2>課程內容橫幅</h2>
+    <section class="grid">
+      <figure class="wide">
+        <picture>
+          <source srcset="banner-01.webp" type="image/webp" />
+          <img src="banner-01.png" width="1600" height="420" alt="01 開發環境、專案骨架與 AI 協作流程" />
+        </picture>
+        <figcaption>01 · 開發環境、專案骨架與 AI 協作流程</figcaption>
+      </figure>
+    
+
+      <figure class="wide">
+        <picture>
+          <source srcset="banner-02.webp" type="image/webp" />
+          <img src="banner-02.png" width="1600" height="420" alt="02 Spring MVC、REST API 與 CRM Domain Modeling" />
+        </picture>
+        <figcaption>02 · Spring MVC、REST API 與 CRM Domain Modeling</figcaption>
+      </figure>
+    
+
+      <figure class="wide">
+        <picture>
+          <source srcset="banner-03.webp" type="image/webp" />
+          <img src="banner-03.png" width="1600" height="420" alt="03 JPA、PostgreSQL、Flyway 與資料查詢" />
+        </picture>
+        <figcaption>03 · JPA、PostgreSQL、Flyway 與資料查詢</figcaption>
+      </figure>
+    
+
+      <figure class="wide">
+        <picture>
+          <source srcset="banner-04.webp" type="image/webp" />
+          <img src="banner-04.png" width="1600" height="420" alt="04 Spring Security、JWT 與權限保護" />
+        </picture>
+        <figcaption>04 · Spring Security、JWT 與權限保護</figcaption>
+      </figure>
+    
+
+      <figure class="wide">
+        <picture>
+          <source srcset="banner-05.webp" type="image/webp" />
+          <img src="banner-05.png" width="1600" height="420" alt="05 React CRM 工作台與前後端整合" />
+        </picture>
+        <figcaption>05 · React CRM 工作台與前後端整合</figcaption>
+      </figure>
+    
+
+      <figure class="wide">
+        <picture>
+          <source srcset="banner-06.webp" type="image/webp" />
+          <img src="banner-06.png" width="1600" height="420" alt="06 Spring AI、SSE 串流與 Tool Calling" />
+        </picture>
+        <figcaption>06 · Spring AI、SSE 串流與 Tool Calling</figcaption>
+      </figure>
+    
+
+      <figure class="wide">
+        <picture>
+          <source srcset="banner-07.webp" type="image/webp" />
+          <img src="banner-07.png" width="1600" height="420" alt="07 RAG、pgvector、MCP 與知識庫擴充" />
+        </picture>
+        <figcaption>07 · RAG、pgvector、MCP 與知識庫擴充</figcaption>
+      </figure>
+    
+
+      <figure class="wide">
+        <picture>
+          <source srcset="banner-08.webp" type="image/webp" />
+          <img src="banner-08.png" width="1600" height="420" alt="08 Demo Day：從登入到 AI CRM 端到端驗收" />
+        </picture>
+        <figcaption>08 · Demo Day：從登入到 AI CRM 端到端驗收</figcaption>
+      </figure>
+    </section>
+  </main>
+</body>
+</html>
