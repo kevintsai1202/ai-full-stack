@@ -1,5 +1,8 @@
 package world.springai.survey.newsletter;
 
+import org.commonmark.ext.gfm.tables.TableBlock;
+import org.commonmark.ext.gfm.tables.TableCell;
+import org.commonmark.ext.gfm.tables.TablesExtension;
 import org.commonmark.node.FencedCodeBlock;
 import org.commonmark.node.Image;
 import org.commonmark.node.Node;
@@ -7,18 +10,32 @@ import org.commonmark.parser.Parser;
 import org.commonmark.renderer.html.HtmlRenderer;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 
 /** 把電子報內文的 Markdown 轉成 HTML（管理者為可信作者） */
 @Component
 public class MarkdownRenderer {
 
-    private final Parser parser = Parser.builder().build();
+    /**
+     * 啟用的 CommonMark 擴充。
+     *
+     * <p>目前只有 GFM 表格。CommonMark 規格本身<b>不含</b>表格語法，不掛這個擴充時
+     * 整張表會被當成普通段落，管線符號原樣輸出給讀者。</p>
+     *
+     * <p>parser 與 renderer <b>必須掛同一份</b>：只掛 parser 會產生 renderer 不認得的
+     * 節點而輸出空白，只掛 renderer 則根本不會有表格節點產生。</p>
+     */
+    private static final List<org.commonmark.Extension> EXTENSIONS =
+        List.of(TablesExtension.create());
+
+    private final Parser parser = Parser.builder().extensions(EXTENSIONS).build();
     /**
      * 單一換行保留為 br，符合後台編輯器的直覺；CommonMark 預設會把 soft break
      * 當成空白，導致管理者明明換行、寄出與文章頁卻黏成同一段。
      */
     private final HtmlRenderer renderer = HtmlRenderer.builder()
+        .extensions(EXTENSIONS)
         .softbreak("<br />\n")
         .attributeProviderFactory(context -> this::responsiveAttributes)
         .build();
@@ -102,6 +119,35 @@ public class MarkdownRenderer {
             attributes.put("style",
                 "max-width:100%;overflow-x:auto;padding:16px;border-radius:10px;"
                     + "background:#10231f;color:#e7f7f2;white-space:pre");
+        }
+        tableAttributes(node, tagName, attributes);
+    }
+
+    /**
+     * 為 GFM 表格補上 Email 可攜的 inline style。
+     *
+     * <p>裸 {@code <table>} 在信箱裡是一張沒有框線、沒有間距、表頭與內容分不出來的東西——
+     * 郵件客戶端不可靠地支援外部 CSS，理由與圖片、程式碼區塊完全相同。</p>
+     *
+     * <p>{@code border-collapse:collapse} 是必要的：不合併的話 Outlook 會在每格之間
+     * 留下雙線縫隙。配色沿用讀者頁主題綠（{@code #087f72} / {@code #d9f1ec}），
+     * 讓信件與網頁版視覺一致。</p>
+     *
+     * <p><b>只處理 {@code <table>} 與儲存格，不動 {@code <tr>}</b>：斑馬紋需要依列數
+     * 決定底色，而 attributeProvider 拿不到列索引；為此改寫成自訂 renderer 不划算，
+     * 有框線就足以辨識。</p>
+     */
+    private void tableAttributes(Node node, String tagName, Map<String, String> attributes) {
+        if (node instanceof TableBlock && "table".equals(tagName)) {
+            attributes.put("style",
+                "border-collapse:collapse;width:100%;max-width:100%;margin:20px 0;"
+                    + "font-size:14px");
+        }
+        if (node instanceof TableCell) {
+            boolean header = ((TableCell) node).isHeader();
+            attributes.put("style",
+                "border:1px solid #9fd6cc;padding:8px 12px;text-align:left;"
+                    + (header ? "background:#d9f1ec;color:#08665c;font-weight:700" : ""));
         }
     }
 }

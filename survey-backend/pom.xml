@@ -53,6 +53,16 @@
       <artifactId>commonmark</artifactId>
       <version>0.22.0</version>
     </dependency>
+    <!--
+      GFM 表格擴充。CommonMark 規格本身不含表格，沒有這個依賴時整張表會被當成
+      普通段落，管線符號原樣輸出給讀者（預覽、測試信、正式寄送、讀者頁四處同時壞）。
+      版本必須與 commonmark 核心一致。
+    -->
+    <dependency>
+      <groupId>org.commonmark</groupId>
+      <artifactId>commonmark-ext-gfm-tables</artifactId>
+      <version>0.22.0</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.poi</groupId>
       <artifactId>poi-ooxml</artifactId>

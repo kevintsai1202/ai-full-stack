@@ -24,6 +24,60 @@ class MarkdownRendererTest {
         assertEquals("", renderer.toHtml(null));
     }
 
+    /**
+     * GFM 表格必須渲染成真正的 {@code <table>}。
+     *
+     * <p>CommonMark 規格本身<b>不含</b>表格，那是 GFM 擴充。沒掛擴充時，
+     * 整張表會被當成普通段落輸出，管線符號原樣噴給讀者看——而且因為預覽、
+     * 測試信與正式寄送共用同一個 toHtml()，四個地方會一起壞。</p>
+     */
+    @Test
+    void rendersGfmTable() {
+        String html = renderer.toHtml("""
+            | 設定 | 在回答什麼 |
+            |---|---|
+            | **MX** | 只管收信 |
+            | SPF | 誰可以寄信 |
+            """);
+
+        assertTrue(html.contains("<table"), "表格必須渲染成 <table>：" + html);
+        assertTrue(html.contains("<th"), "表頭必須是 <th>：" + html);
+        assertTrue(html.contains("<td"), "儲存格必須是 <td>：" + html);
+        assertTrue(html.contains("<strong>MX</strong>"), "儲存格內的 Markdown 仍要生效：" + html);
+        assertTrue(!html.contains("|---|"), "分隔列不可原樣輸出：" + html);
+    }
+
+    /**
+     * 表格必須自帶 inline style。
+     *
+     * <p>Email 端沒有外部 CSS 可用，裸 {@code <table>} 在信箱裡會是一張沒有框線、
+     * 沒有間距、表頭和內容分不出來的東西。與圖片、程式碼區塊同理——
+     * 這個專案已經用 attributeProvider 對那兩者補樣式，表格沿用同一套做法。</p>
+     */
+    @Test
+    void stylesTableForEmailClients() {
+        String html = renderer.toHtml("""
+            | 設定 | 說明 |
+            |---|---|
+            | MX | 只管收信 |
+            """);
+
+        assertTrue(html.contains("border-collapse"), "表格需可靠地合併框線：" + html);
+        assertTrue(html.contains("max-width:100%"), "表格不可撐破信件容器：" + html);
+        // 表頭與儲存格都要有框線，否則信箱中看起來只是一堆散字
+        assertTrue(html.contains("<th style=") && html.contains("<td style="),
+            "表頭與儲存格都要帶 inline style：" + html);
+    }
+
+    /** 表格是選用語法：一般段落不得因為擴充而被誤判成表格。 */
+    @Test
+    void leavesOrdinaryTextUnchangedByTableExtension() {
+        String html = renderer.toHtml("這句話有一個 | 管線符號，但不是表格。");
+
+        assertTrue(!html.contains("<table"), "不該把普通句子當成表格：" + html);
+        assertTrue(html.contains("管線符號"), html);
+    }
+
     /** 編輯器中的單一換行必須保留，避免寄出後兩行被折成同一段。 */
     @Test
     void preservesSingleLineBreak() {
