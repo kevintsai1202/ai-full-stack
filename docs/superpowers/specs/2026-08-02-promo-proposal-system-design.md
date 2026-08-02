@@ -128,7 +128,7 @@ DRAFT ──發布/寄送對帳（內文有此版位連結）──> COMMITTED�
    <!--/promo-->
    ```
 
-   **連結必須是絕對網址**（`https://example.org` 來自 `app.public-base-url`，注入模式比照 `SubscriptionLinkBuilder`）：這是信件中唯一的相對連結曾造成兩層斷路——郵件客戶端沒有 base URL 可補完相對路徑；讀者網域部署下 `ReaderEntryHostFilter` 的允許清單也需要匹配到完整路徑（該 filter 已加入 `GET /promo/c/` 放行，因為此端點需讀取讀者 session cookie 才能正確歸戶）。對帳解析（`/promo/c/(\d+)` 子字串比對）不受影響，絕對網址一樣能解析出 placementId。
+   **連結必須是絕對網址**（`https://example.org` 優先取 `app.reader.base-url`、未設時後備 `app.public-base-url`——reader session cookie 是 host-only，連結指向讀者網域，登入讀者的網頁點擊才帶得到 cookie 完成 READER 歸戶；信件通道靠 rt token 與網域無關）：這是信件中唯一的相對連結曾造成兩層斷路——郵件客戶端沒有 base URL 可補完相對路徑；讀者網域部署下 `ReaderEntryHostFilter` 的允許清單也需要匹配到完整路徑（該 filter 已加入 `GET /promo/c/` 放行，因為此端點需讀取讀者 session cookie 才能正確歸戶）。對帳解析（`/promo/c/(\d+)` 子字串比對）不受影響，絕對網址一樣能解析出 placementId。
 
    文案快照落地：所見即所得、寄出內容＝審核當下內容；提案事後修改不影響已插入的電子報。
 3. 寄送時在既有 `renderFor()` 每收件人替換點多一個替換：`__PROMO_RT__` → 該收件人的簽章。後台預覽與讀者網頁版不替換，佔位符驗簽失敗自然落到 session／匿名歸戶。

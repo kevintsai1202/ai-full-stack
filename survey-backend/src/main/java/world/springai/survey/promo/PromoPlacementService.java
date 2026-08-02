@@ -30,7 +30,17 @@ public class PromoPlacementService {
 
     private final PromoPlacementRepository placementRepository;
     private final PromoProposalRepository proposalRepository;
-    /** 用來把 snippet 內的連結組成絕對網址，比照 SubscriptionLinkBuilder 的注入模式 */
+    /**
+     * 用來把 snippet 內的連結組成絕對網址。
+     *
+     * <p><b>優先取讀者站網域（app.reader.base-url）</b>而非 app.public-base-url：
+     * reader session cookie 是 host-only（綁讀者網域），工商連結若指向 survey 網域，
+     * 讀者在網頁版點擊時瀏覽器不會帶 cookie，登入讀者的點擊會全部降級成匿名、
+     * 進不了唯一點擊——違反「網頁版點擊以登入 reader 歸戶」的產品決策。
+     * 讀者網域的 {@code ReaderEntryHostFilter} 已放行 {@code GET /promo/c/}；
+     * 信件通道靠 rt token 歸戶、與網域無關。未設讀者網域時後備到
+     * public-base-url，本機與測試環境相容（後備模式同 {@code ReaderSiteLinks}）。</p>
+     */
     private final String publicBaseUrl;
     /** 對帳時偵測 promo 標記是否落在受限區、成對是否正確（spec §6.6，僅警告不擋寄送） */
     private final ContentSplitter contentSplitter;
@@ -44,7 +54,7 @@ public class PromoPlacementService {
     /** 注入版位與提案 repository、組絕對網址所需的對外網址設定，以及切分內文的 ContentSplitter */
     public PromoPlacementService(PromoPlacementRepository placementRepository,
                                  PromoProposalRepository proposalRepository,
-                                 @Value("${app.public-base-url}") String publicBaseUrl,
+                                 @Value("${app.reader.base-url:${app.public-base-url}}") String publicBaseUrl,
                                  ContentSplitter contentSplitter) {
         this.placementRepository = placementRepository;
         this.proposalRepository = proposalRepository;
