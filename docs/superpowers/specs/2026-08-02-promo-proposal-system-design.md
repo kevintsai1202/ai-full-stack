@@ -62,7 +62,7 @@
 | committed_at | TIMESTAMPTZ NULL | |
 | created_at | TIMESTAMPTZ | |
 
-約束：partial unique index `UNIQUE(campaign_id, proposal_id) WHERE campaign_id IS NOT NULL`——同一期同提案最多一個版位；未綁定的 DRAFT 不受限。若對帳時發現版位已綁定其他 campaign（markdown 被複製到另一期），擋下寄送並提示重新插入。
+約束：partial unique index `UNIQUE(campaign_id, proposal_id) WHERE campaign_id IS NOT NULL AND status = 'COMMITTED'`——同一期同提案最多一個「已定案」版位；未綁定的 DRAFT 不受限。**條件必須排除非 COMMITTED 狀態**：REMOVED 版位仍保留 `campaign_id`（作為歷史紀錄），若條件只排除 `campaign_id IS NULL`，同一期同提案「移除後重新插入再 COMMIT」會撞到舊的 REMOVED 版位而導致寫入失敗。若對帳時發現版位已綁定其他 campaign（markdown 被複製到另一期），擋下寄送並提示重新插入。
 
 ### 3.3 `promo_click` 點擊原始紀錄
 
@@ -80,6 +80,9 @@
 ### 3.4 既有表擴充
 
 - `credit_txn`：新增 nullable 欄位 `promo_proposal_id`；新增 reason 常數 `PROMO_APPLY`（負）、`PROMO_REFUND`（正）。
+- `credit_txn` 新增兩個索引：
+  - `uq_credit_txn_promo_refund`：partial unique index `UNIQUE(promo_proposal_id, reason) WHERE promo_proposal_id IS NOT NULL AND reason = 'PROMO_REFUND'`——退點冪等的 DB 最終防線。應用層以「是否已有 PROMO_REFUND 交易」判斷冪等，但 `existsByPromoProposalIdAndReason` 到 `save` 之間並非原子操作，併發雙擊 reject／archive 仍有競態窗口，需要這個唯一索引兜底；只限 `PROMO_REFUND`，`PROMO_APPLY` 每次申請都應各自成立一筆，不可限制唯一。
+  - `idx_credit_txn_promo_proposal`：一般 partial index `(promo_proposal_id) WHERE promo_proposal_id IS NOT NULL`——上面的 unique index 條件限定 reason，無法涵蓋 `PROMO_APPLY` 等其他 reason 依 `promo_proposal_id` 查詢的情境。
 - AppSetting：新 key `CREDIT_PROMO_PLACEMENT_COST`，由 `CreditPolicy.promoPlacementCost()` 讀取，後備值 100、夾 ≥ 0（0 為合法「免費投放」營運設定）。
 
 ## 4. 狀態機
@@ -121,9 +124,11 @@ DRAFT ──發布/寄送對帳（內文有此版位連結）──> COMMITTED�
    <!--promo-->
    （body_text 經 Markdown escape 的快照）
 
-   [連結文字](/promo/c/{placementId}?rt=__PROMO_RT__)
+   [連結文字](https://example.org/promo/c/{placementId}?rt=__PROMO_RT__)
    <!--/promo-->
    ```
+
+   **連結必須是絕對網址**（`https://example.org` 來自 `app.public-base-url`，注入模式比照 `SubscriptionLinkBuilder`）：這是信件中唯一的相對連結曾造成兩層斷路——郵件客戶端沒有 base URL 可補完相對路徑；讀者網域部署下 `ReaderEntryHostFilter` 的允許清單也需要匹配到完整路徑（該 filter 已加入 `GET /promo/c/` 放行，因為此端點需讀取讀者 session cookie 才能正確歸戶）。對帳解析（`/promo/c/(\d+)` 子字串比對）不受影響，絕對網址一樣能解析出 placementId。
 
    文案快照落地：所見即所得、寄出內容＝審核當下內容；提案事後修改不影響已插入的電子報。
 3. 寄送時在既有 `renderFor()` 每收件人替換點多一個替換：`__PROMO_RT__` → 該收件人的簽章。後台預覽與讀者網頁版不替換，佔位符驗簽失敗自然落到 session／匿名歸戶。
