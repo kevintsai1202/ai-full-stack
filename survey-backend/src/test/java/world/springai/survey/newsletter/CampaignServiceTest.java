@@ -2,7 +2,9 @@ package world.springai.survey.newsletter;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
@@ -19,6 +21,8 @@ import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.EmailTemplate;
 import world.springai.survey.mail.MailQuotaService;
 import world.springai.survey.mail.MailSender;
+import world.springai.survey.promo.PromoPlacementService;
+import world.springai.survey.promo.PromoRecipientTokenService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -27,9 +31,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -54,17 +62,26 @@ class CampaignServiceTest {
     private final ContentSplitter contentSplitter = new ContentSplitter();
     private final ReaderSiteLinks readerSiteLinks =
         new ReaderSiteLinks("https://reader.example.com");
+    // 工商版位對帳與 token 簽發皆為 mock：本檔只關心 CampaignService 是否在正確時機
+    // 呼叫它們，實際對帳／簽章邏輯由 PromoPlacementServiceTest／PromoRecipientTokenServiceTest 覆蓋
+    private final PromoPlacementService promoPlacementService = mock(PromoPlacementService.class);
+    private final PromoRecipientTokenService promoTokenService = mock(PromoRecipientTokenService.class);
 
     private final CampaignService svc = new CampaignService(
         mailSender, recipientService, campaignRepository, emailLogRepository,
         markdownRenderer, emailTemplate, linkBuilder, mailQuotaService, contentSplitter,
         readerSiteLinks,
-        new MailBodyRenderer(contentSplitter, markdownRenderer, readerSiteLinks));
+        new MailBodyRenderer(contentSplitter, markdownRenderer, readerSiteLinks),
+        promoPlacementService, promoTokenService);
 
     {
         // 除非測試特別 stub 更小的量，否則額度視為充足——避免所有既有發送測試
         // 都在額度檢查處撞到 NPE 或被誤判為額度不足
         when(mailQuotaService.current()).thenReturn(quotaWithMarketing(10000));
+        // renderFor 對每位收件人都會呼叫 promoTokenService.issue(...) 並用結果做
+        // String.replace；未特別測試 token 內容的既有案例只需要一個非 null 的預設值，
+        // 否則 replace(...) 會因 replacement 為 null 而丟 NullPointerException
+        when(promoTokenService.issue(anyString())).thenReturn("DEFAULT.TOKEN");
     }
 
     /** 建一個只關心 marketingRemaining 的 Quota；其餘欄位給合理但無關的值 */
@@ -467,6 +484,111 @@ class CampaignServiceTest {
         verify(mailSender, never()).cancelScheduled(any());
     }
 
+    // ---- Task 9：CampaignService 與工商時間提案系統的接線 ----
+
+    /**
+     * 正式群發（send）必須先預檢工商版位可投放性，campaign 列拿到 id 後、
+     * 任何寄信副作用之前完成對帳——驗證三者的呼叫順序，而非只驗證各自被呼叫過。
+     */
+    @Test
+    void 群發前先預檢並於儲存後對帳() {
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@x.com"));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> {
+            Campaign c = i.getArgument(0);
+            if (c.getId() == null) {
+                ReflectionTestUtils.setField(c, "id", 55L);
+            }
+            return c;
+        });
+        when(mailSender.sendBatch(anyList())).thenReturn("job-1");
+        when(linkBuilder.unsubscribeLink("a@x.com")).thenReturn("https://x/unsubscribe?u=a");
+
+        svc.send("主旨", "[看](/promo/c/55?rt=" + PromoRecipientTokenService.PLACEHOLDER + ")",
+            null, null, "now", null);
+
+        InOrder inOrder = inOrder(promoPlacementService, campaignRepository, mailSender);
+        inOrder.verify(promoPlacementService).assertCommittable(contains("/promo/c/55"));
+        inOrder.verify(campaignRepository).save(any());
+        inOrder.verify(promoPlacementService).reconcile(anyLong(), contains("/promo/c/55"));
+        inOrder.verify(mailSender).sendBatch(anyList());
+    }
+
+    /**
+     * 預檢（assertCommittable）拋例外時，整批群發必須在寫入 campaign 列與寄出任何信件
+     * 之前就中止——資料庫不留殘留列，也不能有任何信件已經送出。
+     */
+    @Test
+    void 對帳失敗時不寄出任何信() {
+        doThrow(new IllegalStateException("投放次數已用罄"))
+            .when(promoPlacementService).assertCommittable(anyString());
+
+        assertThrows(IllegalStateException.class,
+            () -> svc.send("主旨", "[看](/promo/c/99?rt=" + PromoRecipientTokenService.PLACEHOLDER + ")",
+                null, null, "now", null));
+
+        verify(campaignRepository, never()).save(any());
+        verify(mailSender, never()).sendBatch(anyList());
+        verify(mailSender, never()).schedule(any(), any());
+        verify(promoPlacementService, never()).reconcile(any(), any());
+    }
+
+    /**
+     * renderFor（測試信與正式群發共用的收件人渲染入口）要把工商轉址連結的佔位符
+     * 換成該收件人專屬的 token；輸出不得再殘留佔位符原文。
+     */
+    @Test
+    void renderFor替換佔位符為收件人token() {
+        when(promoTokenService.issue("alice@example.com")).thenReturn("B64.SIG");
+        when(linkBuilder.unsubscribeLink("alice@example.com"))
+            .thenReturn("https://example.com/unsubscribe");
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("provider-x");
+
+        svc.sendTest("主旨", "[看](/promo/c/1?rt=" + PromoRecipientTokenService.PLACEHOLDER + ")",
+            "alice@example.com");
+
+        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+        verify(mailSender).send(eq("alice@example.com"), anyString(), html.capture());
+        assertTrue(html.getValue().contains("rt=B64.SIG"), html.getValue());
+        assertTrue(!html.getValue().contains(PromoRecipientTokenService.PLACEHOLDER), html.getValue());
+        // 測試信路徑同樣經 renderFor，但不屬於「內文定案」，不應觸發對帳——
+        // 對應版位仍停在 DRAFT，不入投放統計（spec §5）
+        verify(promoPlacementService, never()).assertCommittable(any());
+        verify(promoPlacementService, never()).reconcile(any(), any());
+    }
+
+    /**
+     * 取消排程成功（確實有排程信被取消）時，該期已 COMMITTED 的工商版位必須整批歸還配額，
+     * 讓提案的投放次數回到可再次使用的狀態。
+     */
+    @Test
+    void 取消排程成功後歸還工商版位配額() {
+        Campaign scheduled = new Campaign("主旨", "內文", "<p>x</p>", null, null, "schedule",
+            OffsetDateTime.parse("2099-01-01T00:00:00Z"), 1, "scheduled");
+        when(campaignRepository.findById(30L)).thenReturn(Optional.of(scheduled));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        when(emailLogRepository.findByCampaignIdAndStatus(30L, "scheduled"))
+            .thenReturn(List.of(new EmailLog("a@x.com", "主旨", "campaign", "prov-1", "scheduled", null, 30L)));
+        when(mailSender.cancelScheduled("prov-1")).thenReturn(true);
+
+        svc.cancelSchedule(30L);
+
+        verify(promoPlacementService).releaseForCampaign(30L);
+    }
+
+    /** 取消排程為 no-op（狀態仍為 scheduled，但沒有任何排程信可取消）時，不可誤放版位配額。 */
+    @Test
+    void 取消排程無排程信時不歸還配額() {
+        Campaign scheduledButEmpty = new Campaign("主旨", "內文", "<p>x</p>", null, null, "schedule",
+            OffsetDateTime.parse("2099-01-01T00:00:00Z"), 0, "scheduled");
+        when(campaignRepository.findById(31L)).thenReturn(Optional.of(scheduledButEmpty));
+        when(emailLogRepository.findByCampaignIdAndStatus(31L, "scheduled")).thenReturn(List.of());
+
+        svc.cancelSchedule(31L);
+
+        verify(promoPlacementService, never()).releaseForCampaign(any());
+        verify(campaignRepository, never()).save(any());
+    }
+
     /** 歷史列表：讀取前先把已到期的 scheduled 批次原子更新為 sent */
     @Test
     void listReconcilesElapsedSchedulesBeforeReadingHistory() {
@@ -848,7 +970,8 @@ class CampaignServiceTest {
             mailSender, recipientService, campaignRepository, emailLogRepository,
             markdownRenderer, emailTemplate, linkBuilder, mailQuotaService, contentSplitter,
             trailingSlashLinks,
-            new MailBodyRenderer(contentSplitter, markdownRenderer, trailingSlashLinks));
+            new MailBodyRenderer(contentSplitter, markdownRenderer, trailingSlashLinks),
+            promoPlacementService, promoTokenService);
         when(campaignRepository.findBySlug("slash")).thenReturn(Optional.empty());
         when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
 
