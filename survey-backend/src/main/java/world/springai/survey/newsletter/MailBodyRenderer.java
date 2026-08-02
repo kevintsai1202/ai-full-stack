@@ -15,9 +15,8 @@ import world.springai.survey.ReaderSiteLinks;
  * 直接渲染整份 markdown，第二次是補寄直接重播存下來的 {@code body_html}。
  * 兩次的共同原因都是「折疊的判斷散落在呼叫端」。</p>
  *
- * <p><b>折疊不看 tier</b>：切分與 tier 正交（見 {@link ContentSplitter}），
- * BASIC 文章也可以有受限區，所以任何以 tier 為條件的守門都擋不到那個組合。
- * 判斷依據只有一個：作者插了標記，就是不想讓這段出現在信裡。</p>
+ * <p><b>折疊仍以標記為準</b>：服務層會強制含標記的文章使用 PREMIUM；本元件仍只
+ * 依標記折疊，讓補寄舊資料時不會因 tier 歷史值不一致而把受限全文寄出去。</p>
  */
 @Component
 public class MailBodyRenderer {

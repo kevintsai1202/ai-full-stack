@@ -311,7 +311,7 @@ UPDATE survey_response
 未發布（published_at 為 null）              → PARTIAL（草稿不對任何人開放，連 VIP 也不行）
 未登入                                    → PARTIAL
 未確認訂閱（consent=false 或 unsubscribed） → PARTIAL
-campaign.tier 精確等於 'BASIC'             → FULL
+campaign.tier 精確等於 'BASIC' 且無付費牆  → FULL
 reader.tier == VIP 且未到期                → FULL（並補寫 article_access，cost=0）
 已存在 article_access                     → FULL
 credits >= campaign.credit_cost           → PARTIAL + CAN_UNLOCK（顯示解鎖按鈕，尚未扣點）
@@ -325,6 +325,7 @@ credits >= campaign.credit_cost           → PARTIAL + CAN_UNLOCK（顯示解�
 3. **`recordAccess()` 只在 VIP（以及階段 C 的付費解鎖）時寫入 `article_access`，不對 BASIC 寫。** 因為 `article_access` 同時是 `ALREADY_UNLOCKED` 的判斷來源：若 BASIC 閱讀也留紀錄，文章日後改為 PREMIUM 時，該讀者會走 `ALREADY_UNLOCKED` 永久免費。
 4. **`resolveCost()` 永遠回 ≥ 1。** 若後台把 `credit.premium_cost` 設成 0 或負數，階段 C 接上 `credits >= cost` 後會變成「所有 PREMIUM 免費」。
 5. **餘額足夠不等於直接放行。** spec 原本寫「`credits >= cost` → FULL + 扣點」，實作改為「PARTIAL + 顯示解鎖按鈕，讀者確認才扣」。理由：讀者從電子報連結點進來就被無感扣點，會被感受為未經同意的收費，而 §5.11 整節的訴求正是點數機制的可信度；誤點的成本從「10 點」降為「0」。代價是多一次互動，但這次互動本身就是讓讀者理解機制的時機（gate 區塊同時放規則頁連結）。實際扣點集中在 `UnlockService`，`decide()` 維持純函式。
+6. **`<!--paywall-->` 明確代表點數付費牆。** 含標記的文章必須是 `PREMIUM` 且 `credit_cost > 0`；`BASIC + paywall` 在 UI 會自動切換 PREMIUM，在服務與資料庫層都會被拒絕。登入只建立身分，不等於解鎖。
 
 只有這個方法能做授權判斷，controller 只呼叫、不重複判斷。
 
@@ -354,7 +355,7 @@ credits >= campaign.credit_cost           → PARTIAL + CAN_UNLOCK（顯示解�
 
 **受限區絕不出現在 PARTIAL 的回應中**——不是 CSS 隱藏、不是前端過濾。否則檢視原始碼或爬蟲即可取得全文，整套點數機制失效。
 
-正交性：標籤決定「**哪裡**開始要權限」，`tier` + `credit_cost` 決定「**要什麼**權限」。無標籤 = 全文自由，與 tier 無關。
+一致性：標籤決定「**哪裡**開始付費」，`PREMIUM + credit_cost` 決定解鎖價格。無標籤只能發布為 `BASIC` 全文免費；有標籤只能發布為 `PREMIUM`，登入後仍需按下解鎖並扣點，VIP 或既有 `article_access` 才能直接讀全文。
 
 **SEO**：archive 頁與單篇免費區允許索引（`sitemap.xml` 納入），受限區不輸出。這正是 Google 認可的 metered paywall 做法，不構成 cloaking。
 
@@ -933,22 +934,19 @@ V7/V8 migration（**含 `credit_txn`，因為首次登入即需發 300 點 `SIGN
 
 > #### 階段 C 補件：`POST /api/admin/campaign/publish`（只發布不寄送，2026-07-26）
 >
-> **它解掉的問題**：階段 C 交付了一整套點數機制（扣點解鎖、`CAN_UNLOCK` 的 paywall gate、
-> 規則頁、我的帳戶、後台讀者管理），但 `CampaignService.send()` 對非 BASIC 的 tier 無條件回 400
-> ——那個守門是正確的（階段 D 的信件折疊完成前，PREMIUM 一旦寄出就會把受限區送進**所有**
-> 收件人的信箱）。副作用是 PREMIUM 文章連 API 都沒有建立路徑，只剩手動 `INSERT INTO campaign`，
-> 於是整批點數功能在合併後**沒有任何操作人員能讓它跑起來**。這條端點就是解法：
-> 建立並發布一篇文章到網頁、完全不寄信；因為不寄信，就沒有「信件端外流付費內容」的問題，
-> 所以 PREMIUM 可以放行。
+> **歷史背景**：階段 C 交付點數機制時，信件折疊尚未完成，因此 `send()` 曾拒絕 PREMIUM；
+> `publish` 先提供完全不寄信的網頁發布路徑。現在 `MailBodyRenderer` 已統一折疊所有寄送路徑，
+> PREMIUM 可直接寄送，`publish` 則保留給「只上架、不通知」的情境。
 >
 > **必須分清楚的兩件事（不美化）**：
 >
 > | 能力 | 狀態 |
 > |---|---|
 > | PREMIUM **發布到網頁**（`/r/news/{slug}`、`/r/archive`，含 paywall） | ✅ 已可用，有後台 UI |
-> | PREMIUM **寄送給訂閱者** | ❌ 仍不可用，待階段 D 的信件折疊（`foldedHtml`） |
+> | PREMIUM **寄送給訂閱者** | ✅ 已可用，信件只含免費區與解鎖連結 |
 >
-> `/api/admin/campaign/send` 對 PREMIUM 的 400 守門**維持原樣**，`reschedule` 的同款守門也維持原樣。
+> `/api/admin/campaign/send` 與 `reschedule` 允許合法的 PREMIUM 付費牆；兩者仍會拒絕
+> `BASIC + paywall` 或 `PREMIUM` 缺少付費牆的錯誤組合。
 >
 > **設計決定與理由**：
 >
@@ -985,33 +983,13 @@ V7/V8 migration（**含 `credit_txn`，因為首次登入即需發 300 點 `SIGN
 >
 > ##### 過渡操作模式：PREMIUM 發布後手動寄一封 BASIC 通知信（2026-07-27 定案）
 >
-> **問題**：`publish` 端點名副其實地「只發布不寄送」——文章上網頁，訂閱者收不到任何通知，
-> 就靜靜躺在 `/r/archive` 上等人自己逛進來。而 PREMIUM 目前<b>只有</b>這一條發布路徑
-> （`send` 對 PREMIUM 無條件回 400），所以「發布 PREMIUM 的深度內容」與
-> 「讓訂閱者知道有這篇」在階段 D 之前是斷開的兩件事。
+> **目前行為**：`publish` 仍代表「只發布不寄送」；若要同步通知訂閱者，可直接用 `send`
+> 寄送 PREMIUM。所有寄送路徑都由 `MailBodyRenderer` 依 `<!--paywall-->` 折疊，信件只含
+> 免費區與「到網頁解鎖」連結，受限區不會進入收件者信箱。
 >
-> **決定：不做新功能，把既有能力文件化。** 操作者用現有的 UI 就能做到：發布 PREMIUM 之後，
-> 另外建一篇 **BASIC** 電子報當通知信，內文放**摘要與文章連結**，走「發送」寄給訂閱者。
-> 發布成功訊息已經帶了文章公開網址（`${app.public-base-url}/r/news/{slug}`），直接複製即可；
-> 該訊息也已追加這段指引，避免操作者以為發布等於通知、等著看開信率。
->
-> **為什麼通知信必須是 BASIC，而且不得含受限內容**（這是本節唯一不可妥協的地方）：
->
-> - 寄送路徑渲染的是 `markdownRenderer.toHtml(markdown)` 的**全文**。階段 D 的
->   `foldedHtml`（只寄免費區）還沒實作，所以「寄送 PREMIUM」= 把 `<!--paywall-->`
->   之後的受限區完整渲染進**每一位**收件人的信箱，paywall 形同虛設。
->   `send`／`reschedule` 對 PREMIUM 的 400 守門就是為了擋這件事，**不得為了通知信而放寬**。
-> - 通知信本身是一篇獨立的 BASIC campaign，它的 `markdown` 就是那封信的全部內容。
->   所以「不得含受限內容」不是流程規約而是硬條件：把受限段落貼進通知信，
->   等於繞過 400 守門手動做了一次全文外洩，而且沒有任何程式擋得住——
->   後端無從分辨「這段文字是摘要還是受限正文」。
-> - 摘要與連結是安全的：連結指向 `/r/news/{slug}`，那條路徑上的
->   `AccessDecisionService` 會照常判斷授權，未解鎖者拿到的 HTTP 回應本文不含受限段落
->   （§5.2、§5.3）。授權判斷留在網頁端，信件只負責導流。
->
-> **它是過渡做法，階段 D 完成後即淘汰**：`foldedHtml` 上線後，PREMIUM 可以直接寄送
-> （信件只含免費區 + 「到網頁解鎖」連結），就不再需要人工另建一篇 BASIC。
-> 屆時本段落應與 §5.5 一併更新。
+> **一致性守門**：含 `<!--paywall-->` 的內容必須是 PREMIUM 且設定正數點數；BASIC 必須
+> 全文免費。`send`、`publish`、`reschedule` 與資料庫 CHECK 都套用同一規則，避免任何路徑
+> 再產生「登入即可閱讀」的 BASIC 付費牆。
 >
 > **代價（誠實記錄）**：通知信是獨立 campaign，所以 ① 它佔用行銷寄信額度（§6），
 > ② 它的開信統計（階段 E）記在通知信自己身上，不是那篇 PREMIUM 文章身上，

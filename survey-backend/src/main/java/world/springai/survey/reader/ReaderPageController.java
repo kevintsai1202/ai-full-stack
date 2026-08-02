@@ -469,11 +469,11 @@ public class ReaderPageController {
         String encodedRedirect = "/r/news/" + slug;
         int cost = accessDecisionService.resolveCost(campaign);
         return switch (decision.reason()) {
-            case NOT_LOGGED_IN -> gateHtml("接下來的內容需要登入",
-                "用訂閱時的 email 登入就能繼續看，不需要密碼。",
-                "<a class=\"btn\" href=\"/r/login?redirect=" + HtmlTemplate.escapeHtml(encodedRedirect) + "\">登入繼續閱讀</a>");
+            case NOT_LOGGED_IN -> gateHtml("接下來是付費內容",
+                "請先用訂閱時的 email 登入；登入後仍需使用點數解鎖，不需要密碼。",
+                "<a class=\"btn\" href=\"/r/login?redirect=" + HtmlTemplate.escapeHtml(encodedRedirect) + "\">登入查看解鎖方式</a>");
             case NOT_SUBSCRIBED -> gateHtml("這個 email 尚未完成訂閱確認",
-                "看完整內容需要先完成訂閱確認，可以直接在訂閱頁重新訂閱一次。",
+                "請先在訂閱頁完成確認；確認後仍需使用點數解鎖付費內容。",
                 "<a class=\"btn\" href=\"/r/\">重新訂閱</a>");
             case CAN_UNLOCK -> gateHtml("這是進階內容",
                 "解鎖需要 " + cost + " 點，<strong>一次解鎖永久可讀</strong>。",

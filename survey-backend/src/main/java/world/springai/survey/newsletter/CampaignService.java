@@ -251,6 +251,7 @@ public class CampaignService {
         // 驗證並正規化發布欄位，須在建立 campaign 前完成，否則會讓 DB 約束以 500 的形式失敗
         String normalizedTier = validateTier(tier);
         int normalizedCreditCost = validateCreditCost(normalizedTier, creditCost);
+        validatePaywallTier(markdown, normalizedTier);
         String normalizedSlug = validateSlug(slug);
         // slug 留空時自動產生：每一封寄出的電子報都要出現在 /r/archive（產品決定，
         // 2026-07-27）。在此之前 slug 留空＝只寄不上架，寄過的內容讀者事後找不到——
@@ -263,23 +264,6 @@ public class CampaignService {
         // 自動產生之後 normalizedSlug 恆非 null，舊守門「publishedAt 有值卻沒 slug → 400」
         // 已無可達路徑，故移除；publishedAt 有值時沿用呼叫端指定的時間發布。
         OffsetDateTime normalizedPublishedAt = resolvePublishedAt(normalizedSlug, publishedAt);
-
-        // 守門：PREMIUM 不走寄送路徑。
-        //
-        // 注意此檢查的理由已經改變。原本的理由是「信件端會把受限區寄給所有收件人」，
-        // 那個缺陷已由 mailBodyHtml() 修掉——現在任何含 <!--paywall--> 的內容，
-        // 無論 tier 為何，寄出的都只有免費區。所以這道守門<b>不再是</b>防外洩的最後防線。
-        //
-        // 保留它是刻意的範圍決定，不是還沒做完：解除等於開放一條新的 PREMIUM 發布路徑，
-        // 而那條路徑還有沒想清楚的部分——寄出的信對所有人長得一樣，VIP 與已解鎖的讀者
-        // 同樣只收到免費區，得自己點回網站才看得到本來就有權讀的內容。要不要為此做
-        // per-recipient 渲染（技術上可行，sendBatch 本來就逐一組裝每封信）是獨立的產品決定。
-        // 決定要開放時，移除這個 if 即可，不需要再補折疊邏輯。
-        if (!Campaign.TIER_BASIC.equals(normalizedTier)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "目前僅支援 BASIC 內容寄送；PREMIUM 內容請用「只發布不寄送」放上網頁，"
-                    + "再另寄一封 BASIC 通知信導流");
-        }
 
         // 取得收件人清單
         List<String> recipients = recipients(
@@ -423,20 +407,7 @@ public class CampaignService {
         String normalizedTier = validateTier(tier);
         int normalizedCreditCost = validateCreditCost(normalizedTier, creditCost);
         String normalizedSlug = validateSlug(slug);
-
-        // ★ PREMIUM 必須真的有受限區（含一行 <!--paywall--> 標記），否則頁面標示「進階／解鎖 N 點」
-        // 而 ContentSplitter 無標記時把全文都當免費區 —— 未登入訪客直接拿到整篇全文，一點都不用付。
-        // 而且沒有任何回饋管道會揭露這件事：不寄信所以沒有寄送統計，credit_txn 永遠不會有這篇的 READ，
-        // 看起來就像「沒人想解鎖」。讀者端「無標記就不收費、不渲染 gate」是刻意且有測試的設計，
-        // 所以缺陷不在渲染層 —— 這個新入口是 PREMIUM 唯一的建立路徑，也是唯一能攔的地方。
-        // 一律 400 而不只是警告：「PREMIUM 但沒有受限區」沒有任何合法用途。
-        // 注意：此檢查只在 publish；send() 對 PREMIUM 本來就無條件 400，不需要（也不該）重複。
-        if (Campaign.TIER_PREMIUM.equals(normalizedTier)
-                && !contentSplitter.split(markdown).hasGate()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "PREMIUM 內容必須含一行 " + ContentSplitter.PAYWALL_MARKER
-                    + " 標記，否則整篇都是免費區（標記需完全小寫）");
-        }
+        validatePaywallTier(markdown, normalizedTier);
 
         OffsetDateTime normalizedPublishedAt = resolvePublishedAt(normalizedSlug, publishedAt);
 
@@ -697,13 +668,9 @@ public class CampaignService {
         if (scheduledAt == null || !scheduledAt.isAfter(now.toInstant())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "新的排程時間需為未來");
         }
-        // 守門：重排仍會實際寄出信件，故與 send() 保持一致（理由見該處註解——
-        // 現在是範圍決定而非防外洩，折疊本身已由 mailBodyHtml() 無條件生效）。
-        if (!Campaign.TIER_BASIC.equals(campaign.getTier())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "目前僅支援 BASIC 內容寄送；PREMIUM 內容請用「只發布不寄送」放上網頁，"
-                    + "再另寄一封 BASIC 通知信導流");
-        }
+        // 重排會改寫原 campaign 的 markdown，因此也必須重驗付費牆與 tier 的配對；
+        // 否則建立時的守門可被「排程後修改內容」繞過。
+        validatePaywallTier(markdown, campaign.getTier());
 
         // 1. 取消舊的 provider 排程信（把舊 email_log 標 cancelled）
         cancelProviderScheduled(campaignId);
@@ -869,6 +836,27 @@ public class CampaignService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "tier 僅接受 BASIC 或 PREMIUM");
         }
         return tier;
+    }
+
+    /**
+     * 驗證付費牆與內容分級必須雙向一致。
+     *
+     * <p>{@code <!--paywall-->} 現在明確代表「需點數解鎖」，所以 BASIC 不得帶標記；
+     * PREMIUM 也不得缺標記，否則會出現標示付費但全文免費的矛盾資料。所有建立與
+     * 重排路徑共用此方法，避免 UI、API 或排程修改留下繞過入口。</p>
+     */
+    private void validatePaywallTier(String markdown, String tier) {
+        boolean hasPaywall = contentSplitter.split(markdown).hasGate();
+        if (hasPaywall && !Campaign.TIER_PREMIUM.equals(tier)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "含 " + ContentSplitter.PAYWALL_MARKER
+                    + " 的付費牆內容必須使用 PREMIUM 分級與正數解鎖點數");
+        }
+        if (!hasPaywall && Campaign.TIER_PREMIUM.equals(tier)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "PREMIUM 內容必須含一行 " + ContentSplitter.PAYWALL_MARKER
+                    + " 標記，否則整篇都是免費區（標記需完全小寫）");
+        }
     }
 
     /**

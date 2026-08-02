@@ -115,6 +115,7 @@ class ReaderPageControllerTest {
 
         // 【Important 5】NOT_LOGGED_IN：頁面須含登入連結，且帶正確的 redirect 目標
         assertTrue(body.contains("/r/login?redirect=/r/news/test-article"), "應含帶正確 redirect 的登入連結");
+        assertTrue(body.contains("登入後仍需使用點數解鎖"), "不得讓讀者誤以為登入即可免費閱讀付費內容");
 
         // 【Important 2/3】decide() 只應被呼叫一次，且引數必須是「未登入」的正確組合：
         // reader 為 null、subscribed 為 false。若 controller 把 subscribed 寫死成 true，
@@ -163,6 +164,7 @@ class ReaderPageControllerTest {
 
         // 【Important 5】NOT_SUBSCRIBED：頁面須含「重新訂閱」的指引
         assertTrue(body.contains("重新訂閱"), "應含重新訂閱的指引文案");
+        assertTrue(body.contains("確認後仍需使用點數解鎖"), "不得讓讀者誤以為確認訂閱即可免費閱讀付費內容");
 
         // 【Important 2】已登入未訂閱：decide() 只呼叫一次，reader 必須是 ReaderContext 提供的
         // 那個物件、subscribed 必須是 false。
