@@ -33,6 +33,8 @@ public class AppSettingService {
     public static final String CREDIT_SIGNUP_GRANT = "credit.signup_grant";
     /** PREMIUM 文章的預設解鎖點數 */
     public static final String CREDIT_PREMIUM_COST = "credit.premium_cost";
+    /** 工商提案每次投放的點數單價 */
+    public static final String CREDIT_PROMO_PLACEMENT_COST = "credit.promo_placement_cost";
     /** 邀請成功的獎勵點數 */
     public static final String CREDIT_REFERRAL_REWARD = "credit.referral_reward";
     /** 被邀者完成確認後的加碼點數 */
