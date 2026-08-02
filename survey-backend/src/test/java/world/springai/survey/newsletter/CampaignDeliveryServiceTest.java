@@ -10,6 +10,7 @@ import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.EmailTemplate;
 import world.springai.survey.mail.MailQuotaService;
 import world.springai.survey.mail.MailSender;
+import world.springai.survey.promo.PromoRecipientTokenService;
 
 import java.util.List;
 import java.util.Optional;
@@ -17,6 +18,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -42,6 +44,8 @@ class CampaignDeliveryServiceTest {
             .thenReturn(List.of("sent@example.com", "failed@example.com", "new@example.com"));
         when(recipientRepository.findByCampaignId(42L)).thenReturn(List.of(sent, failed));
 
+        PromoRecipientTokenService promoTokenService = mock(PromoRecipientTokenService.class);
+        when(promoTokenService.issue(anyString())).thenReturn("DEFAULT.TOKEN");
         CampaignDeliveryService service = new CampaignDeliveryService(
             campaignRepository,
             batchRepository,
@@ -55,7 +59,8 @@ class CampaignDeliveryServiceTest {
             mock(ReaderSiteLinks.class),
             mock(JdbcTemplate.class),
             new MailBodyRenderer(new ContentSplitter(), new MarkdownRenderer(),
-                mock(ReaderSiteLinks.class)));
+                mock(ReaderSiteLinks.class)),
+            promoTokenService);
 
         CampaignDeliveryService.RecipientPage page =
             service.recipients(42L, "ELIGIBLE", null, 0, 50);
@@ -119,6 +124,8 @@ class CampaignDeliveryServiceTest {
         when(recipientService.recipients(null, null, null, null))
             .thenReturn(List.of("a@x.com"));
 
+        PromoRecipientTokenService promoTokenService = mock(PromoRecipientTokenService.class);
+        when(promoTokenService.issue(anyString())).thenReturn("DEFAULT.TOKEN");
         CampaignDeliveryService service = new CampaignDeliveryService(
             campaignRepository, batchRepository, recipientRepository,
             mock(EmailLogRepository.class), recipientService, mailSender, quotaService,
@@ -126,7 +133,8 @@ class CampaignDeliveryServiceTest {
             new ReaderSiteLinks("https://reader.example.com"),
             mock(JdbcTemplate.class),
             new MailBodyRenderer(new ContentSplitter(), new MarkdownRenderer(),
-                new ReaderSiteLinks("https://reader.example.com")));
+                new ReaderSiteLinks("https://reader.example.com")),
+            promoTokenService);
 
         service.createBatch(55L, List.of("a@x.com"), "now", null);
 
@@ -141,6 +149,81 @@ class CampaignDeliveryServiceTest {
         assertFalse(html.contains("<!--paywall-->"),
             "控制標記不可洩漏到信件原始碼中：" + html);
         assertTrue(html.contains("這是進階內容"), "折疊後必須附上解鎖卡片：" + html);
+    }
+
+    /**
+     * C2 修正：補寄路徑原本沒有注入 {@code PromoRecipientTokenService}，
+     * 導致補寄出去的信件內文原樣保留 {@code __PROMO_RT__} 佔位符，
+     * 收件人點擊工商連結時驗簽必定失敗——與 {@code CampaignService.renderFor}
+     * 同一個機制，第二條路徑（補寄）沒接上。
+     *
+     * <p>連帶驗證 C1：markdown 中的工商連結即使已經是絕對網址
+     * （{@code https://example.org/promo/c/...}），置換佔位符後仍應保留該絕對網址、
+     * 只替換 {@code rt} 參數值，不受連結格式影響。</p>
+     */
+    @Test
+    void resendReplacesPromoPlaceholderWithAbsoluteUrlIntact() {
+        CampaignRepository campaignRepository = mock(CampaignRepository.class);
+        CampaignBatchRepository batchRepository = mock(CampaignBatchRepository.class);
+        CampaignRecipientRepository recipientRepository = mock(CampaignRecipientRepository.class);
+        MailSender mailSender = mock(MailSender.class);
+        MailQuotaService quotaService = mock(MailQuotaService.class);
+        SubscriptionLinkBuilder linkBuilder = mock(SubscriptionLinkBuilder.class);
+
+        String markdown = "電子報內容\n\n<!--promo-->\n工商文案\n\n"
+            + "[馬上看](https://example.org/promo/c/55?rt=__PROMO_RT__)\n<!--/promo-->\n";
+        Campaign campaign = new Campaign(
+            "主旨", markdown, "<p>折疊前全文（不應被信任）</p>",
+            null, null, "now", null, 1, "sent");
+        ReflectionTestUtils.setField(campaign, "id", 77L);
+        ReflectionTestUtils.setField(campaign, "tier", Campaign.TIER_BASIC);
+        ReflectionTestUtils.setField(campaign, "slug", "promo-resend");
+
+        when(campaignRepository.findById(77L)).thenReturn(Optional.of(campaign));
+        when(batchRepository.existsByCampaignId(77L)).thenReturn(true);
+        when(batchRepository.save(org.mockito.ArgumentMatchers.any(CampaignBatch.class)))
+            .thenAnswer(invocation -> {
+                CampaignBatch batch = invocation.getArgument(0);
+                ReflectionTestUtils.setField(batch, "id", 901L);
+                return batch;
+            });
+        when(recipientRepository.findByCampaignId(77L)).thenReturn(List.of());
+        when(recipientRepository.reserveNew(
+            org.mockito.ArgumentMatchers.eq(77L), org.mockito.ArgumentMatchers.eq(901L),
+            org.mockito.ArgumentMatchers.eq("b@x.com"), org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.any())).thenReturn(1);
+        when(quotaService.current()).thenReturn(ampleQuota());
+        when(linkBuilder.unsubscribeLink("b@x.com")).thenReturn("https://x/unsubscribe?u=b");
+        when(mailSender.sendBatch(org.mockito.ArgumentMatchers.anyList())).thenReturn("job-10");
+
+        RecipientService recipientService = mock(RecipientService.class);
+        when(recipientService.recipients(null, null, null, null))
+            .thenReturn(List.of("b@x.com"));
+
+        PromoRecipientTokenService promoTokenService = mock(PromoRecipientTokenService.class);
+        when(promoTokenService.issue("b@x.com")).thenReturn("BASE64.SIGNATURE");
+
+        CampaignDeliveryService service = new CampaignDeliveryService(
+            campaignRepository, batchRepository, recipientRepository,
+            mock(EmailLogRepository.class), recipientService, mailSender, quotaService,
+            new EmailTemplate(), linkBuilder,
+            new ReaderSiteLinks("https://reader.example.com"),
+            mock(JdbcTemplate.class),
+            new MailBodyRenderer(new ContentSplitter(), new MarkdownRenderer(),
+                new ReaderSiteLinks("https://reader.example.com")),
+            promoTokenService);
+
+        service.createBatch(77L, List.of("b@x.com"), "now", null);
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<MailSender.Email>> captor =
+            org.mockito.ArgumentCaptor.forClass(List.class);
+        org.mockito.Mockito.verify(mailSender).sendBatch(captor.capture());
+        String html = captor.getValue().getFirst().html();
+        assertFalse(html.contains(PromoRecipientTokenService.PLACEHOLDER),
+            "補寄輸出不可殘留佔位符：" + html);
+        assertTrue(html.contains("https://example.org/promo/c/55?rt=BASE64.SIGNATURE"),
+            "絕對網址須保留、僅替換 rt 參數值：" + html);
     }
 
     /** 額度充足的 Quota，讓測試專注在內容折疊而非額度裁切。 */

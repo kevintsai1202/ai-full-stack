@@ -27,6 +27,8 @@ import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.EmailTemplate;
 import world.springai.survey.mail.MailQuotaService;
 import world.springai.survey.mail.MailSender;
+import world.springai.survey.promo.PromoPlacementService;
+import world.springai.survey.promo.PromoRecipientTokenService;
 
 /** 電子報發送：渲染內文、組個人化退訂連結、立即(batch)/排程(schedule) 發送、記錄 campaign 與 email_log */
 @Service
@@ -56,6 +58,14 @@ public class CampaignService {
     private final ReaderSiteLinks readerSiteLinks;
     /** 信件版內文（含付費牆折疊）的唯一產生點，與補寄路徑共用 */
     private final MailBodyRenderer mailBodyRenderer;
+    /**
+     * 工商版位服務：寄送/發布前的可投放性預檢（{@code assertCommittable}）、
+     * 內文定案後的對帳扣配額／歸還（{@code reconcile}）、排程取消後的整批歸還
+     * （{@code releaseForCampaign}）。CampaignService 刻意無交易，接線順序見各呼叫點註解。
+     */
+    private final PromoPlacementService promoPlacementService;
+    /** 工商轉址連結的收件人 token 簽發器：renderFor 對每一位收件人各自簽發一枚 */
+    private final PromoRecipientTokenService promoTokenService;
 
     public CampaignService(MailSender mailSender,
                            RecipientService recipientService,
@@ -67,7 +77,9 @@ public class CampaignService {
                            MailQuotaService mailQuotaService,
                            ContentSplitter contentSplitter,
                            ReaderSiteLinks readerSiteLinks,
-                           MailBodyRenderer mailBodyRenderer) {
+                           MailBodyRenderer mailBodyRenderer,
+                           PromoPlacementService promoPlacementService,
+                           PromoRecipientTokenService promoTokenService) {
         this.contentSplitter = contentSplitter;
         this.readerSiteLinks = readerSiteLinks;
         this.mailBodyRenderer = mailBodyRenderer;
@@ -79,6 +91,8 @@ public class CampaignService {
         this.emailTemplate = emailTemplate;
         this.linkBuilder = linkBuilder;
         this.mailQuotaService = mailQuotaService;
+        this.promoPlacementService = promoPlacementService;
+        this.promoTokenService = promoTokenService;
     }
 
     /**
@@ -283,6 +297,11 @@ public class CampaignService {
         long subscriberCount = recipientService.subscriberCount();
         boolean scheduled = "schedule".equals(mode);
 
+        // 工商版位可投放性預檢：必須在建立 Campaign 列之前完成，失敗時資料庫不留殘留列
+        // （CampaignService 無交易，一旦 Campaign 列已寫入就無法回滾，唯一的「安全失敗」
+        // 時機只剩「什麼都還沒發生」的這一刻）。
+        promoPlacementService.assertCommittable(markdown);
+
         // 建立 campaign 紀錄並預存（之後更新統計）
         Campaign campaign = new Campaign(subject, markdown, bodyHtml, role, interest, mode,
             scheduledAt == null ? null : OffsetDateTime.ofInstant(scheduledAt, ZoneOffset.UTC),
@@ -296,6 +315,11 @@ public class CampaignService {
         campaign.setSavedSegmentId(savedSegmentId);
         campaign = campaignRepository.save(campaign);
         Long campaignId = campaign.getId();
+
+        // 對帳定案：campaign id 在此刻誕生，必須在任何寄信副作用（sendBatch／schedule）
+        // 之前完成，讓「這批版位確實屬於這期電子報」的事實與「即將寄出的信」同步——
+        // 對帳失敗時整批寄送中止，不會出現「信寄出了但版位沒扣配額」的不一致。
+        promoPlacementService.reconcile(campaignId, markdown);
 
         int accepted = 0;
         int failed = 0;
@@ -387,6 +411,11 @@ public class CampaignService {
      */
     public PublishResult publish(String subject, String markdown, String tier, Integer creditCost,
                                  String slug, Instant publishedAt) {
+        // 工商版位可投放性預檢：這條路徑雖無寄信副作用，但 campaignRepository.save()
+        // 一落地文章即對外可見（STATUS_PUBLISHED），若之後才對帳而失敗（配額用罄／
+        // 版位已綁其他期），會留下「讀者看得到、但工商未定案」的已發布文章，且 slug
+        // 唯一索引讓重試必定 400。因此預檢必須在 Campaign 物件誕生之前，與 send() 同一道防線。
+        promoPlacementService.assertCommittable(markdown);
         // 主旨與內文在 campaign 表皆為 NOT NULL；提前擋下以回 400 而非讓寫入以 500 失敗
         if (subject == null || subject.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "subject 為必填");
@@ -422,6 +451,10 @@ public class CampaignService {
         campaign.setSlug(normalizedSlug);
         campaign.setPublishedAt(normalizedPublishedAt);
         campaign = campaignRepository.save(campaign);
+
+        // 對帳定案：這條路徑沒有信件副作用，但內文一經發布即定案，版位歸屬與配額
+        // 扣抵必須與「文章已公開」同步；campaign id 在 save() 之後才存在，故對帳只能在此刻進行。
+        promoPlacementService.reconcile(campaign.getId(), markdown);
 
         log.info("只發布不寄送：campaignId={} slug={} tier={} creditCost={}",
             campaign.getId(), normalizedSlug, normalizedTier, normalizedCreditCost);
@@ -642,6 +675,14 @@ public class CampaignService {
             campaign.setStatus(Campaign.STATUS_CANCELLED);
             campaignRepository.save(campaign);
         }
+        // 版位歸還：只在「全數取消成功」（cancelled>0 且 failed==0）時才歸還配額，
+        // 與上面的狀態判斷刻意不同條件——部分取消失敗（failed>0）代表那幾封信仍會
+        // 實際寄出，其中含工商內容，等同已投放，spec §6.5「已實際寄出的批次不歸還」
+        // 之意；若無條件在 cancelled>0 就歸還，會讓已送達的工商版位配額被誤放回去，
+        // 造成同一次投放被重複計入下一批的可用額度。
+        if (cancelled > 0 && failed == 0) {
+            promoPlacementService.releaseForCampaign(campaignId);
+        }
         return Map.of("cancelled", cancelled, "failed", failed);
     }
 
@@ -671,6 +712,12 @@ public class CampaignService {
         // 重排會改寫原 campaign 的 markdown，因此也必須重驗付費牆與 tier 的配對；
         // 否則建立時的守門可被「排程後修改內容」繞過。
         validatePaywallTier(markdown, campaign.getTier());
+
+        // 對帳：重排是「新內文對消失版位歸還配額」的唯一入口（原內文已綁定的版位，
+        // 若新內文不再引用即視為未刊登並釋放）。必須在任何 provider 呼叫（取消舊排程、
+        // 重新排程寄送）之前完成——對帳失敗時（如新增版位的提案配額已用罄）要整個中止，
+        // 不能已經取消了舊排程卻沒有新內容可以替補。
+        promoPlacementService.reconcile(campaignId, markdown);
 
         // 1. 取消舊的 provider 排程信（把舊 email_log 標 cancelled）
         cancelProviderScheduled(campaignId);
@@ -964,6 +1011,12 @@ public class CampaignService {
      * 測試信沒有實際文章 slug，因此改導向歷史內容。
      */
     private String renderFor(String bodyHtml, String email, String slug, long subscriberCount) {
+        // 工商轉址連結的收件人 token：每收件人一枚，佔位符來源唯一（Task 4）。
+        // 測試信／預覽寄送也會經過這裡替換出有效 token，但對應版位仍是 DRAFT
+        // （只有 reconcile 定案才會轉 COMMITTED），因此不會計入任何投放統計——
+        // spec §5「測試信不入統計」由此免費達成，不需要額外旗標判斷寄送類型。
+        bodyHtml = bodyHtml.replace(PromoRecipientTokenService.PLACEHOLDER,
+            promoTokenService.issue(email));
         String path = slug == null ? "/r/archive" : "/r/news/" + slug;
         String articleLink = slug == null ? readerSiteLinks.archive() : readerSiteLinks.article(slug);
         return emailTemplate.wrapCampaign(bodyHtml, linkBuilder.unsubscribeLink(email),

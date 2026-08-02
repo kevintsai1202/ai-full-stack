@@ -85,11 +85,19 @@ public class ReaderEntryHostFilter extends OncePerRequestFilter {
      *
      * <p>訂閱首頁仍沿用既有 {@code POST /api/survey} 寫入同意紀錄，所以只為 POST
      * 精準放行該端點；GET 統計、Admin 與其他問卷 API 一律不在讀者網域公開。</p>
+     *
+     * <p>{@code GET /promo/c/{placementId}} 是工商連結的安全轉址端點，信件與
+     * 讀者頁的點擊都會落在讀者網域，且該端點需要讀取讀者 session cookie 才能
+     * 正確歸戶（見 {@code PromoClickController}），未放行會讓讀者網域部署下
+     * 所有工商連結點擊都 404。</p>
      */
     private boolean isAllowedReaderPath(HttpServletRequest request) {
         String path = request.getRequestURI();
         if (path.equals("/r") || path.startsWith("/r/")
                 || path.equals("/api/reader") || path.startsWith("/api/reader/")) {
+            return true;
+        }
+        if ("GET".equalsIgnoreCase(request.getMethod()) && path.startsWith("/promo/c/")) {
             return true;
         }
         return "POST".equalsIgnoreCase(request.getMethod())

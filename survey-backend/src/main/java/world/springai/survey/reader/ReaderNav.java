@@ -54,6 +54,12 @@ final class ReaderNav {
     /** 我的帳戶：餘額、資料、邀請與交易明細的單一個人中心。 */
     private static final String ME = "<a href=\"/r/me\">我的帳戶</a>";
 
+    /**
+     * 工商合作：申請與我的提案；僅登入可見（申請需綁定 reader 並扣點，
+     * 未登入者連「看到入口」都沒有意義——點進去也只會被導回登入頁）。
+     */
+    private static final String PROMO = "<a href=\"/r/promo\">工商合作</a>";
+
     /** 登入：未登入時的行動入口 */
     private static final String LOGIN = "<a href=\"/r/login\">登入</a>";
 
@@ -61,15 +67,16 @@ final class ReaderNav {
      * 產生 {@code <!--NAV_LINKS-->} 的內容。
      *
      * <p>順序依操作頻率排列：首頁與內容在前，登入／帳戶是主要行動，
-     * 遊戲規則屬補充說明固定放最後。帳戶與邀請共用同一入口，避免兩個
-     * 相鄰個人頁讓導覽顯得比實際更複雜。</p>
+     * 工商合作屬登入後才有意義的次要行動放在帳戶之後，遊戲規則屬補充說明
+     * 固定放最後。帳戶與邀請共用同一入口，避免兩個相鄰個人頁讓導覽顯得比
+     * 實際更複雜。</p>
      *
      * @param loggedIn 是否已解析出有效的讀者身分（由呼叫端以 {@link ReaderContext} 判定）
      * @return 可直接插入 {@code <nav>} 的 HTML 片段；固定字串，不含任何使用者可控值
      */
     static String links(boolean loggedIn) {
         if (loggedIn) {
-            return HOME + ARCHIVE + ME + RULES;
+            return HOME + ARCHIVE + ME + PROMO + RULES;
         }
         return HOME + ARCHIVE + LOGIN + RULES;
     }

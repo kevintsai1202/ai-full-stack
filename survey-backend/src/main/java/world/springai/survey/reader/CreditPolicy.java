@@ -63,6 +63,22 @@ public class CreditPolicy {
             AppSettingService.CREDIT_REFERRAL_REWARD, DEFAULT_REFERRAL_REWARD));
     }
 
+    /** 工商提案投放單價的後備值 */
+    static final int DEFAULT_PROMO_PLACEMENT_COST = 100;
+
+    /**
+     * 工商提案每次投放單價；0 為合法值（免費投放），負值夾到 0
+     *
+     * <p><b>為什麼夾 ≥ 0 而非 ≥ 1</b>：0 是合法的「免費投放」營運設定，
+     * 讓後台能關閉投放費用，比照 {@link #signupGrant()} 的做法。
+     * 不同於 {@link #premiumCost()} 必須 ≥ 1 以防止免費洩露內容，
+     * 投放費用為 0 只代表此時段不收費，不構成安全風險。</p>
+     */
+    public int promoPlacementCost() {
+        return Math.max(0, appSettingService.getInt(
+            AppSettingService.CREDIT_PROMO_PLACEMENT_COST, DEFAULT_PROMO_PLACEMENT_COST));
+    }
+
     /** 被邀者完成信箱確認後的加碼；0 可關閉雙邊獎勵。 */
     public int referralInviteeReward() {
         return Math.max(0, appSettingService.getInt(

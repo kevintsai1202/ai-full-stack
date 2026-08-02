@@ -93,6 +93,7 @@
     <button class="tab" id="tab-readers" data-view="readers">讀者管理</button>
     <button class="tab" id="tab-growth" data-view="growth">病毒成長</button>
     <button class="tab" id="tab-settings" data-view="settings">參數設定</button>
+    <button class="tab" id="tab-promo" data-view="promo">工商提案</button>
   </nav>
 
   <section class="view" id="analytics-view">
@@ -202,6 +203,9 @@
         <button type="button" class="btn ghost format-btn" data-block="---" title="分隔線">分隔線</button>
         <button type="button" class="btn ghost format-btn" data-block="<!--paywall-->" data-paywall-tier="PREMIUM" title="插入需點數解鎖的付費牆，並自動切換 PREMIUM">付費牆（點數）</button>
         <button type="button" class="btn ghost format-btn" data-block-start="<!--promo-->" data-block-end="<!--/promo-->" title="工商區塊：選取內容會被包成優惠卡片（渲染成帶綠條的底色卡片）">工商</button>
+        <!-- 插入「工商提案」分頁已核准的提案版位（呼叫後端建立 DRAFT 版位並取回可貼上的 snippet）；
+             刻意不加 format-btn class，避免被 applyMarkdownFormat 的 dataset 驅動邏輯誤處理。 -->
+        <button type="button" class="btn ghost" id="insert-promo-btn" title="插入已核准工商提案的版位片段">插入工商提案</button>
       </div>
       <textarea id="markdown" placeholder="# 標題&#10;&#10;支援 **粗體**、清單、[連結](https://...)"></textarea>
       <details class="media-panel" id="media-panel" open>
@@ -531,6 +535,45 @@
       <div class="msg" id="settings-msg"></div>
     </div>
   </section>
+
+  <section class="view" id="promo-view" hidden>
+    <div class="card section-head">
+      <div><h2 style="margin:0">工商提案審核</h2><p class="hint">核准後才能在電子報編輯器插入版位；拒絕會全額退點，封存會退還未投放的餘額。</p></div>
+      <button class="btn ghost" id="promo-refresh">重新整理</button>
+    </div>
+    <div class="card">
+      <div class="section-head">
+        <h2 style="margin:0">提案清單</h2>
+        <label style="margin:0"><span class="hint">狀態篩選</span>
+          <select id="promo-status-filter">
+            <option value="">全部</option>
+            <option value="PENDING">待審核</option>
+            <option value="APPROVED">已核准</option>
+            <option value="REJECTED">已拒絕</option>
+            <option value="ARCHIVED">已封存</option>
+          </select>
+        </label>
+      </div>
+      <div class="msg" id="promo-list-msg"></div>
+      <div class="table-wrap">
+        <table id="promo-list">
+          <thead><tr><th>名稱</th><th>聯絡人</th><th>狀態</th><th>投放 已用/總數</th><th>操作</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <h2>提案成效統計</h2>
+      <div class="msg" id="promo-stats-msg"></div>
+      <div class="table-wrap">
+        <table id="promo-stats">
+          <thead><tr><th>提案</th><th>期別</th><th>發送數</th><th>信件點擊 總/唯一</th><th>信件 CTR</th><th>網頁點擊 唯一/總</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="hint">唯一點擊以提案版位×收件人去重；郵件安全掃描器可能造成少量誤差</p>
+    </div>
+  </section>
 </main>
 
 <script>
@@ -627,7 +670,7 @@
   function showApp(){$('#gate').style.display='none';$('#app').hidden=false;}
 
   /** 切換分頁（問卷分析／電子報／讀者管理／參數設定）；參數設定首次進入時才載入欄位。 */
-  function switchView(name){document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!==name+'-view');document.querySelectorAll('.tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.view===name));if(name==='analytics'&&!analyticsLoaded)loadAnalytics();if(name==='readers'&&!audienceResult.loaded)searchReaders();if(name==='growth'&&!loadGrowth.done)loadGrowth();if(name==='settings'&&!loadSettings.done)loadSettings();}
+  function switchView(name){document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!==name+'-view');document.querySelectorAll('.tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.view===name));if(name==='analytics'&&!analyticsLoaded)loadAnalytics();if(name==='readers'&&!audienceResult.loaded)searchReaders();if(name==='growth'&&!loadGrowth.done)loadGrowth();if(name==='settings'&&!loadSettings.done)loadSettings();if(name==='promo'){if(!loadPromoProposals.done)loadPromoProposals();if(!loadPromoStats.done)loadPromoStats();}}
 
   /** 把固定選項填入下拉選單。 */
   function fillSelect(selector,items){const el=$(selector);items.forEach(value=>{const option=document.createElement('option');option.value=value;option.textContent=value;el.appendChild(option);});}
@@ -738,6 +781,10 @@
     $('#source-create-name').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();createAudienceSource();}});
     $('#reader-search-btn').onclick=()=>{audiencePage=0;selectedAudienceIds.clear();searchReaders();};$('#vip-grant-btn').onclick=grantVip;$('#grant-btn').onclick=grantCredits;$('#ledger-btn').onclick=loadLedger;$('#settings-save-btn').onclick=saveSettings;
     $('#growth-refresh').onclick=loadGrowth;$('#growth-create').onclick=createGrowthCampaign;
+    // 工商提案：篩選變更即重載清單；重新整理按鈕同時重載清單與統計；編輯器按鈕呼叫插入流程。
+    $('#promo-status-filter').onchange=loadPromoProposals;
+    $('#promo-refresh').onclick=()=>{loadPromoProposals();loadPromoStats();};
+    $('#insert-promo-btn').onclick=insertPromo;
     ['#reader-source','#reader-consent','#reader-account','#reader-vip','#reader-size',
       '#reader-delivery-campaign','#reader-delivery-status','#reader-delivery-from','#reader-delivery-to','#reader-delivery-min','#reader-delivery-never',
       '#reader-unlock-campaign','#reader-unlock-tag','#reader-unlock-from','#reader-unlock-to','#reader-unlock-min','#reader-unlock-never'
@@ -1626,6 +1673,8 @@
   }
   /** 建立單一表格儲存格，內容一律以 textContent 寫入避免 XSS。 */
   function cell(text){const td=document.createElement('td');td.textContent=text==null?'':String(text);return td;}
+  /** 建立表格內的操作按鈕（灰底樣式），供工商提案清單等表格重用。 */
+  function btn(label,onclick){const b=document.createElement('button');b.className='btn ghost';b.textContent=label;b.onclick=onclick;return b;}
   /** 載入電子報寄送歷史，排程中的項目提供取消按鈕；時間欄排程顯示排程時間、其餘顯示建立時間。 */
   async function doHistory(){try{const rows=await api('/api/admin/campaigns'),body=$('#hist tbody');body.textContent='';rows.forEach(c=>{const tr=document.createElement('tr');tr.append(cell(c.subject),cell(c.mode));// 時間欄：排程批次顯示預定寄出時間，其餘顯示建立時間
       tr.append(cell(c.scheduledAt?'排程 '+formatDate(c.scheduledAt):formatDate(c.createdAt)));
@@ -2338,6 +2387,94 @@
       settingsViews=null;
       showMsg('settings-msg','已儲存，立即生效。',true);
     }catch(e){if(e.message!=='401')showMsg('settings-msg','儲存失敗：'+e.message,false);}
+  }
+
+  // ── 工商提案：清單載入與審核操作 ──────────────────────────────
+  /**
+   * 載入提案清單（依 #promo-status-filter 篩選狀態，留空取全部）。
+   * PENDING 顯示核准／拒絕；APPROVED／REJECTED 顯示封存；ARCHIVED 不再提供操作。
+   */
+  async function loadPromoProposals(){
+    try{
+      const status=$('#promo-status-filter').value;
+      const rows=await api('/api/admin/promo/proposals'+(status?'?status='+status:''));
+      const body=$('#promo-list tbody');body.replaceChildren();
+      if(!rows.length){const tr=document.createElement('tr'),td=cell('目前沒有符合條件的提案');td.colSpan=5;tr.append(td);body.append(tr);}
+      rows.forEach(p=>{
+        const tr=document.createElement('tr');
+        tr.append(cell(p.title),cell(p.contactName),cell(p.status),
+          cell(p.placementUsed+'/'+p.placementQuota));
+        const td=document.createElement('td');
+        if(p.status==='PENDING'){
+          td.append(btn('核准',()=>reviewPromo(p.id,'approve')),
+                    btn('拒絕',()=>{const note=prompt('拒絕理由');if(note!=null)reviewPromo(p.id,'reject',note);}));
+        }else if(p.status==='APPROVED'||p.status==='REJECTED'){
+          td.append(btn('封存',()=>reviewPromo(p.id,'archive')));
+        }
+        tr.append(td);body.append(tr);
+      });
+      loadPromoProposals.done=true;
+    }catch(e){if(e.message!=='401')showMsg('promo-list-msg','載入失敗：'+e.message,false);}
+  }
+
+  /** 執行核准／拒絕／封存操作；成功後重新整理清單，讓狀態與操作按鈕同步更新。 */
+  async function reviewPromo(id,action,note){
+    try{await api('/api/admin/promo/proposals/'+id+'/'+action,
+      {method:'POST',body:JSON.stringify(note?{note}:{})});loadPromoProposals();}
+    catch(e){if(e.message!=='401')alert('操作失敗：'+e.message);}
+  }
+
+  /** 將 EMAIL CTR（0–1 的比例或 null）格式化為百分比一位小數；null 表示尚無發送數可計算。 */
+  function formatCtr(value){return value==null?'—':(value*100).toFixed(1)+'%';}
+
+  /** 載入提案 × 版位成效統計（僅已定案版位），CTR 顯示百分比一位小數，無發送數時顯示「—」。 */
+  async function loadPromoStats(){
+    try{
+      const proposals=await api('/api/admin/promo/stats');
+      const body=$('#promo-stats tbody');body.replaceChildren();
+      let hasRow=false;
+      proposals.forEach(p=>{
+        if(!p.placements.length){
+          hasRow=true;
+          const tr=document.createElement('tr');
+          tr.append(cell(p.title),cell('（尚無已定案版位）'),cell('—'),cell('—'),cell('—'),cell('—'));
+          body.append(tr);
+          return;
+        }
+        p.placements.forEach(pl=>{
+          hasRow=true;
+          const tr=document.createElement('tr');
+          tr.append(
+            cell(p.title),
+            cell(pl.campaignSubject||'（尚未寄送）'),
+            cell(pl.accepted),
+            cell(pl.emailTotal+'/'+pl.emailUnique),
+            cell(formatCtr(pl.emailCtr)),
+            cell(pl.webUnique+'/'+pl.webTotal)
+          );
+          body.append(tr);
+        });
+      });
+      if(!hasRow){const tr=document.createElement('tr'),td=cell('目前沒有提案統計資料');td.colSpan=6;tr.append(td);body.append(tr);}
+      loadPromoStats.done=true;
+    }catch(e){if(e.message!=='401')showMsg('promo-stats-msg','載入失敗：'+e.message,false);}
+  }
+
+  /** 編輯器插入：取可選提案 → 建版位 → snippet 插入游標處，前後補空行避免與其他段落黏住。 */
+  async function insertPromo(){
+    try{
+      const list=await api('/api/admin/promo/selectable');
+      if(!list.length){alert('目前沒有可插入的已核准提案');return;}
+      const pick=prompt('輸入要插入的提案編號：\n'
+        +list.map(p=>p.id+'：'+p.title+'（剩 '+(p.placementQuota-p.placementUsed)+' 次）').join('\n'));
+      if(!pick)return;
+      const r=await api('/api/admin/promo/placements',
+        {method:'POST',body:JSON.stringify({proposalId:parseInt(pick,10)})});
+      const ta=$('#markdown'),pos=ta.selectionStart;
+      ta.value=ta.value.slice(0,pos)+'\n'+r.markdown+'\n'+ta.value.slice(ta.selectionEnd);
+      ta.focus();
+      composeChanged();
+    }catch(e){if(e.message!=='401')alert('插入失敗：'+e.message);}
   }
 
   $('#gate-btn').onclick=async()=>{sessionStorage.setItem(KEY,$('#gate-key').value.trim());try{await api('/api/admin/survey');showApp();init();}catch(error){/* 401 已由 api 顯示閘門。 */}};

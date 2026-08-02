@@ -14,6 +14,7 @@ import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.EmailTemplate;
 import world.springai.survey.mail.MailQuotaService;
 import world.springai.survey.mail.MailSender;
+import world.springai.survey.promo.PromoRecipientTokenService;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -51,6 +52,8 @@ public class CampaignDeliveryService {
     private final JdbcTemplate jdbc;
     /** 信件版內文的唯一產生點：補寄一律由 markdown 重新折疊，不信任存下來的 body_html */
     private final MailBodyRenderer mailBodyRenderer;
+    /** 工商轉址連結的收件人 token 簽發器：renderFor 對每一位收件人各自簽發一枚（比照 CampaignService） */
+    private final PromoRecipientTokenService promoTokenService;
 
     /** 注入寄送、名單、稽核與文章連結依賴。 */
     public CampaignDeliveryService(
@@ -65,7 +68,8 @@ public class CampaignDeliveryService {
             SubscriptionLinkBuilder linkBuilder,
             ReaderSiteLinks readerSiteLinks,
             JdbcTemplate jdbc,
-            MailBodyRenderer mailBodyRenderer) {
+            MailBodyRenderer mailBodyRenderer,
+            PromoRecipientTokenService promoTokenService) {
         this.mailBodyRenderer = mailBodyRenderer;
         this.campaignRepository = campaignRepository;
         this.batchRepository = batchRepository;
@@ -78,6 +82,7 @@ public class CampaignDeliveryService {
         this.linkBuilder = linkBuilder;
         this.readerSiteLinks = readerSiteLinks;
         this.jdbc = jdbc;
+        this.promoTokenService = promoTokenService;
     }
 
     /** 收件人管理頁的一列。 */
@@ -394,13 +399,18 @@ public class CampaignDeliveryService {
      * 正確性由這裡自己保證，不是靠上游的善意。</p>
      */
     private String renderFor(Campaign campaign, String email, long subscriberCount) {
+        // 工商轉址連結的收件人 token：比照 CampaignService.renderFor 的第一個替換點。
+        // 這裡曾經漏接——補寄路徑沒有注入 PromoRecipientTokenService，導致補寄出去的信件
+        // 內文原樣保留 __PROMO_RT__ 佔位符，收件人點擊工商連結時驗簽必定失敗。
+        String bodyHtml = mailBodyRenderer.html(campaign.getMarkdown(), campaign.getSlug())
+            .replace(PromoRecipientTokenService.PLACEHOLDER, promoTokenService.issue(email));
         String slug = campaign.getSlug();
         String path = slug == null ? "/r/archive" : "/r/news/" + slug;
         String articleLink = slug == null
             ? readerSiteLinks.archive()
             : readerSiteLinks.article(slug);
         return emailTemplate.wrapCampaign(
-            mailBodyRenderer.html(campaign.getMarkdown(), slug),
+            bodyHtml,
             linkBuilder.unsubscribeLink(email),
             articleLink,
             readerSiteLinks.login(path),
