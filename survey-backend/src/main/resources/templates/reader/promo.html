@@ -21,56 +21,120 @@
 <div class="wrap">
   <p class="page-kicker">Promo</p>
   <h1 class="page-title compact">工商合作</h1>
-  <p class="page-intro">用點數申請一則工商時間，投放到未來的電子報中。</p>
+  <p class="page-intro">用點數申請一則工商時間，審核通過後投放到未來的電子報中；每次投放都會寄達全體訂閱者的信箱。</p>
 
   <!-- 申請表單：單價與試算由後端算好帶入，前端不重算（顯示與扣點同源原則） -->
   <section class="card">
     <h2>工商時間申請</h2>
-    <p>目前訂閱規模：<!--SUBSCRIBER_COUNT--> 人；每次投放 <!--UNIT_COST--> 點，投放次數 1–3 次。</p>
-    <form id="promo-form">
-      <label>聯絡人 <input name="contactName" maxlength="100" required></label>
-      <label>Email <input name="contactEmail" type="email" maxlength="255" required></label>
-      <label>提案名稱 <input name="title" maxlength="150" required></label>
-      <label>純文字文案 <textarea name="bodyText" maxlength="2000" required></textarea></label>
-      <label>連結文字 <input name="linkText" maxlength="100" required></label>
-      <label>連結網址（https） <input name="linkUrl" type="url" pattern="https://.*" maxlength="1000" required></label>
-      <label>投放次數
-        <select name="placements"><option>1</option><option>2</option><option>3</option></select>
-      </label>
-      <p>總費用：<span id="promo-cost">—</span> 點（目前餘額 <!--CREDITS--> 點）</p>
-      <button type="submit">送出申請</button>
-      <p id="promo-msg" role="status"></p>
+    <div class="promo-meta">
+      <span>觸及 <!--SUBSCRIBER_COUNT--> 位訂閱者</span>
+      <span>每次投放 <!--UNIT_COST--> 點</span>
+      <span>我的餘額 <!--CREDITS--> 點</span>
+    </div>
+    <form id="promo-form" class="promo-form">
+      <div class="field">
+        <label for="promo-contact">聯絡人</label>
+        <input id="promo-contact" name="contactName" maxlength="100" required autocomplete="name">
+      </div>
+      <div class="field">
+        <label for="promo-email">聯絡 Email</label>
+        <input id="promo-email" name="contactEmail" type="email" maxlength="255" required autocomplete="email">
+      </div>
+      <div class="field full">
+        <label for="promo-title">提案名稱</label>
+        <input id="promo-title" name="title" maxlength="150" required placeholder="例：AI 全端開發實戰課程・早鳥優惠">
+      </div>
+      <div class="field full">
+        <label for="promo-body">純文字文案</label>
+        <textarea id="promo-body" name="bodyText" maxlength="2000" required
+          placeholder="想對讀者說的話，純文字即可（不支援 HTML 與圖片），會以工商卡片樣式呈現在電子報中。"></textarea>
+        <span class="field-hint">最多 2000 字；送出後由站長審核，核准的文案即定稿。</span>
+      </div>
+      <div class="field">
+        <label for="promo-link-text">按鈕文字</label>
+        <input id="promo-link-text" name="linkText" maxlength="100" required placeholder="例：立即報名">
+      </div>
+      <div class="field">
+        <label for="promo-placements">投放次數</label>
+        <select id="promo-placements" name="placements">
+          <option value="1">1 次</option>
+          <option value="2">2 次</option>
+          <option value="3">3 次</option>
+        </select>
+      </div>
+      <div class="field full">
+        <label for="promo-link-url">連結網址</label>
+        <input id="promo-link-url" name="linkUrl" type="url" pattern="https://.*" maxlength="1000" required
+          placeholder="https://…">
+        <span class="field-hint">僅接受 https:// 開頭；讀者點擊會經由本站安全轉址，你可以在提案通過後取得成效數據。</span>
+      </div>
+      <div class="promo-cost-bar" id="promo-cost-bar">
+        <span class="cost">總費用 <span id="promo-cost">—</span> 點<small>目前餘額 <!--CREDITS--> 點</small></span>
+        <span class="fine-print" id="promo-cost-hint" style="margin:0">被拒絕全額退點；封存時退還未投放的次數。</span>
+      </div>
+      <button type="submit" class="btn promo-submit" id="promo-submit">送出申請</button>
+      <div class="msg full" id="promo-msg" role="status" aria-live="polite" style="grid-column:1 / -1"></div>
     </form>
   </section>
 
   <!-- 我的提案列表：後端 server-render 成 <tr>，佔位符整段替換 -->
   <section class="card">
     <h2>我的提案</h2>
-    <table><thead><tr><th>名稱</th><th>狀態</th><th>投放</th><th>送出時間</th></tr></thead>
-    <tbody><!--PROPOSAL_ROWS--></tbody></table>
+    <table class="promo-table">
+      <thead><tr><th>提案名稱</th><th>狀態</th><th>投放</th><th>送出日期</th></tr></thead>
+      <tbody><!--PROPOSAL_ROWS--></tbody>
+    </table>
   </section>
 </div>
 
 <script>
-// 試算：次數 × 單價；單價由後端帶入，避免前後端各說一套
+// 試算：次數 × 單價；單價與餘額由後端帶入，避免前後端各說一套。
+// 餘額不足時即時鎖住送出鈕並以警示色提示，省掉一次必然失敗的請求。
 (function () {
   var unit = parseInt('<!--UNIT_COST-->', 10) || 0;
+  var credits = parseInt('<!--CREDITS-->', 10) || 0;
   var form = document.getElementById('promo-form');
   var sel = form.querySelector('[name=placements]');
-  function calc() { document.getElementById('promo-cost').textContent = unit * parseInt(sel.value, 10); }
+  var bar = document.getElementById('promo-cost-bar');
+  var hint = document.getElementById('promo-cost-hint');
+  var submit = document.getElementById('promo-submit');
+  function calc() {
+    var total = unit * parseInt(sel.value, 10);
+    document.getElementById('promo-cost').textContent = total;
+    var lack = total > credits;
+    bar.classList.toggle('lack', lack);
+    submit.disabled = lack;
+    hint.textContent = lack
+      ? '點數不足——邀請朋友訂閱可獲得點數，詳見遊戲規則。'
+      : '被拒絕全額退點；封存時退還未投放的次數。';
+  }
   sel.addEventListener('change', calc); calc();
+
   form.addEventListener('submit', async function (e) {
     e.preventDefault();
     var msg = document.getElementById('promo-msg');
+    msg.className = 'msg';
     var data = Object.fromEntries(new FormData(form).entries());
     data.placements = parseInt(data.placements, 10);
+    submit.disabled = true;
     try {
       var res = await fetch('/r/promo/apply', { method: 'POST',
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       var body = await res.json();
-      if (!res.ok) { msg.textContent = body.message || '申請失敗'; return; }
-      location.reload(); // 成功後重載，列表與餘額都以伺服器為準
-    } catch (err) { msg.textContent = '連線失敗，請稍後再試'; }
+      if (!res.ok) {
+        msg.className = 'msg err show';
+        msg.textContent = body.message || '申請失敗，請稍後再試';
+        submit.disabled = false;
+        return;
+      }
+      msg.className = 'msg ok show';
+      msg.textContent = '申請已送出！頁面即將重新整理…';
+      setTimeout(function () { location.reload(); }, 900); // 成功後重載，列表與餘額都以伺服器為準
+    } catch (err) {
+      msg.className = 'msg err show';
+      msg.textContent = '連線失敗，請稍後再試';
+      submit.disabled = false;
+    }
   });
 })();
 </script>
