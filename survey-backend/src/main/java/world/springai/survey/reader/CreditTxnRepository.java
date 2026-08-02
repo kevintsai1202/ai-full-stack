@@ -27,4 +27,7 @@ public interface CreditTxnRepository extends JpaRepository<CreditTxn, Long> {
 
     /** 某讀者某類交易的明細（新到舊）；邀請成效的「累計獲得點數」使用 */
     List<CreditTxn> findByReaderIdAndReasonOrderByCreatedAtDesc(Long readerId, String reason);
+
+    /** 該提案是否已有指定原因的交易——退點冪等防線（REJECTED→ARCHIVED 不重複退） */
+    boolean existsByPromoProposalIdAndReason(Long promoProposalId, String reason);
 }

@@ -32,6 +32,10 @@ public class CreditTxn {
     public static final String REASON_READ = "READ";
     /** 後台手動加點（如贈與上課學員） */
     public static final String REASON_ADMIN_GRANT = "ADMIN_GRANT";
+    /** 工商提案申請扣點（負向） */
+    public static final String REASON_PROMO_APPLY = "PROMO_APPLY";
+    /** 工商提案退點：被拒全退、封存退未投放餘額（正向） */
+    public static final String REASON_PROMO_REFUND = "PROMO_REFUND";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -53,6 +57,10 @@ public class CreditTxn {
     @Column(name = "campaign_id")
     private Long campaignId;
 
+    /** reason=PROMO_APPLY／PROMO_REFUND 時對應的提案；退點冪等判斷依據 */
+    @Column(name = "promo_proposal_id")
+    private Long promoProposalId;
+
     /** 說明文字，ADMIN_GRANT 時記錄贈點理由 */
     private String note;
 
@@ -73,11 +81,19 @@ public class CreditTxn {
         this.note = note;
     }
 
+    /** 建立一筆點數交易（工商提案路徑，帶提案 id） */
+    public CreditTxn(Long readerId, int delta, String reason, Long campaignId,
+                     String note, Long promoProposalId) {
+        this(readerId, delta, reason, campaignId, note);
+        this.promoProposalId = promoProposalId;
+    }
+
     public Long getId() { return id; }
     public Long getReaderId() { return readerId; }
     public int getDelta() { return delta; }
     public String getReason() { return reason; }
     public Long getCampaignId() { return campaignId; }
+    public Long getPromoProposalId() { return promoProposalId; }
     public String getNote() { return note; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
 }
