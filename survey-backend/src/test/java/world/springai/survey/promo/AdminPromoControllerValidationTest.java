@@ -52,4 +52,24 @@ class AdminPromoControllerValidationTest {
         mvc.perform(post("/api/admin/promo/proposals/1/approve"))
            .andExpect(status().isUnauthorized());
     }
+
+    /**
+     * I3 修正：{@code PromoPlacementService.PromoReconcileException}（對帳／預檢失敗）
+     * 須由全域 {@code ApiExceptionHandler} 轉 409，而不是落到預設裸 500。
+     * {@code @WebMvcTest} 預設就會掃到 {@code @RestControllerAdvice} 元件，
+     * 不需額外 {@code @Import}。
+     */
+    @Test
+    void placementServiceReconcileExceptionReturns409() throws Exception {
+        when(placementService.createPlacement(9L))
+            .thenThrow(new PromoPlacementService.PromoReconcileException(
+                "提案「好課」投放次數已用罄，請移除該工商區塊"));
+
+        mvc.perform(post("/api/admin/promo/placements")
+                .header("X-Admin-Key", "test-key")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"proposalId\":9}"))
+           .andExpect(status().isConflict())
+           .andExpect(content().string(org.hamcrest.Matchers.containsString("投放次數已用罄")));
+    }
 }

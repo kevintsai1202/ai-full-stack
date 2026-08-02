@@ -7,6 +7,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
+import world.springai.survey.promo.PromoPlacementService;
 
 /** 統一錯誤回應：把驗證失敗轉成 400 ProblemDetail */
 @RestControllerAdvice
@@ -43,5 +44,22 @@ public class ApiExceptionHandler {
             .map(e -> e.getField() + " " + e.getDefaultMessage())
             .reduce((a, b) -> a + "; " + b).orElse("invalid request"));
         return pd;
+    }
+
+    /**
+     * 工商提案對帳／預檢失敗（{@link PromoPlacementService.PromoReconcileException}）轉 409。
+     *
+     * <p><b>只精準映射這個專屬型別，不是全域 {@link IllegalStateException}</b>：
+     * 後者被 {@code UnlockService} 等既有服務廣泛使用，語意各不相同
+     * （例如併發解鎖失敗、退點失敗），一律轉 409 會改變既有行為且範圍過寬。
+     * 這裡只處理 {@code PromoPlacementService.assertCommittable}／{@code reconcile}
+     * 兩個對帳方法丟出的例外，讓後台前端能看到中文錯誤原因，而不是裸 500。</p>
+     */
+    @ExceptionHandler(PromoPlacementService.PromoReconcileException.class)
+    public ResponseEntity<ProblemDetail> onPromoReconcile(
+            PromoPlacementService.PromoReconcileException ex) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.CONFLICT);
+        pd.setDetail(ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
     }
 }
