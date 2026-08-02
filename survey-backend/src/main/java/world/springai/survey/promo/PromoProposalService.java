@@ -177,6 +177,20 @@ public class PromoProposalService {
      * 退還未投放餘額：(quota − used) × unit_cost。
      * 冪等防線：同一提案只會有一筆 PROMO_REFUND——REJECTED 時已退過的，
      * 之後 ARCHIVED 不重複退。
+     *
+     * <p><b>應用層判斷有競態窗口，DB 唯一索引兜底</b>：{@code existsByPromoProposalIdAndReason}
+     * 到 {@code creditTxnRepository.save} 之間並非原子操作，併發雙擊 reject／archive
+     * （或 reject 後立刻 archive 的重複請求）理論上可能兩者都通過冪等檢查。
+     * V19 的 {@code uq_credit_txn_promo_refund} partial unique index
+     * （{@code (promo_proposal_id, reason) WHERE reason = 'PROMO_REFUND'}）是最終防線。</p>
+     *
+     * <p><b>UNIQUE 撞擊不在此捕捉</b>，理由同 {@code UnlockService.unlock}：
+     * {@code save} 觸發 {@link org.springframework.dao.DataIntegrityViolationException} 後
+     * 交易已被標記 rollback-only，在方法內捕捉並正常回傳會讓 commit 改拋
+     * {@code UnexpectedRollbackException}——必須讓例外往外傳播到交易邊界之外，
+     * 由呼叫端（admin 端點）接手，屬罕見併發情境，回 409／500 可接受。</p>
+     *
+     * @throws org.springframework.dao.DataIntegrityViolationException 併發雙退撞上 UNIQUE
      */
     private void refundRemaining(PromoProposal p) {
         int amount = (p.getPlacementQuota() - p.getPlacementUsed()) * p.getUnitCost();

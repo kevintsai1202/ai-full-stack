@@ -242,4 +242,47 @@ class PromoPlacementReconcileIntegrationTest {
         assertEquals(1, queryPlacementUsed(p1Id),
             "P1 的 placement_used 應被扣為 1");
     }
+
+    /**
+     * ★ 案例 C：REMOVED 版位不撞部分唯一索引（I2 修正）
+     *
+     * <p>{@code uq_promo_placement_campaign_proposal} 原本條件只排除
+     * {@code campaign_id IS NULL}，REMOVED 版位仍保留 campaign_id，
+     * 導致「同一期同提案移除後重新插入再 COMMIT」會撞到舊的 REMOVED 版位而 500。
+     * 修法是條件加上 {@code AND status = 'COMMITTED'}，只有「目前仍定案中」的版位
+     * 才受唯一限制。</p>
+     *
+     * <p>流程：P1(quota=2) 版位 A 先 COMMIT 到 campaign → 重排使其消失轉 REMOVED
+     * 並歸還配額 → 同提案插入新版位 B → 對帳應能成功 COMMIT 到<b>同一個</b> campaign，
+     * 不因與 A 相同的 (campaign_id, proposal_id) 而撞唯一索引。</p>
+     */
+    @Test
+    void 案例C_REMOVED版位不撞唯一索引_同提案可再COMMIT到同一campaign() throws SQLException {
+        long readerId = createReader("promo-test-c@example.com");
+        long campaignId = createCampaign("promo-test-c");
+
+        long p1Id = createProposal(readerId, "提案1", 2);
+        long plAId = createPlacement(p1Id);
+
+        // 第一輪：版位 A 對帳 COMMIT
+        service.reconcile(campaignId, "[A](/promo/c/" + plAId + "?rt=x)");
+        assertEquals(PromoPlacement.STATUS_COMMITTED, queryPlacement(plAId).status());
+        assertEquals(1, queryPlacementUsed(p1Id));
+
+        // 第二輪：重排，內文已無版位 A → 轉 REMOVED 並歸還配額（campaign_id 仍保留）
+        service.reconcile(campaignId, "內文已移除工商區塊");
+        assertEquals(PromoPlacement.STATUS_REMOVED, queryPlacement(plAId).status());
+        assertEquals(campaignId, queryPlacement(plAId).campaignId(),
+            "REMOVED 版位仍保留 campaign_id（歷史紀錄），這正是舊索引會誤傷的原因");
+        assertEquals(0, queryPlacementUsed(p1Id));
+
+        // 同一提案重新插入新版位 B，對帳到同一個 campaign：不應撞唯一索引
+        long plBId = createPlacement(p1Id);
+        service.reconcile(campaignId, "[B](/promo/c/" + plBId + "?rt=x)");
+
+        assertEquals(PromoPlacement.STATUS_COMMITTED, queryPlacement(plBId).status(),
+            "新版位應能成功 COMMIT 到同一個 campaign，不受舊 REMOVED 版位阻擋");
+        assertEquals(campaignId, queryPlacement(plBId).campaignId());
+        assertEquals(1, queryPlacementUsed(p1Id));
+    }
 }
