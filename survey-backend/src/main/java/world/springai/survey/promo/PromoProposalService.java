@@ -101,7 +101,7 @@ public class PromoProposalService {
         requireLen(req.contactName(), 100, "聯絡人");
         requireLen(req.contactEmail(), 255, "Email");
         requireLen(req.title(), 150, "提案名稱");
-        requireLen(req.bodyText(), 2000, "文案");
+        requireLen(req.bodyText(), 500, "文案");
         requireLen(req.linkText(), 100, "連結文字");
         requireLen(req.linkUrl(), 1000, "網址");
         if (!req.contactEmail().contains("@")) {
