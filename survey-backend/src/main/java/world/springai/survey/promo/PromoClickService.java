@@ -49,8 +49,9 @@ public class PromoClickService {
         if (proposal.isEmpty()) return Optional.empty();
 
         if (PromoPlacement.STATUS_COMMITTED.equals(placement.get().getStatus())) {
+            PromoClick click = buildClick(placementId, rt, sessionCookie); // 身分解析例外要浮出，不屬 best-effort 範圍
             try {
-                clickRepository.save(buildClick(placementId, rt, sessionCookie));
+                clickRepository.save(click);
             } catch (RuntimeException e) {
                 log.warn("promo 點擊記錄失敗 placement={}，轉址照常", placementId, e);
             }
