@@ -12,10 +12,14 @@ import static org.mockito.Mockito.*;
 /** snippet 生成、Markdown escape、URL 解析 */
 class PromoPlacementServiceSnippetTest {
 
+    /** 測試用固定對外網址，驗證 snippet 連結必須是絕對網址（C1 修正） */
+    private static final String BASE_URL = "https://example.org";
+
     private final PromoPlacementRepository placementRepository = mock(PromoPlacementRepository.class);
     private final PromoProposalRepository proposalRepository = mock(PromoProposalRepository.class);
     private final PromoPlacementService service =
-        new PromoPlacementService(placementRepository, proposalRepository);
+        new PromoPlacementService(placementRepository, proposalRepository,
+            BASE_URL, new world.springai.survey.newsletter.ContentSplitter());
 
     @Test
     void escape跳脫markdown特殊字元() {
@@ -43,7 +47,9 @@ class PromoPlacementServiceSnippetTest {
         assertTrue(md.startsWith("<!--promo-->\n"));
         assertTrue(md.endsWith("<!--/promo-->\n"));
         assertTrue(md.contains("限時 \\*5\\* 折"));           // 文案已 escape
-        assertTrue(md.contains("[馬上看](/promo/c/55?rt=__PROMO_RT__)"));
+        // C1 修正：連結必須是絕對網址，否則信件內是唯一的相對連結，郵件客戶端無 base URL 可補完
+        assertTrue(md.contains("[馬上看](" + BASE_URL + "/promo/c/55?rt=__PROMO_RT__)"),
+            "連結必須是絕對網址：" + md);
     }
 
     @Test
@@ -61,5 +67,15 @@ class PromoPlacementServiceSnippetTest {
         String md = "x [a](/promo/c/3?rt=__PROMO_RT__) y [b](/promo/c/12?rt=__PROMO_RT__)"
             + " 重複 [c](/promo/c/3?rt=__PROMO_RT__)";
         assertEquals(List.of(3L, 12L), PromoPlacementService.parsePlacementIds(md));
+    }
+
+    /**
+     * C1 修正：解析規則是子字串比對（{@code /promo/c/(\d+)}），不錨定字串開頭，
+     * 因此即使連結改成絕對網址（含網域前綴），對帳解析仍要能正確取出 placementId。
+     */
+    @Test
+    void 解析markdown中的placementId_絕對網址也能解析() {
+        String md = "[看](" + BASE_URL + "/promo/c/55?rt=__PROMO_RT__)";
+        assertEquals(List.of(55L), PromoPlacementService.parsePlacementIds(md));
     }
 }

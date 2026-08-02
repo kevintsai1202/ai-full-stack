@@ -97,6 +97,21 @@ class ReaderEntryHostFilterTest {
         assertNull(getChain.getRequest());
     }
 
+    /**
+     * 工商連結轉址端點在讀者網域須放行（C1 修正）：該端點需要讀取讀者 session
+     * cookie 才能正確歸戶點擊，信件與讀者頁的點擊都會落在讀者網域，
+     * 未放行時讀者網域部署下所有工商連結點擊都會變成 404。
+     */
+    @Test
+    void readerHostAllowsPromoClickRedirect() throws Exception {
+        MockFilterChain chain = new MockFilterChain();
+        MockHttpServletResponse response =
+            run(READER_HOST, READER_HOST, "GET", "/promo/c/55", chain);
+
+        assertEquals(200, response.getStatus(), "工商連結轉址端點必須在讀者網域放行");
+        assertNotNull(chain.getRequest(), "必須繼續走 chain 才能真正觸發轉址邏輯");
+    }
+
     /** 分享點擊只放行精準 POST；GET 不可藉此擴大讀者網域 API 面。 */
     @Test
     void readerHostAllowsOnlyPostForReferralClick() throws Exception {
