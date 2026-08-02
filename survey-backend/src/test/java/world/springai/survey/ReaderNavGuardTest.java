@@ -21,11 +21,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p><b>背景</b>：{@code ReaderNav} 的 javadoc 曾經記載「掃描生產程式碼裡的
  * {@code <a href="/r/} 不可行，偽陽性太多，只能靠 code review 把關」。實測結果推翻了
- * 這個結論：只鎖定三個<b>逐字</b>字串（{@code <a href="/r/archive"}、
- * {@code <a href="/r/me"}、{@code <a href="/r/login"}，而非任何 {@code <a href="/r/}
- * 開頭的寬鬆比對），{@code reader} 套件目前的偽陽性數量是零——paywall 的行動按鈕、
- * 規則頁提示連結用的都是完整的 {@code <a href="/r/rules">} 這個不同的字串，不會撞到
- * 這三個逐字比對。窄 pattern 是可以機械化把關的，不必只靠人工審查。</p>
+ * 這個結論：只鎖定四個<b>逐字</b>字串（{@code <a href="/r/archive"}、
+ * {@code <a href="/r/me"}、{@code <a href="/r/login"}、{@code <a href="/r/promo"}，
+ * 而非任何 {@code <a href="/r/} 開頭的寬鬆比對），{@code reader} 套件目前的偽陽性數量
+ * 是零——paywall 的行動按鈕、規則頁提示連結用的都是完整的 {@code <a href="/r/rules">}
+ * 這個不同的字串，不會撞到這四個逐字比對。窄 pattern 是可以機械化把關的，不必只靠
+ * 人工審查。</p>
  *
  * <p>兩道檢查對應兩種「順手改回自己拼」的方式：</p>
  * <ol>
@@ -54,15 +55,16 @@ class ReaderNavGuardTest {
         "<script src=\"/tracking.js\" defer></script>";
 
     /**
-     * 只能出現在 {@code ReaderNav.java} 裡的三個逐字字串（Java 原始碼中雙引號會被
+     * 只能出現在 {@code ReaderNav.java} 裡的四個逐字字串（Java 原始碼中雙引號會被
      * 跳脫成 {@code \"}，故此處的比對字面值同樣使用跳脫後的形式，才對得上原始檔案
-     * 實際的位元組內容）。刻意只列這三個而非任何 {@code <a href="/r/} 開頭的字串，
+     * 實際的位元組內容）。刻意只列這四個而非任何 {@code <a href="/r/} 開頭的字串，
      * 避免撞上 paywall 行動按鈕、{@code rulesHint()} 等本來就合法的其他連結。
      */
     private static final List<String> FORBIDDEN_LITERALS = List.of(
         "<a href=\\\"/r/archive\\\"",
         "<a href=\\\"/r/me\\\"",
-        "<a href=\\\"/r/login\\\"");
+        "<a href=\\\"/r/login\\\"",
+        "<a href=\\\"/r/promo\\\"");
 
     /**
      * 這兩頁是終點頁（讀者到那裡是為了完成一件事或離開），{@code <nav>} 刻意維持

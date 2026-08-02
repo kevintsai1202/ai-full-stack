@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工商合作｜凱文大叔的電子報</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/r/reader.css">
+<script src="/tracking.js" defer></script>
+<script src="/r/reader-nav.js" defer></script>
+<script src="/r/reader-share.js" defer></script>
+</head>
+<body>
+<header class="site-head">
+  <div class="site-head-inner">
+    <a class="brand" href="/r/">凱文大叔的電子報</a>
+    <nav><!--NAV_LINKS--></nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <p class="page-kicker">Promo</p>
+  <h1 class="page-title compact">工商合作</h1>
+  <p class="page-intro">用點數申請一則工商時間，投放到未來的電子報中。</p>
+
+  <!-- 申請表單：單價與試算由後端算好帶入，前端不重算（顯示與扣點同源原則） -->
+  <section class="card">
+    <h2>工商時間申請</h2>
+    <p>目前訂閱規模：<!--SUBSCRIBER_COUNT--> 人；每次投放 <!--UNIT_COST--> 點，投放次數 1–3 次。</p>
+    <form id="promo-form">
+      <label>聯絡人 <input name="contactName" maxlength="100" required></label>
+      <label>Email <input name="contactEmail" type="email" maxlength="255" required></label>
+      <label>提案名稱 <input name="title" maxlength="150" required></label>
+      <label>純文字文案 <textarea name="bodyText" maxlength="2000" required></textarea></label>
+      <label>連結文字 <input name="linkText" maxlength="100" required></label>
+      <label>連結網址（https） <input name="linkUrl" type="url" pattern="https://.*" maxlength="1000" required></label>
+      <label>投放次數
+        <select name="placements"><option>1</option><option>2</option><option>3</option></select>
+      </label>
+      <p>總費用：<span id="promo-cost">—</span> 點（目前餘額 <!--CREDITS--> 點）</p>
+      <button type="submit">送出申請</button>
+      <p id="promo-msg" role="status"></p>
+    </form>
+  </section>
+
+  <!-- 我的提案列表：後端 server-render 成 <tr>，佔位符整段替換 -->
+  <section class="card">
+    <h2>我的提案</h2>
+    <table><thead><tr><th>名稱</th><th>狀態</th><th>投放</th><th>送出時間</th></tr></thead>
+    <tbody><!--PROPOSAL_ROWS--></tbody></table>
+  </section>
+</div>
+
+<script>
+// 試算：次數 × 單價；單價由後端帶入，避免前後端各說一套
+(function () {
+  var unit = parseInt('<!--UNIT_COST-->', 10) || 0;
+  var form = document.getElementById('promo-form');
+  var sel = form.querySelector('[name=placements]');
+  function calc() { document.getElementById('promo-cost').textContent = unit * parseInt(sel.value, 10); }
+  sel.addEventListener('change', calc); calc();
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var msg = document.getElementById('promo-msg');
+    var data = Object.fromEntries(new FormData(form).entries());
+    data.placements = parseInt(data.placements, 10);
+    try {
+      var res = await fetch('/r/promo/apply', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      var body = await res.json();
+      if (!res.ok) { msg.textContent = body.message || '申請失敗'; return; }
+      location.reload(); // 成功後重載，列表與餘額都以伺服器為準
+    } catch (err) { msg.textContent = '連線失敗，請稍後再試'; }
+  });
+})();
+</script>
+<footer class="site-foot">
+  <p>合作與聯絡：<a href="mailto:contact@springai.world">contact@springai.world</a></p>
+</footer>
+</body>
+</html>
