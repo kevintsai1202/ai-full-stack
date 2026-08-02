@@ -200,7 +200,7 @@
         <button type="button" class="btn ghost format-btn" data-template="[連結文字](https://)" title="連結">連結</button>
         <button type="button" class="btn ghost format-btn" data-template="![圖片說明](https://)" title="圖片">圖片</button>
         <button type="button" class="btn ghost format-btn" data-block="---" title="分隔線">分隔線</button>
-        <button type="button" class="btn ghost format-btn" data-block="<!--paywall-->" title="付費牆">付費牆</button>
+        <button type="button" class="btn ghost format-btn" data-block="<!--paywall-->" data-paywall-tier="PREMIUM" title="插入需點數解鎖的付費牆，並自動切換 PREMIUM">付費牆（點數）</button>
         <button type="button" class="btn ghost format-btn" data-block-start="<!--promo-->" data-block-end="<!--/promo-->" title="工商區塊：選取內容會被包成優惠卡片（渲染成帶綠條的底色卡片）">工商</button>
       </div>
       <textarea id="markdown" placeholder="# 標題&#10;&#10;支援 **粗體**、清單、[連結](https://...)"></textarea>
@@ -250,7 +250,7 @@
         <div><label for="art-slug">網址代稱 slug（留空則不發布到網頁）</label>
           <input type="text" id="art-slug" placeholder="my-first-post"></div>
         <div><label for="art-tier">分級</label>
-          <select id="art-tier"><option value="BASIC">BASIC（訂閱者免費）</option><option value="PREMIUM">PREMIUM（需點數）</option></select></div>
+          <select id="art-tier"><option value="BASIC">BASIC（全文免費）</option><option value="PREMIUM">PREMIUM（付費牆後需點數）</option></select></div>
         <div><label for="art-cost">解鎖點數（PREMIUM 必填，需在 1–10000 之間）</label>
           <input type="number" id="art-cost" min="1" max="10000" placeholder="10">
           <p class="hint" id="cost-hint"></p></div>
@@ -258,7 +258,7 @@
       <p class="hint" id="tier-hint">設了 slug 才會出現在 /r/archive 與單篇頁面。</p>
       <button class="btn" id="send-btn" style="margin-top:14px">發送</button>
       <button class="btn ghost" id="publish-btn" style="margin-top:14px;margin-left:8px">只發布不寄送</button>
-      <p class="hint" style="margin:8px 0 0">「只發布不寄送」只把文章放上網頁（<code>/r/news/{slug}</code> 與 <code>/r/archive</code>），不寄任何信、不消耗寄信額度；PREMIUM 只能走這條路徑。</p>
+      <p class="hint" style="margin:8px 0 0">「只發布不寄送」只把文章放上網頁（<code>/r/news/{slug}</code> 與 <code>/r/archive</code>），不寄任何信、不消耗寄信額度；PREMIUM 也可正常寄送，信件只含免費區與解鎖連結。</p>
       <div class="msg" id="send-msg"></div></div>
     <div class="card"><h2>⑥ 寄送歷史　<button class="btn ghost" id="hist-btn">重新整理</button></h2><div class="table-wrap"><table id="hist"><thead><tr><th>主旨</th><th>模式</th><th>時間</th><th>狀態</th><th>成功/失敗</th><th></th></tr></thead><tbody></tbody></table></div></div>
     <div class="card" id="delivery-card" hidden>
@@ -748,19 +748,13 @@
     $('#reader-q').addEventListener('keydown',e=>{if(e.key==='Enter')searchReaders();});
     $('#ledger-email').addEventListener('keydown',e=>{if(e.key==='Enter')loadLedger();});
     $('#privacy-export').onclick=exportAudienceData;$('#privacy-delete').onclick=deleteAudienceData;
-    // 寄送端點對 PREMIUM 回 400，這裡先在 UI 說明，避免使用者選了 PREMIUM 才撞到。
-    // 注意理由已經改變：信件端的折疊（只寄免費區＋解鎖卡片）已由 CampaignService
-    // 的 mailBodyHtml() 無條件實作，任何含 <!--paywall--> 的內容都不會把受限區寄出，
-    // 與 tier 無關。守門保留的是 PREMIUM 這條寄送路徑本身的產品決定，不是外洩風險。
+    // PREMIUM 可直接寄送：CampaignService 會把信件折疊為免費區＋解鎖卡片，
+    // 受限區只在讀者完成點數解鎖後由網頁端輸出。
     $('#art-tier').addEventListener('change',e=>{
       const hint=$('#tier-hint');
       if(e.target.value==='PREMIUM'){
-        // 文案必須與後端行為一致：「發送」打 /api/admin/campaign/send，該端點對 PREMIUM
-        // 無條件回 400（與有沒有設 slug 無關）；「只發布不寄送」打
-        // /api/admin/campaign/publish，該端點接受 PREMIUM。
-        hint.textContent='PREMIUM 可以發布到網頁（請按「只發布不寄送」，slug 必填），'
-          +'但還不能寄送：按「發送」會被拒絕（400）。PREMIUM 的價值是點數解鎖，'
-          +'而群發的信對所有人長得一樣，VIP 與已解鎖的讀者也只會收到免費區。';
+        hint.textContent='PREMIUM 必須包含付費牆並設定正數解鎖點數。直接發送時，信件只會包含'
+          +'免費區與解鎖連結；付費牆後內容不會進入信件。也可用「只發布不寄送」只放上網頁。';
         hint.className='warn';
         // 價格凍結警告綁在「PREMIUM 狀態」而非「預填事件」上：欄位已有值時預填函式
         // 會直接 return，若警告只在預填成功時出現，操作者恰好在最需要警告的情境
@@ -1125,6 +1119,14 @@
   function applyMarkdownFormat(button){
     const editor=$('#markdown'),start=editor.selectionStart,end=editor.selectionEnd;
     const selected=editor.value.slice(start,end),prefix=button.dataset.prefix;
+    // 付費牆標記的產品語意是「需點數解鎖」；插入時同步切換 PREMIUM，
+    // 並觸發既有 change handler 預填點數與顯示發布提示，避免留下 BASIC 登入牆。
+    const paywallTier=button.dataset.paywallTier;
+    if(paywallTier === 'PREMIUM'){
+      const tierSelect=$('#art-tier');
+      tierSelect.value=paywallTier;
+      tierSelect.dispatchEvent(new Event('change'));
+    }
     let inserted,cursorStart,cursorEnd;
     if(button.dataset.heading){
       const lineStart=editor.value.lastIndexOf('\n',Math.max(0,start-1))+1;
@@ -1598,12 +1600,10 @@
       link.href=r.url;link.textContent=r.url;link.target='_blank';link.rel='noopener';
       m.append(link);
       // 「只發布不寄送」名副其實：訂閱者不會收到任何通知，文章就靜靜躺在網頁上。
-      // 這是目前唯一能發布 PREMIUM 的路徑，所以要主動告知，否則操作者會以為
-      // 發布等於通知，等著看開信率。上面那條連結可直接複製進通知信。
+      // PREMIUM 現在也能直接寄送；若選擇此路徑仍要主動告知沒有通知副作用。
       const notice=document.createElement('p');
       notice.className='hint';notice.style.margin='8px 0 0';
-      // 指引依 tier 分支：BASIC 文章不一定有受限區，對它顯示付費牆相關的提醒
-      // 會讓操作者誤以為自己剛發布的東西有外洩風險。
+      // 指引依 tier 分支：BASIC 必須全文免費，不顯示付費牆相關提醒，避免誤導操作者。
       notice.textContent=r.tier==='PREMIUM'
         ?('訂閱者不會自動收到通知。想通知的話，另外建一篇 BASIC 通知信'
           +'（內文放摘要與上面這條文章連結即可）。就算不小心把受限內容貼進去也不會外洩：'

@@ -216,7 +216,7 @@ class CampaignServiceTest {
         when(linkBuilder.unsubscribeLink("a@x.com")).thenReturn("https://x/unsubscribe?u=a");
 
         svc.send("進階主題", "免費導讀\n\n<!--paywall-->\n\n祕密付費內容",
-            null, null, "now", null);
+            null, null, "now", null, Campaign.TIER_PREMIUM, 10, null, null);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<MailSender.Email>> captor = ArgumentCaptor.forClass(List.class);
@@ -245,7 +245,7 @@ class CampaignServiceTest {
         when(linkBuilder.unsubscribeLink("a@x.com")).thenReturn("https://x/unsubscribe?u=a");
 
         svc.send("進階主題", "免費導讀\n\n<!--paywall-->\n\n祕密付費內容",
-            null, null, "now", null, Campaign.TIER_BASIC, 0, "my-article", null);
+            null, null, "now", null, Campaign.TIER_PREMIUM, 10, "my-article", null);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<MailSender.Email>> captor = ArgumentCaptor.forClass(List.class);
@@ -272,7 +272,7 @@ class CampaignServiceTest {
         when(linkBuilder.unsubscribeLink("a@x.com")).thenReturn("https://x/unsubscribe?u=a");
 
         svc.send("進階主題", "免費導讀\n\n<!--paywall-->\n\n祕密付費內容",
-            null, null, "now", null);
+            null, null, "now", null, Campaign.TIER_PREMIUM, 10, null, null);
 
         ArgumentCaptor<Campaign> saved = ArgumentCaptor.forClass(Campaign.class);
         verify(campaignRepository, atLeastOnce()).save(saved.capture());
@@ -296,6 +296,8 @@ class CampaignServiceTest {
         Instant newAt = Instant.parse("2030-06-01T10:00:00Z");
         Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
             OffsetDateTime.parse("2030-05-01T10:00:00Z"), 1, "scheduled");
+        existing.setTier(Campaign.TIER_PREMIUM);
+        existing.setCreditCost(10);
         when(campaignRepository.findById(21L)).thenReturn(Optional.of(existing));
         when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
         when(emailLogRepository.findByCampaignIdAndStatus(21L, "scheduled")).thenReturn(List.of());
@@ -915,6 +917,18 @@ class CampaignServiceTest {
         assertEquals(0, r.creditCost());
     }
 
+    /** BASIC 文章不得含付費牆；付費牆必須使用 PREMIUM 與正數解鎖點數。 */
+    @Test
+    void publishBasicWithPaywallMarkerRejected() {
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.publish("主旨", "免費區\n\n<!--paywall-->\n\n付費區",
+                Campaign.TIER_BASIC, null, "basic-paywall", null));
+
+        assertEquals(400, ex.getStatusCode().value());
+        assertTrue(ex.getReason() != null && ex.getReason().contains("PREMIUM"), ex.getReason());
+        verify(campaignRepository, never()).save(any(Campaign.class));
+    }
+
     // ── 下架（撤回發布）───────────────────────────────────────────────────
 
     /** 建一個已發布、狀態為 published 的假 campaign（下架測試共用） */
@@ -1241,35 +1255,27 @@ class CampaignServiceTest {
         verify(mailQuotaService, never()).invalidate();
     }
 
-    /**
-     * 守門：tier=PREMIUM 時即使 creditCost/slug 皆合法，發送仍被拒絕
-     * （階段 D 的信件折疊尚未實作，PREMIUM 內容不得寄出，只能在網頁上發布）。
-     * 這是本次任務最重要的一條測試——確保「能設定 PREMIUM」與「信件端全開」不會同時成立。
-     */
+    /** BASIC 搭配付費牆必須拒絕，避免登入後免費取得本應扣點的內容。 */
     @Test
-    void sendPremiumTierIsRejectedByFoldingGuard() {
-        when(campaignRepository.findBySlug("premium-post")).thenReturn(Optional.empty());
-
+    void sendBasicPaywallIsRejected() {
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-            () -> svc.send("主旨", "內文", null, null, "now", null,
-                Campaign.TIER_PREMIUM, 10, "premium-post", null));
+            () -> svc.send("主旨", "免費區\n\n<!--paywall-->\n\n付費區", null, null, "now", null,
+                Campaign.TIER_BASIC, null, "basic-paywall", null));
 
         assertEquals(400, ex.getStatusCode().value());
         verify(campaignRepository, never()).save(any(Campaign.class));
         verify(mailSender, never()).sendBatch(anyList());
     }
 
-    /** 重排（reschedule）同樣受折疊守門保護：既有 campaign 的 tier 為 PREMIUM 時拒絕重排寄送 */
+    /** 重排時也不得把 BASIC 內容改成含付費牆，避免繞過建立時的配對守門。 */
     @Test
-    void reschedulePremiumTierIsRejectedByFoldingGuard() {
+    void rescheduleBasicPaywallIsRejected() {
         Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
             OffsetDateTime.parse("2098-01-01T00:00:00Z"), 1, "scheduled");
-        existing.setTier(Campaign.TIER_PREMIUM);
-        existing.setCreditCost(10);
         when(campaignRepository.findById(11L)).thenReturn(Optional.of(existing));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-            () -> svc.reschedule(11L, "新主旨", "新內文", null, null,
+            () -> svc.reschedule(11L, "新主旨", "免費區\n\n<!--paywall-->\n\n付費區", null, null,
                 Instant.parse("2030-01-01T00:00:00Z")));
 
         assertEquals(400, ex.getStatusCode().value());

@@ -116,7 +116,8 @@ class MigrationSafetyTest {
             st.execute("""
                 INSERT INTO campaign (subject, markdown, mode, recipient_count,
                                       accepted_count, failed_count, status)
-                VALUES ('既有電子報', '# 內容', 'now', 1, 1, 0, 'sent')
+                VALUES ('既有電子報', E'# 免費內容\n\n<!--paywall-->\n\n# 付費內容',
+                        'now', 1, 1, 0, 'sent')
                 """);
             st.execute("""
                 INSERT INTO campaign (
@@ -295,12 +296,13 @@ class MigrationSafetyTest {
             "SELECT value FROM app_setting WHERE setting_key = 'engagement.sunset_days'"));
     }
 
-    /** 非 V16 精準回填目標的既有 campaign 應取得新欄位預設值，且不得被自動發布。 */
+    /** 非 V16 精準回填與 V18 付費牆升級目標的既有 campaign 應取得預設值，且不得被自動發布。 */
     @Test
     void existingCampaignGetsColumnDefaults() throws SQLException {
         assertEquals(0, queryInt("""
             SELECT count(*) FROM campaign
              WHERE id NOT IN (4, 8)
+               AND subject <> '既有電子報'
                AND (tier IS DISTINCT FROM 'BASIC'
                 OR  credit_cost <> 0
                 OR  filter_levels IS DISTINCT FROM 'active'
@@ -362,6 +364,31 @@ class MigrationSafetyTest {
                     """);
             }
         }, "tier=PREMIUM 且 credit_cost=0 應被 CHECK 約束拒絕");
+    }
+
+    /** V18 必須把既有 BASIC 付費牆升級為 PREMIUM，且補上正數解鎖點數。 */
+    @Test
+    void basicPaywallIsBackfilledToPremium() throws SQLException {
+        assertEquals("PREMIUM", queryString(
+            "SELECT tier FROM campaign WHERE subject = '既有電子報'"));
+        assertTrue(queryInt(
+            "SELECT credit_cost FROM campaign WHERE subject = '既有電子報'") > 0,
+            "既有付費牆升級後必須具備正數解鎖點數");
+    }
+
+    /** V18 的資料庫約束必須拒絕日後繞過服務層寫入 BASIC 付費牆。 */
+    @Test
+    void basicPaywallInsertIsRejected() {
+        assertThrows(SQLException.class, () -> {
+            try (Connection c = connect(); Statement st = c.createStatement()) {
+                st.execute("""
+                    INSERT INTO campaign (subject, markdown, mode, recipient_count,
+                                          accepted_count, failed_count, status, tier)
+                    VALUES ('壞付費牆', E'# 免費\n\n<!--paywall-->\n\n# 付費',
+                            'now', 0, 0, 0, 'sent', 'BASIC')
+                    """);
+            }
+        }, "BASIC 搭配付費牆標記應被 CHECK 約束拒絕");
     }
 
     /**

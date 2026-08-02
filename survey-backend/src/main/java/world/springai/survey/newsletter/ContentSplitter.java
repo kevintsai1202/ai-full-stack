@@ -14,8 +14,8 @@ import java.util.List;
  * <p>刻意在 markdown 層切分而非渲染後切 HTML：截斷 HTML 字串會斷在標籤中間造成破版；
  * 而且先渲染再切的話，commonmark 會把這行 HTML 註解原樣輸出到頁面上。</p>
  *
- * <p>正交性：本類決定「哪裡開始要權限」，campaign 的 tier 與 credit_cost 決定
- * 「要什麼權限」。兩者互不干涉，所以 BASIC 文章也可以有受限區。</p>
+ * <p>本類只負責辨識付費內容從哪裡開始；產品規則由 {@link CampaignService}
+ * 統一守門：含標記的文章必須是 PREMIUM 且具備正數解鎖點數，BASIC 必須全文免費。</p>
  */
 @Component
 public class ContentSplitter {

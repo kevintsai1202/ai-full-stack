@@ -245,6 +245,9 @@ input::placeholder { color:#71817c; }
 }
 .article-body pre { background:var(--surface-3); padding:14px 16px; border-radius:8px; overflow-x:auto; }
 .article-body code { background:var(--surface-3); padding:2px 6px; border-radius:4px; font-size:.92em; }
+/* fenced code 的深色背景由 MarkdownRenderer 以 inline style 提供；內層 code 必須透明並繼承文字色，
+   否則行內程式碼的淺色底會蓋進 pre，形成淺底淺字而無法閱讀。 */
+.article-body pre code { background:transparent; color:inherit; padding:0; border-radius:0; font-size:inherit; }
 .article-body blockquote { border-left:3px solid var(--accent); margin:1.4em 0; padding:.2em 0 .2em 16px; color:var(--muted); }
 .article-body ul,.article-body ol { padding-left:1.5em; }
 .article-body li { margin:.45em 0; }
