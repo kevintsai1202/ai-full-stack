@@ -138,4 +138,66 @@ public class PromoProposalService {
             throw new PromoValidationException(label + " 超過長度上限 " + max);
         }
     }
+
+    /** 核准：僅 PENDING 可核准 */
+    @Transactional
+    public PromoProposal approve(Long id) {
+        PromoProposal p = requireStatus(id, PromoProposal.STATUS_PENDING, "核准");
+        p.setStatus(PromoProposal.STATUS_APPROVED);
+        p.setReviewedAt(java.time.OffsetDateTime.now());
+        return proposalRepository.save(p);
+    }
+
+    /** 拒絕：僅 PENDING 可拒絕；全額退點（此時必未投放） */
+    @Transactional
+    public PromoProposal reject(Long id, String note) {
+        PromoProposal p = requireStatus(id, PromoProposal.STATUS_PENDING, "拒絕");
+        p.setStatus(PromoProposal.STATUS_REJECTED);
+        p.setReviewNote(note);
+        p.setReviewedAt(java.time.OffsetDateTime.now());
+        refundRemaining(p);
+        return proposalRepository.save(p);
+    }
+
+    /** 封存：APPROVED／REJECTED 皆可；退未投放餘額（冪等，已退過不重複） */
+    @Transactional
+    public PromoProposal archive(Long id) {
+        PromoProposal p = proposalRepository.findById(id)
+            .orElseThrow(() -> new PromoValidationException("提案不存在：id=" + id));
+        if (!PromoProposal.STATUS_APPROVED.equals(p.getStatus())
+            && !PromoProposal.STATUS_REJECTED.equals(p.getStatus())) {
+            throw new PromoValidationException("狀態 " + p.getStatus() + " 不可封存");
+        }
+        p.setStatus(PromoProposal.STATUS_ARCHIVED);
+        refundRemaining(p);
+        return proposalRepository.save(p);
+    }
+
+    /**
+     * 退還未投放餘額：(quota − used) × unit_cost。
+     * 冪等防線：同一提案只會有一筆 PROMO_REFUND——REJECTED 時已退過的，
+     * 之後 ARCHIVED 不重複退。
+     */
+    private void refundRemaining(PromoProposal p) {
+        int amount = (p.getPlacementQuota() - p.getPlacementUsed()) * p.getUnitCost();
+        if (amount <= 0) return;
+        if (creditTxnRepository.existsByPromoProposalIdAndReason(
+                p.getId(), CreditTxn.REASON_PROMO_REFUND)) {
+            return;
+        }
+        readerRepository.addCredits(p.getReaderId(), amount);
+        creditTxnRepository.save(new CreditTxn(p.getReaderId(), amount,
+            CreditTxn.REASON_PROMO_REFUND, null, p.getTitle(), p.getId()));
+    }
+
+    /** 取出提案並要求目前狀態；不符拋驗證例外 */
+    private PromoProposal requireStatus(Long id, String expected, String action) {
+        PromoProposal p = proposalRepository.findById(id)
+            .orElseThrow(() -> new PromoValidationException("提案不存在：id=" + id));
+        if (!expected.equals(p.getStatus())) {
+            throw new PromoValidationException(
+                "狀態 " + p.getStatus() + " 不可" + action + "（僅 " + expected + " 可）");
+        }
+        return p;
+    }
 }
