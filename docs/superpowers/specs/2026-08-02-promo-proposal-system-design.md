@@ -56,13 +56,13 @@
 | 欄位 | 型別 | 說明 |
 | --- | --- | --- |
 | id | BIGSERIAL PK | 即轉址網址中的 placementId |
-| campaign_id | BIGINT NOT NULL → campaign | |
+| campaign_id | BIGINT NULL → campaign | 插入編輯器時 Campaign 資料列尚不存在（send／publish 當下才建立），故建立版位時為 NULL，發布／寄送對帳時才綁定 |
 | proposal_id | BIGINT NOT NULL → promo_proposal | |
 | status | VARCHAR(20) NOT NULL DEFAULT 'DRAFT' | DRAFT／COMMITTED／REMOVED |
 | committed_at | TIMESTAMPTZ NULL | |
 | created_at | TIMESTAMPTZ | |
 
-約束：`UNIQUE(campaign_id, proposal_id)`——同一期同提案最多一個版位。
+約束：partial unique index `UNIQUE(campaign_id, proposal_id) WHERE campaign_id IS NOT NULL`——同一期同提案最多一個版位；未綁定的 DRAFT 不受限。若對帳時發現版位已綁定其他 campaign（markdown 被複製到另一期），擋下寄送並提示重新插入。
 
 ### 3.3 `promo_click` 點擊原始紀錄
 
@@ -110,7 +110,7 @@ DRAFT ──發布/寄送對帳（內文有此版位連結）──> COMMITTED�
 1. 依 placementId 從 DB 查出 `link_url`，302 轉址。**目的地不進 URL 參數，無 open redirect 面**。版位不存在回 404。
 2. 歸戶順序：`rt` 驗簽通過 → EMAIL／RECIPIENT（identity＝正規化 email）；無 rt 或驗簽失敗但有讀者 session → WEB／READER；否則 WEB／ANON。
 3. **僅 COMMITTED 版位寫入 `promo_click`**；DRAFT／REMOVED 照樣轉址但不記錄。
-4. token＝HMAC-SHA256，沿用 `app.unsubscribe-secret` 同一把 secret，簽名內容加 `"promo|"` 前綴做 domain separation（與退訂 token 不可互換），實作模式複製 `UnsubscribeTokenService`（常數時間比對、Base64 URL-safe 無 padding）。
+4. token 為自包含複合式：`base64url(email) + "." + HMAC-SHA256("promo|" + 正規化email)`——HMAC 單向不可逆，端點必須能從 token 本身取回 email 才能驗簽歸戶。secret 沿用 `app.unsubscribe-secret`，`"promo|"` 前綴做 domain separation（與退訂 token 不可互換），驗證用常數時間比對、Base64 URL-safe 無 padding（實作模式參照 `UnsubscribeTokenService`）。
 
 ## 6. 插入與寄送管線
 
@@ -127,8 +127,9 @@ DRAFT ──發布/寄送對帳（內文有此版位連結）──> COMMITTED�
 
    文案快照落地：所見即所得、寄出內容＝審核當下內容；提案事後修改不影響已插入的電子報。
 3. 寄送時在既有 `renderFor()` 每收件人替換點多一個替換：`__PROMO_RT__` → 該收件人的簽章。後台預覽與讀者網頁版不替換，佔位符驗簽失敗自然落到 session／匿名歸戶。
-4. **發布／寄送時對帳**（關聯定案的唯一時點）：掃描內文實際出現的 `/promo/c/{id}`（解析自己生成的確定性 URL），出現的 DRAFT → COMMITTED＋扣配額；配額不足（`placement_used ≥ placement_quota`）**擋下寄送**並提示；未出現的 DRAFT → REMOVED。管理員刪除區塊無需額外操作。
-5. `MarkdownRenderer`／`MailBodyRenderer` 零改動。對帳時附帶檢查 promo 標記於 paywall 兩側各自成對，不成對僅警告（沿用既有「單邊標記降級為無害註解」行為）。
+4. **發布／寄送時對帳**（關聯定案的唯一時點）：掃描內文實際出現的 `/promo/c/{id}`（解析自己生成的確定性 URL），出現的 DRAFT → COMMITTED＋綁定 campaign＋扣配額；配額不足（`placement_used ≥ placement_quota`）**擋下寄送**並提示；已綁定其他 campaign 的版位同樣擋下。未綁定的 DRAFT 為惰性資料、無需清理。管理員刪除區塊無需額外操作。
+5. **重排（reschedule）與取消排程的配額補正**：重排會重新對帳——已 COMMITTED 但新內文中消失的版位轉 REMOVED 並歸還配額（`placement_used−1`，信件尚未寄出、視為未刊登）；取消排程時該期全部 COMMITTED 版位同樣轉 REMOVED 並歸還配額。已實際寄出的批次不在此列、不歸還。
+6. `MarkdownRenderer`／`MailBodyRenderer` 零改動。對帳時附帶檢查 promo 標記於 paywall 兩側各自成對，不成對僅警告（沿用既有「單邊標記降級為無害註解」行為）。
 
 ## 7. 讀者端
 
