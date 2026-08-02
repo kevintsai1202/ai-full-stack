@@ -37,6 +37,11 @@
   .actions{display:flex;gap:8px;flex-wrap:wrap}.count{font-weight:800;color:var(--accent-deep);font-size:1.1rem}iframe.preview{width:100%;height:360px;border:1px solid var(--border);border-radius:8px;background:#fff}
   iframe.campaign-preview{display:block;height:min(78vh,820px);min-height:620px;resize:vertical;overflow:auto}
   .preview-card .section-head{margin-bottom:10px}.preview-card .section-head h2{margin:0}
+  /* 預覽渲染失敗時把畫面壓暗：舊內容留著比清空有用（還能對照），但必須一眼看得出「這不是現在的內容」 */
+  iframe.preview.stale{opacity:.35;filter:grayscale(.55)}
+  /* 不沿用 .msg.err：它帶 display:block 會蓋過 hidden 屬性，還會多出區塊間距撐開標題列 */
+  .preview-stale-badge{padding:4px 10px;border-radius:999px;background:#fde8e8;color:var(--danger);font-size:.85rem;font-weight:800}
+  .preview-stale-badge[hidden]{display:none}
   .editor-toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start;margin:7px 0}.editor-toolbar .btn{min-height:34px;padding:5px 9px}
   .format-group{position:relative}.format-group>summary{list-style:none}.format-group>summary::-webkit-details-marker{display:none}
   .format-menu{position:absolute;z-index:12;top:calc(100% + 5px);left:0;display:grid;min-width:170px;padding:6px;border:1px solid var(--border);border-radius:9px;background:var(--surface);box-shadow:var(--shadow)}
@@ -218,9 +223,12 @@
       <label>文章 Hashtag（最多 8 個）</label>
       <div id="campaign-tag-options" class="tag-options"><span class="hint">載入中…</span></div>
       <div class="form-row"><input type="text" id="campaign-custom-tag" maxlength="30" placeholder="自訂 hashtag（不用輸入 #）"><button type="button" class="btn ghost" id="campaign-add-tag">加入</button></div>
-      <p class="hint">內容會自動暫存於本機；輸入後約半秒更新右側預覽。</p>
+      <p class="hint">內容會自動暫存於本機；停止輸入約 0.3 秒後更新右側預覽，捲動位置會保留。</p>
       <button class="btn ghost" id="preview-btn" style="margin-top:12px">立即更新預覽</button><div class="msg err" id="compose-msg"></div></div>
-    <div class="card preview-card"><div class="section-head"><h2>② 預覽</h2><span class="hint">可拖曳右下角調整高度</span></div><iframe class="preview campaign-preview" id="preview" title="預覽" sandbox=""></iframe></div>
+    <div class="card preview-card"><div class="section-head"><h2>② 預覽</h2><span class="preview-stale-badge" id="preview-stale" hidden>⚠ 此為舊內容，最後一次更新失敗</span><span class="hint">可拖曳右下角調整高度</span></div><!--
+      sandbox 保留「不給 allow-scripts」這一條，預覽內容因此不會執行任何腳本（含 onerror 這類行內事件）；
+      額外開 allow-same-origin 只為了讓外層讀得到 iframe 的捲動位置，重新渲染後才能捲回原處。
+    --><iframe class="preview campaign-preview" id="preview" title="預覽" sandbox="allow-same-origin"></iframe></div>
     <div class="card"><h2>③ 發送對象</h2><div class="row"><div><label for="role">身分（不限留空）</label><select id="role"><option value="">不限</option></select></div><div><label for="interest">想學主題（不限留空）</label><select id="interest"><option value="">不限</option></select></div></div>
       <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700">更多名單條件與儲存分眾</summary>
         <div class="row">
@@ -565,6 +573,8 @@
   let mediaLibrary=[];
   let selectedCoverMediaId=null;
   let previewTimer=null;
+  /** 預覽請求的遞增序號；只有最新一筆的回應可以寫進畫面，避免慢回應蓋掉新內容。 */
+  let previewToken=0;
 
   /** 取得目前分頁保存的管理金鑰。 */
   function getKey(){return sessionStorage.getItem(KEY)||'';}
@@ -690,6 +700,9 @@
     loadAudienceSources();
     loadAudienceInsightOptions();
     restoreComposeDraft();loadCampaignTags();loadMediaLibrary();
+    // 草稿是直接寫入欄位值，不會觸發 input 事件，預覽因此不會自己更新。少了這一步，
+    // 重開後台會看到「編輯區已有內容、預覽區卻停在別的東西」，正是最容易被誤判成壞掉的畫面。
+    if($('#markdown').value.trim()||$('#subject').value.trim())doPreview();
     document.querySelectorAll('.tab').forEach(tab=>tab.onclick=()=>switchView(tab.dataset.view));
     $('#lock-btn').onclick=()=>{sessionStorage.removeItem(KEY);location.reload();};
     $('#analytics-refresh').onclick=()=>loadAnalytics(true);$('#export-json').onclick=()=>downloadProtected('/api/admin/survey','survey-responses.json');$('#export-csv').onclick=()=>downloadProtected('/api/admin/survey?format=csv','survey-responses.csv');$('#export-pdf').onclick=exportPdf;
@@ -1039,8 +1052,57 @@
       coverMediaId:selectedCoverMediaId};
   }
 
-  /** 呼叫後端渲染含封面與 hashtag 的電子報預覽。 */
-  async function doPreview(){const m=$('#compose-msg');m.className='msg';try{const r=await api('/api/admin/campaign/preview',{method:'POST',body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,...previewMetadata()})});$('#preview').srcdoc=r.html;}catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='預覽失敗：'+e.message;}}}
+  /**
+   * 標示預覽是否為過期內容。
+   *
+   * <p>渲染失敗時刻意「不清空」iframe：舊的渲染結果仍可用來對照。但沒有任何視覺提示的
+   * 舊內容比空白危險——它跟成功的預覽長得一模一樣，管理者會誤以為看到的就是現在的信。
+   * 因此改為壓暗畫面並掛上明確標籤。</p>
+   */
+  function markPreviewStale(stale){
+    $('#preview').classList.toggle('stale',stale);
+    $('#preview-stale').hidden=!stale;
+  }
+
+  /**
+   * 換掉預覽內容並捲回原本的位置。
+   *
+   * <p>srcdoc 一改，iframe 就是整份重新載入、捲動位置歸零。編輯長文時每打幾個字畫面就跳回
+   * 開頭，主觀上跟「預覽沒更新」無法分辨，這才是「很慢」的真正來源（實測後端渲染僅約 330ms）。</p>
+   *
+   * <p>取用 contentDocument 需要 iframe 與外層同源，故 sandbox 保留了 allow-same-origin；
+   * 仍以 try/catch 包住，日後若有人收緊 sandbox，預覽只是失去捲動保留、不會整個壞掉。</p>
+   */
+  function renderPreview(html){
+    const frame=$('#preview');
+    let scrollTop=0;
+    try{scrollTop=frame.contentDocument?.scrollingElement?.scrollTop||0;}catch{scrollTop=0;}
+    frame.addEventListener('load',()=>{
+      try{const scroller=frame.contentDocument?.scrollingElement;if(scroller)scroller.scrollTop=scrollTop;}catch{}
+    },{once:true});
+    frame.srcdoc=html;
+  }
+
+  /**
+   * 呼叫後端渲染含封面與 hashtag 的電子報預覽。
+   *
+   * <p>以遞增序號丟棄過期回應：防抖只有 0.3 秒而單趟往返約 0.33 秒，連續編輯時多個請求必然重疊，
+   * 若不做序號防護，先送出的舊內容可能後到並蓋掉新的渲染結果——症狀同樣是「預覽停在舊資料」。</p>
+   */
+  async function doPreview(){
+    const m=$('#compose-msg'),token=++previewToken;
+    m.className='msg';m.textContent='';
+    try{
+      const r=await api('/api/admin/campaign/preview',{method:'POST',
+        body:JSON.stringify({subject:$('#subject').value,markdown:$('#markdown').value,...previewMetadata()})});
+      if(token!==previewToken)return; // 已有更新的請求送出，這份回應直接丟棄
+      renderPreview(r.html);
+      markPreviewStale(false);
+    }catch(e){
+      if(token!==previewToken)return; // 過期請求的錯誤不該蓋掉現況
+      if(e.message!=='401'){m.className='msg err';m.textContent='預覽失敗：'+e.message;markPreviewStale(true);}
+    }
+  }
 
   /**
    * 將區塊標記放到獨立段落，回傳插入文字及區塊在插入文字中的起點。
@@ -1117,7 +1179,9 @@
       subject:$('#subject').value,markdown:$('#markdown').value,coverEmoji:$('#cover-emoji').value,
       coverMediaId:selectedCoverMediaId,tags:[...selectedCampaignTags],savedAt:new Date().toISOString()
     }));}catch{}
-    clearTimeout(previewTimer);previewTimer=setTimeout(doPreview,500);
+    // 單趟往返實測約 330ms；防抖壓到 300ms 讓「停手即更新」的體感接近即時，
+    // 重疊請求造成的亂序由 doPreview 的序號防護擋掉。
+    clearTimeout(previewTimer);previewTimer=setTimeout(doPreview,300);
   }
 
   /** 載入尚未送出的本機草稿。 */
