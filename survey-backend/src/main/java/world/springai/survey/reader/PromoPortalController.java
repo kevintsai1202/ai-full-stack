@@ -177,20 +177,29 @@ public class PromoPortalController {
      */
     private String statusLabel(PromoProposal p) {
         return switch (p.getStatus()) {
-            case PromoProposal.STATUS_PENDING -> "待審核";
-            case PromoProposal.STATUS_APPROVED -> "已核准";
+            case PromoProposal.STATUS_PENDING -> badge("pending", "待審核");
+            case PromoProposal.STATUS_APPROVED -> badge("approved", "已核准");
             case PromoProposal.STATUS_REJECTED -> rejectedLabel(p.getReviewNote());
-            case PromoProposal.STATUS_ARCHIVED -> "已封存";
-            default -> "狀態未知";
+            case PromoProposal.STATUS_ARCHIVED -> badge("archived", "已封存");
+            default -> badge("archived", "狀態未知");
         };
+    }
+
+    /**
+     * 狀態徽章 HTML：class 對應 reader.css 的 .promo-status 配色（琥珀＝待審、
+     * 綠＝核准、紅＝拒絕、灰＝封存）。variant 與文字皆為本類常數、不含使用者可控值。
+     */
+    private String badge(String variant, String text) {
+        return "<span class=\"promo-status " + variant + "\">" + text + "</span>";
     }
 
     /** REJECTED 的顯示文字：有審核備註才附上（附上的值須跳脫，備註為審核者自由輸入） */
     private String rejectedLabel(String reviewNote) {
         if (reviewNote == null || reviewNote.isBlank()) {
-            return "已拒絕";
+            return badge("rejected", "已拒絕");
         }
-        return "已拒絕（" + HtmlTemplate.escapeHtml(reviewNote) + "）";
+        return badge("rejected", "已拒絕")
+            + "<div class=\"promo-note\">" + HtmlTemplate.escapeHtml(reviewNote) + "</div>";
     }
 
     /**

@@ -157,6 +157,11 @@ img { max-width:100%; display:block; }
   mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M13 3h8v18h-8v-2h6V5h-6V3Zm-2.59 4.59L14.83 12l-4.42 4.41L9 15l2-2H3v-2h8L9 9l1.41-1.41Z'/%3E%3C/svg%3E");
   -webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M13 3h8v18h-8v-2h6V5h-6V3Zm-2.59 4.59L14.83 12l-4.42 4.41L9 15l2-2H3v-2h8L9 9l1.41-1.41Z'/%3E%3C/svg%3E");
 }
+.site-head nav a[href="/r/promo"]::before {
+  /* 大聲公：工商合作。沒有這條規則時 ::before 的 background:currentColor 會渲染成純色方塊 */
+  mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M20 3.5 8.6 7.6H5a2 2 0 0 0-2 2v4.8a2 2 0 0 0 2 2h1.2v3.1a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2.9l9.8 3.9V3.5Zm-2 2.9v11.2l-8.4-3.4V9.8L18 6.4ZM7.6 9.6v4.8H5V9.6h2.6Zm13.4 1v2.8h1.5a1.4 1.4 0 0 0 0-2.8H21Z'/%3E%3C/svg%3E");
+  -webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='black' d='M20 3.5 8.6 7.6H5a2 2 0 0 0-2 2v4.8a2 2 0 0 0 2 2h1.2v3.1a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2.9l9.8 3.9V3.5Zm-2 2.9v11.2l-8.4-3.4V9.8L18 6.4ZM7.6 9.6v4.8H5V9.6h2.6Zm13.4 1v2.8h1.5a1.4 1.4 0 0 0 0-2.8H21Z'/%3E%3C/svg%3E");
+}
 .site-head nav a:hover {
   color:var(--accent-deep);
   background:rgb(255 255 255 / .82);
@@ -516,3 +521,48 @@ input::placeholder { color:#71817c; }
 .site-foot { margin-top:56px; padding:26px 16px 34px; border-top:1px solid var(--border); text-align:center; color:var(--muted); font-size:.92rem; }
 .site-foot p { margin:0; }
 .site-foot a { color:var(--accent-deep); font-weight:600; }
+
+/* ---- 工商合作頁（/r/promo）---- */
+/* 頁首資訊列：訂閱規模、單價、餘額三個藥丸，讓提案人送出前先看清楚買到什麼 */
+.promo-meta { display:flex; flex-wrap:wrap; gap:10px; margin:2px 0 6px; }
+.promo-meta span { background:var(--accent-soft); color:var(--accent-deep); border-radius:999px; padding:6px 14px; font-size:.88rem; font-weight:600; }
+/* 申請表單：桌機雙欄、手機單欄；欄位一律 label 在上、輸入框滿版 */
+.promo-form { display:grid; grid-template-columns:1fr 1fr; gap:16px 18px; margin-top:14px; }
+.promo-form .field { display:flex; flex-direction:column; gap:6px; }
+.promo-form .field.full { grid-column:1 / -1; }
+.promo-form label { font-size:.9rem; font-weight:700; }
+.promo-form input, .promo-form select, .promo-form textarea {
+  width:100%; padding:12px 14px; border:1px solid var(--border-strong); border-radius:8px;
+  font:inherit; background:#fff; color:inherit;
+}
+.promo-form input:focus-visible, .promo-form select:focus-visible, .promo-form textarea:focus-visible {
+  outline:3px solid rgb(8 127 114 / .25); outline-offset:1px;
+}
+.promo-form textarea { min-height:130px; resize:vertical; }
+.promo-form .field-hint { font-size:.8rem; color:var(--muted); }
+/* 費用試算列：總費用與餘額同框，餘額不足時由 JS 加 .lack 變警示色 */
+.promo-cost-bar { grid-column:1 / -1; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; background:var(--accent-soft); border-radius:10px; padding:14px 18px; }
+.promo-cost-bar .cost { font-size:1.15rem; font-weight:800; color:var(--accent-deep); }
+.promo-cost-bar .cost small { font-size:.85rem; font-weight:600; color:var(--muted); margin-left:8px; }
+.promo-cost-bar.lack { background:#fdecec; }
+.promo-cost-bar.lack .cost { color:var(--err); }
+.promo-submit { grid-column:1 / -1; justify-self:start; }
+/* 我的提案列表 */
+.promo-table { width:100%; border-collapse:collapse; margin-top:6px; }
+.promo-table th { text-align:left; font-size:.82rem; color:var(--muted); font-weight:700; padding:10px 12px; border-bottom:1px solid var(--border-strong); white-space:nowrap; }
+.promo-table td { padding:12px; border-bottom:1px solid var(--border); font-size:.94rem; vertical-align:top; }
+.promo-table td.empty { color:var(--muted); text-align:center; padding:26px 12px; }
+/* 狀態徽章：顏色對應審核語意（琥珀=待審、綠=核准、紅=拒絕、灰=封存） */
+.promo-status { display:inline-block; padding:3px 12px; border-radius:999px; font-size:.8rem; font-weight:700; white-space:nowrap; }
+.promo-status.pending { background:#fef3c7; color:#92400e; }
+.promo-status.approved { background:var(--accent-soft); color:var(--accent-deep); }
+.promo-status.rejected { background:#fdecec; color:var(--err); }
+.promo-status.archived { background:#ececec; color:#6b7280; }
+.promo-note { margin-top:6px; font-size:.82rem; color:var(--muted); }
+@media (max-width:640px) {
+  .promo-form { grid-template-columns:1fr; }
+  /* 手機版列表改卡片式堆疊：值本身可自明（徽章、x/y、日期），省掉表頭 */
+  .promo-table thead { display:none; }
+  .promo-table tr { display:block; border-bottom:1px solid var(--border-strong); padding:12px 0; }
+  .promo-table td { display:block; border-bottom:0; padding:4px 0; }
+}
