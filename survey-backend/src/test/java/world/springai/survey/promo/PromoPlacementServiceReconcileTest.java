@@ -88,6 +88,14 @@ class PromoPlacementServiceReconcileTest {
     }
 
     @Test
+    void DRAFT版位已綁其他campaign擋下不扣配額() {
+        placement(77L, 9L, PromoPlacement.STATUS_DRAFT, 999L);
+        assertThrows(IllegalStateException.class,
+            () -> service.reconcile(100L, "[看](/promo/c/77?rt=__PROMO_RT__)"));
+        verify(proposalRepository, never()).consumeQuota(anyLong());
+    }
+
+    @Test
     void 預檢不寫入任何狀態() {
         placement(55L, 9L, PromoPlacement.STATUS_DRAFT, null);
         PromoProposal p = new PromoProposal(1L, "王", "a@b.c", "好課",
