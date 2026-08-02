@@ -6,6 +6,7 @@
 <title>凱文大叔的電子報</title>
 <meta name="description" content="RAG、AI Agent、全端實戰的實作細節與踩雷筆記，固定寄給訂閱者。">
 <link rel="stylesheet" href="/r/reader.css">
+<script src="/tracking.js" defer></script>
 <script src="/r/reader-nav.js" defer></script>
 <script src="/r/reader-share.js" defer></script>
 </head>
@@ -61,6 +62,7 @@
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    window.ReaderAnalytics?.event('SUBSCRIBE_ATTEMPT', 'subscribe_attempt');
     const button = form.querySelector('button');
     button.disabled = true;
     try {
@@ -76,12 +78,15 @@
         body: JSON.stringify(body)
       });
       if (res.status === 201 || res.status === 204) {
+        window.ReaderAnalytics?.event('SUBSCRIBE_SUCCESS', 'subscribe_success');
         showMsg('已訂閱成功，歡迎信已經寄到你的信箱。', true);
         form.reset();
       } else {
+        window.ReaderAnalytics?.event('SUBSCRIBE_ERROR', 'subscribe_error');
         showMsg('送出失敗，請確認 email 格式後再試一次。', false);
       }
     } catch (err) {
+      window.ReaderAnalytics?.event('SUBSCRIBE_ERROR', 'subscribe_error');
       showMsg('連線失敗，請稍後再試。', false);
     } finally {
       button.disabled = false;

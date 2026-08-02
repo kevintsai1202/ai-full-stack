@@ -173,4 +173,23 @@ public interface SurveyResponseRepository extends JpaRepository<SurveyResponse, 
          order by p.email_normalized
         """, nativeQuery = true)
     java.util.List<String> findRecipients(@Param("role") String role, @Param("interest") String interest);
+
+    /**
+     * 目前可寄送的去重訂閱人數；以名單中心每人的最新 EMAIL 同意事件為準。
+     *
+     * <p>這份查詢必須與 {@link #findRecipients} 的資格判斷保持一致，避免網站顯示的
+     * 訂閱人數和實際可寄送名單使用兩套定義。</p>
+     */
+    @Query(value = """
+        select count(*)
+          from audience_person p
+         where (
+               select c.status
+                 from audience_consent c
+                where c.person_id = p.id and c.channel = 'EMAIL'
+                order by c.occurred_at desc, c.id desc
+                limit 1
+         ) = 'CONFIRMED'
+        """, nativeQuery = true)
+    long countRecipients();
 }

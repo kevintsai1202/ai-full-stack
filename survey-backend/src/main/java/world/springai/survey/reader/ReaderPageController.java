@@ -519,6 +519,7 @@ public class ReaderPageController {
           const unlockBtn = document.getElementById('unlock-btn');
           const unlockMsg = document.getElementById('unlock-msg');
           unlockBtn.addEventListener('click', async () => {
+            window.ReaderAnalytics?.event('UNLOCK_CLICK', 'unlock_click');
             unlockBtn.disabled = true;
             unlockMsg.textContent = '處理中…';
             unlockMsg.className = 'msg show';
@@ -526,6 +527,7 @@ public class ReaderPageController {
               const res = await fetch('/api/reader/unlock/' + encodeURIComponent(unlockBtn.dataset.slug),
                 { method: 'POST' });
               if (res.status === 401) {
+                window.ReaderAnalytics?.event('UNLOCK_ERROR', 'unlock_error');
                 unlockMsg.textContent = '登入已過期，請重新登入。';
                 unlockMsg.className = 'msg show err';
                 unlockBtn.disabled = false;
@@ -534,6 +536,7 @@ public class ReaderPageController {
               if (res.status === 409) {
                 const conflict = await res.json();
                 if (conflict.outcome === 'NOT_REQUIRED') {
+                  window.ReaderAnalytics?.event('UNLOCK_SUCCESS', 'unlock_success');
                   // 這篇文章的授權狀態在按下按鈕之前就已改變（例如另一個分頁
                   // 取得 VIP、或後台把這篇改成 BASIC），實際狀態是「本來就
                   // 看得到全文」，不是失敗。重新載入讓 server 依最新授權狀態
@@ -548,6 +551,7 @@ public class ReaderPageController {
               if (!res.ok) { throw new Error('unlock failed'); }
               const data = await res.json();
               if (data.outcome === 'UNLOCKED' || data.outcome === 'ALREADY_UNLOCKED') {
+                window.ReaderAnalytics?.event('UNLOCK_SUCCESS', 'unlock_success');
                 // 重新載入讓 server 重新渲染受限區，不由前端插入內容。
                 // 這裡刻意不解除 disabled：reload 生效前的空窗期若按鈕可再按，
                 // 讀者會多打一次扣點端點。
@@ -555,11 +559,13 @@ public class ReaderPageController {
                 return;
               }
               if (data.outcome === 'INSUFFICIENT_CREDITS') {
+                window.ReaderAnalytics?.event('UNLOCK_INSUFFICIENT', 'unlock_insufficient_credits');
                 unlockMsg.textContent = '點數不足，目前有 ' + data.credits + ' 點。';
                 unlockMsg.className = 'msg show err';
               }
               unlockBtn.disabled = false;
             } catch (e) {
+              window.ReaderAnalytics?.event('UNLOCK_ERROR', 'unlock_error');
               unlockMsg.textContent = '解鎖失敗，請稍後再試。';
               unlockMsg.className = 'msg show err';
               unlockBtn.disabled = false;

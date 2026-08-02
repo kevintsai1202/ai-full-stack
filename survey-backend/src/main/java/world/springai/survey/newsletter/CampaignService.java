@@ -110,7 +110,8 @@ public class CampaignService {
             : markdownRenderer.toHtml(markdown);
         return emailTemplate.wrapCampaign(articlePreview(subject, body, coverEmoji, tags, coverUrl),
             linkBuilder.previewUnsubscribeLink(),
-            readerSiteLinks.archive(), readerSiteLinks.login("/r/archive"));
+            readerSiteLinks.archive(), readerSiteLinks.login("/r/archive"),
+            recipientService.subscriberCount());
     }
 
     /** 組合付費牆預覽，讓管理員同時看見免費區、分界與受限區內容。 */
@@ -158,7 +159,7 @@ public class CampaignService {
         // 測試信沒有實際文章 slug，解鎖卡片的 CTA 因此導向歷史內容
         String body = articlePreview(subject, mailBodyHtml(markdown, null),
             coverEmoji, tags, coverUrl);
-        String html = renderFor(body, to.strip(), null);
+        String html = renderFor(body, to.strip(), null, recipientService.subscriberCount());
         String testSubject = subject.strip().startsWith("[測試]")
             ? subject.strip()
             : "[測試] " + subject.strip();
@@ -295,6 +296,7 @@ public class CampaignService {
         // 存全文等於在資料庫裡留一份現成的外洩來源。網頁端渲染讀的是 markdown 原文
         // 再經 ContentSplitter 切分，與 body_html 無關，所以受限區不會因此消失。
         String bodyHtml = mailBodyHtml(markdown, normalizedSlug);
+        long subscriberCount = recipientService.subscriberCount();
         boolean scheduled = "schedule".equals(mode);
 
         // 建立 campaign 紀錄並預存（之後更新統計）
@@ -316,7 +318,8 @@ public class CampaignService {
 
         if (scheduled) {
             // 排程模式：每封個別呼叫 schedule API（邏輯抽到 scheduleAll 供 reschedule 共用）
-            int[] rc = scheduleAll(campaignId, subject, bodyHtml, recipients, scheduledAt, normalizedSlug);
+            int[] rc = scheduleAll(campaignId, subject, bodyHtml, recipients, scheduledAt,
+                normalizedSlug, subscriberCount);
             accepted = rc[0];
             failed = rc[1];
         } else {
@@ -326,7 +329,7 @@ public class CampaignService {
                 List<MailSender.Email> emails = new ArrayList<>();
                 for (String email : chunk) {
                     emails.add(new MailSender.Email(email, subject,
-                        renderFor(bodyHtml, email, normalizedSlug)));
+                        renderFor(bodyHtml, email, normalizedSlug, subscriberCount)));
                 }
                 try {
                     String jobId = mailSender.sendBatch(emails);
@@ -719,7 +722,7 @@ public class CampaignService {
         // 重寄整批，只修 send() 而漏掉這裡就是一條繞過折疊的後門。
         String bodyHtml = mailBodyHtml(markdown, campaign.getSlug());
         int[] rc = scheduleAll(campaignId, subject, bodyHtml, recipients, scheduledAt,
-            campaign.getSlug());
+            campaign.getSlug(), recipientService.subscriberCount());
 
         // 3. 就地更新同一筆 campaign 的內容、篩選、時間與統計
         campaign.setSubject(subject);
@@ -788,13 +791,15 @@ public class CampaignService {
      * 供立即發送的排程分支與 reschedule 共用。
      */
     private int[] scheduleAll(Long campaignId, String subject, String bodyHtml,
-                              List<String> recipients, Instant scheduledAt, String slug) {
+                              List<String> recipients, Instant scheduledAt, String slug,
+                              long subscriberCount) {
         int accepted = 0;
         int failed = 0;
         for (String email : recipients) {
             try {
                 String id = mailSender.schedule(
-                    new MailSender.Email(email, subject, renderFor(bodyHtml, email, slug)), scheduledAt);
+                    new MailSender.Email(email, subject,
+                        renderFor(bodyHtml, email, slug, subscriberCount)), scheduledAt);
                 emailLogRepository.save(new EmailLog(email, subject, "campaign", id, "scheduled", null, campaignId));
                 accepted++;
             } catch (Exception e) {
@@ -970,11 +975,11 @@ public class CampaignService {
      * 把內文 HTML 套上個人化退訂連結、文章直達按鈕與登入入口。
      * 測試信沒有實際文章 slug，因此改導向歷史內容。
      */
-    private String renderFor(String bodyHtml, String email, String slug) {
+    private String renderFor(String bodyHtml, String email, String slug, long subscriberCount) {
         String path = slug == null ? "/r/archive" : "/r/news/" + slug;
         String articleLink = slug == null ? readerSiteLinks.archive() : readerSiteLinks.article(slug);
         return emailTemplate.wrapCampaign(bodyHtml, linkBuilder.unsubscribeLink(email),
-            articleLink, readerSiteLinks.login(path));
+            articleLink, readerSiteLinks.login(path), subscriberCount);
     }
 
     /** 依是否排程與成敗決定最終狀態字串 */

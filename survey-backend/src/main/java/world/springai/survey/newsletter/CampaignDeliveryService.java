@@ -250,9 +250,10 @@ public class CampaignDeliveryService {
             }
         }
 
+        long subscriberCount = recipientService.subscriberCount();
         int[] result = scheduled
-            ? schedule(campaign, batch, reserved, scheduledAt)
-            : sendNow(campaign, batch, reserved);
+            ? schedule(campaign, batch, reserved, scheduledAt, subscriberCount)
+            : sendNow(campaign, batch, reserved, subscriberCount);
         int accepted = result[0];
         int failed = result[1];
         String finalStatus = finalStatus(scheduled, accepted, failed);
@@ -317,7 +318,8 @@ public class CampaignDeliveryService {
     }
 
     /** 立即模式以 provider batch API 每 100 封送出。 */
-    private int[] sendNow(Campaign campaign, CampaignBatch batch, List<String> emails) {
+    private int[] sendNow(Campaign campaign, CampaignBatch batch, List<String> emails,
+                          long subscriberCount) {
         int accepted = 0;
         int failed = 0;
         for (int index = 0; index < emails.size(); index += PROVIDER_BATCH_SIZE) {
@@ -325,7 +327,7 @@ public class CampaignDeliveryService {
                 index, Math.min(index + PROVIDER_BATCH_SIZE, emails.size()));
             List<MailSender.Email> messages = chunk.stream()
                 .map(email -> new MailSender.Email(
-                    email, campaign.getSubject(), renderFor(campaign, email)))
+                    email, campaign.getSubject(), renderFor(campaign, email, subscriberCount)))
                 .toList();
             try {
                 String providerId = mailSender.sendBatch(messages);
@@ -357,13 +359,15 @@ public class CampaignDeliveryService {
             Campaign campaign,
             CampaignBatch batch,
             List<String> emails,
-            Instant scheduledAt) {
+            Instant scheduledAt,
+            long subscriberCount) {
         int accepted = 0;
         int failed = 0;
         for (String email : emails) {
             try {
                 String providerId = mailSender.schedule(
-                    new MailSender.Email(email, campaign.getSubject(), renderFor(campaign, email)),
+                    new MailSender.Email(email, campaign.getSubject(),
+                        renderFor(campaign, email, subscriberCount)),
                     scheduledAt);
                 recipientRepository.finishAttempt(
                     campaign.getId(), batch.getId(), email,
@@ -389,7 +393,7 @@ public class CampaignDeliveryService {
      * 補寄出去。而且「重新渲染」也讓這條路徑不必依賴任何寫入端記得先折疊——
      * 正確性由這裡自己保證，不是靠上游的善意。</p>
      */
-    private String renderFor(Campaign campaign, String email) {
+    private String renderFor(Campaign campaign, String email, long subscriberCount) {
         String slug = campaign.getSlug();
         String path = slug == null ? "/r/archive" : "/r/news/" + slug;
         String articleLink = slug == null
@@ -399,7 +403,8 @@ public class CampaignDeliveryService {
             mailBodyRenderer.html(campaign.getMarkdown(), slug),
             linkBuilder.unsubscribeLink(email),
             articleLink,
-            readerSiteLinks.login(path));
+            readerSiteLinks.login(path),
+            subscriberCount);
     }
 
     /** 寫入不可變的逐次寄送稽核紀錄。 */

@@ -62,6 +62,32 @@ public class AdminReferralGrowthController {
             "approved", approved,
             "clickToSubmitRate", rate(submitted, clicks),
             "submitToConfirmRate", rate(confirmed, submitted)));
+        long articleViews = readerEventCount("ARTICLE_VIEW");
+        long subscriptionHomeViews = readerEventCount("SUBSCRIPTION_HOME_VIEW");
+        long subscribeAttempts = readerEventCount("SUBSCRIBE_ATTEMPT");
+        long subscribeSuccess = readerEventCount("SUBSCRIBE_SUCCESS");
+        long unlockClicks = readerEventCount("UNLOCK_CLICK");
+        long unlockSuccess = readerEventCount("UNLOCK_SUCCESS");
+        result.put("readerFunnel", Map.of(
+            "articleViews", articleViews,
+            "subscriptionHomeViews", subscriptionHomeViews,
+            "subscribeAttempts", subscribeAttempts,
+            "subscribeSuccess", subscribeSuccess,
+            "unlockClicks", unlockClicks,
+            "unlockSuccess", unlockSuccess,
+            "homeToSubscribeRate", rate(subscribeSuccess, subscriptionHomeViews),
+            "unlockSuccessRate", rate(unlockSuccess, unlockClicks)));
+        result.put("readerTopArticles", jdbc.queryForList("""
+            select article_slug,
+                   count(distinct visitor_key) filter (where event_name = 'ARTICLE_VIEW') views,
+                   count(distinct visitor_key) filter (where event_name = 'UNLOCK_CLICK') unlock_clicks,
+                   count(distinct visitor_key) filter (where event_name = 'UNLOCK_SUCCESS') unlock_success
+              from reader_funnel_event
+             where article_slug is not null
+             group by article_slug
+             order by views desc, unlock_clicks desc
+             limit 20
+            """));
         result.put("topArticles", jdbc.queryForList("""
             with click_stats as (
               select coalesce(source_slug, '(一般邀請連結)') source, count(*) clicks
@@ -147,6 +173,14 @@ public class AdminReferralGrowthController {
     /** 安全取得單一 count。 */
     private long count(String sql) {
         Long value = jdbc.queryForObject(sql, Long.class);
+        return value == null ? 0 : value;
+    }
+
+    /** 依事件名稱計算全期間匿名訪客數，供 reader 漏斗使用。 */
+    private long readerEventCount(String eventName) {
+        Long value = jdbc.queryForObject(
+            "select count(distinct visitor_key) from reader_funnel_event where event_name = ?",
+            Long.class, eventName);
         return value == null ? 0 : value;
     }
 

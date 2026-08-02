@@ -49,6 +49,10 @@ class ReaderNavGuardTest {
     private static final Path READER_NAV_SCRIPT =
         Path.of("src/main/resources/static/reader/reader-nav.js");
 
+    /** 共用追蹤設定腳本；每一份 reader 模板都要載入。 */
+    private static final String TRACKING_SCRIPT =
+        "<script src=\"/tracking.js\" defer></script>";
+
     /**
      * 只能出現在 {@code ReaderNav.java} 裡的三個逐字字串（Java 原始碼中雙引號會被
      * 跳脫成 {@code \"}，故此處的比對字面值同樣使用跳脫後的形式，才對得上原始檔案
@@ -160,6 +164,26 @@ class ReaderNavGuardTest {
             "reader-nav.js 必須同步 aria-current，不能只有視覺 class");
         assertTrue(violations.isEmpty(),
             "下列讀者模板未載入共用導覽強化腳本：" + violations);
+    }
+
+    /** 每一份 reader 模板都載入 tracking.js，且共用腳本具備第一方漏斗與訂閱人數。 */
+    @Test
+    void everyReaderTemplateLoadsTrackingAndSharedFunnel() throws IOException {
+        List<String> violations = new ArrayList<>();
+        try (Stream<Path> files = Files.list(READER_STATIC_ROOT)) {
+            for (Path htmlFile : files.filter(p -> p.toString().endsWith(".html")).toList()) {
+                String content = Files.readString(htmlFile, StandardCharsets.UTF_8);
+                if (!content.contains(TRACKING_SCRIPT)) {
+                    violations.add(htmlFile.getFileName().toString());
+                }
+            }
+        }
+        String script = Files.readString(READER_NAV_SCRIPT, StandardCharsets.UTF_8);
+        assertTrue(script.contains("/api/reader/funnel"),
+            "reader-nav.js 必須送出第一方漏斗，不能只依賴未設定 ID 的外部平台");
+        assertTrue(script.contains("/api/reader/subscriber-count"),
+            "reader-nav.js 必須在頁首載入目前訂閱人數");
+        assertTrue(violations.isEmpty(), "下列 reader 模板未載入 tracking.js：" + violations);
     }
 
     /**

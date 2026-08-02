@@ -37,6 +37,11 @@ public class RecipientService {
         return repository.findRecipients(blankToNull(role), blankToNull(interest));
     }
 
+    /** 取得目前已確認且未退訂的去重訂閱人數。 */
+    public long subscriberCount() {
+        return repository.countRecipients();
+    }
+
     /**
      * 取得動態分眾收件人；保存分眾與臨時條件都會被強制套用 CONFIRMED。
      * 若同時提供舊 role/interest，結果取交集。

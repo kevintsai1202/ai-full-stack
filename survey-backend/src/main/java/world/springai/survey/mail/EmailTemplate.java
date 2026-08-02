@@ -27,9 +27,12 @@ public class EmailTemplate {
      * 按鈕使用完整網址，讀者不論從哪個信箱 App 開啟都能進站。</p>
      */
     public String wrapCampaign(String bodyHtml, String unsubscribeLink,
-                               String articleLink, String loginLink) {
+                               String articleLink, String loginLink, long subscriberCount) {
         return """
             <div style="font-family:system-ui,'Microsoft JhengHei',sans-serif;line-height:1.7;max-width:560px;margin:0 auto;color:#102033">
+              <div style="margin:0 0 24px;padding:10px 16px;border-radius:999px;background:#ecfdf5;color:#0f766e;text-align:center;font-size:13px;font-weight:700">
+                已有 %s 位讀者訂閱凱文大叔的電子報
+              </div>
               %s
               <div style="margin:32px 0 24px;padding:24px;border:1px solid #dce5ee;border-radius:12px;background:#f7fafc;text-align:center">
                 <p style="margin:0 0 14px;font-weight:700">想用更舒服的版面閱讀或解鎖內容？</p>
@@ -46,6 +49,6 @@ public class EmailTemplate {
                 若不想再收到，<a href="%s" style="color:#0f766e">點此取消訂閱</a>。
               </p>
             </div>
-            """.formatted(bodyHtml, articleLink, loginLink, unsubscribeLink);
+            """.formatted(subscriberCount, bodyHtml, articleLink, loginLink, unsubscribeLink);
     }
 }

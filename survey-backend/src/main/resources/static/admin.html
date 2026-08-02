@@ -490,6 +490,12 @@
     </div>
     <div id="growth-kpis" class="kpis growth-kpis"></div>
     <div class="card">
+      <h2>Reader 閱讀／訂閱／解鎖漏斗</h2>
+      <p class="hint">匿名訪客去重；不保存 Email、IP 或 User-Agent。</p>
+      <div id="reader-funnel-kpis" class="kpis growth-kpis"></div>
+      <div class="table-wrap"><table id="reader-funnel-articles"><thead><tr><th>文章</th><th>閱讀</th><th>點解鎖</th><th>解鎖成功</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="card">
       <h2>熱門文章</h2>
       <div class="table-wrap"><table id="growth-articles"><thead><tr><th>來源</th><th>點擊</th><th>填表</th><th>確認</th></tr></thead><tbody></tbody></table></div>
     </div>
@@ -2201,6 +2207,12 @@
       const root=$('#growth-kpis');root.replaceChildren();
       [['分享點擊',f.clicks],['完成填表',f.submitted],['信箱確認',f.confirmed],['點擊→填表',f.clickToSubmitRate+'%'],['填表→確認',f.submitToConfirmRate+'%']]
         .forEach(([label,value])=>{const box=document.createElement('div');box.className='kpi';const strong=document.createElement('strong');strong.className='kpi-value';strong.textContent=value;const span=document.createElement('span');span.className='kpi-label';span.textContent=label;box.append(span,strong);root.append(box);});
+      const reader=data.readerFunnel,readerRoot=$('#reader-funnel-kpis');readerRoot.replaceChildren();
+      [['看文章',reader.articleViews],['進訂閱首頁',reader.subscriptionHomeViews],['送出訂閱',reader.subscribeAttempts],['訂閱成功',reader.subscribeSuccess],['點選解鎖',reader.unlockClicks],['解鎖成功',reader.unlockSuccess],['首頁→訂閱',reader.homeToSubscribeRate+'%'],['解鎖成功率',reader.unlockSuccessRate+'%']]
+        .forEach(([label,value])=>{const box=document.createElement('div');box.className='kpi';const strong=document.createElement('strong');strong.className='kpi-value';strong.textContent=value;const span=document.createElement('span');span.className='kpi-label';span.textContent=label;box.append(span,strong);readerRoot.append(box);});
+      const readerArticles=$('#reader-funnel-articles tbody');readerArticles.replaceChildren();
+      if(!data.readerTopArticles.length){const tr=document.createElement('tr'),td=cell('尚無 reader 漏斗資料');td.colSpan=4;tr.append(td);readerArticles.append(tr);}
+      data.readerTopArticles.forEach(row=>{const tr=document.createElement('tr');tr.append(cell(row.article_slug),cell(row.views),cell(row.unlock_clicks),cell(row.unlock_success));readerArticles.append(tr);});
       const articles=$('#growth-articles tbody');articles.replaceChildren();
       data.topArticles.forEach(row=>{const tr=document.createElement('tr');tr.append(cell(row.source),cell(row.clicks),cell(row.submissions),cell(row.confirmations));articles.append(tr);});
       const reviews=$('#growth-reviews tbody');reviews.replaceChildren();
