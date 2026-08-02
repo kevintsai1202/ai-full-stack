@@ -411,6 +411,11 @@ public class CampaignService {
      */
     public PublishResult publish(String subject, String markdown, String tier, Integer creditCost,
                                  String slug, Instant publishedAt) {
+        // 工商版位可投放性預檢：這條路徑雖無寄信副作用，但 campaignRepository.save()
+        // 一落地文章即對外可見（STATUS_PUBLISHED），若之後才對帳而失敗（配額用罄／
+        // 版位已綁其他期），會留下「讀者看得到、但工商未定案」的已發布文章，且 slug
+        // 唯一索引讓重試必定 400。因此預檢必須在 Campaign 物件誕生之前，與 send() 同一道防線。
+        promoPlacementService.assertCommittable(markdown);
         // 主旨與內文在 campaign 表皆為 NOT NULL；提前擋下以回 400 而非讓寫入以 500 失敗
         if (subject == null || subject.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "subject 為必填");
@@ -669,9 +674,13 @@ public class CampaignService {
         if (cancelled > 0) {
             campaign.setStatus(Campaign.STATUS_CANCELLED);
             campaignRepository.save(campaign);
-            // 版位歸還：信件確實未寄出（排程被取消），視為未刊登，釋放整批版位的配額；
-            // 與上面判斷共用同一個 cancelled>0 條件，避免對「已寄出」或無排程信的
-            // campaign 誤放配額（那種情形本來就沒有東西需要歸還）。
+        }
+        // 版位歸還：只在「全數取消成功」（cancelled>0 且 failed==0）時才歸還配額，
+        // 與上面的狀態判斷刻意不同條件——部分取消失敗（failed>0）代表那幾封信仍會
+        // 實際寄出，其中含工商內容，等同已投放，spec §6.5「已實際寄出的批次不歸還」
+        // 之意；若無條件在 cancelled>0 就歸還，會讓已送達的工商版位配額被誤放回去，
+        // 造成同一次投放被重複計入下一批的可用額度。
+        if (cancelled > 0 && failed == 0) {
             promoPlacementService.releaseForCampaign(campaignId);
         }
         return Map.of("cancelled", cancelled, "failed", failed);

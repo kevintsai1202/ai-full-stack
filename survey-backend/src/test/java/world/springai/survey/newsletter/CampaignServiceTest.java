@@ -10,7 +10,9 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import world.springai.survey.ReaderSiteLinks;
@@ -575,6 +577,35 @@ class CampaignServiceTest {
         verify(promoPlacementService).releaseForCampaign(30L);
     }
 
+    /**
+     * 取消排程「部分失敗」（cancelled=8, failed=2）時不可歸還配額：那 2 封仍會被
+     * 寄信商實際寄出，其中含工商內容，等同已投放——依 spec §6.5「已實際寄出的批次
+     * 不歸還」之意，配額應保留，不能因為「大部分取消成功」就整批誤放回去。
+     */
+    @Test
+    void 取消排程部分失敗時不歸還配額() {
+        Campaign scheduled = new Campaign("主旨", "內文", "<p>x</p>", null, null, "schedule",
+            OffsetDateTime.parse("2099-01-01T00:00:00Z"), 10, "scheduled");
+        when(campaignRepository.findById(32L)).thenReturn(Optional.of(scheduled));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
+        List<EmailLog> rows = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            rows.add(new EmailLog("ok" + i + "@x.com", "主旨", "campaign", "ok-" + i, "scheduled", null, 32L));
+            when(mailSender.cancelScheduled("ok-" + i)).thenReturn(true);
+        }
+        for (int i = 0; i < 2; i++) {
+            rows.add(new EmailLog("bad" + i + "@x.com", "主旨", "campaign", "bad-" + i, "scheduled", null, 32L));
+            when(mailSender.cancelScheduled("bad-" + i)).thenReturn(false);
+        }
+        when(emailLogRepository.findByCampaignIdAndStatus(32L, "scheduled")).thenReturn(rows);
+
+        Map<String, Integer> result = svc.cancelSchedule(32L);
+
+        assertEquals(8, result.get("cancelled"));
+        assertEquals(2, result.get("failed"));
+        verify(promoPlacementService, never()).releaseForCampaign(any());
+    }
+
     /** 取消排程為 no-op（狀態仍為 scheduled，但沒有任何排程信可取消）時，不可誤放版位配額。 */
     @Test
     void 取消排程無排程信時不歸還配額() {
@@ -834,6 +865,25 @@ class CampaignServiceTest {
         verify(mailQuotaService, never()).current();
         verify(mailQuotaService, never()).invalidate();
         verify(emailLogRepository, never()).save(any(EmailLog.class));
+    }
+
+    /**
+     * publish() 的工商版位預檢必須在 Campaign 物件誕生之前：assertCommittable 拋例外時，
+     * campaignRepository.save 完全不可被呼叫——否則會留下「已發布可見、但工商未定案」
+     * 的殘留列，且該 slug 已被佔用，重試必定撞 uq_campaign_slug 400。
+     */
+    @Test
+    void publish對帳預檢失敗時不寫入任何campaign列() {
+        doThrow(new IllegalStateException("投放次數已用罄"))
+            .when(promoPlacementService).assertCommittable(anyString());
+
+        assertThrows(IllegalStateException.class,
+            () -> svc.publish("主旨",
+                "[看](/promo/c/77?rt=" + PromoRecipientTokenService.PLACEHOLDER + ")",
+                Campaign.TIER_BASIC, null, "promo-publish", null));
+
+        verify(campaignRepository, never()).save(any());
+        verify(promoPlacementService, never()).reconcile(any(), any());
     }
 
     /**
