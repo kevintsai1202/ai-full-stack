@@ -76,4 +76,83 @@ public class PromoPlacementService {
         }
         return new ArrayList<>(ids);
     }
+
+    /**
+     * 寄送前預檢（不寫入）：讓「擋下」發生在 Campaign 列建立與任何寄信副作用之前。
+     * CampaignService 刻意無交易（ZSend 副作用無法回滾），所以順序是
+     * 預檢 → 建 Campaign → reconcile → 寄送；預檢失敗時什麼都還沒發生。
+     */
+    public void assertCommittable(String markdown) {
+        for (Long id : parsePlacementIds(markdown)) {
+            PromoPlacement pl = placementRepository.findById(id)
+                .orElseThrow(() -> new IllegalStateException(
+                    "工商版位不存在（id=" + id + "），請重新插入提案"));
+            if (pl.getCampaignId() != null
+                && PromoPlacement.STATUS_COMMITTED.equals(pl.getStatus())) {
+                continue; // 同 campaign 重寄／重排的冪等情境，reconcile 再驗歸屬
+            }
+            PromoProposal p = proposalRepository.findById(pl.getProposalId())
+                .orElseThrow(() -> new IllegalStateException(
+                    "工商提案不存在（placement=" + id + "）"));
+            if (p.getPlacementUsed() >= p.getPlacementQuota()) {
+                throw new IllegalStateException(
+                    "提案「" + p.getTitle() + "」投放次數已用罄，請移除該工商區塊");
+            }
+        }
+    }
+
+    /** 對帳定案：內文出現的 DRAFT → COMMIT＋扣配額；本期已 COMMIT 但消失 → REMOVED＋歸還 */
+    @Transactional
+    public void reconcile(Long campaignId, String markdown) {
+        List<Long> present = parsePlacementIds(markdown);
+
+        for (Long id : present) {
+            PromoPlacement pl = placementRepository.findById(id)
+                .orElseThrow(() -> new IllegalStateException(
+                    "工商版位不存在（id=" + id + "），請重新插入提案"));
+            if (PromoPlacement.STATUS_COMMITTED.equals(pl.getStatus())) {
+                if (!campaignId.equals(pl.getCampaignId())) {
+                    throw new IllegalStateException("工商版位 " + id
+                        + " 已刊於其他電子報，請刪除該區塊並重新插入提案");
+                }
+                continue; // 冪等：同期重寄不重複扣
+            }
+            if (pl.getCampaignId() != null && !campaignId.equals(pl.getCampaignId())) {
+                throw new IllegalStateException("工商版位 " + id
+                    + " 屬於其他電子報，請刪除該區塊並重新插入提案");
+            }
+            // 條件式扣配額是唯一防線：回 0 即擋下，交易回滾已 COMMIT 的同批版位
+            if (proposalRepository.consumeQuota(pl.getProposalId()) == 0) {
+                PromoProposal p = proposalRepository.findById(pl.getProposalId()).orElse(null);
+                throw new IllegalStateException("提案「"
+                    + (p == null ? pl.getProposalId() : p.getTitle())
+                    + "」投放次數已用罄，寄送已取消");
+            }
+            pl.setCampaignId(campaignId);
+            pl.setStatus(PromoPlacement.STATUS_COMMITTED);
+            pl.setCommittedAt(java.time.OffsetDateTime.now());
+            placementRepository.save(pl);
+        }
+
+        // 重排情境：先前已綁本期、但新內文已無該連結 → 視為未刊登，歸還配額
+        for (PromoPlacement pl : placementRepository.findByCampaignIdAndStatus(
+                campaignId, PromoPlacement.STATUS_COMMITTED)) {
+            if (!present.contains(pl.getId())) {
+                pl.setStatus(PromoPlacement.STATUS_REMOVED);
+                placementRepository.save(pl);
+                proposalRepository.releaseQuota(pl.getProposalId());
+            }
+        }
+    }
+
+    /** 取消排程：該期全部 COMMITTED 版位歸還配額（信件未寄出，視為未刊登） */
+    @Transactional
+    public void releaseForCampaign(Long campaignId) {
+        for (PromoPlacement pl : placementRepository.findByCampaignIdAndStatus(
+                campaignId, PromoPlacement.STATUS_COMMITTED)) {
+            pl.setStatus(PromoPlacement.STATUS_REMOVED);
+            placementRepository.save(pl);
+            proposalRepository.releaseQuota(pl.getProposalId());
+        }
+    }
 }
