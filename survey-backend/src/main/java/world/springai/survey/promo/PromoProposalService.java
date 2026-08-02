@@ -185,7 +185,10 @@ public class PromoProposalService {
                 p.getId(), CreditTxn.REASON_PROMO_REFUND)) {
             return;
         }
-        readerRepository.addCredits(p.getReaderId(), amount);
+        // 條件式加點是併發防線；回 0 代表讀者不存在
+        if (readerRepository.addCredits(p.getReaderId(), amount) == 0) {
+            throw new IllegalStateException("退點失敗：讀者不存在 readerId=" + p.getReaderId());
+        }
         creditTxnRepository.save(new CreditTxn(p.getReaderId(), amount,
             CreditTxn.REASON_PROMO_REFUND, null, p.getTitle(), p.getId()));
     }

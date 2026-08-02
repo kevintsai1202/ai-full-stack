@@ -95,4 +95,21 @@ class PromoProposalServiceReviewTest {
         assertThrows(PromoProposalService.PromoValidationException.class,
             () -> service.archive(7L));   // 終態不能再封存
     }
+
+    @Test
+    void 待審不可直接封存() {
+        proposal(PromoProposal.STATUS_PENDING, 0);
+        assertThrows(PromoProposalService.PromoValidationException.class,
+            () -> service.archive(7L));   // PENDING 不可封存
+    }
+
+    @Test
+    void 讀者不存在時退點拋例外且不寫帳本() {
+        proposal(PromoProposal.STATUS_APPROVED, 2);
+        // addCredits 回 0：讀者不存在
+        when(readerRepository.addCredits(1L, 100)).thenReturn(0);
+        assertThrows(IllegalStateException.class, () -> service.archive(7L));
+        // 驗證未寫帳本
+        verify(creditTxnRepository, never()).save(any());
+    }
 }
