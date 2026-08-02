@@ -1,6 +1,8 @@
 package world.springai.survey.promo;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -9,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -129,10 +130,17 @@ public class AdminPromoController {
 
     /**
      * 將驗證失敗（欄位格式、狀態機不符等）轉為 400，訊息直接顯示給前端。
-     * 慣例比照 {@code AdminCampaignController} 對輸入錯誤一律回 400 的作法。
+     *
+     * <p><b>必須回傳 {@link ResponseEntity}，不可在 handler 內再 {@code throw}</b>：
+     * Spring 的 {@code ExceptionHandlerExceptionResolver} 呼叫 handler 方法時，若該方法
+     * 本身又拋出例外，resolver 會判定為「處理失敗」而放棄，讓<b>原始</b>例外
+     * 繼續往外傳播，最終落到預設的 500——不是新拋出的那個例外的狀態碼。
+     * 因此改採「回傳而非拋出」，比照 {@code ApiExceptionHandler.onValidation} 的作法。</p>
      */
     @ExceptionHandler(PromoProposalService.PromoValidationException.class)
-    public void handleValidation(PromoProposalService.PromoValidationException e) {
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+    public ResponseEntity<ProblemDetail> handleValidation(PromoProposalService.PromoValidationException e) {
+        ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+        pd.setDetail(e.getMessage());
+        return ResponseEntity.badRequest().body(pd);
     }
 }
