@@ -88,3 +88,6 @@ survey-backend/Dify 學員.xlsx
 $null
 389，Failures
 cover-test.txt
+
+# 本機記憶冷庫（deep-memory 工作檔，不進版控）
+cold-notes/
