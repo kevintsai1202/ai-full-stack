@@ -540,6 +540,20 @@ input::placeholder { color:#71817c; }
 }
 .promo-form textarea { min-height:130px; resize:vertical; }
 .promo-form .field-hint { font-size:.8rem; color:var(--muted); }
+/* 問卷接續頁（/r/survey）動態長出的單選／複選／單一勾選欄位：
+   input 與選項文字包在同一個 <label> 內、同一行左右排列，點文字也能觸發選取。
+   單靠上面 `.promo-form input { width:100% }` 會把 radio/checkbox 撐成滿版方塊，
+   瀏覽器再把原生圓圈/方塊置中在那個方塊裡——結果是圓圈自成一行置中、文字
+   掉到下一行左對齊，兩者視覺分離，所以這裡必須把 radio/checkbox 排除在外。 */
+.promo-form .choice-group { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
+.promo-form .choice-option {
+  display:flex; align-items:center; gap:8px; margin:4px 0;
+  font-size:.94rem; font-weight:400; cursor:pointer;
+}
+.promo-form .choice-option input[type="radio"],
+.promo-form .choice-option input[type="checkbox"] {
+  width:auto; flex:0 0 auto; margin:0; padding:0;
+}
 /* 費用試算列：總費用與餘額同框，餘額不足時由 JS 加 .lack 變警示色 */
 .promo-cost-bar { grid-column:1 / -1; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; background:var(--accent-soft); border-radius:10px; padding:14px 18px; }
 .promo-cost-bar .cost { font-size:1.15rem; font-weight:800; color:var(--accent-deep); }

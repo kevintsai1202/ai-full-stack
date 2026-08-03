@@ -80,6 +80,7 @@
     if (field.type === 'select' || field.type === 'multi_select') {
       wrapper.appendChild(buildLabel(field.label, field.required));
       var group = document.createElement('div');
+      group.className = 'choice-group';
       var inputType = field.type === 'select' ? 'radio' : 'checkbox';
       options.forEach(function (opt, idx) {
         var id = field.key + '_' + idx;
@@ -93,8 +94,15 @@
         if (inputType === 'radio' && field.key === VOTE_FIELD_KEY && VOTED_INDEX === idx) {
           input.checked = true;
         }
-        group.appendChild(input);
-        group.appendChild(buildLabel(String(opt), false, id));
+        // input 與選項文字包在同一個 <label> 內：input 在前、文字在後，
+        // 兩者同一行對齊，且點文字（不只圓圈本身）也能觸發選取
+        var choice = document.createElement('label');
+        choice.className = 'choice-option';
+        choice.appendChild(input);
+        var text = document.createElement('span');
+        text.textContent = String(opt);
+        choice.appendChild(text);
+        group.appendChild(choice);
       });
       wrapper.appendChild(group);
     } else if (field.type === 'long_text') {
@@ -105,12 +113,18 @@
       if (field.required) { textarea.required = true; }
       wrapper.appendChild(textarea);
     } else if (field.type === 'boolean') {
+      // 同單選／複選群的修法：input 與文字包在同一個 <label> 內，同一行對齊
       var boolInput = document.createElement('input');
       boolInput.type = 'checkbox';
       boolInput.name = field.key;
       boolInput.id = field.key;
-      wrapper.appendChild(boolInput);
-      wrapper.appendChild(buildLabel(field.label, field.required, field.key));
+      var boolChoice = document.createElement('label');
+      boolChoice.className = 'choice-option';
+      boolChoice.appendChild(boolInput);
+      var boolText = document.createElement('span');
+      boolText.textContent = field.label + (field.required ? ' ＊' : '');
+      boolChoice.appendChild(boolText);
+      wrapper.appendChild(boolChoice);
     } else {
       wrapper.appendChild(buildLabel(field.label, field.required, field.key));
       var input2 = document.createElement('input');
