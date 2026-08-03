@@ -167,10 +167,12 @@
       if (!res.ok) { throw new Error('提交失敗'); }
       return res.json();
     }).then(function (result) {
+      // rewardHint 本身已含「已收到」語意（見 NewsletterSubmissionService），
+      // 未發點分支只顯示 rewardHint，避免與固定字串重複
       if (result.rewarded) {
         showMsg('已收到！獲得 ' + result.rewardCredits + ' 點', true);
       } else {
-        showMsg('已收到！' + (result.rewardHint || ''), true);
+        showMsg(result.rewardHint || '已收到！', true);
       }
       Array.prototype.forEach.call(form.elements, function (el) { el.disabled = true; });
     }).catch(function () {
