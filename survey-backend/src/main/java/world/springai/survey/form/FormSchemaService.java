@@ -392,6 +392,10 @@ public class FormSchemaService {
 
     /**
      * 動態分析指定表單；所有 renderer 都只依 dimensions，不認識 role 或 interest。
+     *
+     * @param campaignId 非 null 時只統計電子報通道問卷（Task 10 寫入的
+     *                   {@code raw_data->>'campaignId'}）中指定活動的完整填答，
+     *                   供 campaign 歸因分析交叉比對；null 表示不篩選。
      */
     public Map<String, Object> analytics(
             String formKey,
@@ -400,6 +404,7 @@ public class FormSchemaService {
             OffsetDateTime from,
             OffsetDateTime to,
             String source,
+            Long campaignId,
             boolean publicOnly) {
         FormDefinition selected = getDefinition(formKey, version);
         List<FormDefinition> definitions = allVersions
@@ -409,7 +414,7 @@ public class FormSchemaService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "此表單未開放公開統計");
         }
         List<String> schemaKeys = definitions.stream().map(this::schemaKey).toList();
-        List<Map<String, Object>> records = loadRecords(schemaKeys, from, to, source);
+        List<Map<String, Object>> records = loadRecords(schemaKeys, from, to, source, campaignId);
 
         Map<String, FieldDefinition> fields = new LinkedHashMap<>();
         definitions.forEach(form -> form.fields().forEach(field -> fields.putIfAbsent(field.key(), field)));
@@ -451,7 +456,7 @@ public class FormSchemaService {
             ? listDefinitions().stream().filter(form -> form.key().equals(formKey)).toList()
             : List.of(selected);
         List<Map<String, Object>> records = loadRecords(
-            definitions.stream().map(this::schemaKey).toList(), from, to, source);
+            definitions.stream().map(this::schemaKey).toList(), from, to, source, null);
         Map<Long, Map<String, Object>> people = new LinkedHashMap<>();
         if (!records.isEmpty()) {
             List<Long> ids = records.stream()
@@ -566,7 +571,8 @@ public class FormSchemaService {
             List<String> schemaKeys,
             OffsetDateTime from,
             OffsetDateTime to,
-            String source) {
+            String source,
+            Long campaignId) {
         if (schemaKeys.isEmpty()) {
             return List.of();
         }
@@ -589,6 +595,10 @@ public class FormSchemaService {
         if (StringUtils.hasText(source)) {
             sql.append(" AND source_key = ?");
             params.add(source.trim());
+        }
+        if (campaignId != null) {
+            sql.append(" AND raw_data ->> 'campaignId' = ?");
+            params.add(String.valueOf(campaignId));
         }
         sql.append(" ORDER BY occurred_at DESC, id DESC");
         return jdbc.query(sql.toString(), (rs, rowNum) -> {

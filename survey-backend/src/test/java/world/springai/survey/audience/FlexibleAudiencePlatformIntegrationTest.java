@@ -166,7 +166,7 @@ class FlexibleAudiencePlatformIntegrationTest {
             false,
             null));
         Map<String, Object> analytics = forms.analytics(
-            "fullstack-course-interest", 1, false, null, null, null, false);
+            "fullstack-course-interest", 1, false, null, null, null, null, false);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> dimensions =
             (List<Map<String, Object>>) analytics.get("dimensions");

@@ -33,17 +33,20 @@ public class FormSchemaController {
     private final AdminKeyGuard guard;
     private final WelcomeMailService welcomeMailService;
     private final NewsletterSubmissionService newsletterSubmissionService;
+    private final SurveyVoteStatsService voteStatsService;
 
-    /** 注入 schema 服務、Admin 金鑰守衛、歡迎信服務與電子報通道問卷服務。 */
+    /** 注入 schema 服務、Admin 金鑰守衛、歡迎信服務、電子報通道問卷服務與投票統計服務。 */
     public FormSchemaController(
             FormSchemaService service,
             AdminKeyGuard guard,
             WelcomeMailService welcomeMailService,
-            NewsletterSubmissionService newsletterSubmissionService) {
+            NewsletterSubmissionService newsletterSubmissionService,
+            SurveyVoteStatsService voteStatsService) {
         this.service = service;
         this.guard = guard;
         this.welcomeMailService = welcomeMailService;
         this.newsletterSubmissionService = newsletterSubmissionService;
+        this.voteStatsService = voteStatsService;
     }
 
     /** 公開取得目前發布版本 schema，前端不需硬編碼欄位。 */
@@ -83,7 +86,7 @@ public class FormSchemaController {
     public Map<String, Object> publicStats(
             @PathVariable String formKey,
             @RequestParam(required = false) Integer version) {
-        return service.analytics(formKey, version, false, null, null, null, true);
+        return service.analytics(formKey, version, false, null, null, null, null, true);
     }
 
     /** Admin 列出全部表單與版本。 */
@@ -184,9 +187,19 @@ public class FormSchemaController {
             @RequestParam(defaultValue = "false") boolean allVersions,
             @RequestParam(required = false) OffsetDateTime from,
             @RequestParam(required = false) OffsetDateTime to,
-            @RequestParam(required = false) String source) {
+            @RequestParam(required = false) String source,
+            @RequestParam(required = false) Long campaignId) {
         guard.verify(key);
-        return service.analytics(formKey, version, allVersions, from, to, source, false);
+        return service.analytics(formKey, version, allVersions, from, to, source, campaignId, false);
+    }
+
+    /** Admin 投票統計與 campaign 歸因分析；表單沒有任何票時回零值結構，不回 404。 */
+    @GetMapping("/api/admin/analytics/forms/{formKey}/votes")
+    public Map<String, Object> voteStats(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key,
+            @PathVariable String formKey) {
+        guard.verify(key);
+        return voteStatsService.voteStats(formKey);
     }
 
     /** Admin 匯出動態表單原始資料；CSV 表頭依實際 schema 答案 key 自動展開。 */

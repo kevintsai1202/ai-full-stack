@@ -43,13 +43,15 @@ class NewsletterSubmissionControllerTest {
         FormSchemaService formSchemaService = mock(FormSchemaService.class);
         var adminKeyGuard = mock(world.springai.survey.AdminKeyGuard.class);
         var welcomeMailService = mock(world.springai.survey.audience.WelcomeMailService.class);
+        var voteStatsService = mock(SurveyVoteStatsService.class);
 
-        // 正確注入所有依賴，包括 newsletterSubmissionService
+        // 正確注入所有依賴，包括 newsletterSubmissionService 與 voteStatsService
         controller = new FormSchemaController(
             formSchemaService,
             adminKeyGuard,
             welcomeMailService,
-            submissionService);
+            submissionService,
+            voteStatsService);
 
         // MockMvc 需要 UTF-8 StringHttpMessageConverter（中文）與 JSON converter，
         // 以及異常處理器將 ResponseStatusException 轉成 JSON 回應
