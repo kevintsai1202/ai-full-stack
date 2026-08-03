@@ -286,6 +286,54 @@ class FlexibleAudiencePlatformIntegrationTest {
         assertEquals(matching.personId(), result.items().getFirst().get("personId"));
     }
 
+    /**
+     * SurveyFilter.sources 應限制命中的 record 來源：同一份問卷（同 schemaKey）
+     * 除了官網問卷（survey_form）等真實填答，Dify、考試、名單匯入等管線也可能建立
+     * record_type='survey_submission' 的 audience_record；帶 sources 過濾只應計入
+     * 指定來源，不帶則沿用舊行為（不分來源，全部算命中）。
+     */
+    @Test
+    void audienceSearchSurveyFilterCanRestrictToRealSubmissionSources() {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        FormSchemaService.FormDefinition draft = forms.createVersion(
+            "fullstack-course-interest",
+            new FormSchemaService.VersionRequest("來源篩選測試版"));
+        forms.publish(draft.key(), draft.version());
+        String schemaKey = draft.key() + "@" + draft.version();
+
+        long realSubmitter = audience.mergePerson("source-real@example.com", "真實填答", now).personId();
+        long importedOnly = audience.mergePerson("source-imported@example.com", "僅匯入", now).personId();
+        // 真實填答：官網問卷 survey_form 來源
+        audience.upsertRecord(realSubmitter, "survey_form", "survey_submission", schemaKey,
+            "ext-source-real", now, Map.of(), Map.of());
+        // 匯入名單：exam 管線也對同一份問卷建立 survey_submission record，但不是本人親自填答
+        audience.upsertRecord(importedOnly, "exam", "survey_submission", schemaKey,
+            "ext-source-imported", now, Map.of(), Map.of());
+
+        // 篩選鎖定本測試建立的確切版本（而非 formKey@% 的 LIKE 比對），避免與同一測試類別中
+        // 其他測試共用 "fullstack-course-interest" formKey、不同版本的 record 互相污染計數。
+        AudienceSearchService search = new AudienceSearchService(jdbc);
+        AudienceSearchService.SurveyFilter restrictedToRealSources = new AudienceSearchService.SurveyFilter(
+            draft.key(), draft.version(), null, List.of("survey_form", "newsletter_survey"));
+        AudienceSearchService.SurveyFilter unrestricted =
+            new AudienceSearchService.SurveyFilter(draft.key(), draft.version(), null);
+
+        AudienceSearchService.SearchResult restrictedResult = search.search(
+            new AudienceSearchService.SearchRequest(
+                new AudienceSearchService.Filters(
+                    null, null, null, null, null, null, null, restrictedToRealSources, null, null),
+                new AudienceSearchService.Sort("email", "ASC"), 0, 50));
+        AudienceSearchService.SearchResult unrestrictedResult = search.search(
+            new AudienceSearchService.SearchRequest(
+                new AudienceSearchService.Filters(
+                    null, null, null, null, null, null, null, unrestricted, null, null),
+                new AudienceSearchService.Sort("email", "ASC"), 0, 50));
+
+        assertEquals(1, restrictedResult.total(), "帶 sources 過濾只應計真實填答，不含 exam 匯入 record");
+        assertEquals(realSubmitter, restrictedResult.items().getFirst().get("personId"));
+        assertEquals(2, unrestrictedResult.total(), "不帶 sources 應沿用舊行為，不分來源全部算命中");
+    }
+
     /** 讀者搜尋可依指定電子報寄送狀態與文章 hashtag 解鎖歷程交叉篩選。 */
     @Test
     void audienceSearchFiltersByDeliveryAndUnlockHistory() {

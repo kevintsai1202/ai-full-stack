@@ -56,6 +56,18 @@ public class CouponRecipientService {
     private static final AudienceSearchService.Sort STABLE_SORT =
         new AudienceSearchService.Sort("email", "ASC");
 
+    /**
+     * 「填過問卷」的真實口徑：僅計官網問卷（{@code survey_form}）與電子報問卷
+     * （{@code newsletter_survey}）兩個真實表單提交來源。
+     *
+     * <p>Dify 學員、線上測驗、名單匯入等管線也會為同一份問卷（同 {@code formKey}）
+     * 建立 {@code record_type='survey_submission'} 的 {@code audience_record}，若不限
+     * 來源查詢會把這些「未填答、只是被匯入」的人也算成命中名單——正式環境實測
+     * fullstack-course-interest 一題共 536 筆 records（survey_form=57、dify=190、
+     * exam=254、newsletter=35），不過濾來源會把應收 57 人誤灌成 233 人。</p>
+     */
+    private static final List<String> REAL_SUBMISSION_SOURCES = List.of("survey_form", "newsletter_survey");
+
     private final AudienceSearchService audienceSearchService;
     private final EmailLogRepository emailLogRepository;
     private final ObjectMapper objectMapper;
@@ -145,8 +157,8 @@ public class CouponRecipientService {
      */
     private AudienceSearchService.Filters buildFilters(CouponCampaign campaign) {
         Map<String, Object> answers = parseAnswerFilter(campaign.getAnswerFilter());
-        AudienceSearchService.SurveyFilter survey =
-            new AudienceSearchService.SurveyFilter(campaign.getFormKey(), null, answers);
+        AudienceSearchService.SurveyFilter survey = new AudienceSearchService.SurveyFilter(
+            campaign.getFormKey(), null, answers, REAL_SUBMISSION_SOURCES);
         return new AudienceSearchService.Filters(
             null, null, List.of("CONFIRMED"), null, null,
             null, null, survey, null, null);

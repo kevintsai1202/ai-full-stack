@@ -81,6 +81,9 @@ class CouponRecipientServiceTest {
         assertEquals(List.of("CONFIRMED"), filters.consentStatus());
         assertEquals("reader-poll", filters.survey().formKey());
         assertEquals(Map.of("pick_topic", "RAG"), filters.survey().answers());
+        // 「填過問卷」只能計真實表單提交來源，不可誤把 dify/exam/名單匯入建立的
+        // survey_submission records 也算進命中名單。
+        assertEquals(List.of("survey_form", "newsletter_survey"), filters.survey().sources());
     }
 
     /** 空答案條件 "{}" 應解析為空 Map，而不是拋錯或傳 null 進 SurveyFilter */
