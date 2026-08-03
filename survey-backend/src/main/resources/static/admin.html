@@ -56,7 +56,10 @@
   .full{grid-column:1/-1}.filters{display:grid;grid-template-columns:minmax(240px,2fr) repeat(5,minmax(120px,1fr));gap:10px;margin:12px 0}.filters label{margin:0}.table-wrap{width:100%;max-width:100%;min-width:0;overflow:auto;border:1px solid var(--border);border-radius:10px;max-height:680px}
   table{width:100%;border-collapse:separate;border-spacing:0;font-size:.84rem}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;min-width:110px;max-width:300px;overflow-wrap:anywhere}
   th{position:sticky;top:0;background:#edf5f4;z-index:2;white-space:nowrap}tbody tr:hover{background:#f4fbfa}.empty{color:var(--muted);padding:20px;text-align:center}
-  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.76rem;font-weight:700}.pill.scheduled{background:var(--accent-soft);color:var(--accent-deep)}.pill.sent{background:#dcfce7;color:#166534}.pill.sending{background:#fff2cc;color:#92580a}.pill.failed{background:#fde8e8;color:var(--danger)}.pill.cancelled{background:var(--surface-2);color:var(--muted)}.pill.published{background:#e0e7ff;color:#3730a3}.pill.unpublished{background:var(--surface-2);color:var(--muted)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.76rem;font-weight:700}.pill.scheduled{background:var(--accent-soft);color:var(--accent-deep)}.pill.sent{background:#dcfce7;color:#166534}.pill.sending{background:#fff2cc;color:#92580a}.pill.failed{background:#fde8e8;color:var(--danger)}.pill.cancelled{background:var(--surface-2);color:var(--muted)}.pill.published{background:#e0e7ff;color:#3730a3}.pill.unpublished{background:var(--surface-2);color:var(--muted)}.pill.draft{background:var(--surface-2);color:var(--muted)}
+  /* 優惠券名單：已寄送過的收件人列灰顯，與可勾選的列拉出視覺區隔（不加 disabled，仍允許管理者手動勾選送出；
+     後端 CouponSendService 對已寄過者一律冪等略過，勾了也只會計入 skipped，不會真的重複寄送）。 */
+  #coupon-recipient-table tr.row-sent{opacity:.55;background:var(--surface-2)}
   .suggestions{display:grid;gap:10px}.suggestion{border-left:4px solid var(--accent);background:#f7fbfb;border-radius:0 8px 8px 0;padding:12px 14px}.suggestion p{margin:0;white-space:pre-wrap}.suggestion small{display:block;color:var(--muted);margin-top:5px}
   .dynamic-toolbar{display:grid;grid-template-columns:minmax(220px,2fr) minmax(110px,1fr) repeat(2,minmax(150px,1fr));gap:10px;align-items:end}
   .dynamic-toolbar label{margin:0}.inline-check{display:flex;align-items:center;gap:7px;min-height:44px;font-weight:650}.inline-check input{width:18px;height:18px}
@@ -94,6 +97,7 @@
     <button class="tab" id="tab-growth" data-view="growth">病毒成長</button>
     <button class="tab" id="tab-settings" data-view="settings">參數設定</button>
     <button class="tab" id="tab-promo" data-view="promo">工商提案</button>
+    <button class="tab" id="tab-coupon" data-view="coupon">優惠券</button>
   </nav>
 
   <section class="view" id="analytics-view">
@@ -593,6 +597,66 @@
       <p class="hint">唯一點擊以提案版位×收件人去重；郵件安全掃描器可能造成少量誤差</p>
     </div>
   </section>
+
+  <section class="view" id="coupon-view" hidden>
+    <div class="card">
+      <h2>① 建立優惠券活動</h2>
+      <label for="coupon-course-name">課程名稱</label>
+      <input type="text" id="coupon-course-name" placeholder="例如：AI 賦能全端開發">
+      <label for="coupon-pitch">推薦文案</label>
+      <textarea id="coupon-pitch" style="min-height:100px" placeholder="寫給讀者看的推薦理由，會出現在信件內文"></textarea>
+      <label for="coupon-course-url">課程連結（須 https:// 開頭）</label>
+      <input type="text" id="coupon-course-url" placeholder="https://...">
+      <div class="row">
+        <div><label for="coupon-code">優惠碼</label><input type="text" id="coupon-code" placeholder="例如：AI2026"></div>
+        <div><label for="coupon-expires-at">優惠期限（可留空＝不限期）</label><input type="date" id="coupon-expires-at"></div>
+      </div>
+      <div class="row">
+        <div><label for="coupon-form-key">名單來源問卷</label><select id="coupon-form-key"></select></div>
+        <div><label for="coupon-filter-field">條件欄位（選填，僅支援單選題條件）</label><select id="coupon-filter-field"><option value="">不限</option></select></div>
+        <div><label for="coupon-filter-value">條件值</label><select id="coupon-filter-value" disabled><option value="">請先選欄位</option></select></div>
+      </div>
+      <p class="hint">問卷與條件會隨活動一併儲存（成為此活動的名單快照條件），建立後無法修改，需補寄時請用下方「查詢名單」重新命中目前資料。多選題答案存為陣列，條件比對為嚴格相等恆不命中，故條件欄位只列單選題。</p>
+      <div class="row" style="margin-top:14px"><div style="flex:0"><button class="btn" id="coupon-create-btn">儲存活動</button></div><div style="flex:0"><button class="btn ghost" id="coupon-preview-mail-btn">預覽信件</button></div></div>
+      <div class="msg" id="coupon-create-msg"></div>
+      <div class="msg" id="coupon-preview-mail-msg"></div>
+      <p class="hint" id="coupon-preview-mail-subject" hidden></p>
+      <iframe class="preview" id="coupon-mail-preview" title="優惠券信件預覽" sandbox="" hidden style="margin-top:10px"></iframe>
+    </div>
+
+    <div class="card">
+      <div class="section-head"><h2 style="margin:0">② 名單區</h2><span class="hint" id="coupon-active-hint">尚未選擇活動：請先建立活動，或從下方「④ 活動列表」選取一筆既有活動。</span></div>
+      <button class="btn ghost" id="coupon-query-btn" disabled>查詢名單</button>
+      <div class="msg" id="coupon-list-msg"></div>
+      <div class="selection-bar">
+        <p>共 <strong id="coupon-total">0</strong> 人；已勾選 <strong id="coupon-selected">0</strong> 人</p>
+      </div>
+      <div class="table-wrap">
+        <table id="coupon-recipient-table">
+          <thead><tr><th class="table-check"><input type="checkbox" id="coupon-check-all" aria-label="全選／全不選"></th><th>Email</th><th>姓名</th><th>狀態</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>③ 寄送</h2>
+      <p class="hint">只會寄給上方名單中目前勾選的收件人，一次寄出全部勾選對象（本輪無寄送封數上限輸入）；已寄過者仍可勾選送出，後端會自動略過、不會重複寄送（防騷擾）。</p>
+      <button class="btn" id="coupon-send-btn">寄送優惠券給已勾選名單</button>
+      <div class="msg" id="coupon-send-msg"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-head"><h2 style="margin:0">④ 活動列表</h2><button class="btn ghost" id="coupon-refresh-btn">重新整理</button></div>
+      <div class="msg" id="coupon-campaign-msg"></div>
+      <div class="table-wrap">
+        <table id="coupon-campaign-table">
+          <thead><tr><th>課程</th><th>優惠碼</th><th>問卷</th><th>狀態</th><th>已寄封數</th><th>首次寄送時間</th><th>建立時間</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 </main>
 
 <script>
@@ -643,6 +707,19 @@
   let previewTimer=null;
   /** 預覽請求的遞增序號；只有最新一筆的回應可以寫進畫面，避免慢回應蓋掉新內容。 */
   let previewToken=0;
+  /** 目前作業中的優惠券活動（建立後或從列表選取後設定）；名單查詢與寄送皆針對此活動操作。 */
+  let couponActiveCampaign=null;
+  /**
+   * GET /api/admin/forms 回傳的完整表單定義清單（含每個版本的 fields），
+   * 由 loadCouponForms 存入、loadCouponFilterFields 從中取用——避免再另外呼叫
+   * GET /api/forms/{formKey}：該端點不在 Admin 專用網域白名單
+   * （AdminEntryHostFilter 只放行 /admin.html 與 /api/admin/**），正式 admin 網域會 404。
+   */
+  let couponFormDefinitions=[];
+  /** 建立優惠券活動表單目前選定問卷的欄位清單（僅單選題），供「條件值」下拉取用選項。 */
+  let couponFormFields=[];
+  /** 最近一次查詢到的優惠券收件人清單（含 alreadySent 旗標）。 */
+  let couponRecipients=[];
 
   /** 取得目前分頁保存的管理金鑰。 */
   function getKey(){return sessionStorage.getItem(KEY)||'';}
@@ -689,7 +766,7 @@
   function showApp(){$('#gate').style.display='none';$('#app').hidden=false;}
 
   /** 切換分頁（問卷分析／電子報／讀者管理／參數設定）；參數設定首次進入時才載入欄位。 */
-  function switchView(name){document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!==name+'-view');document.querySelectorAll('.tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.view===name));if(name==='analytics'&&!analyticsLoaded)loadAnalytics();if(name==='readers'&&!audienceResult.loaded)searchReaders();if(name==='growth'&&!loadGrowth.done)loadGrowth();if(name==='settings'&&!loadSettings.done)loadSettings();if(name==='promo'){if(!loadPromoProposals.done)loadPromoProposals();if(!loadPromoStats.done)loadPromoStats();}}
+  function switchView(name){document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!==name+'-view');document.querySelectorAll('.tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.view===name));if(name==='analytics'&&!analyticsLoaded)loadAnalytics();if(name==='readers'&&!audienceResult.loaded)searchReaders();if(name==='growth'&&!loadGrowth.done)loadGrowth();if(name==='settings'&&!loadSettings.done)loadSettings();if(name==='promo'){if(!loadPromoProposals.done)loadPromoProposals();if(!loadPromoStats.done)loadPromoStats();}if(name==='coupon'&&!loadCouponCampaigns.done){loadCouponForms();loadCouponCampaigns();}}
 
   /** 把固定選項填入下拉選單。 */
   function fillSelect(selector,items){const el=$(selector);items.forEach(value=>{const option=document.createElement('option');option.value=value;option.textContent=value;el.appendChild(option);});}
@@ -807,6 +884,16 @@
     $('#promo-refresh').onclick=()=>{loadPromoProposals();loadPromoStats();};
     $('#insert-promo-btn').onclick=insertPromo;
     $('#insert-survey-btn').onclick=insertSurvey;
+    // 優惠券：問卷/條件連動、建立、查詢、全選與寄送
+    $('#coupon-form-key').onchange=loadCouponFilterFields;
+    $('#coupon-filter-field').onchange=refreshCouponFilterValue;
+    $('#coupon-create-btn').onclick=createCouponCampaign;
+    $('#coupon-preview-mail-btn').onclick=previewCouponMail;
+    $('#coupon-query-btn').onclick=queryCouponRecipients;
+    $('#coupon-check-all').onchange=event=>toggleCouponCheckAll(event.target.checked);
+    $('#coupon-recipient-table tbody').addEventListener('change',updateCouponSelectedCount);
+    $('#coupon-send-btn').onclick=sendCouponBatch;
+    $('#coupon-refresh-btn').onclick=loadCouponCampaigns;
     ['#reader-source','#reader-consent','#reader-account','#reader-vip','#reader-size',
       '#reader-delivery-campaign','#reader-delivery-status','#reader-delivery-from','#reader-delivery-to','#reader-delivery-min','#reader-delivery-never',
       '#reader-unlock-campaign','#reader-unlock-tag','#reader-unlock-from','#reader-unlock-to','#reader-unlock-min','#reader-unlock-never'
@@ -2618,6 +2705,221 @@
       editor.setSelectionRange(cursor,cursor);
       composeChanged();
     }catch(e){if(e.message!=='401')alert('插入失敗：'+e.message);}
+  }
+
+  // ── 優惠券活動：問卷/條件選單、建立、預覽信件、名單查詢與寄送 ──────────────────────
+  /** 載入問卷下拉（GET /api/admin/forms，取不重複 formKey，標題採該 formKey 版本號最大者，同 dynamic-form 邏輯）。 */
+  async function loadCouponForms(){
+    try{
+      couponFormDefinitions=await api('/api/admin/forms');
+      const select=$('#coupon-form-key'),current=select.value;
+      select.replaceChildren();
+      [...new Set(couponFormDefinitions.map(item=>item.key))].forEach(key=>{
+        const definition=maxVersionOf(key);
+        select.add(new Option(definition?.title||key,key));
+      });
+      if([...select.options].some(option=>option.value===current))select.value=current;
+      loadCouponFilterFields();
+    }catch(error){if(error.message!=='401')showMsg('coupon-create-msg','問卷清單載入失敗：'+error.message,false);}
+  }
+
+  /** 取記憶體中指定 formKey 版本號最大的定義（不限發布狀態），口徑對齊後端 CouponSendService.resolveFormTitle 的標題選取邏輯。 */
+  function maxVersionOf(formKey){
+    return couponFormDefinitions.filter(item=>item.key===formKey)
+      .reduce((max,item)=>(!max||item.version>max.version)?item:max,null);
+  }
+
+  /**
+   * 依目前選定問卷，從記憶體 couponFormDefinitions（loadCouponForms 已載入）取條件欄位，
+   * 不再另外呼叫 GET /api/forms/{formKey}——該端點不在 AdminEntryHostFilter 的管理網域白名單
+   * （只放行 /admin.html 與 /api/admin/**），正式 admin 網域會直接 404。
+   * 優先取該問卷「已發布」版本中版本號最大者；若尚無已發布版本則退回全部版本中的最大版本號。
+   * 條件欄位只保留單選題（select）：多選題答案存為 JSON 陣列，後端比對為嚴格相等，
+   * 選了多選題條件會恆為 0 命中（見 AudienceSearchService.appendSurveyFilter）。
+   */
+  function loadCouponFilterFields(){
+    const formKey=$('#coupon-form-key').value;
+    const fieldSelect=$('#coupon-filter-field');
+    fieldSelect.replaceChildren(new Option('不限',''));
+    resetCouponFilterValue();
+    if(!formKey){couponFormFields=[];return;}
+    const versions=couponFormDefinitions.filter(item=>item.key===formKey);
+    const published=versions.filter(item=>item.status==='PUBLISHED');
+    const target=(published.length?published:versions)
+      .reduce((max,item)=>(!max||item.version>max.version)?item:max,null);
+    couponFormFields=(target?.fields||[]).filter(field=>field.type==='select');
+    couponFormFields.forEach(field=>fieldSelect.add(new Option(field.label||field.key,field.key)));
+  }
+
+  /** 清空並停用「條件值」下拉；尚未選欄位或欄位為「不限」時呼叫。 */
+  function resetCouponFilterValue(){
+    const valueSelect=$('#coupon-filter-value');
+    valueSelect.replaceChildren(new Option('請先選欄位',''));
+    valueSelect.disabled=true;
+  }
+
+  /** 依目前選定的條件欄位重建「條件值」下拉選項。 */
+  function refreshCouponFilterValue(){
+    const fieldKey=$('#coupon-filter-field').value;
+    if(!fieldKey){resetCouponFilterValue();return;}
+    const field=couponFormFields.find(item=>item.key===fieldKey);
+    const valueSelect=$('#coupon-filter-value');
+    valueSelect.replaceChildren(new Option('不限',''));
+    (field?.options||[]).forEach(option=>valueSelect.add(new Option(String(option),String(option))));
+    valueSelect.disabled=false;
+  }
+
+  /**
+   * 組出建立活動／預覽信件共用的請求 body（七欄位：課程名／文案／連結／優惠碼／期限／問卷／條件），
+   * 僅在條件欄位與條件值皆有選擇時才組出 answerFilter。
+   */
+  function couponFormPayload(){
+    const filterField=$('#coupon-filter-field').value;
+    const filterValue=$('#coupon-filter-value').value;
+    return {
+      courseName:$('#coupon-course-name').value.trim(),
+      pitch:$('#coupon-pitch').value.trim(),
+      courseUrl:$('#coupon-course-url').value.trim(),
+      couponCode:$('#coupon-code').value.trim(),
+      expiresAt:$('#coupon-expires-at').value||null,
+      formKey:$('#coupon-form-key').value,
+      answerFilter:(filterField&&filterValue)?{[filterField]:filterValue}:undefined
+    };
+  }
+
+  /** 預覽即將寄出的優惠券信件（spec §8.1）：打 POST /api/admin/coupons/preview-mail（不落庫），於 iframe 顯示主旨與內文。 */
+  async function previewCouponMail(){
+    const msg=$('#coupon-preview-mail-msg');msg.className='msg';msg.textContent='';
+    try{
+      const result=await api('/api/admin/coupons/preview-mail',{method:'POST',body:JSON.stringify(couponFormPayload())});
+      const subjectLine=$('#coupon-preview-mail-subject');
+      subjectLine.hidden=false;subjectLine.textContent='主旨：'+result.subject;
+      const frame=$('#coupon-mail-preview');
+      frame.hidden=false;frame.srcdoc=result.html;
+    }catch(error){if(error.message!=='401'){msg.className='msg err';msg.textContent='預覽失敗：'+error.message;}}
+  }
+
+  /** 建立優惠券活動：成功後設為目前作業活動並重整活動列表。 */
+  async function createCouponCampaign(){
+    try{
+      const created=await api('/api/admin/coupons',{method:'POST',body:JSON.stringify(couponFormPayload())});
+      showMsg('coupon-create-msg',`已建立活動「${created.courseName}」（優惠碼 ${created.couponCode}）。`,true);
+      resetCouponCreateForm();
+      selectCouponCampaign(created);
+      await loadCouponCampaigns();
+    }catch(error){if(error.message!=='401')showMsg('coupon-create-msg','建立活動失敗：'+error.message,false);}
+  }
+
+  /** 建立成功後清空建立表單的內容欄位，避免管理者誤以為欄位仍是「下一個活動」的草稿而重複送出同樣內容。 */
+  function resetCouponCreateForm(){
+    $('#coupon-course-name').value='';
+    $('#coupon-pitch').value='';
+    $('#coupon-course-url').value='';
+    $('#coupon-code').value='';
+    $('#coupon-expires-at').value='';
+  }
+
+  /** 將指定活動設為目前作業中活動：更新提示文字、清空舊名單並啟用查詢按鈕。 */
+  function selectCouponCampaign(campaign){
+    couponActiveCampaign=campaign;
+    couponRecipients=[];
+    $('#coupon-active-hint').textContent=`目前作業活動：「${campaign.courseName}」（優惠碼 ${campaign.couponCode}，狀態 ${campaign.status}）`;
+    $('#coupon-query-btn').disabled=false;
+    renderCouponRecipients([]);
+    const listMsg=$('#coupon-list-msg');listMsg.className='msg';listMsg.textContent='';
+  }
+
+  /** 查詢目前作業活動的命中收件人（POST .../preview-recipients，條件為活動建立當下的快照，非即時可調）。 */
+  async function queryCouponRecipients(){
+    if(!couponActiveCampaign){alert('請先建立或選取一筆優惠券活動');return;}
+    try{
+      couponRecipients=await api(`/api/admin/coupons/${couponActiveCampaign.id}/preview-recipients`,{method:'POST'});
+      renderCouponRecipients(couponRecipients);
+      showMsg('coupon-list-msg',`共命中 ${couponRecipients.length} 人。`,true);
+    }catch(error){if(error.message!=='401')showMsg('coupon-list-msg','名單查詢失敗：'+error.message,false);}
+  }
+
+  /**
+   * 將收件人清單畫成勾選表格：預設全勾，已寄過本活動者灰顯且預設不勾（仍可手動勾選送出，
+   * 但後端一律冪等略過已寄過者，不會真的重複寄送）；
+   * email／姓名一律以 cell() 的 textContent 寫入，避免使用者可控字串被當成 HTML 解析。
+   */
+  function renderCouponRecipients(recipients){
+    const body=$('#coupon-recipient-table tbody');
+    body.replaceChildren();
+    $('#coupon-total').textContent=String(recipients.length);
+    if(!recipients.length){
+      const tr=document.createElement('tr'),td=cell('尚無資料，請先查詢名單');
+      td.colSpan=4;tr.append(td);body.append(tr);
+    }else{
+      recipients.forEach(recipient=>{
+        const tr=document.createElement('tr');
+        if(recipient.alreadySent)tr.classList.add('row-sent');
+        const checkTd=document.createElement('td'),checkbox=document.createElement('input');
+        checkbox.type='checkbox';checkbox.checked=!recipient.alreadySent;checkbox.dataset.email=recipient.email;
+        checkTd.append(checkbox);
+        tr.append(checkTd,cell(recipient.email),cell(recipient.name),cell(recipient.alreadySent?'已寄過':'尚未寄送'));
+        body.append(tr);
+      });
+    }
+    updateCouponSelectedCount();
+  }
+
+  /** 統計目前表格內勾選人數並寫入畫面。 */
+  function updateCouponSelectedCount(){
+    const count=$('#coupon-recipient-table tbody').querySelectorAll('input[type=checkbox]:checked').length;
+    $('#coupon-selected').textContent=String(count);
+  }
+
+  /** 表頭全選/全不選：套用到目前表格內所有收件人 checkbox。 */
+  function toggleCouponCheckAll(checked){
+    $('#coupon-recipient-table tbody').querySelectorAll('input[type=checkbox]').forEach(checkbox=>checkbox.checked=checked);
+    updateCouponSelectedCount();
+  }
+
+  /** 寄送已勾選收件人：confirm 顯示活動名與人數，成功後重新查詢名單使 alreadySent 立即反映最新狀態。 */
+  async function sendCouponBatch(){
+    if(!couponActiveCampaign){alert('請先建立或選取一筆優惠券活動');return;}
+    const emails=[...$('#coupon-recipient-table tbody').querySelectorAll('input[type=checkbox]:checked')]
+      .map(checkbox=>checkbox.dataset.email);
+    if(!emails.length){alert('尚未勾選任何收件人');return;}
+    if(!confirm(`確定要對活動「${couponActiveCampaign.courseName}」寄送優惠券給 ${emails.length} 人嗎？`))return;
+    try{
+      const result=await api(`/api/admin/coupons/${couponActiveCampaign.id}/send`,
+        {method:'POST',body:JSON.stringify({emails})});
+      showMsg('coupon-send-msg',
+        `本次嘗試 ${result.attempted} 封：成功 ${result.sent}、跳過（已寄過）${result.skipped}、失敗 ${result.failed}、未寄剩餘 ${result.remaining}。`,
+        result.failed===0);
+      await queryCouponRecipients();
+      await loadCouponCampaigns();
+    }catch(error){if(error.message!=='401')showMsg('coupon-send-msg','寄送失敗：'+error.message,false);}
+  }
+
+  /** 載入活動列表（新到舊），每列附「選取」按鈕載入到②③區可補寄。 */
+  async function loadCouponCampaigns(){
+    try{
+      const rows=await api('/api/admin/coupons');
+      const body=$('#coupon-campaign-table tbody');
+      body.replaceChildren();
+      if(!rows.length){
+        const tr=document.createElement('tr'),td=cell('尚無優惠券活動');
+        td.colSpan=8;tr.append(td);body.append(tr);
+      }else{
+        rows.forEach(campaign=>{
+          const tr=document.createElement('tr');
+          tr.append(cell(campaign.courseName),cell(campaign.couponCode),cell(campaign.formKey));
+          const statusTd=document.createElement('td'),pill=document.createElement('span');
+          pill.className='pill '+String(campaign.status).toLowerCase();pill.textContent=campaign.status;
+          statusTd.append(pill);
+          tr.append(statusTd,cell(campaign.sentCount),cell(formatDate(campaign.sentAt)),cell(formatDate(campaign.createdAt)));
+          const actionTd=document.createElement('td');
+          actionTd.append(btn('選取',()=>selectCouponCampaign(campaign)));
+          tr.append(actionTd);
+          body.append(tr);
+        });
+      }
+      loadCouponCampaigns.done=true;
+    }catch(error){if(error.message!=='401')showMsg('coupon-campaign-msg','活動列表載入失敗：'+error.message,false);}
   }
 
   $('#gate-btn').onclick=async()=>{sessionStorage.setItem(KEY,$('#gate-key').value.trim());try{await api('/api/admin/survey');showApp();init();}catch(error){/* 401 已由 api 顯示閘門。 */}};
