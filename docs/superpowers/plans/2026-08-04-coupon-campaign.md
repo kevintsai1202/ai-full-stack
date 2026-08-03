@@ -156,8 +156,9 @@ public class CouponRecipientService {
 @Service
 public class CouponSendService {
     public record SendResult(int attempted, int sent, int skipped, int failed, int remaining) {}
-    /** 子集驗證不過拋 400 ResponseStatusException（訊息列出違規 email）；名單空/全已寄拋 400 */
-    @Transactional
+    /** 子集驗證不過拋 400 ResponseStatusException（訊息列出違規 email）；名單空/全已寄拋 400。
+     *  刻意不加 @Transactional：迴圈夾外部 ZSend 呼叫、副作用不可回滾，
+     *  部分失敗保留已寫入 email_log 比整批回滾誠實（同 CampaignService.send/InviteService 前例）。 */
     public SendResult send(long campaignId, List<String> emails, Integer limit)
 }
 ```
