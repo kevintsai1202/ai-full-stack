@@ -66,6 +66,12 @@ public class CampaignService {
     private final PromoPlacementService promoPlacementService;
     /** 工商轉址連結的收件人 token 簽發器：renderFor 對每一位收件人各自簽發一枚 */
     private final PromoRecipientTokenService promoTokenService;
+    /**
+     * 問卷標記展開器（Task 9 接線）：本類只直接呼叫 {@code assertEmbeddable}
+     * 做寄送前預檢；實際展開（{@code expandForEmail}）已收斂到
+     * {@link MailBodyRenderer#html}，是同一個 Spring 單例，兩處各自注入即可。
+     */
+    private final SurveyBlockRenderer surveyBlockRenderer;
 
     public CampaignService(MailSender mailSender,
                            RecipientService recipientService,
@@ -79,7 +85,8 @@ public class CampaignService {
                            ReaderSiteLinks readerSiteLinks,
                            MailBodyRenderer mailBodyRenderer,
                            PromoPlacementService promoPlacementService,
-                           PromoRecipientTokenService promoTokenService) {
+                           PromoRecipientTokenService promoTokenService,
+                           SurveyBlockRenderer surveyBlockRenderer) {
         this.contentSplitter = contentSplitter;
         this.readerSiteLinks = readerSiteLinks;
         this.mailBodyRenderer = mailBodyRenderer;
@@ -93,6 +100,7 @@ public class CampaignService {
         this.mailQuotaService = mailQuotaService;
         this.promoPlacementService = promoPlacementService;
         this.promoTokenService = promoTokenService;
+        this.surveyBlockRenderer = surveyBlockRenderer;
     }
 
     /**
@@ -122,6 +130,9 @@ public class CampaignService {
         String body = split.hasGate()
             ? paywallPreview(split)
             : markdownRenderer.toHtml(markdown);
+        // 問卷標記展開（Task 9）：預覽通道連結一律 href="#" 且附「預覽不計票」標示，
+        // 不會產生 CID／RT 佔位符，故此處不需要任何後續替換。
+        body = surveyBlockRenderer.expandForPreview(body);
         return emailTemplate.wrapCampaign(articlePreview(subject, body, coverEmoji, tags, coverUrl),
             linkBuilder.previewUnsubscribeLink(),
             readerSiteLinks.archive(), readerSiteLinks.login("/r/archive"),
@@ -173,6 +184,10 @@ public class CampaignService {
         // 測試信沒有實際文章 slug，解鎖卡片的 CTA 因此導向歷史內容
         String body = articlePreview(subject, mailBodyHtml(markdown, null),
             coverEmoji, tags, coverUrl);
+        // 問卷 CID 佔位符替換為 "0"（Task 9）：測試信沒有真正的 campaign，
+        // c=0 對應 SurveyVoteService「campaign 不存在不落票」的既有保證，
+        // 天然把測試信排除在投票統計之外，不需要額外旗標判斷寄送類型。
+        body = body.replace(SurveyBlockRenderer.CID_PLACEHOLDER, "0");
         String html = renderFor(body, to.strip(), null, recipientService.subscriberCount());
         String testSubject = subject.strip().startsWith("[測試]")
             ? subject.strip()
@@ -302,6 +317,17 @@ public class CampaignService {
         // 時機只剩「什麼都還沒發生」的這一刻）。
         promoPlacementService.assertCommittable(markdown);
 
+        // 問卷卡可嵌入性預檢（Task 9）：與工商預檢同一時機、同一理由——必須在建立
+        // Campaign 列之前完成，失敗時資料庫不留殘留列。IllegalArgumentException
+        // 不在 ApiExceptionHandler 的全域映射範圍內（刻意窄範圍，理由見該檔案），
+        // 故在此就地轉譯為 400，比照 sendTest() 對 RestClientResponseException
+        // 轉譯供應商例外的既有慣例，讓後台看得懂原因而非收到裸 500。
+        try {
+            surveyBlockRenderer.assertEmbeddable(markdown);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+
         // 建立 campaign 紀錄並預存（之後更新統計）
         Campaign campaign = new Campaign(subject, markdown, bodyHtml, role, interest, mode,
             scheduledAt == null ? null : OffsetDateTime.ofInstant(scheduledAt, ZoneOffset.UTC),
@@ -315,6 +341,12 @@ public class CampaignService {
         campaign.setSavedSegmentId(savedSegmentId);
         campaign = campaignRepository.save(campaign);
         Long campaignId = campaign.getId();
+
+        // 問卷 CID 佔位符替換（Task 9）：campaign id 在此刻才誕生，必須在下方任何
+        // renderFor（進而寄出／排程）之前完成，否則收件人會收到字面上的
+        // __SURVEY_CID__ 字串。只替換本地變數 bodyHtml，campaign.body_html
+        // 欄位保留替換前的內容——該欄位目前沒有任何讀取路徑（僅存查），不影響正確性。
+        bodyHtml = bodyHtml.replace(SurveyBlockRenderer.CID_PLACEHOLDER, String.valueOf(campaignId));
 
         // 對帳定案：campaign id 在此刻誕生，必須在任何寄信副作用（sendBatch／schedule）
         // 之前完成，讓「這批版位確實屬於這期電子報」的事實與「即將寄出的信」同步——
@@ -713,6 +745,16 @@ public class CampaignService {
         // 否則建立時的守門可被「排程後修改內容」繞過。
         validatePaywallTier(markdown, campaign.getTier());
 
+        // 問卷卡可嵌入性預檢（I1 修正）：與 send() 同一時機、同一理由——重排讀進來的
+        // 是全新 markdown，若其中的問卷標記已失效（問卷被下架或信中一鍵題被清除），
+        // 必須在任何 provider 呼叫（對帳、取消舊排程、重新排程寄送）之前擋下，
+        // 否則會靜默用「未展開卡片」的內容重寄整批，而不是像 send() 一樣直接拒絕。
+        try {
+            surveyBlockRenderer.assertEmbeddable(markdown);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+
         // 對帳：重排是「新內文對消失版位歸還配額」的唯一入口（原內文已綁定的版位，
         // 若新內文不再引用即視為未刊登並釋放）。必須在任何 provider 呼叫（取消舊排程、
         // 重新排程寄送）之前完成——對帳失敗時（如新增版位的提案配額已用罄）要整個中止，
@@ -735,6 +777,10 @@ public class CampaignService {
         // 與 send() 共用同一份折疊判斷：重排看起來只是「改時間」，實際上會用新內容
         // 重寄整批，只修 send() 而漏掉這裡就是一條繞過折疊的後門。
         String bodyHtml = mailBodyHtml(markdown, campaign.getSlug());
+        // 問卷 CID 佔位符替換（Task 9）：重排沿用同一個既有 campaignId（不像 send()
+        // 需要等待新建才知道 id），mailBodyHtml 內部一律經 MailBodyRenderer 展開問卷卡，
+        // 這裡不補替換會讓重寄出去的信件內文原樣殘留 __SURVEY_CID__ 字面字串。
+        bodyHtml = bodyHtml.replace(SurveyBlockRenderer.CID_PLACEHOLDER, String.valueOf(campaignId));
         int[] rc = scheduleAll(campaignId, subject, bodyHtml, recipients, scheduledAt,
             campaign.getSlug(), recipientService.subscriberCount());
 

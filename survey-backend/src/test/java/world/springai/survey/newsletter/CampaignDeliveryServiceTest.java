@@ -6,6 +6,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import world.springai.survey.ReaderSiteLinks;
 import world.springai.survey.audience.RecipientService;
 import world.springai.survey.audience.SubscriptionLinkBuilder;
+import world.springai.survey.form.FormSchemaService;
 import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.EmailTemplate;
 import world.springai.survey.mail.MailQuotaService;
@@ -24,6 +25,16 @@ import static org.mockito.Mockito.when;
 
 /** 同篇電子報補寄資格與永久防重複規則測試。 */
 class CampaignDeliveryServiceTest {
+
+    /**
+     * 本檔所有 markdown 皆不含 {@code <!--survey:...-->} 標記，用真實
+     * {@link SurveyBlockRenderer} 搭配 mock {@link FormSchemaService} 即為安全的
+     * no-op（regex 掃不到任何標記，FormSchemaService 完全不會被呼叫），
+     * 避免用 mock 版 SurveyBlockRenderer 卻忘記 stub 而讓 expandForEmail 回傳 null。
+     */
+    private static SurveyBlockRenderer surveyBlockRenderer() {
+        return new SurveyBlockRenderer(mock(FormSchemaService.class));
+    }
 
     /** 已寄出者不可再選；新加入與失敗者會出現在「尚未寄送」篩選。 */
     @Test
@@ -59,7 +70,7 @@ class CampaignDeliveryServiceTest {
             mock(ReaderSiteLinks.class),
             mock(JdbcTemplate.class),
             new MailBodyRenderer(new ContentSplitter(), new MarkdownRenderer(),
-                mock(ReaderSiteLinks.class)),
+                mock(ReaderSiteLinks.class), surveyBlockRenderer(), "https://reader.example.com"),
             promoTokenService);
 
         CampaignDeliveryService.RecipientPage page =
@@ -133,7 +144,8 @@ class CampaignDeliveryServiceTest {
             new ReaderSiteLinks("https://reader.example.com"),
             mock(JdbcTemplate.class),
             new MailBodyRenderer(new ContentSplitter(), new MarkdownRenderer(),
-                new ReaderSiteLinks("https://reader.example.com")),
+                new ReaderSiteLinks("https://reader.example.com"),
+                surveyBlockRenderer(), "https://reader.example.com"),
             promoTokenService);
 
         service.createBatch(55L, List.of("a@x.com"), "now", null);
@@ -210,7 +222,8 @@ class CampaignDeliveryServiceTest {
             new ReaderSiteLinks("https://reader.example.com"),
             mock(JdbcTemplate.class),
             new MailBodyRenderer(new ContentSplitter(), new MarkdownRenderer(),
-                new ReaderSiteLinks("https://reader.example.com")),
+                new ReaderSiteLinks("https://reader.example.com"),
+                surveyBlockRenderer(), "https://reader.example.com"),
             promoTokenService);
 
         service.createBatch(77L, List.of("b@x.com"), "now", null);

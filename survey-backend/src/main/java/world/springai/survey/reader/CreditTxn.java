@@ -36,6 +36,8 @@ public class CreditTxn {
     public static final String REASON_PROMO_APPLY = "PROMO_APPLY";
     /** 工商提案退點：被拒全退、封存退未投放餘額（正向） */
     public static final String REASON_PROMO_REFUND = "PROMO_REFUND";
+    /** 問卷填答發點（正向）；防重發唯一鍵由 (reader_id, survey_form_key) 組成 */
+    public static final String REASON_SURVEY_REWARD = "SURVEY_REWARD";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -60,6 +62,10 @@ public class CreditTxn {
     /** reason=PROMO_APPLY／PROMO_REFUND 時對應的提案；退點冪等判斷依據 */
     @Column(name = "promo_proposal_id")
     private Long promoProposalId;
+
+    /** reason=SURVEY_REWARD 時對應的問卷；發點對象問卷，防重發唯一鍵成分 */
+    @Column(name = "survey_form_key")
+    private String surveyFormKey;
 
     /** 說明文字，ADMIN_GRANT 時記錄贈點理由 */
     private String note;
@@ -96,4 +102,8 @@ public class CreditTxn {
     public Long getPromoProposalId() { return promoProposalId; }
     public String getNote() { return note; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
+    public String getSurveyFormKey() { return surveyFormKey; }
+
+    /** 設定發點對象問卷（reason=SURVEY_REWARD 時使用） */
+    public void setSurveyFormKey(String surveyFormKey) { this.surveyFormKey = surveyFormKey; }
 }

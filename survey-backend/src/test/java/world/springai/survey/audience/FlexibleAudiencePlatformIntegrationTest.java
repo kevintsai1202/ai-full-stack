@@ -166,7 +166,7 @@ class FlexibleAudiencePlatformIntegrationTest {
             false,
             null));
         Map<String, Object> analytics = forms.analytics(
-            "fullstack-course-interest", 1, false, null, null, null, false);
+            "fullstack-course-interest", 1, false, null, null, null, null, false);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> dimensions =
             (List<Map<String, Object>>) analytics.get("dimensions");
@@ -214,12 +214,47 @@ class FlexibleAudiencePlatformIntegrationTest {
             false,
             null));
         List<Map<String, Object>> rows = forms.rawRecords(
-            draft.key(), draft.version(), false, null, null, null);
+            draft.key(), draft.version(), false, null, null, null, null);
 
         assertTrue(rows.stream().anyMatch(row ->
             "versioned-form@example.com".equals(row.get("email"))
                 && row.get("answers") instanceof Map<?, ?> answers
                 && "11-50".equals(answers.get("companySize"))));
+    }
+
+    /**
+     * 匯出動態原始資料須依 campaignId 篩選（I2 修正）：admin.html 選期別後圖表
+     * 已篩選（{@code analytics()} 早已支援 campaignId），但
+     * {@code /api/admin/analytics/forms/{formKey}/records} 端點與
+     * {@link FormSchemaService#rawRecords} 過去沒收這個參數、Spring 靜默忽略——
+     * 選期別後圖表已篩選，匯出仍全量。直接驗證 {@code loadRecords} 既有的
+     * {@code raw_data->>'campaignId'} 篩選確實透過 {@code rawRecords()} 的新參數對外開放：
+     * 塞兩個 campaign 各一筆記錄，帶 campaignId 只回其中一邊，不帶則回全量。
+     */
+    @Test
+    void rawRecordsFiltersByCampaignId() {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        FormSchemaService.FormDefinition draft = forms.createVersion(
+            "fullstack-course-interest",
+            new FormSchemaService.VersionRequest("campaignId 篩選測試版"));
+        forms.publish(draft.key(), draft.version());
+        String schemaKey = draft.key() + "@" + draft.version();
+
+        long personA = audience.mergePerson("campaign-a@example.com", "A", now).personId();
+        long personB = audience.mergePerson("campaign-b@example.com", "B", now).personId();
+        audience.upsertRecord(personA, "newsletter_survey", "survey_submission", schemaKey,
+            "ext-campaign-10", now, Map.of("campaignId", 10L), Map.of());
+        audience.upsertRecord(personB, "newsletter_survey", "survey_submission", schemaKey,
+            "ext-campaign-20", now, Map.of("campaignId", 20L), Map.of());
+
+        List<Map<String, Object>> filteredToTen = forms.rawRecords(
+            draft.key(), draft.version(), false, null, null, null, 10L);
+        List<Map<String, Object>> unfiltered = forms.rawRecords(
+            draft.key(), draft.version(), false, null, null, null, null);
+
+        assertEquals(1, filteredToTen.size(), "帶 campaignId 只應回該期別的記錄");
+        assertEquals("campaign-a@example.com", filteredToTen.get(0).get("email"));
+        assertEquals(2, unfiltered.size(), "不帶 campaignId 應回全量（兩個期別各一筆）");
     }
 
     /** 複合篩選在伺服器端執行，來源與同意狀態不會讓同一人物重複出現。 */

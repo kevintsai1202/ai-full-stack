@@ -402,7 +402,13 @@ public class CampaignDeliveryService {
         // 工商轉址連結的收件人 token：比照 CampaignService.renderFor 的第一個替換點。
         // 這裡曾經漏接——補寄路徑沒有注入 PromoRecipientTokenService，導致補寄出去的信件
         // 內文原樣保留 __PROMO_RT__ 佔位符，收件人點擊工商連結時驗簽必定失敗。
+        //
+        // 問卷 CID 佔位符（Task 9）：mailBodyRenderer.html() 內部一律展開問卷卡並留下
+        // __SURVEY_CID__ 佔位符（每次呼叫都是即時重新渲染，不是讀存檔），此處已知
+        // campaign.getId()（重寄目標必為既存 campaign），與收件人 token 一併替換，
+        // 涵蓋「重寄舊排程」的相容情境。
         String bodyHtml = mailBodyRenderer.html(campaign.getMarkdown(), campaign.getSlug())
+            .replace(SurveyBlockRenderer.CID_PLACEHOLDER, String.valueOf(campaign.getId()))
             .replace(PromoRecipientTokenService.PLACEHOLDER, promoTokenService.issue(email));
         String slug = campaign.getSlug();
         String path = slug == null ? "/r/archive" : "/r/news/" + slug;

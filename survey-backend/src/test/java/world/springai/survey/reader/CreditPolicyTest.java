@@ -133,4 +133,24 @@ class CreditPolicyTest {
         assertEquals(CreditPolicy.DEFAULT_REFERRAL_REWARD, policy.referralReward());
         assertEquals(CreditPolicy.DEFAULT_VIP_DAYS, policy.vipDefaultDays());
     }
+
+    /** 問卷完成獎勵未設定時採用後備值 20 */
+    @Test
+    void surveyRewardFallsBackToTwentyWhenAbsent() {
+        AppSettingService settings = mock(AppSettingService.class);
+        // 全部鍵都回傳呼叫端給的 defaultValue，模擬 app_setting 內查無此鍵
+        when(settings.getInt(anyString(), anyInt()))
+            .thenAnswer(invocation -> invocation.getArgument(1, Integer.class));
+
+        CreditPolicy policy = new CreditPolicy(settings);
+
+        assertEquals(20, policy.surveyReward());
+    }
+
+    /** 問卷完成獎勵設定為 50 時應原樣回傳 */
+    @Test
+    void surveyRewardReturnsFiftyWhenConfigured() {
+        CreditPolicy policy = new CreditPolicy(settingsReturning(AppSettingService.CREDIT_SURVEY_REWARD, 50));
+        assertEquals(50, policy.surveyReward());
+    }
 }

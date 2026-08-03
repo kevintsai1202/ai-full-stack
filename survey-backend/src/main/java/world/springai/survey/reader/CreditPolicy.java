@@ -30,6 +30,8 @@ public class CreditPolicy {
     static final int DEFAULT_REFERRAL_REWARD = 100;
     /** 被邀者確認加碼的後備值 */
     static final int DEFAULT_INVITEE_REWARD = 20;
+    /** 問卷完整填答獎勵的後備值 */
+    static final int DEFAULT_SURVEY_REWARD = 20;
     /** VIP 預設效期天數的後備值 */
     static final int DEFAULT_VIP_DAYS = 365;
 
@@ -61,6 +63,12 @@ public class CreditPolicy {
     public int referralReward() {
         return Math.max(0, appSettingService.getInt(
             AppSettingService.CREDIT_REFERRAL_REWARD, DEFAULT_REFERRAL_REWARD));
+    }
+
+    /** 問卷完整填答獎勵（點）；未設定時後備 20，負值夾到 0 */
+    public int surveyReward() {
+        return Math.max(0, appSettingService.getInt(
+            AppSettingService.CREDIT_SURVEY_REWARD, DEFAULT_SURVEY_REWARD));
     }
 
     /** 工商提案投放單價的後備值 */

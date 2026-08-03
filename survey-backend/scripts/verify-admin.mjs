@@ -155,7 +155,101 @@ try {
   }, null, { timeout: 15000 });
   console.log('OK 封面、Hashtag、響應式圖片、工商卡片與付費牆預覽渲染成功');
 
-  // 10. 回到分析頁並截圖留存
+  // 10. 問卷卡整條接線：建立問卷 → 加 select 欄 → 設信中一鍵題 → 發布 → 編輯器插入標記 → 預覽斷言
+  // 投票卡出現且標示「預覽不計票」。formKey 帶時間戳避免重跑時撞已存在的 409。
+  {
+    const suffix = Date.now().toString(36).slice(-8);
+    const formKey = `verify-survey-${suffix}`;
+    const title = `驗證問卷 ${suffix}`;
+    const fieldKey = 'pick_topic';
+    const fieldLabel = '你想聽哪個主題？';
+    const options = ['RAG 知識庫', 'Tool Calling'];
+
+    // 原生 prompt/confirm 對話框佇列：依呼叫順序 accept 對應文字，null 表示單純 confirm。
+    const dialogQueue = [];
+    page.on('dialog', async (dialog) => {
+      const next = dialogQueue.shift();
+      if (next === undefined) { await dialog.dismiss(); return; }
+      if (next === null) await dialog.accept();
+      else await dialog.accept(String(next));
+    });
+
+    await page.click('#tab-analytics');
+    dialogQueue.push(formKey, title);
+    await page.click('#form-create-btn');
+    await page.waitForFunction(
+      (fk) => [...document.querySelectorAll('#dynamic-form option')].some((o) => o.value === fk),
+      formKey, { timeout: 10000 });
+    await page.selectOption('#dynamic-form', formKey);
+    console.log('OK 建立新問卷：', formKey);
+
+    // 展開簡易欄位設定並新增一個 select 欄位（信中一鍵題只能綁定單選欄位）
+    const settingsDetails = page.locator('.schema-settings');
+    if (!(await settingsDetails.evaluate((el) => el.open))) {
+      await settingsDetails.locator('summary').click();
+    }
+    await page.fill('#field-key', fieldKey);
+    await page.fill('#field-label', fieldLabel);
+    await page.selectOption('#field-type', 'select');
+    await page.fill('#field-options', options.join('\n'));
+    await page.click('#field-add');
+    await page.waitForFunction(
+      (fk) => [...document.querySelectorAll('#email-vote-field option')].some((o) => o.value === fk),
+      fieldKey, { timeout: 10000 });
+    console.log('OK 新增 select 欄位：', fieldKey);
+
+    // 新草稿版本不繼承任何信中一鍵題設定，下拉必須從「（未設定）」開始
+    if ((await page.inputValue('#email-vote-field')) !== '') {
+      fail('新草稿版本的信中一鍵題下拉不應預設繼承任何欄位');
+    }
+    await page.selectOption('#email-vote-field', fieldKey);
+    await page.waitForFunction(
+      () => (document.querySelector('#schema-msg')?.textContent || '').includes('已設定信中一鍵題'),
+      null, { timeout: 10000 });
+    console.log('OK 設定信中一鍵題');
+
+    // 發布目前草稿（會觸發 confirm 對話框）
+    dialogQueue.push(null);
+    await page.click('#form-publish-version');
+    await page.waitForFunction(
+      () => (document.querySelector('#schema-msg')?.textContent || '').includes('已發布'),
+      null, { timeout: 10000 });
+    console.log('OK 發布問卷版本');
+
+    // 編輯器插入標記：先用 API 確認新問卷在可嵌入清單中的實際編號，避免猜測順序
+    const embeddableRes = await page.request.get(`${BASE}/api/admin/forms/embeddable`,
+      { headers: { 'X-Admin-Key': KEY } });
+    const embeddableList = await embeddableRes.json();
+    const embedIndex = embeddableList.findIndex((f) => f.formKey === formKey);
+    if (embedIndex < 0) fail('新問卷未出現在可嵌入清單中（未發布或未設信中一鍵題？）');
+
+    await page.click('#tab-campaign');
+    await page.fill('#markdown', '');
+    dialogQueue.push(String(embedIndex + 1));
+    await page.click('#insert-survey-btn');
+    await page.waitForFunction(
+      (fk) => (document.querySelector('#markdown')?.value || '').includes(`<!--survey:${fk}-->`),
+      formKey, { timeout: 10000 });
+    const markerMarkdown = await page.inputValue('#markdown');
+    if (!markerMarkdown.startsWith(`<!--survey:${formKey}-->\n\n`)) {
+      fail(`問卷標記插入格式錯誤：${JSON.stringify(markerMarkdown)}`);
+    }
+    console.log('OK 編輯器插入問卷標記，獨立成段');
+
+    // 預覽：投票卡必須出現、選項文字齊全，且標示「預覽不計票」
+    await page.click('#preview-btn');
+    await page.waitForFunction(({ label, opts }) => {
+      const f = document.querySelector('#preview');
+      if (!f || !f.srcdoc) return false;
+      return f.srcdoc.includes('預覽不計票') && f.srcdoc.includes(label)
+        && opts.every((opt) => f.srcdoc.includes(opt));
+    }, { label: fieldLabel, opts: options }, { timeout: 15000 });
+    console.log('OK 預覽出現問卷投票卡，含全部選項且標示「預覽不計票」');
+
+    page.removeAllListeners('dialog');
+  }
+
+  // 11. 回到分析頁並截圖留存
   await page.click('#tab-analytics');
   await mkdir('output/playwright', { recursive: true });
   await page.screenshot({ path: 'output/playwright/survey-admin-verify.png', fullPage: true });
