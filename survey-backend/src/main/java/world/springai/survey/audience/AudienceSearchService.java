@@ -30,8 +30,23 @@ public class AudienceSearchService {
         this.jdbc = jdbc;
     }
 
-    /** Survey 條件；answers 的 key 會對應 form field key。 */
-    public record SurveyFilter(String formKey, Integer version, Map<String, Object> answers) {}
+    /**
+     * Survey 條件；answers 的 key 會對應 form field key。
+     *
+     * <p>{@code sources} 限制命中的 {@code audience_record.source_key}——同一份問卷
+     * （同 {@code formKey}）除了官網問卷（{@code survey_form}）／電子報問卷
+     * （{@code newsletter_survey}）等真實填答外，Dify、考試、名單匯入管線也會為同一
+     * {@code formKey} 建立 {@code record_type='survey_submission'} 的 record，若不分來源
+     * 一律視為「填過問卷」會誤把匯入名單也算進去。{@code null} 或空清單代表不限來源
+     * （沿用舊行為）。</p>
+     */
+    public record SurveyFilter(String formKey, Integer version, Map<String, Object> answers, List<String> sources) {
+
+        /** 舊 API 與既有 Java 呼叫端相容建構式：不限來源。 */
+        public SurveyFilter(String formKey, Integer version, Map<String, Object> answers) {
+            this(formKey, version, answers, null);
+        }
+    }
 
     /** Exam 條件。 */
     public record ExamFilter(
@@ -461,6 +476,11 @@ public class AudienceSearchService {
         } else {
             where.append(" = ?");
             params.add(survey.formKey().trim() + "@" + survey.version());
+        }
+        if (survey.sources() != null && !survey.sources().isEmpty()) {
+            where.append(" AND survey_record.source_key IN (");
+            appendPlaceholders(where, params, survey.sources());
+            where.append(")");
         }
         if (survey.answers() != null) {
             survey.answers().forEach((key, value) -> {
