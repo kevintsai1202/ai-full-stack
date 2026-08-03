@@ -105,7 +105,7 @@
     <div class="card">
       <div class="section-head">
         <div><h2 style="margin:0">彈性表單分析</h2><p class="hint" style="margin:4px 0 0">欄位、圖表與匯出內容都依表單設定自動產生。</p></div>
-        <div class="actions"><button class="btn ghost" id="dynamic-json">匯出 JSON</button><button class="btn ghost" id="dynamic-csv">匯出 CSV</button><button class="btn" id="dynamic-pdf">匯出 PDF</button></div>
+        <div class="actions"><button class="btn ghost" id="form-create-btn">建立新問卷</button><button class="btn ghost" id="dynamic-json">匯出 JSON</button><button class="btn ghost" id="dynamic-csv">匯出 CSV</button><button class="btn" id="dynamic-pdf">匯出 PDF</button></div>
       </div>
       <div class="dynamic-toolbar" style="margin-top:14px">
         <label>表單<select id="dynamic-form"></select></label>
@@ -114,6 +114,7 @@
         <label>起日<input type="date" id="dynamic-from"></label>
         <label>迄日<input type="date" id="dynamic-to"></label>
         <label>來源<select id="dynamic-source"><option value="">全部</option></select></label>
+        <label>期別（電子報活動）<select id="dynamic-campaign"><option value="">全部</option></select></label>
         <button class="btn ghost" id="dynamic-refresh">載入分析</button>
       </div>
       <p class="hint" id="dynamic-summary">表單清單載入中…</p>
@@ -132,8 +133,23 @@
           <div><label for="field-fact-key">名單欄位代稱（選填）</label><input type="text" id="field-fact-key" placeholder="survey.company_size"><label class="inline-check"><input type="checkbox" id="field-required"> 必填</label><label class="inline-check"><input type="checkbox" id="field-public"> 可顯示在公開統計</label></div>
         </div>
         <button class="btn" id="field-add">新增欄位到目前草稿</button>
+        <div class="row">
+          <div><label for="email-vote-field">信中一鍵題（此版本）</label>
+            <select id="email-vote-field" disabled><option value="">（未設定）</option></select>
+            <p class="hint">選單只列出此版本的單選（select）欄位；新建草稿版本一律從「未設定」開始，不會沿用舊版本的設定。</p></div>
+        </div>
         <div class="msg" id="schema-msg"></div>
       </details>
+    </div>
+    <div class="card">
+      <div class="section-head">
+        <div><h2 style="margin:0">信中投票</h2><p class="hint" style="margin:4px 0 0">依表單信中一鍵題統計具名／匿名票數，並依電子報活動拆解投票→完填轉換率。</p></div>
+      </div>
+      <p class="hint" id="vote-summary">尚未載入。</p>
+      <div class="chart" id="vote-options-chart"></div>
+      <div class="table-wrap" style="margin-top:14px">
+        <table id="vote-campaign-table"><thead><tr><th>活動</th><th>投票數</th><th>完整填答數</th><th>轉換率</th></tr></thead><tbody></tbody></table>
+      </div>
     </div>
     <div class="kpis">
       <div class="kpi"><div class="kpi-label">總回應數</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-note">資料庫全部紀錄</div></div>
@@ -206,6 +222,9 @@
         <!-- 插入「工商提案」分頁已核准的提案版位（呼叫後端建立 DRAFT 版位並取回可貼上的 snippet）；
              刻意不加 format-btn class，避免被 applyMarkdownFormat 的 dataset 驅動邏輯誤處理。 -->
         <button type="button" class="btn ghost" id="insert-promo-btn" title="插入已核准工商提案的版位片段">插入工商提案</button>
+        <!-- 插入「已發布且已設信中一鍵題」的問卷投票標記（獨立一行的 HTML 註解，由 SurveyBlockRenderer
+             展開成投票卡）；同工商按鈕，刻意不加 format-btn class 避免被 dataset 驅動邏輯誤處理。 -->
+        <button type="button" class="btn ghost" id="insert-survey-btn" title="插入可嵌入的問卷一鍵投票標記">插入問卷</button>
       </div>
       <textarea id="markdown" placeholder="# 標題&#10;&#10;支援 **粗體**、清單、[連結](https://...)"></textarea>
       <details class="media-panel" id="media-panel" open>
@@ -755,9 +774,11 @@
     document.querySelectorAll('.tab').forEach(tab=>tab.onclick=()=>switchView(tab.dataset.view));
     $('#lock-btn').onclick=()=>{sessionStorage.removeItem(KEY);location.reload();};
     $('#analytics-refresh').onclick=()=>loadAnalytics(true);$('#export-json').onclick=()=>downloadProtected('/api/admin/survey','survey-responses.json');$('#export-csv').onclick=()=>downloadProtected('/api/admin/survey?format=csv','survey-responses.csv');$('#export-pdf').onclick=exportPdf;
-    $('#dynamic-form').onchange=()=>{refreshDynamicVersions();loadDynamicAnalytics();};$('#dynamic-version').onchange=loadDynamicAnalytics;$('#dynamic-all-versions').onchange=loadDynamicAnalytics;['#dynamic-from','#dynamic-to','#dynamic-source'].forEach(selector=>$(selector).onchange=loadDynamicAnalytics);$('#dynamic-refresh').onclick=loadDynamicAnalytics;
+    $('#dynamic-form').onchange=()=>{refreshDynamicVersions();loadDynamicAnalytics();};$('#dynamic-version').onchange=loadDynamicAnalytics;$('#dynamic-all-versions').onchange=loadDynamicAnalytics;['#dynamic-from','#dynamic-to','#dynamic-source','#dynamic-campaign'].forEach(selector=>$(selector).onchange=loadDynamicAnalytics);$('#dynamic-refresh').onclick=loadDynamicAnalytics;
     $('#dynamic-json').onclick=()=>downloadDynamic('json');$('#dynamic-csv').onclick=()=>downloadDynamic('csv');$('#dynamic-pdf').onclick=exportDynamicPdf;
+    $('#form-create-btn').onclick=createForm;
     $('#form-create-version').onclick=createFormVersion;$('#form-publish-version').onclick=publishFormVersion;$('#field-add').onclick=addFormField;
+    $('#email-vote-field').onchange=updateEmailVoteField;
     ['#raw-search','#raw-source','#raw-role','#raw-budget','#raw-subscription','#raw-sort'].forEach(selector=>$(selector).addEventListener(selector==='#raw-search'?'input':'change',renderRawTable));
     $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=()=>{doCount();doQuota();};$('#role').onchange=doCount;$('#interest').onchange=doCount;['#campaign-source','#campaign-consent','#campaign-vip','#campaign-segment'].forEach(selector=>$(selector).onchange=doCount);$('#campaign-segment-save').onclick=saveCampaignSegment;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#publish-btn').onclick=doPublish;$('#hist-btn').onclick=doHistory;
     document.querySelectorAll('.format-btn').forEach(button=>button.onclick=()=>applyMarkdownFormat(button));
@@ -785,6 +806,7 @@
     $('#promo-status-filter').onchange=loadPromoProposals;
     $('#promo-refresh').onclick=()=>{loadPromoProposals();loadPromoStats();};
     $('#insert-promo-btn').onclick=insertPromo;
+    $('#insert-survey-btn').onclick=insertSurvey;
     ['#reader-source','#reader-consent','#reader-account','#reader-vip','#reader-size',
       '#reader-delivery-campaign','#reader-delivery-status','#reader-delivery-from','#reader-delivery-to','#reader-delivery-min','#reader-delivery-never',
       '#reader-unlock-campaign','#reader-unlock-tag','#reader-unlock-from','#reader-unlock-to','#reader-unlock-min','#reader-unlock-never'
@@ -831,6 +853,20 @@
     buildRawHeader();loadFormDefinitions();loadCampaignSegments();doQuota();doCount();doHistory();doInviteOverview();switchView('analytics');
   }
 
+  /** 建立全新問卷（v1 草稿空殼）；formKey 格式不符後端回 400、重複回 409，訊息直接顯示原因。 */
+  async function createForm(){
+    const formKey=prompt('輸入新問卷的 formKey（3–50 字，僅小寫字母、數字與 -）：');
+    if(!formKey)return;
+    const title=prompt('輸入問卷標題：','');
+    if(title==null)return;
+    try{
+      const created=await api('/api/admin/forms',{method:'POST',body:JSON.stringify({formKey,title})});
+      await loadFormDefinitions();$('#dynamic-form').value=created.key;refreshDynamicVersions(created.version);
+      $('#dynamic-version').value=String(created.version);await loadDynamicAnalytics();
+      showMsg('schema-msg',`已建立問卷「${created.title}」（${created.key} v${created.version}）。`,true);
+    }catch(error){if(error.message!=='401')showMsg('schema-msg','建立問卷失敗：'+error.message,false);}
+  }
+
   /** 載入表單版本清單，讓 Admin 不再被固定問卷欄位綁死。 */
   async function loadFormDefinitions(){
     try{
@@ -847,7 +883,7 @@
     }catch(error){if(error.message!=='401')$('#dynamic-summary').textContent='表單清單載入失敗：'+error.message;}
   }
 
-  /** 依目前表單重建版本選單，標示草稿、發布與封存狀態。 */
+  /** 依目前表單重建版本選單，標示草稿、發布與封存狀態；同步重建信中一鍵題下拉。 */
   function refreshDynamicVersions(preferredVersion){
     const key=$('#dynamic-form').value,select=$('#dynamic-version'),current=preferredVersion??Number(select.value);
     select.replaceChildren();
@@ -855,12 +891,47 @@
       select.add(new Option(`v${item.version} · ${item.status}`,String(item.version)));
     });
     if([...select.options].some(option=>Number(option.value)===Number(current)))select.value=String(current);
+    refreshEmailVoteField();
   }
 
-  /** 讀取 schema 驅動統計並產生不限欄位數量的圖表。 */
+  /**
+   * 依目前表單/版本重建「信中一鍵題」下拉：選項為該版本單選（select）欄位＋「（未設定）」，
+   * 值一律反映後端目前設定（不在前端猜測）——新建草稿版本後端不會沿用舊版本的
+   * email_vote_field_key，因此重建後看到的一定是「（未設定）」，UI 不可自行假設繼承。
+   */
+  function refreshEmailVoteField(){
+    const key=$('#dynamic-form').value,version=Number($('#dynamic-version').value);
+    const current=formDefinitions.find(item=>item.key===key&&item.version===version);
+    const select=$('#email-vote-field');
+    select.replaceChildren(new Option('（未設定）',''));
+    (current?.fields||[]).filter(field=>field.type==='select').forEach(field=>{
+      select.add(new Option(field.label,field.key));
+    });
+    select.value=current?.emailVoteFieldKey||'';
+    select.disabled=!current;
+  }
+
+  /** 呼叫後端設定或清除目前版本的信中一鍵題；失敗時還原下拉為後端目前狀態，避免停在半套值。 */
+  async function updateEmailVoteField(){
+    const key=$('#dynamic-form').value,version=Number($('#dynamic-version').value);
+    const select=$('#email-vote-field'),fieldKey=select.value||null;
+    const label=select.selectedOptions[0]?.textContent||'';
+    try{
+      await api(`/api/admin/forms/${encodeURIComponent(key)}/versions/${version}/email-vote-field`,
+        {method:'PUT',body:JSON.stringify({fieldKey})});
+      await loadFormDefinitions();refreshDynamicVersions(version);$('#dynamic-version').value=String(version);
+      showMsg('schema-msg',fieldKey?`已設定信中一鍵題為「${label}」。`:'已清除信中一鍵題設定。',true);
+    }catch(error){
+      if(error.message!=='401')showMsg('schema-msg','設定信中一鍵題失敗：'+error.message,false);
+      refreshEmailVoteField();
+    }
+  }
+
+  /** 讀取 schema 驅動統計並產生不限欄位數量的圖表；同時刷新信中投票卡（只依 formKey，與版本／篩選無關）。 */
   async function loadDynamicAnalytics(){
     const key=$('#dynamic-form').value,version=$('#dynamic-version').value;
     if(!key||!version)return;
+    loadVoteStats();
     const query=dynamicQuery();
     try{
       dynamicAnalytics=await api(`/api/admin/analytics/forms/${encodeURIComponent(key)}?${query}`);
@@ -892,13 +963,59 @@
     downloadProtected(`/api/admin/analytics/forms/${encodeURIComponent(key)}/records?${query}`,`${key}-v${version}.${format==='csv'?'csv':'json'}`);
   }
 
-  /** 動態分析與匯出共用日期、來源與版本 query，避免畫面和下載資料範圍不同。 */
+  /** 動態分析與匯出共用日期、來源、版本與期別（campaignId）query，避免畫面和下載資料範圍不同。 */
   function dynamicQuery(){
     const query=new URLSearchParams({version:$('#dynamic-version').value,allVersions:String($('#dynamic-all-versions').checked)});
     if($('#dynamic-from').value)query.set('from',new Date($('#dynamic-from').value+'T00:00:00Z').toISOString());
     if($('#dynamic-to').value){const exclusiveTo=new Date($('#dynamic-to').value+'T00:00:00Z');exclusiveTo.setUTCDate(exclusiveTo.getUTCDate()+1);query.set('to',exclusiveTo.toISOString());}
     if($('#dynamic-source').value)query.set('source',$('#dynamic-source').value);
+    if($('#dynamic-campaign').value)query.set('campaignId',$('#dynamic-campaign').value);
     return query;
+  }
+
+  /** 讀取信中一鍵題投票統計：選項具名／匿名分層，以及各電子報活動的投票→完填轉換率。 */
+  async function loadVoteStats(){
+    const key=$('#dynamic-form').value;
+    if(!key){$('#vote-summary').textContent='請先選擇表單。';return;}
+    try{
+      const stats=await api(`/api/admin/analytics/forms/${encodeURIComponent(key)}/votes`);
+      $('#vote-summary').textContent=`累計 ${stats.totalVotes||0} 票 · 具名 ${stats.totalNamed||0} 票 · 匿名 ${(stats.totalVotes||0)-(stats.totalNamed||0)} 票`;
+      renderVoteOptions(stats.options||[]);
+      renderVoteCampaignTable(stats.byCampaign||[]);
+    }catch(error){if(error.message!=='401')$('#vote-summary').textContent='投票統計載入失敗：'+error.message;}
+  }
+
+  /** 以水平長條呈現各選項總票數，並在數值處附上具名／匿名分層明細。 */
+  function renderVoteOptions(options){
+    const root=$('#vote-options-chart');root.replaceChildren();
+    if(!options.length){root.append(emptyNode('尚無投票資料'));return;}
+    const max=Math.max(...options.map(option=>Number(option.named||0)+Number(option.anon||0)),1);
+    options.forEach(option=>{
+      const named=Number(option.named||0),anon=Number(option.anon||0),total=named+anon;
+      const row=document.createElement('div');row.className='bar-row';
+      const name=document.createElement('span');name.className='bar-label';name.textContent=option.value;name.title=option.value;
+      const track=document.createElement('div');track.className='bar-track';
+      const fill=document.createElement('div');fill.className='bar-fill';fill.style.width=(total/max*100)+'%';
+      track.append(fill);
+      const value=document.createElement('span');value.className='bar-value';
+      value.textContent=`${total}（具名 ${named}・匿名 ${anon}）`;
+      row.append(name,track,value);root.append(row);
+    });
+  }
+
+  /** 依電子報活動列出投票數、完整填答數與轉換率百分比。 */
+  function renderVoteCampaignTable(rows){
+    const body=$('#vote-campaign-table tbody');body.replaceChildren();
+    if(!rows.length){
+      const tr=document.createElement('tr'),td=document.createElement('td');
+      td.colSpan=4;td.className='hint';td.textContent='尚無電子報活動投票資料';tr.append(td);body.append(tr);return;
+    }
+    rows.forEach(row=>{
+      const tr=document.createElement('tr');
+      tr.append(cell('#'+row.campaignId),cell(String(row.votes)),cell(String(row.submissions)),
+        cell(Math.round(Number(row.conversionRate||0)*100)+'%'));
+      body.append(tr);
+    });
   }
 
   /** 用動態 dimension 產生列印報表，不再硬編碼身分、預算等舊題目。 */
@@ -1898,11 +2015,11 @@
     return Number.isNaN(date.getTime())?null:date.toISOString();
   }
 
-  /** 載入收信文章、解鎖文章與 hashtag 篩選選項。 */
+  /** 載入收信文章、解鎖文章、hashtag 與彈性表單分析「期別」篩選選項；共用同一份活動清單。 */
   async function loadAudienceInsightOptions(){
     try{
       const options=await api('/api/admin/audience/insights/options');
-      ['#reader-delivery-campaign','#reader-unlock-campaign'].forEach(selector=>{
+      ['#reader-delivery-campaign','#reader-unlock-campaign','#dynamic-campaign'].forEach(selector=>{
         const select=$(selector),first=select.options[0];select.textContent='';select.append(first);
         (options.campaigns||[]).forEach(campaign=>{
           const option=document.createElement('option');option.value=campaign.id;
@@ -2473,6 +2590,32 @@
       const ta=$('#markdown'),pos=ta.selectionStart;
       ta.value=ta.value.slice(0,pos)+'\n'+r.markdown+'\n'+ta.value.slice(ta.selectionEnd);
       ta.focus();
+      composeChanged();
+    }catch(e){if(e.message!=='401')alert('插入失敗：'+e.message);}
+  }
+
+  /**
+   * 編輯器插入：取可嵌入問卷清單 → 選定後在游標處插入獨立一行的問卷標記。
+   *
+   * 插入邏輯改用 markdownBlock（同「分隔線」等 data-block 按鈕），確保標記前後
+   * 補足空行成獨立一段，而不是像 insertPromo 直接夾在游標兩側——因為這裡插入的
+   * 是必須整行單獨、由 SurveyBlockRenderer 以行級比對展開的 HTML 註解標記。
+   */
+  async function insertSurvey(){
+    try{
+      const list=await api('/api/admin/forms/embeddable');
+      if(!list.length){alert('目前沒有已發布且已設信中一鍵題的問卷可插入');return;}
+      const pick=prompt('輸入要插入的問卷編號：\n'
+        +list.map((f,i)=>(i+1)+'：'+f.title+'（'+f.formKey+'）').join('\n'));
+      if(!pick)return;
+      const index=parseInt(pick,10)-1;
+      if(!(index>=0&&index<list.length)){alert('輸入的編號不存在');return;}
+      const marker='<!--survey:'+list[index].formKey+'-->';
+      const editor=$('#markdown'),start=editor.selectionStart,end=editor.selectionEnd;
+      const block=markdownBlock(editor.value,start,end,marker);
+      editor.setRangeText(block.text,start,end,'end');editor.focus();
+      const cursor=start+block.text.length;
+      editor.setSelectionRange(cursor,cursor);
       composeChanged();
     }catch(e){if(e.message!=='401')alert('插入失敗：'+e.message);}
   }
