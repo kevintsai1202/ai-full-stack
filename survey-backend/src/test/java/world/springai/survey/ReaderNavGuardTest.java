@@ -71,9 +71,12 @@ class ReaderNavGuardTest {
      * 最小的靜態導覽，不呼叫 {@code ReaderNav}——見 {@code ReaderNav} 類 javadoc
      * 的說明，這是範圍決定而非漏改。{@code promo-contact.html} 是工商 mailto 目的地的
      * 聯絡中介頁：多由信件點擊進入、常為未登入狀態，渲染端點也不在 reader 套件內。
+     * {@code survey.html}（接續填答頁）同理：常由電子報信件的一鍵題轉址或轉寄連結
+     * 進入，多為未登入的匿名訪客，渲染端點在 {@code world.springai.survey.form}
+     * 套件而非 reader 套件，維持與 promo-contact.html 一致的最小靜態導覽。
      */
     private static final Set<String> STATIC_NAV_TEMPLATES =
-        Set.of("login.html", "not-found.html", "promo-contact.html");
+        Set.of("login.html", "not-found.html", "promo-contact.html", "survey.html");
 
     /** 抓出 {@code <nav>...</nav>} 區塊本體（DOTALL 讓 {@code .} 跨行比對） */
     private static final Pattern NAV_BLOCK = Pattern.compile("<nav>(.*?)</nav>", Pattern.DOTALL);

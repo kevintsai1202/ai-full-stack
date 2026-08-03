@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><!--FORM_TITLE-->｜凱文大叔的電子報</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/r/reader.css">
+<script src="/tracking.js" defer></script>
+<script src="/r/reader-nav.js" defer></script>
+</head>
+<body>
+<header class="site-head">
+  <div class="site-head-inner">
+    <a class="brand" href="/r/">凱文大叔的電子報</a>
+    <!-- 接續填答頁採最小靜態導覽（同 promo-contact.html）：常由信件的一鍵題轉址或
+         轉寄連結進入，多為未登入狀態，已列入 ReaderNavGuardTest 的 STATIC_NAV_TEMPLATES -->
+    <nav><a href="/r/">首頁</a><a href="/r/archive">歷史內容</a><a href="/r/rules">遊戲規則</a></nav>
+  </div>
+</header>
+
+<div class="wrap auth-shell">
+  <p class="page-kicker">Survey</p>
+  <div class="card feature-card">
+    <h1 class="page-title compact"><!--FORM_TITLE--></h1>
+    <!--VOTED_BANNER-->
+    <!--IDENTITY_BLOCK-->
+    <form id="survey-form" class="promo-form" autocomplete="off">
+      <div id="fields-container" class="field full"></div>
+      <button class="btn promo-submit" type="submit">送出答案</button>
+    </form>
+    <div class="msg" id="msg" role="status" aria-live="polite"></div>
+  </div>
+
+  <p class="fine-print">
+    這份問卷由「凱文大叔的電子報」寄出；填答內容僅用於了解讀者需求，不會公開你的個人資料。
+  </p>
+</div>
+
+<script type="application/json" id="survey-fields-data"><!--FIELDS_JSON--></script>
+<script>
+// 讀取頁面注入資料，依 schema 動態產生表單元件；voted 命中信中一鍵題時預選對應選項
+(function () {
+  var FIELDS = JSON.parse(document.getElementById('survey-fields-data').textContent || '[]');
+  var FORM_KEY = <!--FORM_KEY-->;
+  var REWARD_CREDITS = <!--REWARD_CREDITS-->;
+  var CAMPAIGN_ID = <!--CAMPAIGN_ID-->;
+  var RT = <!--RT-->;
+  var VOTED_INDEX = <!--VOTED_INDEX-->;
+  var VOTE_FIELD_KEY = <!--VOTE_FIELD_KEY-->;
+
+  var form = document.getElementById('survey-form');
+  var container = document.getElementById('fields-container');
+  var msg = document.getElementById('msg');
+  var identityBlock = document.querySelector('.identity-block');
+  var identified = !!identityBlock && identityBlock.getAttribute('data-identified') === 'true';
+
+  /** 顯示提示訊息 */
+  function showMsg(text, ok) {
+    msg.textContent = text;
+    msg.className = 'msg show ' + (ok ? 'ok' : 'err');
+  }
+
+  /** 建立欄位標籤；required 時加上視覺星號提示 */
+  function buildLabel(text, required, forId) {
+    var label = document.createElement('label');
+    if (forId) { label.setAttribute('for', forId); }
+    label.textContent = text + (required ? ' ＊' : '');
+    return label;
+  }
+
+  // 依欄位類型動態產生輸入元件：
+  // select→單選群、multi_select→複選群、long_text→多行文字、
+  // short_text/email→單行輸入、rating/number→數字、boolean→單一勾選、date→日期
+  FIELDS.forEach(function (field) {
+    var wrapper = document.createElement('div');
+    wrapper.className = 'field full';
+    var options = field.options || [];
+
+    if (field.type === 'select' || field.type === 'multi_select') {
+      wrapper.appendChild(buildLabel(field.label, field.required));
+      var group = document.createElement('div');
+      var inputType = field.type === 'select' ? 'radio' : 'checkbox';
+      options.forEach(function (opt, idx) {
+        var id = field.key + '_' + idx;
+        var input = document.createElement('input');
+        input.type = inputType;
+        input.name = field.key;
+        input.id = id;
+        input.value = opt;
+        if (field.required && inputType === 'radio') { input.required = true; }
+        // voted 命中信中一鍵題所綁定的欄位與選項索引時，前端預選同一個選項
+        if (inputType === 'radio' && field.key === VOTE_FIELD_KEY && VOTED_INDEX === idx) {
+          input.checked = true;
+        }
+        group.appendChild(input);
+        group.appendChild(buildLabel(String(opt), false, id));
+      });
+      wrapper.appendChild(group);
+    } else if (field.type === 'long_text') {
+      wrapper.appendChild(buildLabel(field.label, field.required, field.key));
+      var textarea = document.createElement('textarea');
+      textarea.name = field.key;
+      textarea.id = field.key;
+      if (field.required) { textarea.required = true; }
+      wrapper.appendChild(textarea);
+    } else if (field.type === 'boolean') {
+      var boolInput = document.createElement('input');
+      boolInput.type = 'checkbox';
+      boolInput.name = field.key;
+      boolInput.id = field.key;
+      wrapper.appendChild(boolInput);
+      wrapper.appendChild(buildLabel(field.label, field.required, field.key));
+    } else {
+      wrapper.appendChild(buildLabel(field.label, field.required, field.key));
+      var input2 = document.createElement('input');
+      input2.name = field.key;
+      input2.id = field.key;
+      if (field.type === 'rating' || field.type === 'number') {
+        input2.type = 'number';
+      } else if (field.type === 'date') {
+        input2.type = 'date';
+      } else if (field.type === 'email') {
+        input2.type = 'email';
+      } else {
+        input2.type = 'text';
+      }
+      if (field.required) { input2.required = true; }
+      wrapper.appendChild(input2);
+    }
+    container.appendChild(wrapper);
+  });
+
+  // 未歸戶：整份表單唯讀，不可送出，只能先按身分區塊的連結登入 / 訂閱
+  if (!identified) {
+    Array.prototype.forEach.call(form.elements, function (el) { el.disabled = true; });
+  }
+
+  form.addEventListener('submit', function (evt) {
+    evt.preventDefault();
+    if (!identified) { return; }
+    var answers = {};
+    FIELDS.forEach(function (field) {
+      if (field.type === 'multi_select') {
+        answers[field.key] = Array.prototype.map.call(
+          form.querySelectorAll('input[name="' + field.key + '"]:checked'),
+          function (el) { return el.value; });
+      } else if (field.type === 'select') {
+        var checked = form.querySelector('input[name="' + field.key + '"]:checked');
+        answers[field.key] = checked ? checked.value : null;
+      } else if (field.type === 'boolean') {
+        var box = form.querySelector('[name="' + field.key + '"]');
+        answers[field.key] = !!(box && box.checked);
+      } else {
+        var input = form.querySelector('[name="' + field.key + '"]');
+        answers[field.key] = input ? input.value : null;
+      }
+    });
+
+    var submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    fetch('/api/forms/' + encodeURIComponent(FORM_KEY) + '/newsletter-submissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answers: answers, campaignId: CAMPAIGN_ID, rt: RT })
+    }).then(function (res) {
+      if (!res.ok) { throw new Error('提交失敗'); }
+      return res.json();
+    }).then(function (result) {
+      if (result.rewarded) {
+        showMsg('已收到！獲得 ' + result.rewardCredits + ' 點', true);
+      } else {
+        showMsg('已收到！' + (result.rewardHint || ''), true);
+      }
+      Array.prototype.forEach.call(form.elements, function (el) { el.disabled = true; });
+    }).catch(function () {
+      showMsg('送出失敗，請稍後再試一次。', false);
+      submitButton.disabled = false;
+    });
+  });
+})();
+</script>
+<footer class="site-foot">
+  <p>合作與聯絡：<a href="mailto:contact@springai.world">contact@springai.world</a></p>
+</footer>
+</body>
+</html>
