@@ -6,6 +6,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -206,5 +208,58 @@ class CampaignSurveyWiringTest {
         assertTrue(html.contains("c=9"), "讀者頁通道應帶入真正的 campaignId：" + html);
         assertFalse(html.contains(SurveyBlockRenderer.CID_PLACEHOLDER), html);
         assertFalse(html.contains("rt="), "讀者頁通道不應帶 rt（改由 session 歸戶）：" + html);
+    }
+
+    /**
+     * 情境 6（reschedule 路徑的 CID 替換，Task 9 report 中主動延伸、先前唯一沒有
+     * 測試保護的接線點）：重排一則含問卷標記的既有 campaign 後，最終寫回
+     * campaign 的 bodyHtml 不得殘留 {@code __SURVEY_CID__}，而是被
+     * <b>重排目標本身既有的 campaignId</b>（不是新建 id）取代。
+     *
+     * <p>組裝方式照抄既有的 {@code rescheduleWithPaywallSchedulesOnlyFreeSection}
+     * （同檔案）：{@code campaignRepository.save} 回傳同一物件，因此重排結束後
+     * 直接讀 {@code existing.getBodyHtml()} 即為最終寫入值，不需要額外 captor。</p>
+     */
+    @Test
+    void reschedule流程後bodyHtml以既有campaignId取代CID佔位符() {
+        givenEmbeddable();
+        Instant newAt = Instant.parse("2030-06-01T10:00:00Z");
+        Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
+            OffsetDateTime.parse("2030-05-01T10:00:00Z"), 1, "scheduled");
+        ReflectionTestUtils.setField(existing, "id", 66L);
+        existing.setTier(Campaign.TIER_BASIC);
+        when(campaignRepository.findById(66L)).thenReturn(Optional.of(existing));
+        when(campaignRepository.save(any(Campaign.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(emailLogRepository.findByCampaignIdAndStatus(66L, "scheduled")).thenReturn(List.of());
+        when(recipientService.recipients(null, null)).thenReturn(List.of("a@x.com"));
+        when(mailSender.schedule(any(), eq(newAt))).thenReturn("sched-1");
+
+        svc.reschedule(66L, "新主旨", markdownWithSurvey(), null, null, newAt);
+
+        assertFalse(existing.getBodyHtml().contains(SurveyBlockRenderer.CID_PLACEHOLDER),
+            "重排後存檔的 bodyHtml 不得殘留 CID 佔位符：" + existing.getBodyHtml());
+        assertTrue(existing.getBodyHtml().contains("c=66"),
+            "重排後應以既有 campaignId（不是新建 id）取代 CID 佔位符：" + existing.getBodyHtml());
+    }
+
+    /**
+     * 情境 7（Admin 預覽通道 {@code expandForPreview} 接線，先前無測試保護）：
+     * 後台預覽輸出含投票卡與「預覽不計票」標示，連結一律 {@code href="#"}、
+     * 不含任何 {@code /s/v/} 真連結——展開本身的 HTML 細節已由
+     * {@code SurveyBlockRendererTest} 覆蓋，這裡只驗證 {@code CampaignService.preview}
+     * 真的接上它。測 2-arg overload（{@code preview(subject, markdown)}）：它內部
+     * 直接委派同一份 5-arg 實作（{@code coverEmoji}/{@code tags}/{@code coverUrl}
+     * 皆傳 null），因此同時涵蓋兩個 overload 共用的展開邏輯。
+     */
+    @Test
+    void adminPreview含投票卡不計票標示且無真連結() {
+        givenEmbeddable();
+        when(linkBuilder.previewUnsubscribeLink()).thenReturn("https://example.com/unsubscribe");
+
+        String html = svc.preview("主旨", markdownWithSurvey());
+
+        assertTrue(html.contains("預覽不計票"), html);
+        assertFalse(html.contains("/s/v/"), "預覽通道連結一律 href=\"#\"，不得含真連結：" + html);
+        assertFalse(html.contains(SurveyBlockRenderer.CID_PLACEHOLDER), html);
     }
 }
