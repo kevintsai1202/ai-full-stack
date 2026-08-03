@@ -49,6 +49,17 @@
 - `fullstack-course-interest` 問卷未設信中題，不會出現在「插入問卷」選單。
 - 新路由 `/s/v/`、`/r/survey/` 無碰撞，但須加入 `ReaderEntryHostFilter` 放行清單（`/promo/c/` 有前例）。
 
+### 3.4 既有問卷的定位：照常運作，且可選擇性升級
+
+本設計是**加一個通道，不是換掉舊系統**。`fullstack-course-interest` 與其既有資料：
+
+- **訂閱首頁照常收件**：靜態表單、`POST /api/survey`、audience 合併、consent 軌跡全部不變。
+- **已收集資料與圖表不動**：「彈性表單分析」讀同一資料來源；新功能只是加 campaign 篩選與投票統計卡。
+- **同一套 schema 基礎設施**：新問卷與舊問卷都是 `form_definition`，不是兩套系統。
+- **舊問卷可選擇性嵌入電子報**：只要在 admin 為它指定一個信中題，它同樣能插入電子報——
+  屆時同一份問卷有兩個入口：訂閱首頁（訂閱漏斗語意、含 consent）與電子報
+  （讀者互動語意、跳過 consent），答案匯入同一份分析。是否啟用由站長決定，預設不啟用。
+
 ## 4. 資料模型（V21 migration）
 
 ```sql
