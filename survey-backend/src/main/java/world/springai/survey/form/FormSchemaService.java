@@ -21,6 +21,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -62,7 +63,7 @@ public class FormSchemaService {
             int displayOrder,
             String factKey) {}
 
-    /** 表單版本 schema。 */
+    /** 表單版本 schema。emailVoteFieldKey 為此版本信中一鍵題所綁定的欄位 key，未設為 null。 */
     public record FormDefinition(
             long id,
             String key,
@@ -70,7 +71,12 @@ public class FormSchemaService {
             String title,
             String status,
             boolean publicAnalyticsEnabled,
+            String emailVoteFieldKey,
             List<FieldDefinition> fields) {}
+
+    /** 信中一鍵題完整描述；options 為選項文字（依序，optionIndex 對映） */
+    public record EmailVoteQuestion(String formKey, String title, String fieldKey,
+                                    String label, List<String> options) {}
 
     /** 動態表單提交要求；Email 與姓名維持人物主檔，不混入一般答案。 */
     public record SubmissionRequest(
@@ -104,7 +110,8 @@ public class FormSchemaService {
     /** 列出全部表單版本，供 Admin 下拉選單與簡易欄位設定使用。 */
     public List<FormDefinition> listDefinitions() {
         return jdbc.query("""
-            SELECT id, form_key, version, title, status, public_analytics_enabled
+            SELECT id, form_key, version, title, status, public_analytics_enabled,
+                   email_vote_field_key
               FROM form_definition
              ORDER BY form_key, version DESC
             """, (rs, rowNum) -> definition(
@@ -113,21 +120,24 @@ public class FormSchemaService {
                 rs.getInt("version"),
                 rs.getString("title"),
                 rs.getString("status"),
-                rs.getBoolean("public_analytics_enabled")));
+                rs.getBoolean("public_analytics_enabled"),
+                rs.getString("email_vote_field_key")));
     }
 
     /** 取得指定版本；version 為 null 時取最新發布版本。 */
     public FormDefinition getDefinition(String formKey, Integer version) {
         List<Map<String, Object>> rows = version == null
             ? jdbc.queryForList("""
-                SELECT id, form_key, version, title, status, public_analytics_enabled
+                SELECT id, form_key, version, title, status, public_analytics_enabled,
+                       email_vote_field_key
                   FROM form_definition
                  WHERE form_key = ? AND status = 'PUBLISHED'
                  ORDER BY version DESC
                  LIMIT 1
                 """, formKey)
             : jdbc.queryForList("""
-                SELECT id, form_key, version, title, status, public_analytics_enabled
+                SELECT id, form_key, version, title, status, public_analytics_enabled,
+                       email_vote_field_key
                   FROM form_definition
                  WHERE form_key = ? AND version = ?
                 """, formKey, version);
@@ -141,7 +151,8 @@ public class FormSchemaService {
             ((Number) row.get("version")).intValue(),
             String.valueOf(row.get("title")),
             String.valueOf(row.get("status")),
-            Boolean.TRUE.equals(row.get("public_analytics_enabled")));
+            Boolean.TRUE.equals(row.get("public_analytics_enabled")),
+            (String) row.get("email_vote_field_key"));
     }
 
     /** 建立全新問卷：v1 DRAFT 空殼；formKey 限 [a-z0-9-]{3,50} 且不可重複。 */
@@ -262,6 +273,64 @@ public class FormSchemaService {
              WHERE id = ?
             """, form.id());
         return getDefinition(formKey, version);
+    }
+
+    /** 取得指定問卷最新已發布版本所綁定的信中一鍵題；未設定、欄位已不是單選或找不到已發布版本都回 empty。 */
+    public Optional<EmailVoteQuestion> emailVoteQuestion(String formKey) {
+        FormDefinition form;
+        try {
+            form = getDefinition(formKey, null);
+        } catch (ResponseStatusException notFound) {
+            return Optional.empty();
+        }
+        return toEmailVoteQuestion(form);
+    }
+
+    /**
+     * 指定或清除某版本的信中一鍵題欄位；fieldKey 為 null 表示清除。
+     * 指定的欄位必須存在於該版本且型別為 select，否則以 400 拒絕。
+     */
+    @Transactional
+    public void updateEmailVoteField(String formKey, int version, String fieldKey) {
+        FormDefinition form = getDefinition(formKey, version);
+        if (fieldKey != null) {
+            boolean validSelectField = form.fields().stream()
+                .anyMatch(field -> field.key().equals(fieldKey) && "select".equals(field.type()));
+            if (!validSelectField) {
+                throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "指定欄位不存在或非單選（select）欄位");
+            }
+        }
+        jdbc.update("""
+            UPDATE form_definition
+               SET email_vote_field_key = ?, updated_at = now()
+             WHERE id = ?
+            """, fieldKey, form.id());
+    }
+
+    /** 列出全部已發布且已設定信中一鍵題的問卷，供電子報編輯器插入選單使用。 */
+    public List<EmailVoteQuestion> listEmbeddable() {
+        return listDefinitions().stream()
+            .filter(form -> "PUBLISHED".equals(form.status()))
+            .flatMap(form -> toEmailVoteQuestion(form).stream())
+            .toList();
+    }
+
+    /** 依表單版本與其 emailVoteFieldKey 組出信中一鍵題描述；條件不符回 empty。 */
+    private Optional<EmailVoteQuestion> toEmailVoteQuestion(FormDefinition form) {
+        if (!StringUtils.hasText(form.emailVoteFieldKey())) {
+            return Optional.empty();
+        }
+        return form.fields().stream()
+            .filter(field -> field.key().equals(form.emailVoteFieldKey())
+                && "select".equals(field.type()))
+            .findFirst()
+            .map(field -> new EmailVoteQuestion(
+                form.key(),
+                form.title(),
+                field.key(),
+                field.label(),
+                field.options().stream().map(String::valueOf).toList()));
     }
 
     /**
@@ -422,9 +491,10 @@ public class FormSchemaService {
             int version,
             String title,
             String status,
-            boolean publicAnalyticsEnabled) {
+            boolean publicAnalyticsEnabled,
+            String emailVoteFieldKey) {
         return new FormDefinition(
-            id, key, version, title, status, publicAnalyticsEnabled, fields(id));
+            id, key, version, title, status, publicAnalyticsEnabled, emailVoteFieldKey, fields(id));
     }
 
     /** 依顯示順序讀取欄位定義。 */

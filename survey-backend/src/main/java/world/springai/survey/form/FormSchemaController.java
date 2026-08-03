@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -132,6 +133,29 @@ public class FormSchemaController {
             @PathVariable int version) {
         guard.verify(key);
         return service.publish(formKey, version);
+    }
+
+    /** Admin 指定或清除信中一鍵題所綁定的欄位；fieldKey 為 null 表示清除。 */
+    public record EmailVoteFieldRequest(String fieldKey) {}
+
+    /** Admin 指定信中一鍵題欄位；欄位不存在或非單選（select）題以 400 拒絕。 */
+    @PutMapping("/api/admin/forms/{formKey}/versions/{version}/email-vote-field")
+    public ResponseEntity<Void> updateEmailVoteField(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key,
+            @PathVariable String formKey,
+            @PathVariable int version,
+            @RequestBody(required = false) EmailVoteFieldRequest request) {
+        guard.verify(key);
+        service.updateEmailVoteField(formKey, version, request == null ? null : request.fieldKey());
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Admin 列出全部已發布且已設信中一鍵題的問卷，供電子報編輯器插入選單。 */
+    @GetMapping("/api/admin/forms/embeddable")
+    public List<FormSchemaService.EmailVoteQuestion> listEmbeddable(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key) {
+        guard.verify(key);
+        return service.listEmbeddable();
     }
 
     /** Admin 動態分析；可選單一版本或合併相同 fieldKey 的全部版本。 */
