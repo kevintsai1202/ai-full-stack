@@ -30,4 +30,7 @@ public interface CreditTxnRepository extends JpaRepository<CreditTxn, Long> {
 
     /** 該提案是否已有指定原因的交易——退點冪等防線（REJECTED→ARCHIVED 不重複退） */
     boolean existsByPromoProposalIdAndReason(Long promoProposalId, String reason);
+
+    /** 該讀者是否已有指定問卷、指定原因的交易——填答發點冪等防線（防重複領取） */
+    boolean existsByReaderIdAndSurveyFormKeyAndReason(Long readerId, String surveyFormKey, String reason);
 }
