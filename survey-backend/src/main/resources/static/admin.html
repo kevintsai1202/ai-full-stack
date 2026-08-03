@@ -57,7 +57,8 @@
   table{width:100%;border-collapse:separate;border-spacing:0;font-size:.84rem}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;min-width:110px;max-width:300px;overflow-wrap:anywhere}
   th{position:sticky;top:0;background:#edf5f4;z-index:2;white-space:nowrap}tbody tr:hover{background:#f4fbfa}.empty{color:var(--muted);padding:20px;text-align:center}
   .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.76rem;font-weight:700}.pill.scheduled{background:var(--accent-soft);color:var(--accent-deep)}.pill.sent{background:#dcfce7;color:#166534}.pill.sending{background:#fff2cc;color:#92580a}.pill.failed{background:#fde8e8;color:var(--danger)}.pill.cancelled{background:var(--surface-2);color:var(--muted)}.pill.published{background:#e0e7ff;color:#3730a3}.pill.unpublished{background:var(--surface-2);color:var(--muted)}.pill.draft{background:var(--surface-2);color:var(--muted)}
-  /* 優惠券名單：已寄送過的收件人列灰顯，與可勾選的列拉出視覺區隔（不加 disabled，仍允許管理者手動勾選以強制補寄）。 */
+  /* 優惠券名單：已寄送過的收件人列灰顯，與可勾選的列拉出視覺區隔（不加 disabled，仍允許管理者手動勾選送出；
+     後端 CouponSendService 對已寄過者一律冪等略過，勾了也只會計入 skipped，不會真的重複寄送）。 */
   #coupon-recipient-table tr.row-sent{opacity:.55;background:var(--surface-2)}
   .suggestions{display:grid;gap:10px}.suggestion{border-left:4px solid var(--accent);background:#f7fbfb;border-radius:0 8px 8px 0;padding:12px 14px}.suggestion p{margin:0;white-space:pre-wrap}.suggestion small{display:block;color:var(--muted);margin-top:5px}
   .dynamic-toolbar{display:grid;grid-template-columns:minmax(220px,2fr) minmax(110px,1fr) repeat(2,minmax(150px,1fr));gap:10px;align-items:end}
@@ -637,7 +638,7 @@
 
     <div class="card">
       <h2>③ 寄送</h2>
-      <p class="hint">只會寄給上方名單中目前勾選的收件人；已寄過本活動者仍可勾選以強制補寄。</p>
+      <p class="hint">只會寄給上方名單中目前勾選的收件人；已寄過者仍可勾選送出，後端會自動略過、不會重複寄送（防騷擾）。</p>
       <button class="btn" id="coupon-send-btn">寄送優惠券給已勾選名單</button>
       <div class="msg" id="coupon-send-msg"></div>
     </div>
@@ -2762,9 +2763,19 @@
         courseName,pitch,courseUrl,couponCode,expiresAt,formKey,answerFilter
       })});
       showMsg('coupon-create-msg',`已建立活動「${created.courseName}」（優惠碼 ${created.couponCode}）。`,true);
+      resetCouponCreateForm();
       selectCouponCampaign(created);
       await loadCouponCampaigns();
     }catch(error){if(error.message!=='401')showMsg('coupon-create-msg','建立活動失敗：'+error.message,false);}
+  }
+
+  /** 建立成功後清空建立表單的內容欄位，避免管理者誤以為欄位仍是「下一個活動」的草稿而重複送出同樣內容。 */
+  function resetCouponCreateForm(){
+    $('#coupon-course-name').value='';
+    $('#coupon-pitch').value='';
+    $('#coupon-course-url').value='';
+    $('#coupon-code').value='';
+    $('#coupon-expires-at').value='';
   }
 
   /** 將指定活動設為目前作業中活動：更新提示文字、清空舊名單並啟用查詢按鈕。 */
@@ -2788,7 +2799,8 @@
   }
 
   /**
-   * 將收件人清單畫成勾選表格：預設全勾，已寄過本活動者灰顯且預設不勾（仍可手動勾選強制補寄）；
+   * 將收件人清單畫成勾選表格：預設全勾，已寄過本活動者灰顯且預設不勾（仍可手動勾選送出，
+   * 但後端一律冪等略過已寄過者，不會真的重複寄送）；
    * email／姓名一律以 cell() 的 textContent 寫入，避免使用者可控字串被當成 HTML 解析。
    */
   function renderCouponRecipients(recipients){
