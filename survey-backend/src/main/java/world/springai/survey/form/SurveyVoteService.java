@@ -9,6 +9,8 @@ import world.springai.survey.newsletter.CampaignRepository;
 import world.springai.survey.promo.PromoRecipientTokenService;
 import world.springai.survey.reader.ReaderSessionService;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 
@@ -55,9 +57,14 @@ public class SurveyVoteService {
             || optionIndex < 0 || optionIndex >= question.get().options().size()) {
             return Optional.empty();
         }
+        // M2 修正：rt 來自外部信件連結，可能帶 CR/LF 或 &/= 等特殊字元；
+        // 未編碼會破壞查詢字串結構甚至讓病態值變成 500（HttpServletResponse
+        // 對含 CR/LF 的 Location header 會拋例外），故一律先做 URL 編碼。
         String redirect = "/r/survey/" + formKey + "?voted=" + optionIndex
             + (campaignId != null ? "&c=" + campaignId : "")
-            + (StringUtils.hasText(rt) ? "&rt=" + rt : "");
+            + (StringUtils.hasText(rt)
+                ? "&rt=" + URLEncoder.encode(rt, StandardCharsets.UTF_8)
+                : "");
         // c 參數存在但 campaign 不存在（含測試信固定帶的 c=0）→ 照常轉址、不落票
         if (campaignId != null && !campaignRepository.existsById(campaignId)) {
             return Optional.of(redirect);
@@ -110,6 +117,9 @@ public class SurveyVoteService {
             .findByFormKeyAndIdentityTypeAndIdentityKey(question.formKey(), identityType, identityKey);
         if (existing.isPresent()) {
             SurveyVote vote = existing.get();
+            // M1 修正：信中一鍵題可能被改綁到不同欄位，fieldKey 必須跟著同步更新，
+            // 否則會留下 optionValue 屬於新欄位、fieldKey 卻仍指向舊欄位的自相矛盾列。
+            vote.setFieldKey(question.fieldKey());
             vote.setOptionValue(optionValue);
             vote.setCampaignId(campaignId);
             vote.setChannel(channel);

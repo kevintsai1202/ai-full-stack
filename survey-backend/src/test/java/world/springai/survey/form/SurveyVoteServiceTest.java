@@ -126,6 +126,43 @@ class SurveyVoteServiceTest {
     }
 
     /**
+     * M1 修正：改票時必須同步更新 fieldKey。既有列可能是「信中一鍵題改綁到不同欄位」
+     * 前留下的舊列（同一 formKey + identityType + identityKey，但 fieldKey 是舊的），
+     * 若 upsert 只改 optionValue 不改 fieldKey，會留下一列 optionValue 屬於新欄位、
+     * fieldKey 卻仍指向舊欄位的自相矛盾資料。
+     */
+    @Test
+    void 改票時同步更新fieldKey_防信中題改綁後留自相矛盾列() {
+        givenQuestion("reader-poll", "new-field", List.of("A", "B"));
+        when(tokenService.verify("tok")).thenReturn(Optional.of("a@b.c"));
+        SurveyVote existing = new SurveyVote("reader-poll", "old-field", "A", 9L,
+            SurveyVote.CHANNEL_EMAIL, SurveyVote.IDENTITY_RECIPIENT, "a@b.c");
+        when(voteRepository.findByFormKeyAndIdentityTypeAndIdentityKey(
+            "reader-poll", SurveyVote.IDENTITY_RECIPIENT, "a@b.c")).thenReturn(Optional.of(existing));
+
+        service.vote("reader-poll", "new-field", 0, 9L, "tok", null);
+
+        assertEquals("new-field", existing.getFieldKey(),
+            "改票時 fieldKey 必須同步更新為目前信中一鍵題綁定的欄位");
+    }
+
+    /**
+     * M2 修正：redirect 字串組裝時 rt 須經 URL 編碼，防止 rt 帶入 CR/LF 或
+     * {@code &}/{@code =} 等特殊字元時破壞查詢字串結構（甚至注入額外參數或
+     * header）。挑一個含 {@code &} 與 {@code =} 的病態值驗證編碼後不變成裸字元；
+     * 既有測試中的正常 token（純英數字）編碼前後不變，不受影響。
+     */
+    @Test
+    void rt含特殊字元時進行URL編碼防止注入() {
+        givenQuestion("reader-poll", "rating", List.of("很有幫助", "普通"));
+
+        Optional<String> result =
+            service.vote("reader-poll", "rating", 0, null, "tok&x=1", null);
+
+        assertEquals(Optional.of("/r/survey/reader-poll?voted=0&rt=tok%26x%3D1"), result);
+    }
+
+    /**
      * 前置審查交辦（Task 1 審查者）：rt 驗證回病態的 {@code Optional.of("")}（空字串但存在）時，
      * identityKey 為 blank。NULL 對唯一索引不生效（多個 NULL 視為互不相等），若讓空字串當作
      * 具名 identityKey 寫入則不受此限制、逃過一票限制，必須在此降級為 ANON 落票。

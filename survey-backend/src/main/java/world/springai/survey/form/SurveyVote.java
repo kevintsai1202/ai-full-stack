@@ -123,6 +123,13 @@ public class SurveyVote {
     /** 改票時更新選項值 */
     public void setOptionValue(String optionValue) { this.optionValue = optionValue; }
 
+    /**
+     * 改票時更新所屬欄位（M1 修正）：信中一鍵題可能被改綁到不同欄位，
+     * 若既有列的 fieldKey 未同步更新，會留下 optionValue 屬於新欄位、
+     * fieldKey 卻仍指向舊欄位的自相矛盾列。
+     */
+    public void setFieldKey(String fieldKey) { this.fieldKey = fieldKey; }
+
     /** 改票時更新所屬活動 */
     public void setCampaignId(Long campaignId) { this.campaignId = campaignId; }
 

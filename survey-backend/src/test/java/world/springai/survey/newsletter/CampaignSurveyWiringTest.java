@@ -243,6 +243,35 @@ class CampaignSurveyWiringTest {
     }
 
     /**
+     * 情境 6b（I1 修正）：reschedule 讀新 markdown 後、任何 provider 呼叫（對帳、
+     * 取消舊排程、重新排程寄送）之前必須先做問卷卡可嵌入性預檢，比照 send()——
+     * 否則排程後改壞內文重排會靜默用「未展開卡片」的內容重寄整批。
+     * 目標未發布或未設信中一鍵題（givenNotEmbeddable）時必須擋在最前面：
+     * 不對帳、不取消舊排程、不寄出任何信、不更新 campaign 統計。
+     */
+    @Test
+    void 壞標記擋下reschedule且不對帳不取消不寄信() {
+        givenNotEmbeddable();
+        Instant newAt = Instant.parse("2030-06-01T10:00:00Z");
+        Campaign existing = new Campaign("舊主旨", "舊內文", "<p>舊</p>", null, null, "schedule",
+            OffsetDateTime.parse("2030-05-01T10:00:00Z"), 1, "scheduled");
+        ReflectionTestUtils.setField(existing, "id", 66L);
+        existing.setTier(Campaign.TIER_BASIC);
+        when(campaignRepository.findById(66L)).thenReturn(Optional.of(existing));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> svc.reschedule(66L, "新主旨", markdownWithSurvey(), null, null, newAt));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        assertTrue(ex.getReason() != null && ex.getReason().contains(FORM_KEY),
+            "錯誤訊息應指名是哪個問卷標記無法嵌入：" + ex.getReason());
+        verify(promoPlacementService, never()).reconcile(any(), any());
+        verify(emailLogRepository, never()).findByCampaignIdAndStatus(any(), any());
+        verify(campaignRepository, never()).save(any());
+        verify(mailSender, never()).schedule(any(), any());
+    }
+
+    /**
      * 情境 7（Admin 預覽通道 {@code expandForPreview} 接線，先前無測試保護）：
      * 後台預覽輸出含投票卡與「預覽不計票」標示，連結一律 {@code href="#"}、
      * 不含任何 {@code /s/v/} 真連結——展開本身的 HTML 細節已由

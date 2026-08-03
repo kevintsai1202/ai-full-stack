@@ -202,7 +202,13 @@ public class FormSchemaController {
         return voteStatsService.voteStats(formKey);
     }
 
-    /** Admin 匯出動態表單原始資料；CSV 表頭依實際 schema 答案 key 自動展開。 */
+    /**
+     * Admin 匯出動態表單原始資料；CSV 表頭依實際 schema 答案 key 自動展開。
+     *
+     * <p>{@code campaignId} 與 {@link #analytics} 同名參數同一語意（I2 修正）：
+     * admin.html 的 dynamicQuery() 選期別後一併帶上這個 query，圖表與匯出才會
+     * 是同一份已篩選資料，否則選期別後圖表已篩選、匯出仍全量。</p>
+     */
     @GetMapping("/api/admin/analytics/forms/{formKey}/records")
     public ResponseEntity<?> records(
             @RequestHeader(value = "X-Admin-Key", required = false) String key,
@@ -212,10 +218,11 @@ public class FormSchemaController {
             @RequestParam(required = false) OffsetDateTime from,
             @RequestParam(required = false) OffsetDateTime to,
             @RequestParam(required = false) String source,
+            @RequestParam(required = false) Long campaignId,
             @RequestParam(defaultValue = "json") String format) {
         guard.verify(key);
         List<Map<String, Object>> rows =
-            service.rawRecords(formKey, version, allVersions, from, to, source);
+            service.rawRecords(formKey, version, allVersions, from, to, source, campaignId);
         if (!"csv".equalsIgnoreCase(format)) {
             return ResponseEntity.ok(rows);
         }

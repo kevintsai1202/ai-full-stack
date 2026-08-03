@@ -133,7 +133,8 @@ public class NewsletterSubmissionService {
             Map.of("formTitle", form.title(), "version", form.version()));
         audience.replaceFacts(person.personId(), record.recordId(), SOURCE_KEY, now, facts(form, answers));
 
-        return grantRewardIfEligible(formKey, identity.email(), request.campaignId(), submissionId);
+        return grantRewardIfEligible(
+            formKey, form.title(), identity.email(), request.campaignId(), submissionId);
     }
 
     /** rt 優先解析（信中一鍵題身分），其次讀者 session；兩者皆無效視為未登入，拋 401。 */
@@ -156,7 +157,7 @@ public class NewsletterSubmissionService {
      * 已發過或非註冊讀者都照收答案，只是不觸發發點。
      */
     private SubmitResult grantRewardIfEligible(
-            String formKey, String email, Long campaignId, String submissionId) {
+            String formKey, String formTitle, String email, Long campaignId, String submissionId) {
         Optional<Reader> reader = readerRepository.findByEmailIgnoreCase(email);
         if (reader.isEmpty()) {
             return new SubmitResult(submissionId, false, 0, "填答已收到！訂閱成為讀者即可獲得問卷點數");
@@ -167,7 +168,10 @@ public class NewsletterSubmissionService {
             return new SubmitResult(submissionId, false, 0, "此問卷先前已發過點數，不會重複發送");
         }
         int rewardCredits = creditPolicy.surveyReward();
-        CreditTxn txn = new CreditTxn(readerId, rewardCredits, CreditTxn.REASON_SURVEY_REWARD, campaignId, null);
+        // M4 修正：note 說明是哪一份問卷的獎勵，比照 PromoProposalService 用
+        // proposal.getTitle() 的既有慣例，讓帳本明細看得出這筆點數的來由。
+        String note = "完成問卷「" + formTitle + "」獎勵";
+        CreditTxn txn = new CreditTxn(readerId, rewardCredits, CreditTxn.REASON_SURVEY_REWARD, campaignId, note);
         txn.setSurveyFormKey(formKey);
         creditTxnRepository.save(txn);
         // 條件式 UPDATE 回 0 列代表讀者列已不存在（例如帳戶剛好被刪除），

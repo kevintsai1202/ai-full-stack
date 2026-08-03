@@ -137,7 +137,10 @@ class NewsletterSubmissionServiceTest {
             txn.getReaderId().equals(5L)
                 && txn.getDelta() == 20
                 && CreditTxn.REASON_SURVEY_REWARD.equals(txn.getReason())
-                && "news-form".equals(txn.getSurveyFormKey())));
+                && "news-form".equals(txn.getSurveyFormKey())
+                // M4 修正：note 須說明是哪一份問卷的獎勵，比照 referral/promo 前例
+                // （PromoProposalService 用 proposal.getTitle()），而不是留白
+                && "完成問卷「電子報問卷」獎勵".equals(txn.getNote())));
     }
 
     @Test

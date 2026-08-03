@@ -137,6 +137,26 @@ class ReaderEntryHostFilterTest {
         assertNotNull(chain.getRequest(), "必須繼續走 chain");
     }
 
+    /**
+     * 電子報通道問卷提交端點在讀者網域須放行（C1 修正）：接續頁 survey.html
+     * 以相對路徑 fetch POST {@code /api/forms/{formKey}/newsletter-submissions}，
+     * 未放行時完整填答＋發點主流程整條在讀者網域斷線（404）。
+     */
+    @Test
+    void readerHostAllowsOnlyPostForNewsletterSubmissions() throws Exception {
+        MockFilterChain postChain = new MockFilterChain();
+        MockHttpServletResponse postResponse = run(READER_HOST, READER_HOST, "POST",
+            "/api/forms/reader-poll/newsletter-submissions", postChain);
+        assertEquals(200, postResponse.getStatus(), "電子報通道問卷提交必須在讀者網域放行");
+        assertNotNull(postChain.getRequest(), "必須繼續走 chain 才能真正觸發提交邏輯");
+
+        MockFilterChain getChain = new MockFilterChain();
+        MockHttpServletResponse getResponse = run(READER_HOST, READER_HOST, "GET",
+            "/api/forms/reader-poll/newsletter-submissions", getChain);
+        assertEquals(404, getResponse.getStatus(), "同路徑 GET 不可藉此擴大讀者網域 API 面");
+        assertNull(getChain.getRequest());
+    }
+
     /** 分享點擊只放行精準 POST；GET 不可藉此擴大讀者網域 API 面。 */
     @Test
     void readerHostAllowsOnlyPostForReferralClick() throws Exception {

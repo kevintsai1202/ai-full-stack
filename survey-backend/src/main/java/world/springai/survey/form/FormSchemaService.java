@@ -443,20 +443,28 @@ public class FormSchemaService {
         return response;
     }
 
-    /** 匯出動態原始資料；欄位答案保留 JSON 型別，Email／姓名從人物主檔即時取得。 */
+    /**
+     * 匯出動態原始資料；欄位答案保留 JSON 型別，Email／姓名從人物主檔即時取得。
+     *
+     * @param campaignId 非 null 時只匯出電子報通道問卷中指定活動的完整填答，
+     *                   與 {@link #analytics} 的同名參數同一語意（I2 修正）：
+     *                   後台選期別後圖表已篩選，匯出若不接這個參數會靜默忽略、
+     *                   回全量，讓「畫面篩選過」與「下載的資料」互相矛盾。
+     */
     public List<Map<String, Object>> rawRecords(
             String formKey,
             Integer version,
             boolean allVersions,
             OffsetDateTime from,
             OffsetDateTime to,
-            String source) {
+            String source,
+            Long campaignId) {
         FormDefinition selected = getDefinition(formKey, version);
         List<FormDefinition> definitions = allVersions
             ? listDefinitions().stream().filter(form -> form.key().equals(formKey)).toList()
             : List.of(selected);
         List<Map<String, Object>> records = loadRecords(
-            definitions.stream().map(this::schemaKey).toList(), from, to, source, null);
+            definitions.stream().map(this::schemaKey).toList(), from, to, source, campaignId);
         Map<Long, Map<String, Object>> people = new LinkedHashMap<>();
         if (!records.isEmpty()) {
             List<Long> ids = records.stream()

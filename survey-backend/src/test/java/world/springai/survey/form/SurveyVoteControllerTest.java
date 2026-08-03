@@ -10,6 +10,7 @@ import java.util.Optional;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -63,5 +64,35 @@ class SurveyVoteControllerTest {
     void o參數缺漏回404() throws Exception {
         mvc.perform(get("/s/v/reader-poll").param("f", "q1"))
            .andExpect(status().isNotFound());
+    }
+
+    /**
+     * M3 修正：{@code c}（campaignId）與 {@code o} 同樣宣告為 {@code String} 自行
+     * parse，而非讓 Spring 用 {@code @RequestParam Long} 直接綁定——理由相同：
+     * 綁定失敗會被預設 handler 接住回 500。但落地行為與 {@code o} 不同：{@code c}
+     * 只是可選的活動歸因，不是「這是不是合法投票目標」的判斷依據，因此非數字時
+     * 視為未帶 campaignId（傳 null），仍讓合法投票正常進行，而非整個請求 404。
+     */
+    @Test
+    void c參數非數字時視為null仍可投票() throws Exception {
+        when(voteService.vote(eq("reader-poll"), eq("q1"), eq(1), isNull(), any(), any()))
+            .thenReturn(Optional.of("/r/survey/reader-poll?voted=1"));
+
+        mvc.perform(get("/s/v/reader-poll")
+                .param("f", "q1").param("o", "1").param("c", "abc"))
+           .andExpect(status().isFound())
+           .andExpect(header().string("Location", "/r/survey/reader-poll?voted=1"));
+
+        verify(voteService).vote(eq("reader-poll"), eq("q1"), eq(1), isNull(), any(), any());
+    }
+
+    /** c 參數缺漏時同樣視為 null，行為與現況一致（不應是這次修正的破壞性變更）。 */
+    @Test
+    void c參數缺漏時視為null() throws Exception {
+        when(voteService.vote(eq("reader-poll"), eq("q1"), eq(1), isNull(), any(), any()))
+            .thenReturn(Optional.of("/r/survey/reader-poll?voted=1"));
+
+        mvc.perform(get("/s/v/reader-poll").param("f", "q1").param("o", "1"))
+           .andExpect(status().isFound());
     }
 }

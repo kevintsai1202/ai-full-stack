@@ -745,6 +745,16 @@ public class CampaignService {
         // 否則建立時的守門可被「排程後修改內容」繞過。
         validatePaywallTier(markdown, campaign.getTier());
 
+        // 問卷卡可嵌入性預檢（I1 修正）：與 send() 同一時機、同一理由——重排讀進來的
+        // 是全新 markdown，若其中的問卷標記已失效（問卷被下架或信中一鍵題被清除），
+        // 必須在任何 provider 呼叫（對帳、取消舊排程、重新排程寄送）之前擋下，
+        // 否則會靜默用「未展開卡片」的內容重寄整批，而不是像 send() 一樣直接拒絕。
+        try {
+            surveyBlockRenderer.assertEmbeddable(markdown);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+
         // 對帳：重排是「新內文對消失版位歸還配額」的唯一入口（原內文已綁定的版位，
         // 若新內文不再引用即視為未刊登並釋放）。必須在任何 provider 呼叫（取消舊排程、
         // 重新排程寄送）之前完成——對帳失敗時（如新增版位的提案配額已用罄）要整個中止，

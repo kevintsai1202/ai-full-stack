@@ -20,9 +20,10 @@ import java.io.IOException;
  * 根路徑請求導向 {@code /r/}，問卷網域則完全不受影響。</p>
  *
  * <p><b>讀者 Host 採允許清單</b>：只放行 {@code /r/**}、{@code /api/reader/**}、
- * 分享點擊的 {@code POST /api/referrals/click}
- * 與首頁訂閱所需的 {@code POST /api/survey}。Admin、問卷統計與其他營運端點
- * 即使部署在同一個 app，也不可經由讀者網域存取。</p>
+ * 分享點擊的 {@code POST /api/referrals/click}、
+ * 首頁訂閱所需的 {@code POST /api/survey}
+ * 與接續填答頁送出完整答案的 {@code POST /api/forms/{formKey}/newsletter-submissions}。
+ * Admin、問卷統計與其他營運端點即使部署在同一個 app，也不可經由讀者網域存取。</p>
  *
  * <p><b>用 302 而非 301</b>：301 會被瀏覽器永久快取，日後若想把讀者入口
  * 換成獨立頁面，被快取的舊轉址收不回來；302 讓目的地保持可調整。</p>
@@ -94,6 +95,14 @@ public class ReaderEntryHostFilter extends OncePerRequestFilter {
      * <p>{@code GET /s/v/{formKey}} 是信中一鍵投票端點，同樣需要讀取讀者 session
      * cookie 才能正確歸戶（見 {@code SurveyVoteController}），且投票連結多半落在
      * 讀者網域；轉址目的地 {@code /r/survey/**} 已被 {@code /r/} 前綴放行涵蓋。</p>
+     *
+     * <p>{@code POST /api/forms/{formKey}/newsletter-submissions} 是接續填答頁
+     * （{@code /r/survey/{formKey}}）送出完整答案的端點（見
+     * {@code NewsletterSubmissionService}）。該頁以相對路徑 fetch，未放行時
+     * 讀者網域一律回這裡的 404 純文字，完整填答＋發點主流程整條斷線（C1 修正）；
+     * 精準比對前後綴（POST 且路徑以 {@code /api/forms/} 開頭、以
+     * {@code /newsletter-submissions} 結尾），不放寬到整個 {@code /api/forms/**}——
+     * 那會連 Admin schema 編輯端點都一併曝光給讀者網域。</p>
      */
     private boolean isAllowedReaderPath(HttpServletRequest request) {
         String path = request.getRequestURI();
@@ -103,6 +112,10 @@ public class ReaderEntryHostFilter extends OncePerRequestFilter {
         }
         if ("GET".equalsIgnoreCase(request.getMethod())
                 && (path.startsWith("/promo/c/") || path.startsWith("/s/v/"))) {
+            return true;
+        }
+        if ("POST".equalsIgnoreCase(request.getMethod())
+                && path.startsWith("/api/forms/") && path.endsWith("/newsletter-submissions")) {
             return true;
         }
         return "POST".equalsIgnoreCase(request.getMethod())
