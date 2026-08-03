@@ -18,6 +18,7 @@ import java.util.Optional;
 import world.springai.survey.ReaderSiteLinks;
 import world.springai.survey.audience.RecipientService;
 import world.springai.survey.audience.SubscriptionLinkBuilder;
+import world.springai.survey.form.FormSchemaService;
 import world.springai.survey.mail.EmailLog;
 import world.springai.survey.mail.EmailLogRepository;
 import world.springai.survey.mail.EmailTemplate;
@@ -68,13 +69,20 @@ class CampaignServiceTest {
     // 呼叫它們，實際對帳／簽章邏輯由 PromoPlacementServiceTest／PromoRecipientTokenServiceTest 覆蓋
     private final PromoPlacementService promoPlacementService = mock(PromoPlacementService.class);
     private final PromoRecipientTokenService promoTokenService = mock(PromoRecipientTokenService.class);
+    // 問卷展開器：本檔既有測試的 markdown 皆不含 <!--survey:...--> 標記，用真實
+    // SurveyBlockRenderer 搭配 mock FormSchemaService 即可安全通過（展開/預檢皆為
+    // no-op，不需要逐條 stub），避免 mock 版 SurveyBlockRenderer 在未 stub 時對
+    // expandForEmail 回傳 null 而讓所有既有斷言全部改觀。
+    private final FormSchemaService formSchemaService = mock(FormSchemaService.class);
+    private final SurveyBlockRenderer surveyBlockRenderer = new SurveyBlockRenderer(formSchemaService);
 
     private final CampaignService svc = new CampaignService(
         mailSender, recipientService, campaignRepository, emailLogRepository,
         markdownRenderer, emailTemplate, linkBuilder, mailQuotaService, contentSplitter,
         readerSiteLinks,
-        new MailBodyRenderer(contentSplitter, markdownRenderer, readerSiteLinks),
-        promoPlacementService, promoTokenService);
+        new MailBodyRenderer(contentSplitter, markdownRenderer, readerSiteLinks,
+            surveyBlockRenderer, "https://reader.example.com"),
+        promoPlacementService, promoTokenService, surveyBlockRenderer);
 
     {
         // 除非測試特別 stub 更小的量，否則額度視為充足——避免所有既有發送測試
@@ -1020,8 +1028,9 @@ class CampaignServiceTest {
             mailSender, recipientService, campaignRepository, emailLogRepository,
             markdownRenderer, emailTemplate, linkBuilder, mailQuotaService, contentSplitter,
             trailingSlashLinks,
-            new MailBodyRenderer(contentSplitter, markdownRenderer, trailingSlashLinks),
-            promoPlacementService, promoTokenService);
+            new MailBodyRenderer(contentSplitter, markdownRenderer, trailingSlashLinks,
+                surveyBlockRenderer, "https://reader.example.com"),
+            promoPlacementService, promoTokenService, surveyBlockRenderer);
         when(campaignRepository.findBySlug("slash")).thenReturn(Optional.empty());
         when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
 

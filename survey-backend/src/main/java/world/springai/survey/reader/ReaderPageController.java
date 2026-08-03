@@ -16,6 +16,7 @@ import world.springai.survey.newsletter.CampaignRepository;
 import world.springai.survey.newsletter.ContentSplitter;
 import world.springai.survey.newsletter.MarkdownRenderer;
 import world.springai.survey.newsletter.PublicCampaignTagService;
+import world.springai.survey.newsletter.SurveyBlockRenderer;
 import world.springai.survey.media.MediaAssetService;
 import world.springai.survey.ReaderSiteLinks;
 
@@ -54,6 +55,11 @@ public class ReaderPageController {
     private final MediaAssetService mediaAssetService;
     /** 社群 meta 與圖卡使用的正式讀者網域。 */
     private final ReaderSiteLinks readerSiteLinks;
+    /**
+     * 問卷標記展開器（Task 9 接線）：reader 套件可合法依賴 newsletter 套件
+     * （{@code PackageDependencyTest} 只禁止反方向），contentHtml 定案後統一展開。
+     */
+    private final SurveyBlockRenderer surveyBlockRenderer;
 
     /**
      * 注入內容、授權與渲染所需的服務。
@@ -72,7 +78,8 @@ public class ReaderPageController {
                                HtmlTemplate htmlTemplate,
                                ObjectProvider<PublicCampaignTagService> campaignTagServiceProvider,
                                MediaAssetService mediaAssetService,
-                               ObjectProvider<ReaderSiteLinks> readerSiteLinksProvider) {
+                               ObjectProvider<ReaderSiteLinks> readerSiteLinksProvider,
+                               SurveyBlockRenderer surveyBlockRenderer) {
         this.campaignRepository = campaignRepository;
         this.markdownRenderer = markdownRenderer;
         this.contentSplitter = contentSplitter;
@@ -83,6 +90,7 @@ public class ReaderPageController {
         this.campaignTagService = campaignTagServiceProvider.getIfAvailable();
         this.mediaAssetService = mediaAssetService;
         this.readerSiteLinks = readerSiteLinksProvider.getIfAvailable();
+        this.surveyBlockRenderer = surveyBlockRenderer;
     }
 
     /** 舊單元測試相容建構式；沒有標籤服務時維持原本列表行為。 */
@@ -103,6 +111,7 @@ public class ReaderPageController {
         this.campaignTagService = null;
         this.mediaAssetService = null;
         this.readerSiteLinks = null;
+        this.surveyBlockRenderer = null;
     }
 
     /** 歷史內容列表：只列已發布者，登入者會看到自己的解鎖狀態 */
@@ -178,6 +187,13 @@ public class ReaderPageController {
         String contentHtml = markdownRenderer.toHtml(split.freeMarkdown());
         if (full && split.hasGate()) {
             contentHtml += markdownRenderer.toHtml(split.gatedMarkdown());
+        }
+
+        // 問卷標記展開（Task 9 接線）：contentHtml 定案（免費區／全文皆已決定）後
+        // 統一展開，campaignId 在讀者頁一律已知，選項連結改由 session 歸戶不帶 rt。
+        // surveyBlockRenderer 為 null 只會發生在舊單元測試相容建構式，維持原內容不動。
+        if (surveyBlockRenderer != null) {
+            contentHtml = surveyBlockRenderer.expandForWeb(contentHtml, campaign.getId());
         }
 
         if (full) {

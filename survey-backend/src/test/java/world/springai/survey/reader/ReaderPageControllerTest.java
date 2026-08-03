@@ -1,5 +1,6 @@
 package world.springai.survey.reader;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,12 +9,14 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import world.springai.survey.AppSettingService;
 import world.springai.survey.newsletter.Campaign;
 import world.springai.survey.newsletter.CampaignRepository;
 import world.springai.survey.newsletter.ContentSplitter;
 import world.springai.survey.newsletter.MarkdownRenderer;
+import world.springai.survey.newsletter.SurveyBlockRenderer;
 import world.springai.survey.media.MediaAssetService;
 
 import java.time.OffsetDateTime;
@@ -25,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -64,6 +68,20 @@ class ReaderPageControllerTest {
     @MockBean ReaderContext readerContext;
     @MockBean AppSettingService appSettingService;
     @MockBean MediaAssetService mediaAssetService;
+    /** Task 9 接線：問卷標記展開器（mock），預設 stub 為直通避免影響既有斷言 */
+    @MockBean SurveyBlockRenderer surveyBlockRenderer;
+
+    /**
+     * 預設直通：多數既有測試不關心問卷卡展開。若不 stub，Mockito 對未 stub 的
+     * 方法回傳 null，contentHtml 會整段變成 null，讓本檔既有的所有內容斷言全數改觀
+     * ——這正是 @MockBean 新依賴最容易踩到的坑（同一坑先前在 CampaignServiceTest
+     * 對 promoTokenService.issue() 出現過一次）。
+     */
+    @BeforeEach
+    void stubSurveyBlockRendererPassthrough() {
+        when(surveyBlockRenderer.expandForWeb(any(), any()))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+    }
 
     /** 建立一篇含 paywall 標記的文章 */
     private Campaign gatedArticle(String tier, int cost) {
@@ -146,6 +164,29 @@ class ReaderPageControllerTest {
         assertTrue(body.contains("class=\"article-hero-cover\""));
         assertTrue(body.contains("https://media.example.com/newsletter-media/images/cover.png"));
         assertTrue(body.contains("alt=\"測試文章\""));
+    }
+
+    /**
+     * Task 9 接線：contentHtml 定案後必須呼叫 {@code expandForWeb} 並帶入正確的
+     * campaignId，且展開結果要真的進入回應本文——只驗證呼叫過但不驗證有沒有
+     * 進到輸出，等於沒驗證接線是否真的生效。
+     */
+    @Test
+    void articlePageExpandsSurveyBlockWithCampaignId() throws Exception {
+        Campaign campaign = gatedArticle(Campaign.TIER_BASIC, 0);
+        ReflectionTestUtils.setField(campaign, "id", 77L);
+        when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(campaign));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+        when(surveyBlockRenderer.expandForWeb(any(), eq(77L)))
+            .thenReturn("<div>SURVEY_CARD_MARKER</div>");
+
+        String body = mvc.perform(get("/r/news/test-article"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(body.contains("SURVEY_CARD_MARKER"), body);
+        verify(surveyBlockRenderer).expandForWeb(any(), eq(77L));
     }
 
     /** 已登入但未確認訂閱：同樣不得含受限區 */
