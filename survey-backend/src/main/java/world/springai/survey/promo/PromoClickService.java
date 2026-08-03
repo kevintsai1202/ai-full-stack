@@ -41,8 +41,11 @@ public class PromoClickService {
         this.sessionService = sessionService;
     }
 
+    /** 點擊目的地：linkUrl 決定轉址或聯絡頁，title 供聯絡頁顯示提案名稱 */
+    public record Destination(String linkUrl, String title) {}
+
     /** 查目的地並記錄點擊；empty＝版位或提案不存在（404） */
-    public Optional<String> resolveAndRecord(long placementId, String rt, String sessionCookie) {
+    public Optional<Destination> resolveAndRecord(long placementId, String rt, String sessionCookie) {
         Optional<PromoPlacement> placement = placementRepository.findById(placementId);
         if (placement.isEmpty()) return Optional.empty();
         Optional<PromoProposal> proposal = proposalRepository.findById(placement.get().getProposalId());
@@ -56,7 +59,7 @@ public class PromoClickService {
                 log.warn("promo 點擊記錄失敗 placement={}，轉址照常", placementId, e);
             }
         }
-        return Optional.of(proposal.get().getLinkUrl());
+        return Optional.of(new Destination(proposal.get().getLinkUrl(), proposal.get().getTitle()));
     }
 
     /** 依歸戶順序組出點擊列 */

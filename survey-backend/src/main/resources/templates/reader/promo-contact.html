@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>聯絡合作夥伴｜凱文大叔的電子報</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/r/reader.css">
+<script src="/tracking.js" defer></script>
+<script src="/r/reader-nav.js" defer></script>
+</head>
+<body>
+<header class="site-head">
+  <div class="site-head-inner">
+    <a class="brand" href="/r/">凱文大叔的電子報</a>
+    <!-- 終點頁採最小靜態導覽（同 login.html），已列入 ReaderNavGuardTest 的 STATIC_NAV_TEMPLATES -->
+    <nav><a href="/r/">首頁</a><a href="/r/archive">歷史內容</a><a href="/r/rules">遊戲規則</a></nav>
+  </div>
+</header>
+
+<div class="wrap auth-shell">
+  <p class="page-kicker">Contact</p>
+  <div class="card feature-card">
+    <h1 class="page-title compact">聯絡「<!--PROMO_TITLE-->」</h1>
+    <p class="muted">
+      這則工商合作以 Email 聯絡。複製地址貼到你慣用的信箱寄送，
+      或若電腦已設定郵件軟體，也可以直接開啟。
+    </p>
+    <!-- data-email 存純信箱（不含 ?subject= 參數），是複製功能的單一來源 -->
+    <p id="contact-email" data-email="<!--CONTACT_EMAIL-->"
+       style="font-size:1.35rem;font-weight:700;word-break:break-all;margin:.5rem 0 1rem"><!--CONTACT_EMAIL--></p>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+      <button class="btn" type="button" id="copy-email">複製 Email 地址</button>
+      <a class="btn" href="<!--MAILTO_HREF-->">開啟郵件軟體</a>
+    </div>
+    <div class="msg" id="msg" role="status" aria-live="polite"></div>
+  </div>
+
+  <p class="fine-print">
+    這是「凱文大叔的電子報」中工商合作單位的聯絡方式；寄信給對方即代表你同意讓對方取得你的 Email 地址。
+  </p>
+</div>
+
+<script>
+// 一鍵複製：clipboard API 優先；失敗（非 https、瀏覽器不支援）時退回選取文字讓讀者手動複製
+(function () {
+  var button = document.getElementById('copy-email');
+  var holder = document.getElementById('contact-email');
+  var email = holder.getAttribute('data-email');
+  var msg = document.getElementById('msg');
+  button.addEventListener('click', async function () {
+    try {
+      await navigator.clipboard.writeText(email);
+      msg.textContent = '已複製：' + email;
+      msg.className = 'msg ok show';
+    } catch (err) {
+      var range = document.createRange();
+      range.selectNodeContents(holder);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      msg.textContent = '無法自動複製，已為你選取地址，請按 Ctrl+C（手機長按）複製。';
+      msg.className = 'msg err show';
+    }
+  });
+})();
+</script>
+<footer class="site-foot">
+  <p>合作與聯絡：<a href="mailto:contact@springai.world">contact@springai.world</a></p>
+</footer>
+</body>
+</html>

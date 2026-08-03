@@ -43,7 +43,7 @@ class PromoClickServiceTest {
     void 有效token記EMAIL_RECIPIENT並轉址() {
         placement(PromoPlacement.STATUS_COMMITTED);
         when(tokenService.verify("tok")).thenReturn(Optional.of("alice@example.com"));
-        assertEquals(Optional.of("https://example.com"),
+        assertEquals(Optional.of(new PromoClickService.Destination("https://example.com", "好課")),
             service.resolveAndRecord(55L, "tok", null));
         verify(clickRepository).save(argThat(c ->
             PromoClick.CHANNEL_EMAIL.equals(c.getChannel())
@@ -73,7 +73,7 @@ class PromoClickServiceTest {
     @Test
     void DRAFT版位照樣轉址但不記錄() {
         placement(PromoPlacement.STATUS_DRAFT);
-        assertEquals(Optional.of("https://example.com"),
+        assertEquals(Optional.of(new PromoClickService.Destination("https://example.com", "好課")),
             service.resolveAndRecord(55L, null, null));
         verify(clickRepository, never()).save(any());
     }
@@ -88,7 +88,7 @@ class PromoClickServiceTest {
     void 記錄失敗不影響轉址() {
         placement(PromoPlacement.STATUS_COMMITTED);
         when(clickRepository.save(any())).thenThrow(new RuntimeException("db down"));
-        assertEquals(Optional.of("https://example.com"),
+        assertEquals(Optional.of(new PromoClickService.Destination("https://example.com", "好課")),
             service.resolveAndRecord(55L, null, null)); // 讀者體驗優先，統計 best-effort
     }
 }

@@ -67,11 +67,13 @@ class ReaderNavGuardTest {
         "<a href=\\\"/r/promo\\\"");
 
     /**
-     * 這兩頁是終點頁（讀者到那裡是為了完成一件事或離開），{@code <nav>} 刻意維持
+     * 這幾頁是終點頁（讀者到那裡是為了完成一件事或離開），{@code <nav>} 刻意維持
      * 最小的靜態導覽，不呼叫 {@code ReaderNav}——見 {@code ReaderNav} 類 javadoc
-     * 的說明，這是範圍決定而非漏改。
+     * 的說明，這是範圍決定而非漏改。{@code promo-contact.html} 是工商 mailto 目的地的
+     * 聯絡中介頁：多由信件點擊進入、常為未登入狀態，渲染端點也不在 reader 套件內。
      */
-    private static final Set<String> STATIC_NAV_TEMPLATES = Set.of("login.html", "not-found.html");
+    private static final Set<String> STATIC_NAV_TEMPLATES =
+        Set.of("login.html", "not-found.html", "promo-contact.html");
 
     /** 抓出 {@code <nav>...</nav>} 區塊本體（DOTALL 讓 {@code .} 跨行比對） */
     private static final Pattern NAV_BLOCK = Pattern.compile("<nav>(.*?)</nav>", Pattern.DOTALL);
