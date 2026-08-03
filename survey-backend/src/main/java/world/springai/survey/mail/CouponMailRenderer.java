@@ -75,7 +75,7 @@ public class CouponMailRenderer {
         html.append("<p><code style=\"").append(CODE_STYLE).append("\">")
             .append(escapeHtml(campaign.getCouponCode())).append("</code></p>");
         html.append("<p><a href=\"").append(escapeHtml(campaign.getCourseUrl()))
-            .append("\" style=\"").append(BUTTON_STYLE).append("\">立即領取優惠</a></p>");
+            .append("\" style=\"").append(BUTTON_STYLE).append("\">前往課程</a></p>");
         if (campaign.getExpiresAt() != null) {
             html.append("<p style=\"").append(EXPIRES_STYLE).append("\">優惠至 ")
                 .append(campaign.getExpiresAt()).append("</p>");
@@ -83,7 +83,7 @@ public class CouponMailRenderer {
         html.append(CARD_CLOSE);
         html.append("<p style=\"").append(FOOTER_STYLE)
             .append("\">你收到這封信是因為你填過問卷『").append(escapeHtml(formTitle))
-            .append("』。若不想再收到，<a href=\"").append(unsubscribeLink)
+            .append("』。若不想再收到，<a href=\"").append(escapeHtml(unsubscribeLink))
             .append("\">點此取消訂閱</a>。</p>");
         return html.toString();
     }

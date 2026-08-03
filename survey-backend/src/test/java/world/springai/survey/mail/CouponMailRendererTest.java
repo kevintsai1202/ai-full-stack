@@ -35,6 +35,7 @@ class CouponMailRendererTest {
         assertTrue(html.contains("優惠至 2026-09-30"));
         assertTrue(html.contains("讀者意見調查")); // 寄送原因
         assertTrue(html.contains("https://x/unsub")); // 退訂
+        assertTrue(html.contains("前往課程")); // 按鈕文案照 spec §7 釘住，不得偏離
     }
 
     @Test
@@ -50,6 +51,15 @@ class CouponMailRendererTest {
             "SAVE300", null), "讀者意見調查", "https://x/unsub");
         assertTrue(html.contains("A&lt;b&gt;"));
         assertFalse(html.contains("A<b>"));
+    }
+
+    @Test
+    void 動態值跳脫_退訂連結含雙引號() {
+        // unsubscribeLink 若含 " 且未跳脫，會提早關閉 href 屬性、破壞版面甚至被注入額外屬性
+        String html = renderer.body(campaign("AI 全端開發", "超值文案", "https://hahow.in/cr/x",
+            "SAVE300", null), "讀者意見調查", "https://x/unsub?t=\"onmouseover=alert(1)");
+        assertTrue(html.contains("https://x/unsub?t=&quot;onmouseover=alert(1)"));
+        assertFalse(html.contains("href=\"https://x/unsub?t=\"onmouseover"));
     }
 
     /** 建一筆測試用優惠券活動，formKey／answerFilter 用固定值（渲染器不會用到這兩個欄位） */
