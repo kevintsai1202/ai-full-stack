@@ -90,6 +90,10 @@ public class ReaderEntryHostFilter extends OncePerRequestFilter {
      * 讀者頁的點擊都會落在讀者網域，且該端點需要讀取讀者 session cookie 才能
      * 正確歸戶（見 {@code PromoClickController}），未放行會讓讀者網域部署下
      * 所有工商連結點擊都 404。</p>
+     *
+     * <p>{@code GET /s/v/{formKey}} 是信中一鍵投票端點，同樣需要讀取讀者 session
+     * cookie 才能正確歸戶（見 {@code SurveyVoteController}），且投票連結多半落在
+     * 讀者網域；轉址目的地 {@code /r/survey/**} 已被 {@code /r/} 前綴放行涵蓋。</p>
      */
     private boolean isAllowedReaderPath(HttpServletRequest request) {
         String path = request.getRequestURI();
@@ -97,7 +101,8 @@ public class ReaderEntryHostFilter extends OncePerRequestFilter {
                 || path.equals("/api/reader") || path.startsWith("/api/reader/")) {
             return true;
         }
-        if ("GET".equalsIgnoreCase(request.getMethod()) && path.startsWith("/promo/c/")) {
+        if ("GET".equalsIgnoreCase(request.getMethod())
+                && (path.startsWith("/promo/c/") || path.startsWith("/s/v/"))) {
             return true;
         }
         return "POST".equalsIgnoreCase(request.getMethod())

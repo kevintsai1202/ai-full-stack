@@ -112,6 +112,31 @@ class ReaderEntryHostFilterTest {
         assertNotNull(chain.getRequest(), "必須繼續走 chain 才能真正觸發轉址邏輯");
     }
 
+    /**
+     * 信中一鍵投票端點在讀者網域須放行（Task 7）：點擊多半發生在讀者網域部署下，
+     * 未放行會讓所有信中投票連結在讀者網域回 404。
+     */
+    @Test
+    void readerHostAllowsSurveyVoteEndpoint() throws Exception {
+        MockFilterChain chain = new MockFilterChain();
+        MockHttpServletResponse response =
+            run(READER_HOST, READER_HOST, "GET", "/s/v/1", chain);
+
+        assertEquals(200, response.getStatus(), "信中一鍵投票端點必須在讀者網域放行");
+        assertNotNull(chain.getRequest(), "必須繼續走 chain 才能真正觸發投票邏輯");
+    }
+
+    /** 投票後導向的接續頁 /r/survey/** 須放行，否則轉址後讀者網域會 404。 */
+    @Test
+    void readerHostAllowsSurveyContinuationPage() throws Exception {
+        MockFilterChain chain = new MockFilterChain();
+        MockHttpServletResponse response =
+            run(READER_HOST, READER_HOST, "GET", "/r/survey/x", chain);
+
+        assertEquals(200, response.getStatus(), "投票後接續頁必須在讀者網域放行");
+        assertNotNull(chain.getRequest(), "必須繼續走 chain");
+    }
+
     /** 分享點擊只放行精準 POST；GET 不可藉此擴大讀者網域 API 面。 */
     @Test
     void readerHostAllowsOnlyPostForReferralClick() throws Exception {
