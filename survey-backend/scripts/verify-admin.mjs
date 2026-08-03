@@ -87,7 +87,8 @@ try {
   // 6. 分隔線與付費牆必須插入真正換行，不可把 "\n" 字面值寫進內文
   await page.fill('#markdown', '');
   await page.getByRole('button', { name: '分隔線', exact: true }).click();
-  await page.getByRole('button', { name: '付費牆', exact: true }).click();
+  // 按鈕於 f9a17df（付費牆點數功能）改名為「付費牆（點數）」，exact 比對需用全名
+  await page.getByRole('button', { name: '付費牆（點數）', exact: true }).click();
   const blockMarkdown = await page.inputValue('#markdown');
   if (blockMarkdown !== '---\n\n<!--paywall-->\n\n') {
     fail(`Markdown 區塊插入格式錯誤：${JSON.stringify(blockMarkdown)}`);
