@@ -175,6 +175,22 @@ class CouponSendServiceTest {
         verify(campaignRepository).save(c);
     }
 
+    /**
+     * 名單為空（emails 為空清單）應回 400，且不觸發任何寄信；與「全部已寄過」分開單獨釘住，
+     * 避免日後重構把「空清單」與「全部已寄」合併成同一分支時，其中一種情境被誤刪或改錯訊息。
+     */
+    @Test
+    void 名單為空拋400() {
+        CouponCampaign c = withId(campaign(), 9L);
+        when(campaignRepository.findById(9L)).thenReturn(Optional.of(c));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> service.send(9L, List.of(), null));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        verifyNoInteractions(mailSender);
+    }
+
     /** 名單全部已寄過（去除已寄後無任何合法可寄對象）應回 400，且不觸發任何寄信 */
     @Test
     void 名單全部已寄拋400() {

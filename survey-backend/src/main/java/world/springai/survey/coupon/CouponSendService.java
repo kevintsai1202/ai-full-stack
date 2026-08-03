@@ -4,7 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
@@ -28,6 +27,16 @@ import world.springai.survey.mail.MailSender;
  * 中斷整批、{@link EmailLog} 成功記 {@code "sent"}／失敗記 {@code "failed"}＋錯誤訊息。
  * 與邀請信不同之處：本服務多一層「後台勾選名單必須是命中集合子集」的驗證
  * （見 {@link CouponRecipientService#findIllegal}），防止外部夾帶未命中名單的 email。</p>
+ *
+ * <p>{@link #send} 刻意不加 {@code @Transactional}：迴圈夾外部 ZSend 呼叫，且 provider
+ * 副作用無法回滾——若迴圈跑完後 {@code campaignRepository.save} 拋例外，整顆交易回滾會把
+ * 本輪已成功寫入的 {@link EmailLog}「sent」列一併吃掉，但信已經真的寄出去了，下次重跑會
+ * 對同一批人重複寄送。部分失敗時保留已寫入的 email_log 記錄，比整批回滾更誠實（同理見
+ * {@code world.springai.survey.newsletter.CampaignService#send} 的 Javadoc）。</p>
+ *
+ * <p>{@link EmailLog} 在本服務刻意一律用六參建構子（{@code campaignId} 傳 {@code null}）：
+ * 該欄位語意是電子報 {@code Campaign}（{@code newsletter} 套件），優惠券活動與寄送記錄的
+ * 關聯改以 {@code type="coupon:"+campaignId} 表達，不是遺漏設定 campaignId。</p>
  */
 @Service
 public class CouponSendService {
@@ -82,7 +91,6 @@ public class CouponSendService {
      * @param emails     後台指定的收件人子集（大小寫不敏感比對）
      * @param limit      單次最多寄送封數，null 或 &le;0 視為不限（配合寄信額度分批寄送）
      */
-    @Transactional
     public SendResult send(long campaignId, List<String> emails, Integer limit) {
         CouponCampaign campaign = campaignRepository.findById(campaignId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到指定優惠券活動"));
