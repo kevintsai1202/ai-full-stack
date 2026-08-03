@@ -30,15 +30,18 @@ public class FormSchemaController {
     private final FormSchemaService service;
     private final AdminKeyGuard guard;
     private final WelcomeMailService welcomeMailService;
+    private final NewsletterSubmissionService newsletterSubmissionService;
 
-    /** 注入 schema 服務、Admin 金鑰守衛與歡迎信服務。 */
+    /** 注入 schema 服務、Admin 金鑰守衛、歡迎信服務與電子報通道問卷服務。 */
     public FormSchemaController(
             FormSchemaService service,
             AdminKeyGuard guard,
-            WelcomeMailService welcomeMailService) {
+            WelcomeMailService welcomeMailService,
+            NewsletterSubmissionService newsletterSubmissionService) {
         this.service = service;
         this.guard = guard;
         this.welcomeMailService = welcomeMailService;
+        this.newsletterSubmissionService = newsletterSubmissionService;
     }
 
     /** 公開取得目前發布版本 schema，前端不需硬編碼欄位。 */
@@ -59,6 +62,18 @@ public class FormSchemaController {
         FormSchemaService.SubmissionResult result = service.submit(formKey, request);
         welcomeMailService.sendWelcome(request.email());
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
+    }
+
+    /** 電子報通道問卷提交；身分由後端解析（rt token 或讀者 session），不信任前端 email。 */
+    @PostMapping("/api/forms/{formKey}/newsletter-submissions")
+    public NewsletterSubmissionService.SubmitResult submitNewsletter(
+            @PathVariable String formKey,
+            @RequestBody NewsletterSubmissionService.SubmitRequest request,
+            @org.springframework.web.bind.annotation.CookieValue(
+                value = world.springai.survey.reader.ReaderSessionService.COOKIE_NAME,
+                required = false) String sessionCookie) {
+        // 委派完整邏輯到服務層：身分解析、答案驗證、人物合併、發點
+        return newsletterSubmissionService.submit(formKey, request, sessionCookie);
     }
 
     /** 公開統計只輸出 schema 明確允許且非敏感的欄位。 */
