@@ -55,8 +55,9 @@ class SurveyVoteServiceTest {
         givenQuestion("reader-poll", "rating", List.of("很有幫助", "普通", "沒幫助"));
         when(tokenService.verify("tok")).thenReturn(Optional.of("a@b.c"));
         when(campaignRepository.existsById(9L)).thenReturn(true);
-        // 第一次：insert
-        assertTrue(service.vote("reader-poll", "rating", 0, 9L, "tok", null).isPresent());
+        // 第一次：insert；同時驗證 redirect 字串完整內容（有 c 有 rt）
+        assertEquals(Optional.of("/r/survey/reader-poll?voted=0&c=9&rt=tok"),
+            service.vote("reader-poll", "rating", 0, 9L, "tok", null));
         verify(voteRepository).save(argThat(v -> "很有幫助".equals(v.getOptionValue())
             && SurveyVote.IDENTITY_RECIPIENT.equals(v.getIdentityType())));
         // 第二次同身分：改票（先查到既有列→setOptionValue 再 save）
@@ -69,9 +70,17 @@ class SurveyVoteServiceTest {
     }
 
     @Test
-    void 問卷未發布或欄位不符回empty不落票() {
+    void 問卷未發布回empty不落票() {
         when(formSchemaService.emailVoteQuestion("ghost")).thenReturn(Optional.empty());
         assertTrue(service.vote("ghost", "rating", 0, null, null, null).isEmpty());
+        verify(voteRepository, never()).save(any());
+    }
+
+    /** 問卷存在但呼叫端傳的 fieldKey 不等於該問卷綁定的信中一鍵題欄位——同樣視為目標不合法 */
+    @Test
+    void 問卷存在但fieldKey不符信中題回empty不落票() {
+        givenQuestion("reader-poll", "rating", List.of("很有幫助", "普通", "沒幫助"));
+        assertTrue(service.vote("reader-poll", "wrong-field", 0, null, null, null).isEmpty());
         verify(voteRepository, never()).save(any());
     }
 
@@ -79,6 +88,14 @@ class SurveyVoteServiceTest {
     void optionIndex超界回empty() {
         givenQuestion("reader-poll", "rating", List.of("很有幫助", "普通", "沒幫助"));
         assertTrue(service.vote("reader-poll", "rating", 3, null, null, null).isEmpty());
+        verify(voteRepository, never()).save(any());
+    }
+
+    /** Minor：負數 optionIndex 同樣是超界，須與正數超界一致回 empty 不落票 */
+    @Test
+    void optionIndex為負數回empty() {
+        givenQuestion("reader-poll", "rating", List.of("很有幫助", "普通", "沒幫助"));
+        assertTrue(service.vote("reader-poll", "rating", -1, null, null, null).isEmpty());
         verify(voteRepository, never()).save(any());
     }
 
@@ -93,7 +110,9 @@ class SurveyVoteServiceTest {
     @Test
     void 匿名insert不查重() {
         givenQuestion("reader-poll", "rating", List.of("很有幫助", "普通", "沒幫助"));
-        assertTrue(service.vote("reader-poll", "rating", 0, null, null, null).isPresent());
+        // 無 c 無 rt：redirect 字串完整內容驗證
+        assertEquals(Optional.of("/r/survey/reader-poll?voted=0"),
+            service.vote("reader-poll", "rating", 0, null, null, null));
         verify(voteRepository).save(argThat(v -> SurveyVote.IDENTITY_ANON.equals(v.getIdentityType())
             && v.getIdentityKey() == null));
         verify(voteRepository, never()).findByFormKeyAndIdentityTypeAndIdentityKey(any(), any(), any());
@@ -108,8 +127,8 @@ class SurveyVoteServiceTest {
 
     /**
      * 前置審查交辦（Task 1 審查者）：rt 驗證回病態的 {@code Optional.of("")}（空字串但存在）時，
-     * identityKey 為 blank——DB 唯一約束對 NULL 有效但對空字串無效，必須降級為 ANON 落票，
-     * 不可讓空字串當作具名 identityKey 寫入。
+     * identityKey 為 blank。NULL 對唯一索引不生效（多個 NULL 視為互不相等），若讓空字串當作
+     * 具名 identityKey 寫入則不受此限制、逃過一票限制，必須在此降級為 ANON 落票。
      */
     @Test
     void rt驗證回空字串時降級為ANON落票() {

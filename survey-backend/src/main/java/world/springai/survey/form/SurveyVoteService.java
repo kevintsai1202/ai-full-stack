@@ -93,8 +93,9 @@ public class SurveyVoteService {
                 identityKey = null;
             }
         }
-        // 防禦：具名身分的 identityKey 若為空白（例如 rt 驗證回病態空字串），
-        // DB 唯一約束對 NULL 有效但對空字串無效，必須在此降級為匿名，避免撞鍵或誤歸戶
+        // 防禦：具名身分的 identityKey 若為空白（例如 rt 驗證回病態空字串），必須在此降級為匿名。
+        // NULL 對唯一索引不生效（多個 NULL 視為互不相等），具名身分若留 NULL identityKey
+        // 會逃過一票限制；因此 blank 一律降級 ANON，由 WHERE identity_type <> 'ANON' 明確排除
         if (!SurveyVote.IDENTITY_ANON.equals(identityType) && !StringUtils.hasText(identityKey)) {
             identityType = SurveyVote.IDENTITY_ANON;
             identityKey = null;
