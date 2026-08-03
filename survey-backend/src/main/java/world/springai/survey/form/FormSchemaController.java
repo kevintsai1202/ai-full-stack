@@ -4,6 +4,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import world.springai.survey.AdminKeyGuard;
 import world.springai.survey.audience.WelcomeMailService;
+import world.springai.survey.reader.ReaderSessionService;
 
 import java.time.OffsetDateTime;
 import java.nio.charset.StandardCharsets;
@@ -69,8 +71,8 @@ public class FormSchemaController {
     public NewsletterSubmissionService.SubmitResult submitNewsletter(
             @PathVariable String formKey,
             @RequestBody NewsletterSubmissionService.SubmitRequest request,
-            @org.springframework.web.bind.annotation.CookieValue(
-                value = world.springai.survey.reader.ReaderSessionService.COOKIE_NAME,
+            @CookieValue(
+                value = ReaderSessionService.COOKIE_NAME,
                 required = false) String sessionCookie) {
         // 委派完整邏輯到服務層：身分解析、答案驗證、人物合併、發點
         return newsletterSubmissionService.submit(formKey, request, sessionCookie);

@@ -7,9 +7,12 @@ import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.server.ResponseStatusException;
 import world.springai.survey.ApiExceptionHandler;
 import world.springai.survey.reader.ReaderSessionService;
+
+import static org.springframework.http.HttpStatus.CONFLICT;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -94,7 +97,7 @@ class NewsletterSubmissionControllerTest {
     void 成功提交回200帶rewarded欄位() throws Exception {
         var result = new NewsletterSubmissionService.SubmitResult(
             "uuid-123", true, 50, "感謝填答，已發送 50 點數");
-        when(submissionService.submit(anyString(), any(), anyString()))
+        when(submissionService.submit(anyString(), any(), nullable(String.class)))
             .thenReturn(result);
 
         mvc.perform(post("/api/forms/my-form/newsletter-submissions")
@@ -125,7 +128,7 @@ class NewsletterSubmissionControllerTest {
     /** 答案驗證失敗拋 400，轉譯為 400 JSON 回應（ProblemDetail 格式）*/
     @Test
     void 答案驗證失敗回400() throws Exception {
-        when(submissionService.submit(anyString(), any(), anyString()))
+        when(submissionService.submit(anyString(), any(), nullable(String.class)))
             .thenThrow(new ResponseStatusException(BAD_REQUEST, "必填欄位未填寫：q1"));
 
         mvc.perform(post("/api/forms/my-form/newsletter-submissions")
@@ -134,5 +137,19 @@ class NewsletterSubmissionControllerTest {
                 .content(submitJson(Map.of(), 1L)))
            .andExpect(status().isBadRequest())
            .andExpect(jsonPath("$.detail").value("必填欄位未填寫：q1"));
+    }
+
+    /** 停止處理名單（suppression）拋 409，轉譯為 409 JSON 回應（ProblemDetail 格式）*/
+    @Test
+    void 停止處理名單回409() throws Exception {
+        when(submissionService.submit(anyString(), any(), nullable(String.class)))
+            .thenThrow(new ResponseStatusException(CONFLICT, "此 Email 已要求停止處理，如需重新訂閱請聯絡管理員"));
+
+        mvc.perform(post("/api/forms/my-form/newsletter-submissions")
+                .cookie(sessionCookie())
+                .contentType(APPLICATION_JSON)
+                .content(submitJson(Map.of("q1", "yes"), 1L)))
+           .andExpect(status().isConflict())
+           .andExpect(jsonPath("$.detail").value("此 Email 已要求停止處理，如需重新訂閱請聯絡管理員"));
     }
 }
