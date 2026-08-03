@@ -522,8 +522,13 @@ public class FormSchemaService {
                 rs.getString("fact_key")), formDefinitionId);
     }
 
-    /** 驗證必填與未知欄位，避免拼錯 key 後資料靜默消失在統計之外。 */
-    private void validateAnswers(FormDefinition form, Map<String, Object> answers) {
+    /**
+     * 驗證必填與未知欄位，避免拼錯 key 後資料靜默消失在統計之外。
+     *
+     * <p>套件層級存取（非 private）：{@link NewsletterSubmissionService} 電子報通道提交
+     * 需重用同一份驗證規則，避免兩處各自維護一套「必填／未知欄位」判斷而逐漸失準。</p>
+     */
+    void validateAnswers(FormDefinition form, Map<String, Object> answers) {
         Map<String, FieldDefinition> allowed = new LinkedHashMap<>();
         form.fields().forEach(field -> allowed.put(field.key(), field));
         List<String> unknown = answers.keySet().stream()
