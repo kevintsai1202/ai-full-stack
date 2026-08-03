@@ -10,6 +10,9 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.server.ResponseStatusException;
 import world.springai.survey.AdminKeyGuard;
 import world.springai.survey.ApiExceptionHandler;
+import world.springai.survey.audience.SubscriptionLinkBuilder;
+import world.springai.survey.form.FormSchemaService;
+import world.springai.survey.mail.CouponMailRenderer;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -43,6 +46,9 @@ class AdminCouponControllerTest {
     private CouponSendService sendService;
     private AdminKeyGuard guard;
     private ObjectMapper objectMapper;
+    private CouponMailRenderer mailRenderer;
+    private SubscriptionLinkBuilder linkBuilder;
+    private FormSchemaService formSchemaService;
 
     @BeforeEach
     void setUp() {
@@ -52,6 +58,12 @@ class AdminCouponControllerTest {
         sendService = mock(CouponSendService.class);
         guard = mock(AdminKeyGuard.class);
         objectMapper = new ObjectMapper();
+        // 信件渲染器直接用真實實例（無外部依賴），讓 preview-mail 測試驗證真正的渲染輸出
+        mailRenderer = new CouponMailRenderer();
+        linkBuilder = mock(SubscriptionLinkBuilder.class);
+        formSchemaService = mock(FormSchemaService.class);
+        when(linkBuilder.previewUnsubscribeLink()).thenReturn("https://example.com/api/survey/unsubscribe?email=preview%40example.com&t=preview");
+        when(formSchemaService.listDefinitions()).thenReturn(List.of());
 
         // 注入依賴建立 controller
         controller = new AdminCouponController(
@@ -59,7 +71,10 @@ class AdminCouponControllerTest {
             recipientService,
             sendService,
             guard,
-            objectMapper);
+            objectMapper,
+            mailRenderer,
+            linkBuilder,
+            formSchemaService);
 
         // MockMvc 需要 UTF-8 StringHttpMessageConverter（中文）與 JSON converter，
         // 以及異常處理器將 ResponseStatusException 轉成 JSON 回應
@@ -84,6 +99,25 @@ class AdminCouponControllerTest {
                 "expiresAt", expiresAt != null ? expiresAt : "",
                 "formKey", formKey != null ? formKey : "",
                 "answerFilter", answerFilter != null ? answerFilter : Map.of()
+            );
+            return objectMapper.writeValueAsString(body);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /** 預覽信件請求 JSON（同建立活動七欄位，不落庫） */
+    private String previewMailJson(String courseName, String pitch, String courseUrl,
+                                   String couponCode, String expiresAt, String formKey) {
+        try {
+            Map<String, Object> body = Map.of(
+                "courseName", courseName != null ? courseName : "",
+                "pitch", pitch != null ? pitch : "",
+                "courseUrl", courseUrl != null ? courseUrl : "",
+                "couponCode", couponCode != null ? couponCode : "",
+                "expiresAt", expiresAt != null ? expiresAt : "",
+                "formKey", formKey != null ? formKey : "",
+                "answerFilter", Map.of()
             );
             return objectMapper.writeValueAsString(body);
         } catch (Exception e) {
@@ -285,5 +319,37 @@ class AdminCouponControllerTest {
                 .content(sendJson(List.of("bad@example.com"), 100)))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.detail").exists());
+    }
+
+    // ========== 預覽信件測試（spec §8.1，不落庫） ==========
+
+    /** preview-mail 回 200，html 內含優惠碼與課程名，subject 內含課程名 */
+    @Test
+    void previewMail回200帶主旨與含優惠碼的html() throws Exception {
+        mvc.perform(post("/api/admin/coupons/preview-mail")
+                .header("X-Admin-Key", "valid-key")
+                .contentType(APPLICATION_JSON)
+                .content(previewMailJson(
+                    "Python 入門", "學習 Python 的好夥伴", "https://example.com/course",
+                    "SAVE300", "2026-09-30", "survey-key")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.subject").value(org.hamcrest.Matchers.containsString("Python 入門")))
+            .andExpect(jsonPath("$.html").value(org.hamcrest.Matchers.containsString("SAVE300")))
+            .andExpect(jsonPath("$.html").value(org.hamcrest.Matchers.containsString("Python 入門")));
+    }
+
+    /** preview-mail 缺 X-Admin-Key 回 401，不觸發任何渲染 */
+    @Test
+    void previewMail缺Admin金鑰回401() throws Exception {
+        doThrow(new ResponseStatusException(UNAUTHORIZED, "invalid admin key"))
+            .when(guard).verify(nullable(String.class));
+
+        mvc.perform(post("/api/admin/coupons/preview-mail")
+                .contentType(APPLICATION_JSON)
+                .content(previewMailJson(
+                    "Python 入門", "學習 Python 的好夥伴", "https://example.com/course",
+                    "SAVE300", "2026-09-30", "survey-key")))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.detail").value("invalid admin key"));
     }
 }

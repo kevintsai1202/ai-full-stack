@@ -176,6 +176,25 @@ class CouponSendServiceTest {
     }
 
     /**
+     * 同批次內同一 email（含大小寫與頭尾空白差異）只應視為一人：只實際寄一封，
+     * attempted／sent 皆計 1，不因批內重複而重複寄送或重複累計 sent_count。
+     */
+    @Test
+    void 同批重複email正規化後只寄一封() {
+        CouponCampaign c = withId(campaign(), 9L);
+        when(campaignRepository.findById(9L)).thenReturn(Optional.of(c));
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        CouponSendService.SendResult result =
+            service.send(9L, List.of("a@x.com", "A@X.com", " a@x.com "), null);
+
+        assertEquals(1, result.attempted());
+        assertEquals(1, result.sent());
+        assertEquals(1, c.getSentCount());
+        verify(mailSender, times(1)).send(anyString(), anyString(), anyString());
+    }
+
+    /**
      * 名單為空（emails 為空清單）應回 400，且不觸發任何寄信；與「全部已寄過」分開單獨釘住，
      * 避免日後重構把「空清單」與「全部已寄」合併成同一分支時，其中一種情境被誤刪或改錯訊息。
      */

@@ -37,6 +37,12 @@ import world.springai.survey.mail.MailSender;
  * <p>{@link EmailLog} 在本服務刻意一律用六參建構子（{@code campaignId} 傳 {@code null}）：
  * 該欄位語意是電子報 {@code Campaign}（{@code newsletter} 套件），優惠券活動與寄送記錄的
  * 關聯改以 {@code type="coupon:"+campaignId} 表達，不是遺漏設定 campaignId。</p>
+ *
+ * <p><b>批內去重</b>：{@link #send} 一開始即對 {@code emails} 依正規化 email 去重（同批同
+ * 一人只保留第一次出現），才進入子集驗證與已寄過濾。理由：後台勾選表格理論上不會產生重複
+ * email，但前端若有重整、跨分頁重複勾選等邊界情況把同一人送兩次，迴圈若不去重會對同一人
+ * 寄兩封信、{@code sent_count} 也會被誤算兩次——這與「已寄過跳過」的冪等意圖矛盾（已寄過的
+ * 判斷是跨批次的，批內重複則是同一次呼叫內的，兩者需要分開處理）。</p>
  */
 @Service
 public class CouponSendService {
@@ -95,7 +101,9 @@ public class CouponSendService {
         CouponCampaign campaign = campaignRepository.findById(campaignId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到指定優惠券活動"));
 
-        List<String> requested = emails == null ? List.of() : emails;
+        // 批內去重：同批同一 email（正規化後）只保留第一次出現，避免同一人被誤寄兩封、
+        // sent_count 重複累計（見類別 Javadoc「批內去重」說明）
+        List<String> requested = dedupeNormalized(emails == null ? List.of() : emails);
         // 子集驗證：後台勾選名單必須全部落在活動命中集合內，否則整批拒絕、不觸發任何寄信
         List<String> illegal = recipientService.findIllegal(campaign, requested);
         if (!illegal.isEmpty()) {
@@ -165,5 +173,23 @@ public class CouponSendService {
     /** email 正規化：去除頭尾空白並轉小寫，作為大小寫不敏感比對的統一格式 */
     private String normalize(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * 依正規化 email 去重，保留每個人第一次出現時的原始字串（維持呼叫端原始大小寫供顯示／寄送）。
+     * {@code null} 元素刻意不參與去重（每個 null 都視為獨立元素、全數保留）——讓後續
+     * {@link CouponRecipientService#findIllegal} 仍能對每一筆 null 各自判定為不合法，
+     * 不因去重而悄悄吃掉應該被攔下的錯誤輸入。
+     */
+    private List<String> dedupeNormalized(List<String> emails) {
+        Set<String> seen = new java.util.LinkedHashSet<>();
+        List<String> result = new java.util.ArrayList<>();
+        for (String email : emails) {
+            String key = email == null ? null : normalize(email);
+            if (key == null || seen.add(key)) {
+                result.add(email);
+            }
+        }
+        return result;
     }
 }

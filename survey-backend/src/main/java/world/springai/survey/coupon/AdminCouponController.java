@@ -10,13 +10,17 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import world.springai.survey.AdminKeyGuard;
+import world.springai.survey.audience.SubscriptionLinkBuilder;
+import world.springai.survey.form.FormSchemaService;
+import world.springai.survey.mail.CouponMailRenderer;
 
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 課程優惠券 Admin API：建立活動、列表、預覽收件人、寄送優惠券。
+ * 課程優惠券 Admin API：建立活動、列表、預覽收件人、寄送優惠券、預覽信件。
  * 全部端點皆須驗證 {@code X-Admin-Key}。
  */
 @RestController
@@ -30,19 +34,28 @@ public class AdminCouponController {
     private final CouponSendService sendService;
     private final AdminKeyGuard guard;
     private final ObjectMapper objectMapper;
+    private final CouponMailRenderer mailRenderer;
+    private final SubscriptionLinkBuilder linkBuilder;
+    private final FormSchemaService formSchemaService;
 
-    /** 注入依賴：活動與寄送服務、金鑰驗證、JSON 解析器 */
+    /** 注入依賴：活動與寄送服務、金鑰驗證、JSON 解析器、信件渲染與退訂連結組裝、表單 schema 服務 */
     public AdminCouponController(
             CouponCampaignRepository campaignRepository,
             CouponRecipientService recipientService,
             CouponSendService sendService,
             AdminKeyGuard guard,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            CouponMailRenderer mailRenderer,
+            SubscriptionLinkBuilder linkBuilder,
+            FormSchemaService formSchemaService) {
         this.campaignRepository = campaignRepository;
         this.recipientService = recipientService;
         this.sendService = sendService;
         this.guard = guard;
         this.objectMapper = objectMapper;
+        this.mailRenderer = mailRenderer;
+        this.linkBuilder = linkBuilder;
+        this.formSchemaService = formSchemaService;
     }
 
     /** 建立優惠券活動請求 */
@@ -59,6 +72,19 @@ public class AdminCouponController {
     public record SendRequest(
             List<String> emails,
             Integer limit) {}
+
+    /** 預覽信件請求：與 {@link CreateCampaignRequest} 同七欄位，僅供渲染、不落庫 */
+    public record PreviewMailRequest(
+            String courseName,
+            String pitch,
+            String courseUrl,
+            String couponCode,
+            String expiresAt,
+            String formKey,
+            Map<String, Object> answerFilter) {}
+
+    /** 信件預覽結果：主旨與內文 HTML */
+    public record MailPreview(String subject, String html) {}
 
     /**
      * 建立優惠券活動：驗證必填欄位與 courseUrl 格式（https:// 開頭），
@@ -172,5 +198,65 @@ public class AdminCouponController {
 
         // 委派給寄送服務（會自行驗證活動存在與名單合法性）
         return sendService.send(id, request.emails(), request.limit());
+    }
+
+    /**
+     * 預覽即將寄出的優惠券信件（spec §8.1）：body 與建立活動同七欄位，但刻意不落庫，
+     * 純粹以 {@link CouponMailRenderer} 渲染出主旨與內文供後台即時檢視。
+     *
+     * <p>退訂連結一律用 {@link SubscriptionLinkBuilder#previewUnsubscribeLink()}（假
+     * email、假簽章）——預覽內容會直接顯示在後台頁面，不該讓一個可用的退訂 token 隨預覽外流，
+     * 理由與該方法本身的 Javadoc 一致。寄送原因用的問卷標題與
+     * {@link CouponSendService#send} 同口徑：取該 formKey 版本號最大者的標題，查無版本
+     * 時退回 formKey 原字串——此處刻意獨立實作一份（而非讓 controller 依賴 service 內部
+     * private 方法），因為兩者分屬 controller／service 不同層級，重複四行 stream 邏輯比
+     * 額外增加跨層耦合的成本更低。</p>
+     */
+    @PostMapping("/api/admin/coupons/preview-mail")
+    public MailPreview previewMail(
+            @RequestHeader(value = KEY_HEADER, required = false) String key,
+            @RequestBody PreviewMailRequest request) {
+        // 驗證 Admin 金鑰
+        guard.verify(key);
+
+        // 解析 expiresAt（可為 null／空白）；格式不正確直接 400，不進入渲染
+        LocalDate expiresAt = null;
+        if (request.expiresAt() != null && !request.expiresAt().isBlank()) {
+            try {
+                expiresAt = LocalDate.parse(request.expiresAt());
+            } catch (Exception e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "expiresAt 格式不正確，應為 YYYY-MM-DD");
+            }
+        }
+
+        // 建立暫時性活動物件供渲染器使用，刻意不呼叫 campaignRepository.save，不落庫
+        CouponCampaign draft = new CouponCampaign(
+            request.courseName(),
+            request.pitch(),
+            request.courseUrl(),
+            request.couponCode(),
+            expiresAt,
+            request.formKey(),
+            "{}");
+
+        String formTitle = resolveFormTitle(request.formKey());
+        String subject = mailRenderer.subject(draft);
+        String html = mailRenderer.body(draft, formTitle, linkBuilder.previewUnsubscribeLink());
+        return new MailPreview(subject, html);
+    }
+
+    /**
+     * 取該 formKey 版本號最大的問卷標題，供預覽信件的寄送原因顯示；查無任何版本或
+     * formKey 空白時退回 formKey 原字串（不擋預覽）。口徑對齊 {@code CouponSendService.resolveFormTitle}。
+     */
+    private String resolveFormTitle(String formKey) {
+        if (formKey == null || formKey.isBlank()) {
+            return "";
+        }
+        return formSchemaService.listDefinitions().stream()
+            .filter(definition -> definition.key().equals(formKey))
+            .max(Comparator.comparingInt(FormSchemaService.FormDefinition::version))
+            .map(FormSchemaService.FormDefinition::title)
+            .orElse(formKey);
     }
 }

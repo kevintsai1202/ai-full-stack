@@ -613,12 +613,15 @@
       </div>
       <div class="row">
         <div><label for="coupon-form-key">名單來源問卷</label><select id="coupon-form-key"></select></div>
-        <div><label for="coupon-filter-field">條件欄位（選填，僅列單選／多選題）</label><select id="coupon-filter-field"><option value="">不限</option></select></div>
+        <div><label for="coupon-filter-field">條件欄位（選填，僅支援單選題條件）</label><select id="coupon-filter-field"><option value="">不限</option></select></div>
         <div><label for="coupon-filter-value">條件值</label><select id="coupon-filter-value" disabled><option value="">請先選欄位</option></select></div>
       </div>
-      <p class="hint">問卷與條件會隨活動一併儲存（成為此活動的名單快照條件），建立後無法修改，需補寄時請用下方「查詢名單」重新命中目前資料。</p>
-      <button class="btn" id="coupon-create-btn" style="margin-top:14px">儲存活動</button>
+      <p class="hint">問卷與條件會隨活動一併儲存（成為此活動的名單快照條件），建立後無法修改，需補寄時請用下方「查詢名單」重新命中目前資料。多選題答案存為陣列，條件比對為嚴格相等恆不命中，故條件欄位只列單選題。</p>
+      <div class="row" style="margin-top:14px"><div style="flex:0"><button class="btn" id="coupon-create-btn">儲存活動</button></div><div style="flex:0"><button class="btn ghost" id="coupon-preview-mail-btn">預覽信件</button></div></div>
       <div class="msg" id="coupon-create-msg"></div>
+      <div class="msg" id="coupon-preview-mail-msg"></div>
+      <p class="hint" id="coupon-preview-mail-subject" hidden></p>
+      <iframe class="preview" id="coupon-mail-preview" title="優惠券信件預覽" sandbox="" hidden style="margin-top:10px"></iframe>
     </div>
 
     <div class="card">
@@ -638,7 +641,7 @@
 
     <div class="card">
       <h2>③ 寄送</h2>
-      <p class="hint">只會寄給上方名單中目前勾選的收件人；已寄過者仍可勾選送出，後端會自動略過、不會重複寄送（防騷擾）。</p>
+      <p class="hint">只會寄給上方名單中目前勾選的收件人，一次寄出全部勾選對象（本輪無寄送封數上限輸入）；已寄過者仍可勾選送出，後端會自動略過、不會重複寄送（防騷擾）。</p>
       <button class="btn" id="coupon-send-btn">寄送優惠券給已勾選名單</button>
       <div class="msg" id="coupon-send-msg"></div>
     </div>
@@ -706,7 +709,14 @@
   let previewToken=0;
   /** 目前作業中的優惠券活動（建立後或從列表選取後設定）；名單查詢與寄送皆針對此活動操作。 */
   let couponActiveCampaign=null;
-  /** 建立優惠券活動表單目前選定問卷的欄位清單（僅單選／多選），供「條件值」下拉取用選項。 */
+  /**
+   * GET /api/admin/forms 回傳的完整表單定義清單（含每個版本的 fields），
+   * 由 loadCouponForms 存入、loadCouponFilterFields 從中取用——避免再另外呼叫
+   * GET /api/forms/{formKey}：該端點不在 Admin 專用網域白名單
+   * （AdminEntryHostFilter 只放行 /admin.html 與 /api/admin/**），正式 admin 網域會 404。
+   */
+  let couponFormDefinitions=[];
+  /** 建立優惠券活動表單目前選定問卷的欄位清單（僅單選題），供「條件值」下拉取用選項。 */
   let couponFormFields=[];
   /** 最近一次查詢到的優惠券收件人清單（含 alreadySent 旗標）。 */
   let couponRecipients=[];
@@ -878,6 +888,7 @@
     $('#coupon-form-key').onchange=loadCouponFilterFields;
     $('#coupon-filter-field').onchange=refreshCouponFilterValue;
     $('#coupon-create-btn').onclick=createCouponCampaign;
+    $('#coupon-preview-mail-btn').onclick=previewCouponMail;
     $('#coupon-query-btn').onclick=queryCouponRecipients;
     $('#coupon-check-all').onchange=event=>toggleCouponCheckAll(event.target.checked);
     $('#coupon-recipient-table tbody').addEventListener('change',updateCouponSelectedCount);
@@ -2696,37 +2707,48 @@
     }catch(e){if(e.message!=='401')alert('插入失敗：'+e.message);}
   }
 
-  // ── 優惠券活動：問卷/條件選單、建立、名單查詢與寄送 ──────────────────────────────
-  /** 載入問卷下拉（沿用 GET /api/admin/forms，取不重複 formKey，優先顯示標題，同 dynamic-form 邏輯）。 */
+  // ── 優惠券活動：問卷/條件選單、建立、預覽信件、名單查詢與寄送 ──────────────────────
+  /** 載入問卷下拉（GET /api/admin/forms，取不重複 formKey，標題採該 formKey 版本號最大者，同 dynamic-form 邏輯）。 */
   async function loadCouponForms(){
     try{
-      const definitions=await api('/api/admin/forms');
+      couponFormDefinitions=await api('/api/admin/forms');
       const select=$('#coupon-form-key'),current=select.value;
       select.replaceChildren();
-      [...new Set(definitions.map(item=>item.key))].forEach(key=>{
-        const definition=definitions.find(item=>item.key===key);
+      [...new Set(couponFormDefinitions.map(item=>item.key))].forEach(key=>{
+        const definition=maxVersionOf(key);
         select.add(new Option(definition?.title||key,key));
       });
       if([...select.options].some(option=>option.value===current))select.value=current;
-      await loadCouponFilterFields();
+      loadCouponFilterFields();
     }catch(error){if(error.message!=='401')showMsg('coupon-create-msg','問卷清單載入失敗：'+error.message,false);}
   }
 
-  /** 依目前選定問卷載入其發布中版本 schema（GET /api/forms/{formKey}），只保留單選／多選欄位供條件下拉使用。 */
-  async function loadCouponFilterFields(){
+  /** 取記憶體中指定 formKey 版本號最大的定義（不限發布狀態），口徑對齊後端 CouponSendService.resolveFormTitle 的標題選取邏輯。 */
+  function maxVersionOf(formKey){
+    return couponFormDefinitions.filter(item=>item.key===formKey)
+      .reduce((max,item)=>(!max||item.version>max.version)?item:max,null);
+  }
+
+  /**
+   * 依目前選定問卷，從記憶體 couponFormDefinitions（loadCouponForms 已載入）取條件欄位，
+   * 不再另外呼叫 GET /api/forms/{formKey}——該端點不在 AdminEntryHostFilter 的管理網域白名單
+   * （只放行 /admin.html 與 /api/admin/**），正式 admin 網域會直接 404。
+   * 優先取該問卷「已發布」版本中版本號最大者；若尚無已發布版本則退回全部版本中的最大版本號。
+   * 條件欄位只保留單選題（select）：多選題答案存為 JSON 陣列，後端比對為嚴格相等，
+   * 選了多選題條件會恆為 0 命中（見 AudienceSearchService.appendSurveyFilter）。
+   */
+  function loadCouponFilterFields(){
     const formKey=$('#coupon-form-key').value;
     const fieldSelect=$('#coupon-filter-field');
     fieldSelect.replaceChildren(new Option('不限',''));
     resetCouponFilterValue();
     if(!formKey){couponFormFields=[];return;}
-    try{
-      const definition=await api(`/api/forms/${encodeURIComponent(formKey)}`);
-      couponFormFields=(definition.fields||[]).filter(field=>field.type==='select'||field.type==='multi_select');
-      couponFormFields.forEach(field=>fieldSelect.add(new Option(field.label||field.key,field.key)));
-    }catch(error){
-      couponFormFields=[];
-      if(error.message!=='401')showMsg('coupon-create-msg','問卷欄位載入失敗：'+error.message,false);
-    }
+    const versions=couponFormDefinitions.filter(item=>item.key===formKey);
+    const published=versions.filter(item=>item.status==='PUBLISHED');
+    const target=(published.length?published:versions)
+      .reduce((max,item)=>(!max||item.version>max.version)?item:max,null);
+    couponFormFields=(target?.fields||[]).filter(field=>field.type==='select');
+    couponFormFields.forEach(field=>fieldSelect.add(new Option(field.label||field.key,field.key)));
   }
 
   /** 清空並停用「條件值」下拉；尚未選欄位或欄位為「不限」時呼叫。 */
@@ -2747,21 +2769,40 @@
     valueSelect.disabled=false;
   }
 
-  /** 建立優惠券活動：僅在條件欄位與條件值皆有選擇時才組出 answerFilter，成功後設為目前作業活動並重整活動列表。 */
-  async function createCouponCampaign(){
-    const courseName=$('#coupon-course-name').value.trim();
-    const pitch=$('#coupon-pitch').value.trim();
-    const courseUrl=$('#coupon-course-url').value.trim();
-    const couponCode=$('#coupon-code').value.trim();
-    const expiresAt=$('#coupon-expires-at').value||null;
-    const formKey=$('#coupon-form-key').value;
+  /**
+   * 組出建立活動／預覽信件共用的請求 body（七欄位：課程名／文案／連結／優惠碼／期限／問卷／條件），
+   * 僅在條件欄位與條件值皆有選擇時才組出 answerFilter。
+   */
+  function couponFormPayload(){
     const filterField=$('#coupon-filter-field').value;
     const filterValue=$('#coupon-filter-value').value;
-    const answerFilter=(filterField&&filterValue)?{[filterField]:filterValue}:undefined;
+    return {
+      courseName:$('#coupon-course-name').value.trim(),
+      pitch:$('#coupon-pitch').value.trim(),
+      courseUrl:$('#coupon-course-url').value.trim(),
+      couponCode:$('#coupon-code').value.trim(),
+      expiresAt:$('#coupon-expires-at').value||null,
+      formKey:$('#coupon-form-key').value,
+      answerFilter:(filterField&&filterValue)?{[filterField]:filterValue}:undefined
+    };
+  }
+
+  /** 預覽即將寄出的優惠券信件（spec §8.1）：打 POST /api/admin/coupons/preview-mail（不落庫），於 iframe 顯示主旨與內文。 */
+  async function previewCouponMail(){
+    const msg=$('#coupon-preview-mail-msg');msg.className='msg';msg.textContent='';
     try{
-      const created=await api('/api/admin/coupons',{method:'POST',body:JSON.stringify({
-        courseName,pitch,courseUrl,couponCode,expiresAt,formKey,answerFilter
-      })});
+      const result=await api('/api/admin/coupons/preview-mail',{method:'POST',body:JSON.stringify(couponFormPayload())});
+      const subjectLine=$('#coupon-preview-mail-subject');
+      subjectLine.hidden=false;subjectLine.textContent='主旨：'+result.subject;
+      const frame=$('#coupon-mail-preview');
+      frame.hidden=false;frame.srcdoc=result.html;
+    }catch(error){if(error.message!=='401'){msg.className='msg err';msg.textContent='預覽失敗：'+error.message;}}
+  }
+
+  /** 建立優惠券活動：成功後設為目前作業活動並重整活動列表。 */
+  async function createCouponCampaign(){
+    try{
+      const created=await api('/api/admin/coupons',{method:'POST',body:JSON.stringify(couponFormPayload())});
       showMsg('coupon-create-msg',`已建立活動「${created.courseName}」（優惠碼 ${created.couponCode}）。`,true);
       resetCouponCreateForm();
       selectCouponCampaign(created);

@@ -59,8 +59,9 @@ CREATE TABLE coupon_campaign (
 | --- | --- |
 | `POST /api/admin/coupons` | 建活動；驗證：必填、course_url 限 `https://`、期限格式 |
 | `GET /api/admin/coupons` | 活動列表（含狀態、sent_count、sent_at） |
-| `POST /api/admin/coupons/{id}/preview-recipients` | 以活動快照條件跑 SurveyFilter（固定 `consentStatus=CONFIRMED`），回命中清單：email、稱呼、填答日、關鍵答案摘要、`alreadySent` 旗標 |
+| `POST /api/admin/coupons/{id}/preview-recipients` | 以活動快照條件跑 SurveyFilter（固定 `consentStatus=CONFIRMED`），回命中清單：email、稱呼、`alreadySent` 旗標 |
 | `POST /api/admin/coupons/{id}/send` body `{emails, limit}` | 寄送（見 §6） |
+| `POST /api/admin/coupons/preview-mail` body 同建立活動七欄位（不落庫） | 即時信件預覽（見 §8 第 1 點），回 `{subject, html}` |
 
 ## 6. 寄送流程與防線
 
@@ -81,7 +82,7 @@ CREATE TABLE coupon_campaign (
 ## 8. Admin UI（新「優惠券」分頁）
 
 1. **建立表單**：五欄位＋即時信件預覽（iframe srcdoc，沿用既有預覽慣例）。
-2. **名單區**：問卷下拉（列有填答資料的問卷）＋答案條件（選欄位→選選項值）→「查詢名單」→ 命中清單表格（預設全選、可逐人取消、`alreadySent` 標記灰顯、即時顯示勾選人數）。
+2. **名單區**：問卷下拉（列有填答資料的問卷）＋答案條件（選欄位→選選項值，條件欄位僅列單選題——多選題答案存為 JSON 陣列，後端比對為嚴格相等，選了恆為 0 命中，見 §11）→「查詢名單」→ 命中清單表格（預設全選、可逐人取消、`alreadySent` 標記灰顯、即時顯示勾選人數）。
 3. **寄送**：確認框含最終人數與活動名 → 呼叫 send → 顯示結果摘要。
 4. **活動列表**：狀態 pill、寄送數、時間；點入可補寄（重跑名單，已寄自動跳過）。
 5. 動態值進 DOM 一律 `textContent`（既有 XSS 慣例）。
@@ -108,3 +109,5 @@ CREATE TABLE coupon_campaign (
 - 點擊追蹤與 CTR 統計（D5）。
 - 排程寄送（本輪即時寄送）、寄送前測試信。
 - 以「投過信中一鍵投票但未完整填答」者為對象（本輪名單來源限完整填答資料）。
+- 多選題答案條件（`@>` jsonb containment 查詢）：`AudienceSearchService.appendSurveyFilter` 目前對答案採 jsonb 標量嚴格相等（`= ?::jsonb`），多選題答案存為陣列，選了必然 0 命中。條件欄位下拉本輪只列單選題，多選題條件比對留待需求出現再評估 containment 查詢。
+- 名單明細欄位（填答日、答案摘要）：本輪逐人勾選主要用於剔除特定對象，判斷依據靠條件篩選；`preview-recipients` 只回 email、稱呼、`alreadySent` 旗標，明細欄位留待需求出現。
