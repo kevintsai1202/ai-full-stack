@@ -61,10 +61,15 @@ public class CouponCampaign {
     /**
      * 建立時的答案篩選條件快照，以 JSON 字串儲存於 jsonb 欄，空條件為 {@code "{}"}。
      *
-     * <p>刻意用 String 而非型別化物件：補寄時要原封不動重放這份快照查名單，
-     * 不需要在應用層再解析成 Java 型別；{@code @JdbcTypeCode(SqlTypes.JSON)} 讓
-     * Hibernate 6 對 String 欄位改採「原文直通」寫入 jsonb，不會被誤當成
-     * 需要再包一層 JSON 字串引號的一般字串。</p>
+     * <p><b>已比對專案內既有型別化 jsonb 前例</b>：{@code SurveyResponse.answers}
+     * 用 {@code Map<String, Object>}＋{@code @JdbcTypeCode}、{@code Campaign.filterJson}
+     * 用型別化 POJO（{@code AudienceSearchService.Filters}）＋{@code @JdbcTypeCode}——
+     * 兩者都是「讀出後即拿來當 Java 物件用」的欄位。本欄位語意不同：它是**條件快照**，
+     * 補寄時要原封不動重放同一份查詢條件，若改成型別化物件，等於「反序列化再序列化」
+     * 一輪，任何欄位鍵序調整或型別演進都可能讓補寄口徑與建立當下悄悄產生落差；
+     * 刻意採 {@code String} 直通，讀寫之間不經過任何 Java 型別的再解析。
+     * {@code @JdbcTypeCode(SqlTypes.JSON)} 讓 Hibernate 6 對 String 欄位改採「原文直通」
+     * 寫入 jsonb，不會被誤當成需要再包一層 JSON 字串引號的一般字串。</p>
      */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "answer_filter", nullable = false, columnDefinition = "jsonb")
@@ -84,11 +89,11 @@ public class CouponCampaign {
 
     /** 建立時間，由 {@link #onCreate()} 寫回實體欄位（不可用 @CreationTimestamp——
      *  該註解只注入 INSERT 語句、不寫回實體，同交易後續 UPDATE 會把值洗成 NULL） */
-    @Column(name = "created_at")
+    @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
     /** 更新時間，同上理由改用 @PrePersist 寫回，UPDATE 時的維護交由呼叫端顯式設定 */
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
     /** JPA 需要的無參建構子 */
@@ -116,7 +121,7 @@ public class CouponCampaign {
         this.expiresAt = expiresAt;
         this.formKey = formKey;
         this.answerFilter = answerFilter;
-        this.status = STATUS_DRAFT;
+        // status 維持欄位宣告處的預設值 STATUS_DRAFT，不在此重複賦值
     }
 
     /** 新增前補上建立/更新時間（寫回實體欄位，避免同交易後續 UPDATE 洗掉） */
