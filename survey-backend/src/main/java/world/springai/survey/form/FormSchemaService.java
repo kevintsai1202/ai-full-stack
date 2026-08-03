@@ -144,6 +144,28 @@ public class FormSchemaService {
             Boolean.TRUE.equals(row.get("public_analytics_enabled")));
     }
 
+    /** 建立全新問卷：v1 DRAFT 空殼；formKey 限 [a-z0-9-]{3,50} 且不可重複。 */
+    @Transactional
+    public FormDefinition createForm(String formKey, String title) {
+        if (formKey == null || !formKey.matches("[a-z0-9-]{3,50}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "表單代號限小寫英數與連字號（3–50 字）");
+        }
+        if (!StringUtils.hasText(title)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "表單標題為必填");
+        }
+        Integer exists = jdbc.queryForObject(
+            "SELECT count(*) FROM form_definition WHERE form_key = ?", Integer.class, formKey);
+        if (exists != null && exists > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "表單代號已存在");
+        }
+        jdbc.update("""
+            INSERT INTO form_definition (form_key, version, title, status, public_analytics_enabled)
+            VALUES (?, 1, ?, 'DRAFT', FALSE)
+            """, formKey, title.trim());
+        return getDefinition(formKey, 1);
+    }
+
     /** 從最新版本複製一份 DRAFT，避免修改已發布版本後讓歷史統計失去原始定義。 */
     @Transactional
     public FormDefinition createVersion(String formKey, VersionRequest request) {

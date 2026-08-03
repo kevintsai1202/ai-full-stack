@@ -76,6 +76,18 @@ public class FormSchemaController {
         return service.listDefinitions();
     }
 
+    /** 建立全新問卷（v1 草稿空殼）；欄位之後用既有欄位編輯端點補。 */
+    public record CreateFormRequest(String formKey, String title) {}
+
+    /** Admin 建立全新問卷；formKey 格式不符 400、重複 409。 */
+    @PostMapping("/api/admin/forms")
+    public FormSchemaService.FormDefinition createForm(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key,
+            @RequestBody CreateFormRequest request) {
+        guard.verify(key);
+        return service.createForm(request.formKey(), request.title());
+    }
+
     /** Admin 從最新版本建立新草稿，已發布版本不會被原地修改。 */
     @PostMapping("/api/admin/forms/{formKey}/versions")
     public ResponseEntity<FormSchemaService.FormDefinition> createVersion(
