@@ -63,10 +63,12 @@
         </select>
       </div>
       <div class="field full">
-        <label for="promo-link-url">連結網址</label>
-        <input id="promo-link-url" name="linkUrl" type="url" pattern="https://.*" maxlength="1000" required
-          placeholder="https://…">
-        <span class="field-hint">僅接受 https:// 開頭；讀者點擊會經由本站安全轉址，你可以在提案通過後取得成效數據。</span>
+        <label for="promo-link-url">連結網址或 Email</label>
+        <!-- type=text 而非 url：需同時接受 https:// 網址與 Email；格式由 pattern 與後端雙重把關 -->
+        <input id="promo-link-url" name="linkUrl" type="text" maxlength="1000" required
+          pattern="(https://.*|(mailto:)?[^@\s]+@[^@\s]+\.[^@\s]+.*)"
+          placeholder="https://… 或 name@example.com">
+        <span class="field-hint">接受 https:// 網址或 Email（純 Email 會自動轉為 mailto: 連結）；讀者點擊會經由本站安全轉址，你可以在提案通過後取得成效數據。</span>
       </div>
       <div class="promo-cost-bar" id="promo-cost-bar">
         <span class="cost">總費用 <span id="promo-cost">—</span> 點<small>目前餘額 <!--CREDITS--> 點</small></span>

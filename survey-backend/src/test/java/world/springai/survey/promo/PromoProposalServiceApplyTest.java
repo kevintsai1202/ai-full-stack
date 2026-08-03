@@ -82,6 +82,50 @@ class PromoProposalServiceApplyTest {
     }
 
     @Test
+    void mailto連結接受並原樣儲存() {
+        var req = new PromoProposalService.ApplyRequest(valid.contactName(), valid.contactEmail(),
+            valid.title(), valid.bodyText(), valid.linkText(), "mailto:sales@example.com", 2);
+        service.apply(1L, req);
+        verify(proposalRepository).save(argThat(p ->
+            "mailto:sales@example.com".equals(p.getLinkUrl())));
+    }
+
+    @Test
+    void 純Email自動正規化為mailto() {
+        var req = new PromoProposalService.ApplyRequest(valid.contactName(), valid.contactEmail(),
+            valid.title(), valid.bodyText(), valid.linkText(), "sales@example.com", 2);
+        service.apply(1L, req);
+        verify(proposalRepository).save(argThat(p ->
+            "mailto:sales@example.com".equals(p.getLinkUrl())));
+    }
+
+    @Test
+    void mailto帶subject參數接受() {
+        var req = new PromoProposalService.ApplyRequest(valid.contactName(), valid.contactEmail(),
+            valid.title(), valid.bodyText(), valid.linkText(),
+            "mailto:sales@example.com?subject=合作洽詢", 2);
+        service.apply(1L, req);
+        verify(proposalRepository).save(argThat(p ->
+            "mailto:sales@example.com?subject=合作洽詢".equals(p.getLinkUrl())));
+    }
+
+    @Test
+    void mailto信箱格式不正確拒絕() {
+        var bad = new PromoProposalService.ApplyRequest(valid.contactName(), valid.contactEmail(),
+            valid.title(), valid.bodyText(), valid.linkText(), "mailto:not-an-email", 1);
+        assertThrows(PromoProposalService.PromoValidationException.class,
+            () -> service.apply(1L, bad));
+    }
+
+    @Test
+    void 非網址也非Email的文字拒絕() {
+        var bad = new PromoProposalService.ApplyRequest(valid.contactName(), valid.contactEmail(),
+            valid.title(), valid.bodyText(), valid.linkText(), "hello world", 1);
+        assertThrows(PromoProposalService.PromoValidationException.class,
+            () -> service.apply(1L, bad));
+    }
+
+    @Test
     void 含小於號拒絕_禁HTML() {
         var bad = new PromoProposalService.ApplyRequest(valid.contactName(), valid.contactEmail(),
             valid.title(), "hello <b>bold</b>", valid.linkText(), valid.linkUrl(), 1);

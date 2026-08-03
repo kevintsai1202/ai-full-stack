@@ -21,6 +21,9 @@ public class PromoProposalService {
 
     /** 待審中提案的每人上限（防濫用） */
     static final int MAX_PENDING_PER_READER = 3;
+    /** Email 基本格式；連結會成為可點擊 href，檢查比聯絡 Email 嚴格 */
+    private static final java.util.regex.Pattern EMAIL_PATTERN =
+        java.util.regex.Pattern.compile("[^@\\s]+@[^@\\s]+\\.[^@\\s]+");
     /** 投放次數上下限（spec §2） */
     static final int MIN_PLACEMENTS = 1;
     static final int MAX_PLACEMENTS = 3;
@@ -82,7 +85,7 @@ public class PromoProposalService {
         PromoProposal proposal = proposalRepository.save(new PromoProposal(
             readerId, req.contactName().trim(), req.contactEmail().trim(),
             req.title().trim(), req.bodyText().trim(), req.linkText().trim(),
-            req.linkUrl().trim(), req.placements(), unitCost));
+            normalizeLinkUrl(req.linkUrl()), req.placements(), unitCost));
 
         if (totalCost > 0) {
             creditTxnRepository.save(new CreditTxn(readerId, -totalCost,
@@ -103,13 +106,16 @@ public class PromoProposalService {
         requireLen(req.title(), 150, "提案名稱");
         requireLen(req.bodyText(), 500, "文案");
         requireLen(req.linkText(), 100, "連結文字");
-        requireLen(req.linkUrl(), 1000, "網址");
+        requireLen(req.linkUrl(), 1000, "連結");
         if (!req.contactEmail().contains("@")) {
             throw new PromoValidationException("Email 格式不正確");
         }
-        if (!req.linkUrl().trim().startsWith("https://")) {
-            throw new PromoValidationException("網址僅接受 https:// 開頭");
+        String normalized = normalizeLinkUrl(req.linkUrl());
+        if (normalized == null) {
+            throw new PromoValidationException("連結僅接受 https:// 網址或 Email（可用 mailto:）");
         }
+        // 正規化可能補 mailto: 前綴（+7 字元），入庫前需重驗欄位上限
+        requireLen(normalized, 1000, "連結");
         // 禁 HTML／Script：任何欄位含 '<' 一律拒絕；同時拒絕佔位符字面，
         // 否則寄送時每收件人替換機制會把收件人 token 誤代入文案（spec §7.2）
         for (String field : new String[]{req.title(), req.bodyText(), req.linkText()}) {
@@ -127,6 +133,25 @@ public class PromoProposalService {
             >= MAX_PENDING_PER_READER) {
             throw new PromoValidationException("同時最多 " + MAX_PENDING_PER_READER + " 件待審提案");
         }
+    }
+
+    /**
+     * 正規化連結：https:// 原樣通過；mailto: 驗證信箱本體（可帶 ?subject= 等參數）；
+     * 純 Email 補上 mailto: 前綴，讓下游（302 轉址、信件 href）維持單一格式。
+     * 不合法回傳 {@code null}，由呼叫端轉為驗證例外。
+     */
+    static String normalizeLinkUrl(String raw) {
+        String value = raw.trim();
+        if (value.startsWith("https://")) {
+            return value;
+        }
+        String rest = value.startsWith("mailto:") ? value.substring("mailto:".length()) : value;
+        // mailto 可帶 ?subject= 等參數，只驗問號前的信箱本體
+        String address = rest.split("\\?", 2)[0];
+        if (!EMAIL_PATTERN.matcher(address).matches()) {
+            return null;
+        }
+        return value.startsWith("mailto:") ? value : "mailto:" + value;
     }
 
     /** 必填＋長度上限檢查 */
