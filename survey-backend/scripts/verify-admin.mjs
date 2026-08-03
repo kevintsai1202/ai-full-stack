@@ -158,9 +158,12 @@ try {
 
   // 10. 問卷卡整條接線：建立問卷 → 加 select 欄 → 設信中一鍵題 → 發布 → 編輯器插入標記 → 預覽斷言
   // 投票卡出現且標示「預覽不計票」。formKey 帶時間戳避免重跑時撞已存在的 409。
+  // verifySurveyFormKey 提升到外層作用域，供後面第 12 段優惠券分頁驗證重用同一份問卷。
+  let verifySurveyFormKey;
   {
     const suffix = Date.now().toString(36).slice(-8);
     const formKey = `verify-survey-${suffix}`;
+    verifySurveyFormKey = formKey;
     const title = `驗證問卷 ${suffix}`;
     const fieldKey = 'pick_topic';
     const fieldLabel = '你想聽哪個主題？';
@@ -255,6 +258,67 @@ try {
   await mkdir('output/playwright', { recursive: true });
   await page.screenshot({ path: 'output/playwright/survey-admin-verify.png', fullPage: true });
   console.log('OK 截圖 output/playwright/survey-admin-verify.png（含線上個資，不得提交）');
+
+  // 12. 優惠券分頁整條接線：切到優惠券分頁 → 建立活動（unique 名稱）→ 選第 10 段建立的
+  // verify-survey-* 問卷 → 查詢名單 → 斷言表格與勾選數顯示 → 停在寄送確認框前，絕不點擊
+  // 「寄送」按鈕（避免對真實收件人送出優惠券信）。
+  {
+    if (!verifySurveyFormKey) fail('缺少可重用的 verify-survey-* 問卷，無法驗證優惠券分頁');
+    const couponSuffix = Date.now().toString(36).slice(-8);
+    const courseName = `verify-coupon-${couponSuffix}`;
+    const couponCode = `VERIFY${couponSuffix}`.toUpperCase();
+
+    await page.click('#tab-coupon');
+    // 問卷下拉由 loadCouponForms()（GET /api/admin/forms）非同步載入，等第 10 段建立的
+    // 問卷出現在選項中再繼續，避免競速選到空值。
+    await page.waitForFunction(
+      (fk) => [...document.querySelectorAll('#coupon-form-key option')].some((o) => o.value === fk),
+      verifySurveyFormKey, { timeout: 10000 });
+
+    await page.fill('#coupon-course-name', courseName);
+    await page.fill('#coupon-pitch', '（E2E 驗證用）限時優惠，敬請把握。');
+    await page.fill('#coupon-course-url', 'https://example.com/verify-course');
+    await page.fill('#coupon-code', couponCode);
+    await page.selectOption('#coupon-form-key', verifySurveyFormKey);
+    await page.click('#coupon-create-btn');
+    await page.waitForFunction(
+      (name) => (document.querySelector('#coupon-create-msg')?.textContent || '').includes(name),
+      courseName, { timeout: 10000 });
+    console.log('OK 建立優惠券活動：', courseName);
+
+    // 建立成功會自動呼叫 selectCouponCampaign()，查詢名單按鈕應已從 disabled 轉為可用
+    if (await page.locator('#coupon-query-btn').isDisabled()) {
+      fail('建立活動後查詢名單按鈕應已啟用');
+    }
+    await page.click('#coupon-query-btn');
+    await page.waitForFunction(
+      () => /共命中\s*\d+\s*人/.test(document.querySelector('#coupon-list-msg')?.textContent || ''),
+      null, { timeout: 10000 });
+
+    // 斷言①：名單表格與總數／勾選數顯示正確——總數為表格實際列數（0 人時顯示佔位列，
+    // 不計入總數），勾選數為目前實際被勾選的 checkbox 數。
+    const totalText = await page.locator('#coupon-total').textContent();
+    const total = Number(totalText);
+    const rowCount = await page.locator('#coupon-recipient-table tbody tr').count();
+    if (!Number.isInteger(total) || total < 0) fail(`名單總數顯示異常：${totalText}`);
+    if (total > 0 && rowCount !== total) fail(`名單表格列數（${rowCount}）與總數（${total}）不一致`);
+    if (total === 0 && rowCount !== 1) fail('名單為 0 人時應顯示「尚無資料」佔位列');
+    const selectedText = await page.locator('#coupon-selected').textContent();
+    if (!/^\d+$/.test(selectedText || '')) fail(`勾選數顯示異常：${selectedText}`);
+    const checkedCount = await page.locator(
+      '#coupon-recipient-table tbody input[type=checkbox]:checked').count();
+    if (Number(selectedText) !== checkedCount) {
+      fail(`勾選數顯示（${selectedText}）與實際勾選 checkbox 數（${checkedCount}）不一致`);
+    }
+    console.log(`OK 名單查詢：共 ${total} 人，已勾選 ${selectedText} 人（表格與勾選數顯示正確）`);
+
+    // 斷言②：停在寄送確認框前，絕不實際寄送——不點擊「寄送」按鈕，僅確認按鈕確實存在，
+    // 以免對真實收件人（含補寄場景）送出優惠券信。
+    if (!(await page.locator('#coupon-send-btn').isVisible())) {
+      fail('優惠券分頁應顯示「寄送優惠券給已勾選名單」按鈕');
+    }
+    console.log('OK 停在寄送確認框前：未點擊「寄送」按鈕，未實際寄送優惠券信');
+  }
 
   console.log('\n全部通過 ✅（未實際發送）');
 } catch (e) {
