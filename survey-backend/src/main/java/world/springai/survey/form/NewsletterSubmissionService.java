@@ -35,6 +35,13 @@ import java.util.UUID;
  *   <li>發點與提交同一交易：任何一步失敗整筆回滾，帳本不變式優先於「已經填完」的體驗，
  *       讀者重送即可。</li>
  * </ul>
+ *
+ * <p><b>結構上不注入 legacy repository 是刻意設計，不只是「沒呼叫」</b>：本類別的建構子
+ * 完全沒有 {@code SurveyResponseRepository} 這個依賴，而不是「注入了但跳過呼叫」——
+ * 這樣即使日後有人不小心在本類別新增一段寫入 legacy 的邏輯，編譯期就會被迫先加一個
+ * 新的建構子參數，而不能悄悄接上一個「反正已經在手邊」的既有欄位。{@code
+ * NewsletterSubmissionServiceTest} 用反射斷言建構子參數不含該型別，把這個結構守衛
+ * 釘死在測試上（spec §3.2）。</p>
  */
 @Service
 public class NewsletterSubmissionService {
@@ -85,8 +92,10 @@ public class NewsletterSubmissionService {
      * 提交電子報通道問卷答案。
      *
      * <p>身分解析失敗（無 rt 也無有效 session）拋 401 {@link ResponseStatusException}；
-     * 答案格式錯誤（未知欄位／缺必填）由 {@link FormSchemaService#validateAnswers} 拋 400，
-     * 兩者都在寫入前發生，交易不會留下半套資料。</p>
+     * 答案格式錯誤（未知欄位／缺必填）由 {@link FormSchemaService#validateAnswers} 拋 400；
+     * 解析出的 email 若在停止處理名單上（{@link AudiencePlatformService.SuppressedEmailException}）
+     * 轉 409，比照 {@link FormSchemaService#submit} 現行處理——三者都在寫入前發生，
+     * 交易不會留下半套資料。</p>
      */
     @Transactional
     public SubmitResult submit(String formKey, SubmitRequest request, String sessionCookie) {
@@ -99,7 +108,13 @@ public class NewsletterSubmissionService {
             : new LinkedHashMap<>(request.answers());
         formSchemaService.validateAnswers(form, answers);
 
-        AudiencePlatformService.PersonResult person = audience.mergePerson(identity.email(), null, now);
+        AudiencePlatformService.PersonResult person;
+        try {
+            person = audience.mergePerson(identity.email(), null, now);
+        } catch (AudiencePlatformService.SuppressedEmailException exception) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT, "此 Email 已要求停止處理，如需重新訂閱請聯絡管理員");
+        }
         audience.upsertIdentity(person.personId(), SOURCE_KEY, "email", person.emailNormalized(), now);
 
         String submissionId = UUID.randomUUID().toString();
@@ -152,10 +167,15 @@ public class NewsletterSubmissionService {
             return new SubmitResult(submissionId, false, 0, "此問卷先前已發過點數，不會重複發送");
         }
         int rewardCredits = creditPolicy.surveyReward();
-        readerRepository.addCredits(readerId, rewardCredits);
         CreditTxn txn = new CreditTxn(readerId, rewardCredits, CreditTxn.REASON_SURVEY_REWARD, campaignId, null);
         txn.setSurveyFormKey(formKey);
         creditTxnRepository.save(txn);
+        // 條件式 UPDATE 回 0 列代表讀者列已不存在（例如帳戶剛好被刪除），
+        // 帳本已寫入若靜默放行，reader.credits 與 sum(credit_txn) 就對不起來——
+        // 比照 ReferralGrowthService.addCredit 一律拋例外讓交易回滾，不可視為成功。
+        if (readerRepository.addCredits(readerId, rewardCredits) == 0) {
+            throw new IllegalStateException("問卷發點失敗：readerId=" + readerId);
+        }
         return new SubmitResult(submissionId, true, rewardCredits, "感謝填答，已發送 " + rewardCredits + " 點數");
     }
 
