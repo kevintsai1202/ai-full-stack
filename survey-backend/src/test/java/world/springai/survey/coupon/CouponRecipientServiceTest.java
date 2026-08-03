@@ -117,6 +117,26 @@ class CouponRecipientServiceTest {
             .filter(r -> "b@example.com".equals(r.email())).findFirst().orElseThrow().alreadySent() == false);
     }
 
+    /**
+     * 分頁排序必須帶穩定鍵（email），不能讓 AudienceSearchService 用預設的
+     * lastActivityAt（易變欄位）排序——OFFSET 分頁期間若活動時間更新，
+     * 會造成跨頁漏筆或重複，進而讓合法收件人被漏收、或 findIllegal 誤判。
+     */
+    @Test
+    void resolveUsesStableSortKeyForPagination() {
+        CouponCampaign c = withId(campaign("reader-poll", "{}"), 1L);
+        when(audienceSearchService.search(any())).thenReturn(new AudienceSearchService.SearchResult(
+            List.of(item("a@example.com", "A")), 1, 0, 200, List.of(), Map.of()));
+
+        service.resolve(c);
+
+        ArgumentCaptor<AudienceSearchService.SearchRequest> captor =
+            ArgumentCaptor.forClass(AudienceSearchService.SearchRequest.class);
+        verify(audienceSearchService).search(captor.capture());
+        AudienceSearchService.Sort sort = captor.getValue().sort();
+        assertEquals("email", sort.field(), "應以不可變的 email 欄位排序，避免分頁期間排序位移");
+    }
+
     /** 分頁迴圈：單頁未拉滿 total 時應再拉下一頁，直到累積筆數達 total */
     @Test
     void resolvePaginatesUntilTotalReached() {

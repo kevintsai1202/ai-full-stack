@@ -35,6 +35,27 @@ public class CouponRecipientService {
      */
     private static final int PAGE_SIZE = 200;
 
+    /**
+     * 分頁用穩定排序鍵：{@code email}（對應 {@code p.email_normalized}）。
+     *
+     * <p><b>為什麼不能用預設排序</b>：{@code searchAll} 用 OFFSET 分頁跨多次呼叫拉取
+     * 全量名單，{@link AudienceSearchService#search} 在 {@code sort} 為 null 時預設以
+     * {@code lastActivityAt}（{@code activity.last_activity_at}）排序——這是一個會隨
+     * 使用者互動（例如提交問卷、測驗）即時變動的欄位。若在分頁期間有人的活動時間更新，
+     * 該筆列在排序中的名次會位移，可能造成 OFFSET 分頁跨頁漏筆（合法收件人被漏收）
+     * 或重複（同一人被算兩次，影響 {@link #findIllegal} 的判斷基準）。</p>
+     *
+     * <p><b>為什麼選 email</b>：查過 {@code AudienceSearchService.orderBy()} 的排序白名單
+     * （email／name／credits／vipExpiresAt／lastLoginAt／lastActivityAt／deliveryCount／
+     * lastDeliveryAt／unlockCount／lastUnlockAt），白名單內沒有直接開放 {@code personId}
+     * 排序，但 {@code email} 對應的 {@code p.email_normalized} 是白名單中最接近不可變鍵的
+     * 欄位（正常操作下不會在一次名單解析的極短時間內被改變）；{@code orderBy()} 也固定在
+     * 任何排序欄位之後補上 {@code p.id ASC} 作為次要排序鍵（tie-breaker），兩者合計即可
+     * 保證同一份查詢條件下分頁順序穩定、不受 activity 等易變欄位影響。</p>
+     */
+    private static final AudienceSearchService.Sort STABLE_SORT =
+        new AudienceSearchService.Sort("email", "ASC");
+
     private final AudienceSearchService audienceSearchService;
     private final EmailLogRepository emailLogRepository;
     private final ObjectMapper objectMapper;
@@ -106,7 +127,7 @@ public class CouponRecipientService {
         long total = Long.MAX_VALUE;
         while (all.size() < total) {
             AudienceSearchService.SearchRequest request =
-                new AudienceSearchService.SearchRequest(filters, null, page, PAGE_SIZE);
+                new AudienceSearchService.SearchRequest(filters, STABLE_SORT, page, PAGE_SIZE);
             AudienceSearchService.SearchResult result = audienceSearchService.search(request);
             if (result.items().isEmpty()) {
                 break;
