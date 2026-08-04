@@ -94,17 +94,19 @@ WebSocket 上線後你才會發現，握手成功只是開始。
 
 不像 SSE，WebSocket 的斷線偵測和重連**規格不管**。生產等級的前端至少長這樣：
 
-    let ws, delay = 1000;
-    function connect() {
-      ws = new WebSocket('wss://example.com/ws');
-      ws.onopen = () => { delay = 1000; };            // 連上就重置退避
-      ws.onmessage = (e) => handle(JSON.parse(e.data));
-      ws.onclose = () => {                            // 斷線：指數退避＋抖動重連
-        setTimeout(connect, delay + Math.random() * 500);
-        delay = Math.min(delay * 2, 30000);
-      };
-    }
-    connect();
+```js
+let ws, delay = 1000;
+function connect() {
+  ws = new WebSocket('wss://example.com/ws');
+  ws.onopen = () => { delay = 1000; };            // 連上就重置退避
+  ws.onmessage = (e) => handle(JSON.parse(e.data));
+  ws.onclose = () => {                            // 斷線：指數退避＋抖動重連
+    setTimeout(connect, delay + Math.random() * 500);
+    delay = Math.min(delay * 2, 30000);
+  };
+}
+connect();
+```
 
 伺服器端則要定期 ping、逾時未 pong 就主動斷開——否則殭屍連線會慢慢吃光資源。
 
@@ -116,36 +118,42 @@ WebSocket 上線後你才會發現，握手成功只是開始。
 
 服務一水平擴展，「廣播給所有人」就破功了——A 實例收到的訊息，掛在 B 實例上的使用者收不到。標準解是掛一個 pub/sub（最常見 Redis）：
 
-    // 收到訊息：不直接廣播，先發布到 Redis
-    redis.convertAndSend("chat", message);
+```java
+// 收到訊息：不直接廣播，先發布到 Redis
+redis.convertAndSend("chat", message);
 
-    // 每個實例都訂閱同頻道，收到後推給「自己身上」的連線
-    @Override
-    public void onMessage(String message) {
-      sessions.forEach(s -> send(s, message));
-    }
+// 每個實例都訂閱同頻道，收到後推給「自己身上」的連線
+@Override
+public void onMessage(String message) {
+  sessions.forEach(s -> send(s, message));
+}
+```
 
 Spring 端的最小骨架（原生 `TextWebSocketHandler`，不套 STOMP）：
 
-    @Override
-    public void afterConnectionEstablished(WebSocketSession session) {
-      sessions.add(session);       // 上線登記
-    }
-    @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage msg) {
-      redis.convertAndSend("chat", msg.getPayload());  // 進 pub/sub，不直發
-    }
+```java
+@Override
+public void afterConnectionEstablished(WebSocketSession session) {
+  sessions.add(session);       // 上線登記
+}
+@Override
+protected void handleTextMessage(WebSocketSession session, TextMessage msg) {
+  redis.convertAndSend("chat", msg.getPayload());  // 進 pub/sub，不直發
+}
+```
 
 ### 4. WebRTC 最小心智模型：三次握手之外的三步
 
-    // 1. 造一個 PeerConnection（帶 STUN）
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-    // 2. 我方開價（offer）→ 經信令伺服器交給對方 → 對方回價（answer）
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    signaling.send({ type: 'offer', sdp: offer });
-    // 3. 雙方持續交換 ICE 候選位址，直到找到能通的路
-    pc.onicecandidate = (e) => e.candidate && signaling.send({ type: 'ice', candidate: e.candidate });
+```js
+// 1. 造一個 PeerConnection（帶 STUN）
+const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+// 2. 我方開價（offer）→ 經信令伺服器交給對方 → 對方回價（answer）
+const offer = await pc.createOffer();
+await pc.setLocalDescription(offer);
+signaling.send({ type: 'offer', sdp: offer });
+// 3. 雙方持續交換 ICE 候選位址，直到找到能通的路
+pc.onicecandidate = (e) => e.candidate && signaling.send({ type: 'ice', candidate: e.candidate });
+```
 
 記住結構就好：**offer/answer 換能力、ICE 換路徑、STUN/TURN 幫穿牆**——細節查文件，結構不對 AI 也救不了你。
 
@@ -183,7 +191,7 @@ Spring 端的最小骨架（原生 `TextWebSocketHandler`，不套 STOMP）：
 
 - **必須在 008、009 之後寄出**：開頭引用前兩期，且 009 結尾已承諾本期的「選型決策表」。
 - **工商卡片未填優惠碼**：完結篇文案回到課程整體定位；優惠碼寄送前確認。若三期都保留工商卡，考慮只在其中一〜兩期投放以免疲乏（工商提案系統的投放次數配額可直接支援此策略）。
-- 本期表格一張（選型決策表）＋程式碼區塊 5 段。**測試信重點確認選型表在手機信箱的換行**——表格是 Email 相容性最差的元素，破版就把表改成條列。
+- 本期表格一張（選型決策表）＋程式碼區塊 4 段（圍欄式，含 js/java 語言標記）。**測試信重點確認選型表在手機信箱的換行**——表格是 Email 相容性最差的元素，破版就把表改成條列。
 - 「Chrome 已移除 HTTP/2 Server Push 支援」為事實陳述（Chrome 106 起）；WebTransport 瀏覽器支援描述用「逐漸到位」保留語氣，**請勿改寫成絕對敘述**。
 - STUN 範例用 Google 公開伺服器位址，僅為教學示意；正式產品應自建或採用商用 TURN 服務，文中已點出成本考量。
 - 本期**不含** `<!--paywall-->`，全文免費——完結篇以分享轉發優先；系列三期寄畢後，可考慮在讀者頁把三期整理成一個系列合集入口。

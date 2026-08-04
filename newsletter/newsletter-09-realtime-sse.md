@@ -46,18 +46,22 @@
 
 SSE 的原理簡單到令人懷疑：瀏覽器發一個普通的 HTTP GET，伺服器回應 `Content-Type: text/event-stream`，然後**不關閉連線**，有資料就往裡面寫一段：
 
-    data: 第一則訊息
+```text
+data: 第一則訊息
 
-    data: 第二則訊息
+data: 第二則訊息
+```
 
 就這樣。沒有新協定、沒有握手升級，就是一條不掛斷的 HTTP 回應。這帶來三個很實際的好處：
 
 - **防火牆、代理、企業網路一路綠燈**——它就是 HTTP，不會像 WebSocket 偶爾被中間設備擋掉
 - **瀏覽器原生支援**，前端三行就能動：
 
-      const es = new EventSource('/api/stream');
-      es.onmessage = (e) => render(e.data);
-      es.onerror   = () => console.log('瀏覽器會自動重連，通常不用你管');
+```js
+const es = new EventSource('/api/stream');
+es.onmessage = (e) => render(e.data);
+es.onerror   = () => console.log('瀏覽器會自動重連，通常不用你管');
+```
 
 - **自動重連是規格內建的**——斷線後瀏覽器自己重連，還會帶上 `Last-Event-ID` 標頭告訴伺服器「我收到哪了」，讓伺服器能補發漏掉的事件。WebSocket 的重連要自己寫，SSE 送你。
 
@@ -88,10 +92,12 @@ SSE 的原理簡單到令人懷疑：瀏覽器發一個普通的 HTTP GET，伺�
 
 `data:` 只是最小用法。完整的事件有四個欄位：
 
-    event: order-created
-    id: 42
-    retry: 5000
-    data: {"orderId": 1001, "amount": 300}
+```text
+event: order-created
+id: 42
+retry: 5000
+data: {"orderId": 1001, "amount": 300}
+```
 
 - `event`：事件名，前端用 `es.addEventListener('order-created', ...)` 分流
 - `id`：事件序號，斷線重連時瀏覽器自動帶回 `Last-Event-ID`，伺服器據此**補發遺漏**
@@ -102,24 +108,26 @@ SSE 的原理簡單到令人懷疑：瀏覽器發一個普通的 HTTP GET，伺�
 
 Spring MVC 用 `SseEmitter`：
 
-    @GetMapping(value = "/api/ai/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter chat(@RequestParam String q) {
-      SseEmitter emitter = new SseEmitter(120_000L);   // 兩分鐘超時
-      chatClient.prompt().user(q).stream().content()  // Spring AI 的串流輸出
-          .subscribe(
-              token -> send(emitter, token),           // 每個 token 推一段
-              emitter::completeWithError,
-              emitter::complete);
-      return emitter;
-    }
+```java
+@GetMapping(value = "/api/ai/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+public SseEmitter chat(@RequestParam String q) {
+  SseEmitter emitter = new SseEmitter(120_000L);   // 兩分鐘超時
+  chatClient.prompt().user(q).stream().content()  // Spring AI 的串流輸出
+      .subscribe(
+          token -> send(emitter, token),           // 每個 token 推一段
+          emitter::completeWithError,
+          emitter::complete);
+  return emitter;
+}
 
-    private void send(SseEmitter emitter, String token) {
-      try {
-        emitter.send(SseEmitter.event().data(token));
-      } catch (IOException e) {
-        emitter.completeWithError(e);   // 客戶端斷線：結束串流，別讓例外悶著
-      }
-    }
+private void send(SseEmitter emitter, String token) {
+  try {
+    emitter.send(SseEmitter.event().data(token));
+  } catch (IOException e) {
+    emitter.completeWithError(e);   // 客戶端斷線：結束串流，別讓例外悶著
+  }
+}
+```
 
 WebFlux 更精簡：直接回 `Flux<ServerSentEvent<String>>`，框架幫你打點格式。
 
@@ -127,15 +135,19 @@ WebFlux 更精簡：直接回 `Flux<ServerSentEvent<String>>`，框架幫你打�
 
 **反向代理緩衝**——最經典的坑：本機打字機效果順暢，上線後整段回答「憋到最後一次吐出來」。因為 Nginx 預設會**緩衝**上游回應。解法是對 SSE 路徑關閉緩衝：
 
-    location /api/ai/ {
-      proxy_pass http://backend;
-      proxy_buffering off;          # 或由後端回 X-Accel-Buffering: no
-      proxy_read_timeout 3600s;     # 別讓代理先把長連線掐掉
-    }
+```nginx
+location /api/ai/ {
+  proxy_pass http://backend;
+  proxy_buffering off;          # 或由後端回 X-Accel-Buffering: no
+  proxy_read_timeout 3600s;     # 別讓代理先把長連線掐掉
+}
+```
 
 **閒置逾時**——中間設備（LB、代理、防火牆）常把「太久沒流量」的連線靜默掐掉。標準解是伺服器定期送**註解行心跳**（`:` 開頭的行，瀏覽器會忽略）：
 
-    : keep-alive
+```text
+: keep-alive
+```
 
 每 15–30 秒一次，連線就不會被判定閒置。
 
@@ -173,7 +185,7 @@ WebFlux 更精簡：直接回 `Flux<ServerSentEvent<String>>`，框架幫你打�
 
 - **必須在 008 之後寄出**：開頭直接引用上期輪詢結論（「你去問」vs「它來說」）。
 - **工商卡片未填優惠碼**：文案主打「打字機效果實戰單元」，與本期主題強關聯；優惠碼寄送前確認。
-- 本期程式碼區塊較多（6 段）且含 Nginx 設定——**測試信務必檢查縮排 code 在 Gmail 手機版的呈現**。
+- 本期程式碼區塊較多（6 段，圍欄式含 js/java/nginx/text 語言標記）——**測試信務必檢查程式碼在 Gmail 手機版的呈現**。
 - ChatGPT／Claude／Gemini 僅作為讀者熟悉的實例提及，未做功能比較；「絕大多數就是 SSE」的措辭保留餘地（部分實作走 fetch streaming），**請勿改寫成絕對敘述**。
 - 本期**不含** `<!--paywall-->`，全文免費。
 - 下期預告已寫死「選型決策表」，010 內容需兌現此承諾。

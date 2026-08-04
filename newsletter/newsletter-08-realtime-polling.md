@@ -98,50 +98,58 @@
 
 搭配 `ETag`／`If-None-Match`，資料沒變時伺服器只回 `304 Not Modified`，不傳整包資料：
 
-    // 前端：帶上次的 ETag 去問
-    const res = await fetch('/api/board', {
-      headers: lastEtag ? { 'If-None-Match': lastEtag } : {}
-    });
-    if (res.status === 304) return;        // 沒變，什麼都不用做
-    lastEtag = res.headers.get('ETag');    // 有變，更新畫面與 ETag
-    render(await res.json());
+```js
+// 前端：帶上次的 ETag 去問
+const res = await fetch('/api/board', {
+  headers: lastEtag ? { 'If-None-Match': lastEtag } : {}
+});
+if (res.status === 304) return;        // 沒變，什麼都不用做
+lastEtag = res.headers.get('ETag');    // 有變，更新畫面與 ETag
+render(await res.json());
+```
 
 ### 3. 頁面不在前景就別問
 
 使用者切去別的分頁，你的輪詢還在跑就是純浪費。用 Page Visibility API 暫停：
 
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) stopPolling();
-      else { pollOnce(); startPolling(); }   // 回來先立刻補一次
-    });
+```js
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopPolling();
+  else { pollOnce(); startPolling(); }   // 回來先立刻補一次
+});
+```
 
 ### 4. 出錯要退避，還要加亂數
 
 伺服器一出錯，成千個客戶端同時重試會把它踩死（thundering herd）。指數退避＋隨機抖動（jitter）是標配：
 
-    let delay = 5000;
-    async function poll() {
-      try {
-        await fetchBoard();
-        delay = 5000;                        // 成功就重置
-      } catch {
-        delay = Math.min(delay * 2, 60000);  // 失敗指數退避，上限一分鐘
-      }
-      setTimeout(poll, delay + Math.random() * 1000);  // 加抖動錯開大家
-    }
+```js
+let delay = 5000;
+async function poll() {
+  try {
+    await fetchBoard();
+    delay = 5000;                        // 成功就重置
+  } catch {
+    delay = Math.min(delay * 2, 60000);  // 失敗指數退避，上限一分鐘
+  }
+  setTimeout(poll, delay + Math.random() * 1000);  // 加抖動錯開大家
+}
+```
 
 ### 5. 長輪詢的伺服器端：別佔住執行緒
 
 長輪詢最大的坑是把伺服器執行緒「掛著等」。Spring MVC 用 `DeferredResult` 讓等待不佔工作執行緒：
 
-    @GetMapping("/api/notifications/poll")
-    public DeferredResult<List<Notification>> poll(@RequestParam long since) {
-      // 30 秒超時，超時回空陣列，客戶端收到後再發下一輪
-      DeferredResult<List<Notification>> result =
-          new DeferredResult<>(30_000L, List.of());
-      notificationHub.register(since, result);  // 有新通知時 setResult 即刻回應
-      return result;
-    }
+```java
+@GetMapping("/api/notifications/poll")
+public DeferredResult<List<Notification>> poll(@RequestParam long since) {
+  // 30 秒超時，超時回空陣列，客戶端收到後再發下一輪
+  DeferredResult<List<Notification>> result =
+      new DeferredResult<>(30_000L, List.of());
+  notificationHub.register(since, result);  // 有新通知時 setResult 即刻回應
+  return result;
+}
+```
 
 客戶端收到回應（不管有沒有資料）就立刻再發下一個請求，形成「永遠有一個請求在伺服器待命」的循環。
 
@@ -170,7 +178,7 @@
 
 - **本期是三期系列第一期**，開頭即預告 009（SSE）與 010（WebSocket/WebRTC），三期需依序寄出。
 - **工商卡片未填優惠碼**：目前只放課程連結；若要加優惠碼，寄送前務必實測代碼有效並確認期限。
-- 本期程式碼區塊共 5 段（縮排式 code block）。**測試信重點確認程式碼在手機信箱的呈現**——縮排 code 在部分客戶端可能不等寬，若破版考慮改用圍欄式並重測。
+- 本期程式碼區塊共 4 段（圍欄式，含 js/java 語言標記）。**測試信重點確認程式碼在手機信箱的呈現**（等寬字體與橫向捲動）。
 - 內文提到 ChatGPT 打字機效果作為下期鉤子，屬事實描述、無商標爭議疑慮。
 - 本期**不含** `<!--paywall-->`，全文免費——系列第一期以觸及與轉發優先。
 - 流量計算範例（100 人×5 秒=20 req/s）為說明用簡化模型，請勿改寫成絕對效能宣稱。
