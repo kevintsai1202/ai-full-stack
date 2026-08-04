@@ -59,6 +59,8 @@
 
 判斷句很簡單：**「外部服務發生事件時，要通知『你的後端』」→ Webhook**。要再通知到使用者的瀏覽器，就接上這系列前三期的技術（webhook → 後端 → SSE/WS → 畫面）。
 
+![Webhook 互補鏈：外部服務以 webhook 通知你的後端，後端再以 SSE 或 WebSocket 接力推到使用者的瀏覽器](https://springai-media.zeabur.app/newsletter-media/images/6522f68ce284c6ba0f6dab02253fcea45f2152d2a6c7953d1f4663c58f20e409.png)
+
 ## 為什麼說坑都在接收端
 
 提供方（金流、GitHub）的工作很單純：事件發生、發 HTTP 請求、收不到 2xx 就重試。接收方卻要面對四個現實：
@@ -69,6 +71,8 @@
 4. **事件可能亂序到達**——「付款成功」比「處理中」先到
 
 這四題就是後段的全部內容。
+
+![接收端四道關卡管線：驗章、去重、立刻回 200、狀態機——本質是在 HTTP 上手工補回訊息佇列原生提供的保證](https://springai-media.zeabur.app/newsletter-media/images/caa59eec40e71786a8d717078bf7eb5fd2b213b5aaf2dabbce6ba703325e7ef7.png)
 
 <!--promo-->
 ### 工商時間
@@ -207,7 +211,7 @@ public void transition(Order order, String next) {
 
 - **必須在 010 之後寄出**：010 的 Webhook 親戚小節已預告本期。
 - **工商卡片未填優惠碼**：文案主打金流串接與整合實戰；優惠碼寄送前確認。四期皆有工商卡，建議以投放配額只選其中一〜兩期。
-- 本期含「事件驅動架構」觀念補充小節（Kafka/RabbitMQ/Redis pub/sub 僅點名不比較）；程式碼區塊 4 段（圍欄式 `java`）——簽章驗證程式碼為教學示意，**寄送前確認未影射任何特定金流商的實際欄位名**（現用通用的 `X-Signature`）。
+- 本期含「事件驅動架構」觀念補充小節（Kafka/RabbitMQ/Redis pub/sub 僅點名不比較）；程式碼區塊 4 段（圍欄式 `java`）＋示意圖 2 張（媒體庫 PNG，測試信確認載入）——簽章驗證程式碼為教學示意，**寄送前確認未影射任何特定金流商的實際欄位名**（現用通用的 `X-Signature`）。
 - GitHub／Stripe／LINE 等僅作場景舉例，未做服務比較；「至少一次送達」為業界通則描述。
 - 本期**不含** `<!--paywall-->`，全文免費——完結篇以分享轉發優先。
 - 系列四期寄畢後，可在讀者頁把四期整理成系列合集入口（010 的寄送提醒原建議三期，以此為準更新）。

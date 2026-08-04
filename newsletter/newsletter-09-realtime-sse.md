@@ -66,6 +66,8 @@ es.onerror   = () => console.log('瀏覽器會自動重連，通常不用你管'
 
 - **自動重連是規格內建的**——斷線後瀏覽器自己重連，還會帶上 `Last-Event-ID` 標頭告訴伺服器「我收到哪了」，讓伺服器能補發漏掉的事件。WebSocket 的重連要自己寫，SSE 送你。
 
+![SSE 運作示意：一條不掛斷的 HTTP 將事件逐段推向瀏覽器；連線中斷後瀏覽器自動帶 Last-Event-ID 重連，伺服器補發漏掉的事件](https://springai-media.zeabur.app/newsletter-media/images/aa0bfbf3afd95f53668b4de72c33157d7ec5a7e609de6703b57095dcccb25393.png)
+
 當然，它有兩個明確的限制：**單向**（只能伺服器→瀏覽器；瀏覽器要說話請另外發 HTTP 請求）、**純文字**（UTF-8；二進位資料不行）。
 
 ## 什麼場景該選 SSE
@@ -144,6 +146,8 @@ location /api/ai/ {
 }
 ```
 
+![Nginx 緩衝對比：預設緩衝會把 token 憋住最後一次全吐；對 SSE 路徑關閉緩衝後逐字直通](https://springai-media.zeabur.app/newsletter-media/images/0dc234d0dd7e08b36a1c85fdf03e478f24faeeab10e27335448b133c099a47b9.png)
+
 **閒置逾時**——中間設備（LB、代理、防火牆）常把「太久沒流量」的連線靜默掐掉。標準解是伺服器定期送**註解行心跳**（`:` 開頭的行，瀏覽器會忽略）：
 
 ```text
@@ -186,7 +190,7 @@ location /api/ai/ {
 
 - **必須在 008 之後寄出**：開頭直接引用上期輪詢結論（「你去問」vs「它來說」）。
 - **工商卡片未填優惠碼**：文案主打「打字機效果實戰單元」，與本期主題強關聯；優惠碼寄送前確認。
-- 本期程式碼區塊較多（6 段，圍欄式含 js/java/nginx/text 語言標記）——**測試信務必檢查程式碼在 Gmail 手機版的呈現**。
+- 本期程式碼區塊較多（6 段，圍欄式含 js/java/nginx/text 語言標記）＋示意圖 2 張（媒體庫 PNG）——**測試信務必檢查程式碼與圖片在 Gmail 手機版的呈現**。
 - ChatGPT／Claude／Gemini 僅作為讀者熟悉的實例提及，未做功能比較；「絕大多數就是 SSE」的措辭保留餘地（部分實作走 fetch streaming），**請勿改寫成絕對敘述**。
 - 本期**不含** `<!--paywall-->`，全文免費。
 - 下期預告已寫死「選型決策表」，010 內容需兌現此承諾。

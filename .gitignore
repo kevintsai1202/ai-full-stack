@@ -91,3 +91,6 @@ cover-test.txt
 
 # 本機記憶冷庫（deep-memory 工作檔，不進版控）
 cold-notes/
+
+# 示意圖 PNG 為 SVG 轉檔產物（可由 generate_diagrams.py + render-diagrams.mjs 重生成）
+newsletter/assets/png/
