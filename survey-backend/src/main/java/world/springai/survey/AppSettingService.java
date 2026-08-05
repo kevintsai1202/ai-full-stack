@@ -41,6 +41,8 @@ public class AppSettingService {
     public static final String CREDIT_REFERRAL_INVITEE_REWARD = "credit.referral_invitee_reward";
     /** 問卷完整填答的獎勵點數 */
     public static final String CREDIT_SURVEY_REWARD = "credit.survey_reward";
+    /** 一鍵投票獎勵點數 */
+    public static final String CREDIT_SURVEY_VOTE_REWARD = "credit.survey_vote_reward";
     /** 3 人里程碑獎勵 */
     public static final String CREDIT_REFERRAL_MILESTONE_3 = "credit.referral_milestone_3";
     /** 5 人里程碑獎勵 */

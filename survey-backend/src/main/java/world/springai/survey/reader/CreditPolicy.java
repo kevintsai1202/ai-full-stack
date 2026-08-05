@@ -32,6 +32,8 @@ public class CreditPolicy {
     static final int DEFAULT_INVITEE_REWARD = 20;
     /** 問卷完整填答獎勵的後備值 */
     static final int DEFAULT_SURVEY_REWARD = 20;
+    /** 一鍵投票獎勵的後備值 */
+    static final int DEFAULT_SURVEY_VOTE_REWARD = 5;
     /** VIP 預設效期天數的後備值 */
     static final int DEFAULT_VIP_DAYS = 365;
 
@@ -69,6 +71,18 @@ public class CreditPolicy {
     public int surveyReward() {
         return Math.max(0, appSettingService.getInt(
             AppSettingService.CREDIT_SURVEY_REWARD, DEFAULT_SURVEY_REWARD));
+    }
+
+    /**
+     * 一鍵投票獎勵（點）；未設定時後備 5，負值夾到 0。
+     *
+     * <p>0 為合法值——代表關閉投票發點，此時問卷卡不會輸出點數提示
+     * （見 {@code SurveyBlockRenderer}）。理由同 {@link #signupGrant()}：
+     * 夾成 ≥ 1 會讓後台無法關閉贈點。</p>
+     */
+    public int surveyVoteReward() {
+        return Math.max(0, appSettingService.getInt(
+            AppSettingService.CREDIT_SURVEY_VOTE_REWARD, DEFAULT_SURVEY_VOTE_REWARD));
     }
 
     /** 工商提案投放單價的後備值 */

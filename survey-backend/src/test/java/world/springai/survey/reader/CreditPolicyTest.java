@@ -153,4 +153,24 @@ class CreditPolicyTest {
         CreditPolicy policy = new CreditPolicy(settingsReturning(AppSettingService.CREDIT_SURVEY_REWARD, 50));
         assertEquals(50, policy.surveyReward());
     }
+
+    /** 投票獎勵：查無設定時採後備值 5 */
+    @Test
+    void surveyVoteRewardFallsBackToFive() {
+        CreditPolicy policy = new CreditPolicy(settingsReturning("unrelated.key", 999));
+
+        assertEquals(5, policy.surveyVoteReward());
+    }
+
+    /** 投票獎勵可被設為 0（關閉投票發點），但負值一律夾到 0 */
+    @Test
+    void surveyVoteRewardAllowsZeroAndClampsNegative() {
+        assertEquals(0, new CreditPolicy(
+                settingsReturning(AppSettingService.CREDIT_SURVEY_VOTE_REWARD, 0)).surveyVoteReward(),
+            "0 是合法的『關閉投票發點』設定");
+
+        assertEquals(0, new CreditPolicy(
+                settingsReturning(AppSettingService.CREDIT_SURVEY_VOTE_REWARD, -5)).surveyVoteReward(),
+            "負值必須夾到 0");
+    }
 }

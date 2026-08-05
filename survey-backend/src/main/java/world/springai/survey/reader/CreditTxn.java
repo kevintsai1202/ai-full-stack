@@ -38,6 +38,8 @@ public class CreditTxn {
     public static final String REASON_PROMO_REFUND = "PROMO_REFUND";
     /** 問卷填答發點（正向）；防重發唯一鍵由 (reader_id, survey_form_key) 組成 */
     public static final String REASON_SURVEY_REWARD = "SURVEY_REWARD";
+    /** 交易原因：信中／頁面一鍵投票獎勵（每人每問卷一次，與完整填答獎勵各自獨立） */
+    public static final String REASON_SURVEY_VOTE_REWARD = "SURVEY_VOTE_REWARD";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
