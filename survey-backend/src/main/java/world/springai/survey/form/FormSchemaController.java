@@ -178,6 +178,18 @@ public class FormSchemaController {
         return service.listEmbeddable();
     }
 
+    /**
+     * 編輯器快建投票：一次建立可直接嵌入的投票問卷，回傳信中一鍵題描述
+     * （前端需要 formKey 才能組出 &lt;!--survey:KEY--&gt; 標記）。
+     */
+    @PostMapping("/api/admin/forms/quick-vote")
+    public FormSchemaService.EmailVoteQuestion createQuickVote(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key,
+            @RequestBody FormSchemaService.QuickVoteRequest request) {
+        guard.verify(key);
+        return service.createQuickVoteForm(request);
+    }
+
     /** Admin 動態分析；可選單一版本或合併相同 fieldKey 的全部版本。 */
     @GetMapping("/api/admin/analytics/forms/{formKey}")
     public Map<String, Object> analytics(

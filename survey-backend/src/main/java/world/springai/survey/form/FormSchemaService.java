@@ -93,6 +93,9 @@ public class FormSchemaService {
     /** 建立新版本時可覆寫標題；空白時沿用上一版。 */
     public record VersionRequest(String title) {}
 
+    /** 編輯器快建投票的要求；options 為選項文字（依序，optionIndex 對映） */
+    public record QuickVoteRequest(String title, String label, List<String> options) {}
+
     /** Admin 欄位設定要求；所有會影響統計與篩選的描述都由同一份 schema 保存。 */
     public record FieldRequest(
             String label,
@@ -306,6 +309,98 @@ public class FormSchemaService {
                SET email_vote_field_key = ?, updated_at = now()
              WHERE id = ?
             """, fieldKey, form.id());
+    }
+
+    /** 快建投票的固定欄位 key；信中一鍵題永遠綁在這個欄位上 */
+    private static final String QUICK_VOTE_FIELD_KEY = "vote";
+    /** 選項數量下限（少於 2 個沒有投票意義） */
+    private static final int QUICK_VOTE_MIN_OPTIONS = 2;
+    /** 選項數量上限（信件內按鈕排版可容納的上限） */
+    private static final int QUICK_VOTE_MAX_OPTIONS = 6;
+    /** 單一選項文字長度上限 */
+    private static final int QUICK_VOTE_OPTION_MAX_LENGTH = 40;
+    /** formKey 自動生成的碰撞重試次數 */
+    private static final int QUICK_VOTE_KEY_ATTEMPTS = 5;
+
+    /**
+     * 一次建立「可直接嵌入電子報」的投票問卷：在單一交易內走完既有四步
+     * （建立 → 加單選欄位 → 發布 → 綁定信中一鍵題）。
+     *
+     * <p><b>為什麼不讓管理員自訂 formKey</b>：中文標題無法可靠轉成
+     * {@code [a-z0-9-]} 的 slug，而要求管理員自創代號正是原本「問卷難設」的一部分。
+     * 因此代號一律自動生成 {@code vote-{yyyyMMdd}-{4 碼}}，撞鍵時重試。</p>
+     *
+     * <p><b>刻意串接既有方法而非另寫 SQL</b>：驗證規則（欄位型別、DRAFT 才可改、
+     * 發布時封存舊版）只有一份實作，快建路徑不會逐漸與手動路徑失準。</p>
+     */
+    @Transactional
+    public EmailVoteQuestion createQuickVoteForm(QuickVoteRequest request) {
+        List<String> options = normalizeQuickVoteOptions(request);
+        String title = request.title().trim();
+        String label = StringUtils.hasText(request.label()) ? request.label().trim() : title;
+
+        String formKey = null;
+        for (int attempt = 0; attempt < QUICK_VOTE_KEY_ATTEMPTS; attempt++) {
+            String candidate = generateVoteFormKey();
+            Integer exists = jdbc.queryForObject(
+                "SELECT count(*) FROM form_definition WHERE form_key = ?", Integer.class, candidate);
+            if (exists == null || exists == 0) {
+                formKey = candidate;
+                break;
+            }
+        }
+        if (formKey == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "問卷代號連續碰撞，請稍後再試");
+        }
+        // formKey 於上方迴圈中重新賦值，非 effectively final，lambda 需另存一份不可變參照
+        final String resolvedFormKey = formKey;
+
+        createForm(resolvedFormKey, title);
+        // FieldRequest.options 的型別是 List<Object>，必須明寫泛型參數——
+        // new ArrayList<>(options) 會推導成 ArrayList<String> 而編譯不過
+        addField(resolvedFormKey, 1, QUICK_VOTE_FIELD_KEY, new FieldRequest(
+            label, "select", false, new ArrayList<Object>(options),
+            true, "bar", true, false, false, 0, null));
+        publish(resolvedFormKey, 1);
+        updateEmailVoteField(resolvedFormKey, 1, QUICK_VOTE_FIELD_KEY);
+
+        return emailVoteQuestion(resolvedFormKey).orElseThrow(() -> new IllegalStateException(
+            "快建投票完成後應立即可嵌入，但查不到信中一鍵題：" + resolvedFormKey));
+    }
+
+    /**
+     * 驗證並正規化快建投票的選項：去頭尾空白、去空字串，檢查數量、長度與重複。
+     *
+     * <p>全部在寫入前完成——交易不會留下半套資料（已建立的 form 但沒有欄位）。</p>
+     */
+    private List<String> normalizeQuickVoteOptions(QuickVoteRequest request) {
+        if (request == null || !StringUtils.hasText(request.title())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "問卷標題為必填");
+        }
+        List<String> options = (request.options() == null ? List.<String>of() : request.options()).stream()
+            .filter(java.util.Objects::nonNull)
+            .map(String::trim)
+            .filter(StringUtils::hasText)
+            .toList();
+        if (options.size() < QUICK_VOTE_MIN_OPTIONS || options.size() > QUICK_VOTE_MAX_OPTIONS) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "投票選項需 " + QUICK_VOTE_MIN_OPTIONS + "–" + QUICK_VOTE_MAX_OPTIONS + " 個");
+        }
+        if (options.stream().anyMatch(option -> option.length() > QUICK_VOTE_OPTION_MAX_LENGTH)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "單一選項不可超過 " + QUICK_VOTE_OPTION_MAX_LENGTH + " 字");
+        }
+        if (new java.util.LinkedHashSet<>(options).size() != options.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "投票選項不可重複");
+        }
+        return options;
+    }
+
+    /** 生成 vote-{yyyyMMdd}-{4 碼小寫英數} 形式的 formKey，符合既有 [a-z0-9-]{3,50} 規則 */
+    private String generateVoteFormKey() {
+        String date = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 4);
+        return "vote-" + date + "-" + suffix;
     }
 
     /** 列出全部已發布且已設定信中一鍵題的問卷，供電子報編輯器插入選單使用。 */
