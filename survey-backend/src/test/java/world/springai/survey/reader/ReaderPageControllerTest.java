@@ -83,7 +83,7 @@ class ReaderPageControllerTest {
      */
     @BeforeEach
     void stubSurveyBlockRendererPassthrough() {
-        when(surveyBlockRenderer.expandForWeb(any(), any()))
+        when(surveyBlockRenderer.expandForWeb(any(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
             .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -182,7 +182,7 @@ class ReaderPageControllerTest {
         when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(campaign));
         when(readerContext.resolve(any())).thenReturn(Optional.empty());
         stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
-        when(surveyBlockRenderer.expandForWeb(any(), eq(77L)))
+        when(surveyBlockRenderer.expandForWeb(any(), eq(77L), org.mockito.ArgumentMatchers.anyBoolean()))
             .thenReturn("<div>SURVEY_CARD_MARKER</div>");
 
         String body = mvc.perform(get("/r/news/test-article"))
@@ -190,7 +190,7 @@ class ReaderPageControllerTest {
             .andReturn().getResponse().getContentAsString();
 
         assertTrue(body.contains("SURVEY_CARD_MARKER"), body);
-        verify(surveyBlockRenderer).expandForWeb(any(), eq(77L));
+        verify(surveyBlockRenderer).expandForWeb(any(), eq(77L), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     /** 已登入但未確認訂閱：同樣不得含受限區 */

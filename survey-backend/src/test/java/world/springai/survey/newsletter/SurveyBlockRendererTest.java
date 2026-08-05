@@ -23,7 +23,10 @@ import static org.mockito.Mockito.when;
 class SurveyBlockRendererTest {
 
     private final FormSchemaService formSchemaService = mock(FormSchemaService.class);
-    private final SurveyBlockRenderer renderer = new SurveyBlockRenderer(formSchemaService);
+    /** 投票獎勵取值來源（mock）：newsletter 不得依賴 reader，故只認根套件介面 */
+    private final world.springai.survey.SurveyVoteRewardView rewardView =
+        mock(world.springai.survey.SurveyVoteRewardView.class);
+    private final SurveyBlockRenderer renderer = new SurveyBlockRenderer(formSchemaService, rewardView);
 
     /** 測試用問卷標記：<!--survey:reader-poll--> */
     private static final String MARKER_COMMENT = "<!--survey:reader-poll-->";
@@ -69,7 +72,7 @@ class SurveyBlockRendererTest {
         givenEmbeddable("reader-poll", "rating", "滿意度調查", "你覺得如何？",
             List.of("很有幫助", "普通"));
 
-        String html = renderer.expandForWeb(MARKER_COMMENT, 9L);
+        String html = renderer.expandForWeb(MARKER_COMMENT, 9L, true);
 
         assertTrue(html.contains("/s/v/reader-poll?f=rating&o=0&c=9"), html);
         assertFalse(html.contains("rt="), html);
@@ -81,7 +84,7 @@ class SurveyBlockRendererTest {
     void web展開campaignId為null時不帶c參數() {
         givenEmbeddable("reader-poll", "rating", "滿意度調查", "你覺得如何？", List.of("很有幫助"));
 
-        String html = renderer.expandForWeb(MARKER_COMMENT, null);
+        String html = renderer.expandForWeb(MARKER_COMMENT, null, true);
 
         assertTrue(html.contains("/s/v/reader-poll?f=rating&o=0\""), html);
         assertFalse(html.contains("&c="), html);
@@ -129,5 +132,78 @@ class SurveyBlockRendererTest {
         assertFalse(html.contains("選項<A>"), html);
         assertTrue(html.contains("選項&lt;A&gt;"), html);
         assertTrue(html.contains("滿意度&lt;test&gt;"), html);
+    }
+
+    /** 信件通道：提示須說明「限已註冊讀者」——收件人未必已建帳，不可對他們說謊 */
+    @Test
+    void email通道提示點數與限制() {
+        when(rewardView.surveyVoteReward()).thenReturn(5);
+        givenEmbeddable("reader-poll", "rating", "滿意度調查", "你覺得如何？", List.of("A", "B"));
+
+        String html = renderer.expandForEmail(MARKER_COMMENT, "https://news.example.com");
+
+        assertTrue(html.contains("投票即可獲得 5 點"), html);
+        assertTrue(html.contains("限已註冊讀者"), "信件通道必須說明僅註冊讀者可得點：" + html);
+    }
+
+    /** 讀者頁已登入：提示不需再提「限已註冊讀者」，但要說明每份問卷一次 */
+    @Test
+    void web已登入提示點數() {
+        when(rewardView.surveyVoteReward()).thenReturn(5);
+        givenEmbeddable("reader-poll", "rating", "滿意度調查", "你覺得如何？", List.of("A", "B"));
+
+        String html = renderer.expandForWeb(MARKER_COMMENT, 3L, true);
+
+        assertTrue(html.contains("投票即可獲得 5 點"), html);
+        assertTrue(html.contains("每份問卷一次"), html);
+        assertFalse(html.contains("限已註冊讀者"), "已登入者不需要看到註冊限制：" + html);
+    }
+
+    /** 讀者頁未登入：匿名投票不發點，提示必須先講登入 */
+    @Test
+    void web未登入提示需先登入() {
+        when(rewardView.surveyVoteReward()).thenReturn(5);
+        givenEmbeddable("reader-poll", "rating", "滿意度調查", "你覺得如何？", List.of("A", "B"));
+
+        String html = renderer.expandForWeb(MARKER_COMMENT, 3L, false);
+
+        assertTrue(html.contains("登入後投票可獲得 5 點"),
+            "未登入者投票不會發點，不可寫成「投票即可獲得」：" + html);
+    }
+
+    /** 後台預覽：提示照顯示（管理員要看到讀者會看到什麼），且保留「預覽不計票」 */
+    @Test
+    void 預覽通道同時有提示與不計票標示() {
+        when(rewardView.surveyVoteReward()).thenReturn(5);
+        givenEmbeddable("reader-poll", "rating", "滿意度調查", "你覺得如何？", List.of("A", "B"));
+
+        String html = renderer.expandForPreview(MARKER_COMMENT);
+
+        assertTrue(html.contains("投票即可獲得 5 點"), html);
+        assertTrue(html.contains("預覽不計票"), html);
+    }
+
+    /** 後台把投票獎勵設為 0（關閉發點）時整列提示不輸出，不可顯示「獲得 0 點」 */
+    @Test
+    void 獎勵為零時不輸出提示() {
+        when(rewardView.surveyVoteReward()).thenReturn(0);
+        givenEmbeddable("reader-poll", "rating", "滿意度調查", "你覺得如何？", List.of("A", "B"));
+
+        String html = renderer.expandForEmail(MARKER_COMMENT, "https://news.example.com");
+
+        assertFalse(html.contains("點"), "關閉發點時不得出現任何點數字樣：" + html);
+        assertTrue(html.contains("滿意度調查"), "卡片其餘內容仍須正常輸出");
+    }
+
+    /** 提示必須排在題目之前——需求就是「問答上方提示」 */
+    @Test
+    void 提示位置在題目之前() {
+        when(rewardView.surveyVoteReward()).thenReturn(5);
+        givenEmbeddable("reader-poll", "rating", "滿意度調查", "你覺得如何？", List.of("A", "B"));
+
+        String html = renderer.expandForEmail(MARKER_COMMENT, "https://news.example.com");
+
+        assertTrue(html.indexOf("投票即可獲得") < html.indexOf("滿意度調查"),
+            "點數提示必須在題目上方：" + html);
     }
 }

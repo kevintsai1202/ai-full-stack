@@ -67,7 +67,10 @@ class CampaignSurveyWiringTest {
     // 真實 SurveyBlockRenderer + mock FormSchemaService：只關心「有沒有接上」，
     // 展開的 HTML 細節已由 SurveyBlockRendererTest 覆蓋，這裡不重複斷言卡片樣式。
     private final FormSchemaService formSchemaService = mock(FormSchemaService.class);
-    private final SurveyBlockRenderer surveyBlockRenderer = new SurveyBlockRenderer(formSchemaService);
+    private final world.springai.survey.SurveyVoteRewardView rewardView =
+        mock(world.springai.survey.SurveyVoteRewardView.class);
+    private final SurveyBlockRenderer surveyBlockRenderer =
+        new SurveyBlockRenderer(formSchemaService, rewardView);
     private final MailBodyRenderer mailBodyRenderer = new MailBodyRenderer(
         contentSplitter, markdownRenderer, readerSiteLinks, surveyBlockRenderer, READER_BASE_URL);
 
@@ -203,7 +206,7 @@ class CampaignSurveyWiringTest {
     void expandForWeb以相同SurveyBlockRenderer運作於campaignId() {
         givenEmbeddable();
 
-        String html = surveyBlockRenderer.expandForWeb(markdownWithSurvey(), 9L);
+        String html = surveyBlockRenderer.expandForWeb(markdownWithSurvey(), 9L, true);
 
         assertTrue(html.contains("c=9"), "讀者頁通道應帶入真正的 campaignId：" + html);
         assertFalse(html.contains(SurveyBlockRenderer.CID_PLACEHOLDER), html);

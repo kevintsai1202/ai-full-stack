@@ -51,6 +51,9 @@ public class SurveyBlockRenderer {
     /** 預覽通道的「不計票」提示樣式 */
     private static final String PREVIEW_BADGE =
         "<p style=\"margin:0 0 12px;font-size:12px;font-weight:700;color:#b45309;\">預覽不計票</p>";
+    /** 點數提示樣式：與卡片同色系但字級較小，排在題目之上 */
+    private static final String REWARD_HINT_STYLE =
+        "margin:0 0 10px;font-size:13px;font-weight:700;color:#1d4ed8;";
     private static final String TITLE_STYLE =
         "margin:0 0 6px;font-size:16px;font-weight:700;color:#1e3a8a;";
     private static final String LABEL_STYLE =
@@ -64,34 +67,64 @@ public class SurveyBlockRenderer {
 
     /** 問卷 schema 服務：查詢標記對應的信中一鍵題是否可嵌入 */
     private final FormSchemaService formSchemaService;
+    /** 投票獎勵點數的取值來源；只認根套件介面，維持 newsletter 不依賴 reader */
+    private final world.springai.survey.SurveyVoteRewardView rewardView;
 
-    /** 注入問卷 schema 服務 */
-    public SurveyBlockRenderer(FormSchemaService formSchemaService) {
+    /** 注入問卷 schema 服務與投票獎勵取值來源 */
+    public SurveyBlockRenderer(FormSchemaService formSchemaService,
+                               world.springai.survey.SurveyVoteRewardView rewardView) {
         this.formSchemaService = formSchemaService;
+        this.rewardView = rewardView;
     }
 
     /**
      * 信件通道展開：選項按鈕連結格式
      * {@code {readerBaseUrl}/s/v/{formKey}?f={fieldKey}&o={optionIndex}&c=__SURVEY_CID__&rt=__PROMO_RT__}。
      * campaignId 與收件人 token 皆留待呼叫端延遲替換（見 {@link #CID_PLACEHOLDER}）。
+     *
+     * <p>點數提示註明「限已註冊讀者」：收件人是訂閱者但未必已建立讀者帳號，
+     * 未建帳者投票只計票不發點（見 {@code SurveyVoteRewardService}）。</p>
      */
     public String expandForEmail(String html, String readerBaseUrl) {
+        String hint = rewardHint("投票即可獲得 %d 點（限已註冊讀者，每份問卷一次）");
         return expand(html, q -> renderCard(q,
-            i -> emailOptionHref(q, i, readerBaseUrl), null, false));
+            i -> emailOptionHref(q, i, readerBaseUrl), null, false, hint));
     }
 
     /**
      * 讀者頁通道展開：選項按鈕連結帶 {@code c}（campaignId，可為 null 則不帶），
      * 不帶 {@code rt}（改由 session 歸戶），並附一條「繼續填完整問卷」連結。
+     *
+     * <p>點數提示依 {@code loggedIn} 分歧：匿名投票不會發點，對未登入者說
+     * 「投票即可獲得」就是假訊息。</p>
      */
-    public String expandForWeb(String html, Long campaignId) {
+    public String expandForWeb(String html, Long campaignId, boolean loggedIn) {
+        String hint = loggedIn
+            ? rewardHint("投票即可獲得 %d 點（每份問卷一次）")
+            : rewardHint("登入後投票可獲得 %d 點");
         return expand(html, q -> renderCard(q,
-            i -> webOptionHref(q, i, campaignId), continueHref(q.formKey(), campaignId), false));
+            i -> webOptionHref(q, i, campaignId), continueHref(q.formKey(), campaignId), false, hint));
     }
 
     /** 預覽通道展開：卡片視覺與正式通道一致，但加「預覽不計票」標示，連結一律 {@code href="#"} */
     public String expandForPreview(String html) {
-        return expand(html, q -> renderCard(q, i -> "#", null, true));
+        String hint = rewardHint("投票即可獲得 %d 點（限已註冊讀者，每份問卷一次）");
+        return expand(html, q -> renderCard(q, i -> "#", null, true, hint));
+    }
+
+    /**
+     * 組出點數提示列；獎勵為 0（後台關閉投票發點）時回空字串。
+     *
+     * <p>回空字串而非顯示「獲得 0 點」：後者是把一個沒有好處的動作包裝成有好處，
+     * 比不提示更糟。</p>
+     */
+    private String rewardHint(String template) {
+        int reward = rewardView.surveyVoteReward();
+        if (reward <= 0) {
+            return "";
+        }
+        return "<p style=\"" + REWARD_HINT_STYLE + "\">🎁 "
+            + escapeHtml(template.formatted(reward)) + "</p>";
     }
 
     /**
@@ -136,14 +169,16 @@ public class SurveyBlockRenderer {
         return result.append(html, cursor, html.length()).toString();
     }
 
-    /** 組出問卷卡片 HTML：標題、題目 label、逐一選項按鈕，選填一條續填連結與預覽標示 */
+    /** 組出問卷卡片 HTML：點數提示、標題、題目 label、逐一選項按鈕，選填一條續填連結與預覽標示 */
     private String renderCard(EmailVoteQuestion question, IntFunction<String> optionHref,
-                               String continueHref, boolean previewMode) {
+                               String continueHref, boolean previewMode, String rewardHint) {
         StringBuilder sb = new StringBuilder();
         sb.append(CARD_OPEN);
         if (previewMode) {
             sb.append(PREVIEW_BADGE);
         }
+        // 點數提示排在題目之前：讀者要先知道有好處，才有動機讀題並投票
+        sb.append(rewardHint);
         sb.append("<p style=\"").append(TITLE_STYLE).append("\">")
             .append(escapeHtml(question.title())).append("</p>");
         sb.append("<p style=\"").append(LABEL_STYLE).append("\">")

@@ -2,6 +2,7 @@ package world.springai.survey.reader;
 
 import org.springframework.stereotype.Component;
 import world.springai.survey.AppSettingService;
+import world.springai.survey.SurveyVoteRewardView;
 import world.springai.survey.newsletter.Campaign;
 
 /**
@@ -20,7 +21,7 @@ import world.springai.survey.newsletter.Campaign;
  * 只夾掉負值。把四者一律夾成 ≥ 1 會讓後台無法關閉贈點。</p>
  */
 @Component
-public class CreditPolicy {
+public class CreditPolicy implements SurveyVoteRewardView {
 
     /** 初始贈點的後備值（查不到設定時採用） */
     static final int DEFAULT_SIGNUP_GRANT = 300;
@@ -80,6 +81,7 @@ public class CreditPolicy {
      * （見 {@code SurveyBlockRenderer}）。理由同 {@link #signupGrant()}：
      * 夾成 ≥ 1 會讓後台無法關閉贈點。</p>
      */
+    @Override
     public int surveyVoteReward() {
         return Math.max(0, appSettingService.getInt(
             AppSettingService.CREDIT_SURVEY_VOTE_REWARD, DEFAULT_SURVEY_VOTE_REWARD));

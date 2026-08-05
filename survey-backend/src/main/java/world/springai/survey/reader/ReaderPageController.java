@@ -197,9 +197,11 @@ public class ReaderPageController {
 
         // 問卷標記展開（Task 9 接線）：contentHtml 定案（免費區／全文皆已決定）後
         // 統一展開，campaignId 在讀者頁一律已知，選項連結改由 session 歸戶不帶 rt。
-        // surveyBlockRenderer 為 null 只會發生在舊單元測試相容建構式，維持原內容不動。
+        // 第三參數為登入狀態——匿名投票不發點，提示文字必須跟著分歧，否則會對
+        // 拿不到點的訪客說謊。surveyBlockRenderer 為 null 只會發生在舊單元測試
+        // 相容建構式，維持原內容不動。
         if (surveyBlockRenderer != null) {
-            contentHtml = surveyBlockRenderer.expandForWeb(contentHtml, campaign.getId());
+            contentHtml = surveyBlockRenderer.expandForWeb(contentHtml, campaign.getId(), reader != null);
         }
 
         if (full) {

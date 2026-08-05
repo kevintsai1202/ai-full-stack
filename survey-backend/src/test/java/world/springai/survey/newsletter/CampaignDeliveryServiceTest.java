@@ -33,7 +33,8 @@ class CampaignDeliveryServiceTest {
      * 避免用 mock 版 SurveyBlockRenderer 卻忘記 stub 而讓 expandForEmail 回傳 null。
      */
     private static SurveyBlockRenderer surveyBlockRenderer() {
-        return new SurveyBlockRenderer(mock(FormSchemaService.class));
+        return new SurveyBlockRenderer(mock(FormSchemaService.class),
+            mock(world.springai.survey.SurveyVoteRewardView.class));
     }
 
     /** 已寄出者不可再選；新加入與失敗者會出現在「尚未寄送」篩選。 */

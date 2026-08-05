@@ -74,7 +74,10 @@ class CampaignServiceTest {
     // no-op，不需要逐條 stub），避免 mock 版 SurveyBlockRenderer 在未 stub 時對
     // expandForEmail 回傳 null 而讓所有既有斷言全部改觀。
     private final FormSchemaService formSchemaService = mock(FormSchemaService.class);
-    private final SurveyBlockRenderer surveyBlockRenderer = new SurveyBlockRenderer(formSchemaService);
+    private final world.springai.survey.SurveyVoteRewardView rewardView =
+        mock(world.springai.survey.SurveyVoteRewardView.class);
+    private final SurveyBlockRenderer surveyBlockRenderer =
+        new SurveyBlockRenderer(formSchemaService, rewardView);
 
     private final CampaignService svc = new CampaignService(
         mailSender, recipientService, campaignRepository, emailLogRepository,
