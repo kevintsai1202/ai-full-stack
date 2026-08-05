@@ -83,13 +83,24 @@
 - 學員端填頭像、姓名、Email
 - 名單中心增量匯出 API + marketing 模組（Campaign / Delivery / Zeabur ZSend adapter）供會後寄送
 
-### 5.2 名單合規（重要，別重蹈覆轍）
+### 5.2 名單合規（已查證線上現況，2026-08-05）
 
-過去 exam 的 `student_profile` 雖有 `first_consent_at` / `consent_version` 欄位卻**全為 NULL**，等於沒有行銷同意，事後得補走一輪 double opt-in 邀請信才敢寄。這次是全新收集，**在填 Email 的當下就把同意收好**：
+**線上部署架構**：前後端為兩個獨立 Zeabur 服務。
 
-- 填 Email 畫面加明確勾選：「我同意收到凱文大叔的技術電子報與本場直播資料，可隨時退訂」
-- 寫入 `first_consent_at`（時間戳）與 `consent_version`（同意條款版本）
-- 未勾選者仍可作答與看排行榜，**只是不進寄送名單**——不要用同意綁作答
+| 服務 | 位址 | 狀態 |
+|---|---|---|
+| 前端 | `https://exam.zeabur.app` | 純靜態，`/api/*` 走 SPA fallback |
+| 後端 | `https://exam-system-backend.zeabur.app` | 運行中，`/api/survey-fields` 回真 JSON |
+
+**線上前端是舊版，沒有同意勾選。** 前端 bundle 字串探測結果：`請輸入您的 Email` 存在，但 `我同意接收電子報` / `我同意接收促銷廣告` / `訂閱同意` / `退訂` / `電子報管理` 全部不存在。本機 `StudentJoin.tsx` 有的兩個同意 checkbox 尚未上線。
+
+（後端版本無法用端點探測判定——Spring Security 讓不存在的路徑也回 401。但不影響結論：前端沒有勾選 UI，`consentNewsletter` 恆為 false，後端 `recordConsent()` 不會被呼叫。）
+
+**已完成的後端修復（待整批部署）**：`ConsentService.recordConsent()` 原本只寫 `consent_record` 事件流，未回寫 `StudentProfile.firstConsentAt` / `consentVersion`，而名單中心匯出契約（`api.md`）正是以這兩欄判定行銷同意——「缺一時，下游不得將人物視為已同意行銷」。已修復並 commit 於 `exam_system_new` 本地 `main`（`5dd6f53`），規則為：僅 `NEWSLETTER` 回寫、`firstConsentAt` 僅首次寫入不覆蓋、撤回不清除證據。TDD 三輪紅綠，`ConsentServiceTest` 9/9，consent 相關 5 套件 31/31；全模組 7 個失敗經 stash 基線比對確認為 pre-existing。
+
+該修復無法單獨 cherry-pick 到 `origin/main`——遠端完全沒有 `member/` 與 `marketing/` 模組，整套 consent 與電子報體系都在本地 26 個未推送 commit 內。
+
+**分工**：EXAM 的測驗建立、題目輸入，以及同意訂閱／宣傳勾選的上線，由講師自行在 exam 系統處理。本設計文件不再涵蓋該部分的執行。
 
 ### 5.3 口頭對價（開場掃碼時要說的話）
 
@@ -470,10 +481,10 @@ AI 稽核取代不了滲透測試。它的價值是**便宜的第一道網**：�
 - 四句型總表一張（收尾用，設計成適合觀眾截圖的版面）
 - QR Code + 加入碼投影片一張（開場用；建議另備一張小尺寸常駐在角落）
 
-### EXAM 前置作業
+### EXAM 前置作業（講師自行處理）
 
-- 建立測驗，依序放入 Q0、Q1、Q2、Q3、Q4、Q5（Q5 設為不計分）
-- 確認填 Email 畫面已加同意勾選，並寫入 `first_consent_at` / `consent_version`
+- 建立測驗，依序放入 Q0、Q1、Q2、Q3、Q4、Q5（Q5 設為不計分），題目全文見第 6 節
+- 同意訂閱／宣傳勾選的上線與後端 consent 修復部署，另行安排（見 5.2）
 - 直播前 30 分鐘實測一次完整流程：加入 → 作答 → 統計上圖 → 名單匯出
 
 ### 投影片估計
@@ -492,7 +503,7 @@ AI 稽核取代不了滲透測試。它的價值是**便宜的第一道網**：�
 | 觀眾問「哪個模型」 | 統一回答：這四招與模型無關，是提問結構的問題；Q&A 再談模型差異 |
 | 觀眾質疑 AI 稽核可靠性 | 站 4 已預先講過「便宜的第一道網」，Q&A 直接回扣這句 |
 | 資安清單版本被質疑 | 投影片標註版本與發布時間（OWASP Top 10:2025、CWE Top 25 2025 版、LLM Top 10 2025） |
-| 名單同意未收就寄信 | 上線前檢查 `first_consent_at` 非 NULL 才進寄送名單；未同意者只留作答資料 |
+| 名單同意未收就寄信 | 線上前端目前無同意勾選（見 5.2）；寄送前須確認同意來源，未有明確同意者只留作答資料 |
 
 ---
 
