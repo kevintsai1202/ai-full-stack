@@ -382,6 +382,12 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   <p class="lead" style="margin-top:20px">備援：若當場失敗，直接播預錄影片，不要現場除錯</p>
 </section>
 
+<section class="slide center" data-station="站 3 開發驗收" data-note="★ 備援頁：只有 live 失敗時才走到這裡。進入本頁影片會自動從頭播放。正常情況直接跳過（按兩次 →）。">
+  <p><span class="badge live">備援影片</span></p>
+  <video src="assets/live-demo.webm" muted controls playsinline style="max-height:66vh;border-radius:10px;border:1px solid var(--border)"></video>
+  <p class="small" style="margin-top:12px">相依阻塞 → 完成前置 → 阻塞自動解除、進度前進、下一步建議跳動</p>
+</section>
+
 <section class="slide" data-station="站 3 開發驗收" data-note="跑完留下這些。10 張，一次執行的完整軌跡。">
   <figure>
     <img src="assets/07-e2e-screenshots.png" alt="E2E 步驟截圖軌跡牆">
@@ -541,6 +547,19 @@ let notesVisible = false;
 function show(index) {
   current = Math.max(0, Math.min(index, slides.length - 1));
   slides.forEach((slide, i) => slide.classList.toggle('active', i === current));
+
+  // 離開頁面時暫停影片，進入含影片的頁面則從頭自動播放——
+  // 備援影片是在 live 失敗的當下才用到，那時沒有餘裕再去按播放鍵
+  slides.forEach((slide, i) => {
+    const video = slide.querySelector('video');
+    if (!video) return;
+    if (i === current) {
+      video.currentTime = 0;
+      video.play().catch(() => undefined); // 瀏覽器擋自動播放時靜默略過，講者可手動按
+    } else {
+      video.pause();
+    }
+  });
 
   const slide = slides[current];
   barStation.textContent = slide.dataset.station || '';
