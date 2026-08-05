@@ -100,3 +100,6 @@ live-slides/verify-output/
 
 # SDD 工作區（ledger／briefs／review packages，純本機暫存）
 .superpowers/
+
+# 側欄與投票驗證腳本的截圖輸出（可由 verify-sidebar-and-vote.mjs 重生成）
+survey-backend/scripts/verify-output/
