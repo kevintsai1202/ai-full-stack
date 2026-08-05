@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>別再問 AI「能不能做」——讓 AI 交出可審查產物的四個提問轉換</title>
+<style>
+/* ── 基本設定 ───────────────────────────────────────── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0b1020;
+  --panel: #151c33;
+  --border: #26304f;
+  --text: #e8ecf7;
+  --dim: #94a3c4;
+  --accent: #6ea8ff;
+  --bad: #ff7b72;
+  --good: #4ade80;
+  --warn: #fbbf24;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Noto Sans TC", "Microsoft JhengHei", "Segoe UI", sans-serif;
+  line-height: 1.7;
+  overflow: hidden;
+}
+
+/* ── 投影片容器：一次只顯示一張 ─────────────────────── */
+.slide {
+  display: none;
+  position: fixed;
+  inset: 0;
+  padding: 56px 72px 76px;
+  flex-direction: column;
+  justify-content: center;
+  animation: fade .18s ease-out;
+}
+.slide.active { display: flex; }
+@keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+h1 { font-size: 46px; line-height: 1.35; margin-bottom: 18px; }
+h2 { font-size: 34px; margin-bottom: 22px; color: #fff; }
+h3 { font-size: 24px; margin-bottom: 14px; color: var(--accent); }
+p  { font-size: 21px; margin-bottom: 14px; }
+.lead { font-size: 25px; color: var(--dim); }
+.small { font-size: 17px; color: var(--dim); }
+strong { color: var(--warn); }
+em { font-style: normal; color: var(--accent); }
+
+/* ── 封面 ───────────────────────────────────────────── */
+.cover { text-align: center; align-items: center; }
+.cover h1 { font-size: 54px; }
+.cover .sub { font-size: 26px; color: var(--dim); margin-top: 10px; }
+.cover .by { margin-top: 46px; font-size: 20px; color: var(--dim); }
+
+/* ── 生命週期地圖 ───────────────────────────────────── */
+.map { display: flex; align-items: stretch; gap: 12px; margin: 26px 0; }
+.map .station {
+  flex: 1; padding: 18px 16px; text-align: center;
+  background: var(--panel); border: 2px solid var(--border); border-radius: 12px;
+  opacity: .38; transition: all .25s;
+}
+.map .station .no { font-size: 14px; color: var(--dim); letter-spacing: .1em; }
+.map .station .name { font-size: 21px; font-weight: 600; margin: 4px 0 6px; }
+.map .station .what { font-size: 15px; color: var(--dim); }
+.map .station.on { opacity: 1; border-color: var(--accent); background: #1b2542; transform: translateY(-4px); }
+.map .arrow { align-self: center; color: var(--border); font-size: 26px; }
+.map.all .station { opacity: 1; }
+
+/* ── 句型對比 ───────────────────────────────────────── */
+.pair { display: grid; gap: 18px; margin: 18px 0; }
+.line {
+  padding: 20px 24px; border-radius: 12px; font-size: 24px;
+  background: var(--panel); border-left: 6px solid var(--border);
+}
+.line.no  { border-left-color: var(--bad);  color: #ffb4ae; }
+.line.yes { border-left-color: var(--good); color: #bbf7d0; font-weight: 600; }
+.line .tag { display: inline-block; margin-right: 12px; font-weight: 700; }
+
+/* ── 提示詞區塊 ─────────────────────────────────────── */
+pre {
+  background: #060a16; border: 1px solid var(--border); border-radius: 10px;
+  padding: 20px 24px; font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 17px; line-height: 1.65; color: #cbd5e1; overflow: auto;
+  white-space: pre-wrap; max-height: 62vh;
+}
+pre .hl { color: var(--warn); font-weight: 700; }
+
+/* ── 截圖 ───────────────────────────────────────────── */
+figure { text-align: center; }
+figure img {
+  max-width: 100%; max-height: 66vh; border-radius: 10px;
+  border: 1px solid var(--border); background: #fff;
+}
+figure figcaption { margin-top: 12px; font-size: 18px; color: var(--dim); }
+
+/* ── 表格 ───────────────────────────────────────────── */
+table { width: 100%; border-collapse: collapse; font-size: 19px; }
+th, td { border: 1px solid var(--border); padding: 12px 16px; text-align: left; vertical-align: top; }
+th { background: #1b2542; color: #fff; }
+td.no  { color: #ffb4ae; }
+td.yes { color: #bbf7d0; font-weight: 600; }
+
+/* ── 標記 ───────────────────────────────────────────── */
+.badge {
+  display: inline-block; padding: 5px 14px; border-radius: 999px;
+  font-size: 16px; font-weight: 700; letter-spacing: .04em;
+}
+.badge.live  { background: #7f1d1d; color: #fecaca; }
+.badge.quiz  { background: #1e3a8a; color: #bfdbfe; }
+.badge.time  { background: #14532d; color: #bbf7d0; }
+
+.center { text-align: center; align-items: center; }
+.big { font-size: 34px; line-height: 1.6; }
+
+/* ── 底部列 ─────────────────────────────────────────── */
+.bar {
+  position: fixed; left: 0; right: 0; bottom: 0; height: 46px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; background: #060a16; border-top: 1px solid var(--border);
+  font-size: 14px; color: var(--dim);
+}
+.bar .station-name { color: var(--accent); }
+
+/* ── 講者備註（按 N 開關）───────────────────────────── */
+.notes {
+  position: fixed; left: 0; right: 0; bottom: 46px; max-height: 42vh; overflow: auto;
+  padding: 18px 28px; background: #1a1207; border-top: 2px solid var(--warn);
+  color: #fde68a; font-size: 17px; line-height: 1.7; display: none;
+}
+.notes.show { display: block; }
+.notes b { color: #fff; }
+</style>
+</head>
+<body>
+
+<!-- 1 封面 -->
+<section class="slide cover" data-station="開場" data-note="開場白：今天不談模型、不談工具比較，只談一件事——你怎麼問。">
+  <h1>別再問 AI「能不能做」</h1>
+  <p class="sub">讓 AI 交出可審查產物的四個提問轉換</p>
+  <p class="by">從可行性評估到資安稽核，一小時走完 AI 開發生命週期</p>
+</section>
+
+<!-- 2 反差 -->
+<section class="slide" data-station="開場" data-note="慢慢講，這是全場的鉤子。講完停兩秒再翻頁。強調：同一天、同一個模型、同一個需求。">
+  <h2>同一個需求，同一天，同一個模型</h2>
+  <div class="pair">
+    <div class="line no"><span class="tag">A 問：</span>「這個功能能不能做？」</div>
+    <div class="line" style="border-left-color:var(--dim);color:var(--dim)">得到一句「可以做，建議用 React」</div>
+    <div class="line yes"><span class="tag">B 問：</span>「幫我做可行性評估報告」</div>
+    <div class="line" style="border-left-color:var(--dim);color:var(--dim)">得到一份含難度分級、風險清單、驗證順序的文件</div>
+  </div>
+  <p class="lead">差別不在模型，在問法。</p>
+</section>
+
+<!-- 3 主張 -->
+<section class="slide center" data-station="開場" data-note="這是整場的軸。收尾會再說一次。">
+  <p class="big">決定 AI 交付品質的<br>不是提示詞寫得漂不漂亮<br><br>是你有沒有要求它<strong>交出一份可以被審查的產物</strong></p>
+  <p class="lead" style="margin-top:34px">「能不能做」換來一句話——沒得反駁、沒得追蹤、沒得改<br>「可行性評估報告」換來一份文件——可以開會、可以被打槍、可以修</p>
+</section>
+
+<!-- 4 地圖總覽 -->
+<section class="slide" data-station="開場" data-note="攤開地圖。說明規則：每站一句對比、一段原理、一個產物、一題測驗。反例只用講的不 demo。">
+  <h2>今天走這四站</h2>
+  <div class="map all">
+    <div class="station"><div class="no">STATION 1</div><div class="name">想法期</div><div class="what">能不能做<br>→ 可行性評估</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STATION 2</div><div class="name">設計期</div><div class="what">幫我寫<br>→ 選型＋計畫</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STATION 3</div><div class="name">開發驗收</div><div class="what">幫我測試<br>→ TDD＋E2E＋SOP</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STATION 4</div><div class="name">上線前</div><div class="what">查漏洞<br>→ 逐項稽核</div></div>
+  </div>
+  <p class="lead">每站：一句對比 → 一段原理 → 一個產物 → 一題測驗</p>
+</section>
+
+<!-- 5 掃碼 -->
+<section class="slide center" data-station="開場" data-note="唸出對價：「留 Email 的話，今天所有提示詞全文、SOP 範本、資安稽核清單，我整包寄給你。」Q0 開出來後不解說，只說「這張圖等一下收尾會再出現一次」。">
+  <h2>先掃碼加入</h2>
+  <p class="lead">每一段結束我出一題<br>留 Email，今天所有提示詞全文＋SOP 範本＋資安稽核清單，我整包寄給你</p>
+  <p style="margin-top:30px"><span class="badge quiz">Q0 暖身題</span></p>
+  <p class="big" style="margin-top:16px">你現在最常用哪一句問 AI 幫你寫程式？</p>
+  <p class="lead">A.「幫我寫一個 XXX」　B.「這個能不能做？」<br>C.「幫我看看有沒有問題」　D. 我會先請它分析、寫計畫，才動手</p>
+</section>
+
+<!-- ══════════ 站 1 ══════════ -->
+<section class="slide" data-station="站 1 想法期" data-note="站 1 開始。9 分鐘。">
+  <h2>第一站：想法期</h2>
+  <div class="map">
+    <div class="station on"><div class="no">STATION 1</div><div class="name">想法期</div><div class="what">能不能做<br>→ 可行性評估</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STATION 2</div><div class="name">設計期</div><div class="what">幫我寫<br>→ 選型＋計畫</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STATION 3</div><div class="name">開發驗收</div><div class="what">幫我測試<br>→ TDD＋E2E＋SOP</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STATION 4</div><div class="name">上線前</div><div class="what">查漏洞<br>→ 逐項稽核</div></div>
+  </div>
+</section>
+
+<section class="slide" data-station="站 1 想法期" data-note="「能不能」是 yes/no 題。模型有討好傾向，面對可行性幾乎永遠答『可以』，而且給你一個聽起來很合理的技術棧。">
+  <h2>換一句話</h2>
+  <div class="pair">
+    <div class="line no"><span class="tag">❌</span>這個功能能不能做？</div>
+    <div class="line yes"><span class="tag">✅</span>幫我做這個需求的可行性評估報告</div>
+  </div>
+  <p class="lead" style="margin-top:26px">yes/no 題只會換來 yes。<br>指定產出格式，它才非攤開不可。</p>
+</section>
+
+<section class="slide" data-station="站 1 想法期" data-note="重點唸最後一句「最沒把握的三件事」。這通常是整份報告最值錢的一段。">
+  <h3>提示詞（可直接複製）</h3>
+  <pre>針對以下需求，幫我做一份可行性評估報告：
+【貼上需求描述】
+
+報告需包含：
+1. 技術可行性：現有技術能否達成，需要哪些關鍵元件
+2. <span class="hl">難易度分級</span>：把需求拆成子項目，每項標 S / M / L 並說明理由
+3. <span class="hl">風險與未知數</span>：哪些地方我現在無法確定，可能會爆的點在哪
+4. 前置資源：需要的環境、帳號、授權、資料、外部服務
+5. <span class="hl">建議驗證順序</span>：哪一塊該先做 spike 驗證，為什麼
+
+最後請標出：<span class="hl">你對這份評估最沒把握的三件事。</span></pre>
+</section>
+
+<section class="slide" data-station="站 1 想法期" data-note="這是真的跑出來的。強調 S/M/L 分級逼它把工作量攤開。">
+  <figure>
+    <img src="assets/01-feasibility-difficulty.png" alt="難易度分級表">
+    <figcaption>它不能再用一句「可以做」蓋過去</figcaption>
+  </figure>
+</section>
+
+<section class="slide" data-station="站 1 想法期" data-note="全站最重要的一張。強調：這三件事是我沒想到要問的。第一項後來真的讓我回頭改了規格。">
+  <figure>
+    <img src="assets/02-feasibility-uncertainties.png" alt="最沒把握的三件事">
+    <figcaption>它問了我沒想到要問的問題——第一項讓我回頭改了規格</figcaption>
+  </figure>
+</section>
+
+<section class="slide center" data-station="站 1 想法期" data-note="Q1，60 秒作答 + 30 秒解說。解說重點：A、B、D 都是一句話能回答完的問題，AI 就真的只給你一句話。">
+  <p><span class="badge quiz">Q1</span></p>
+  <h2>你想確認一個功能做不做得出來<br>下列哪個提問最可能讓 AI 把「風險」講出來？</h2>
+  <p class="lead">A. 這個功能能不能做？　B. 這個功能難不難？<br>C. 幫我做可行性評估報告：技術可行性、難易度分級、風險與未知數、建議驗證順序<br>D. 這個功能大概要多久？</p>
+</section>
+
+<!-- ══════════ 站 2 ══════════ -->
+<section class="slide" data-station="站 2 設計期" data-note="站 2 開始。9 分鐘。">
+  <h2>第二站：設計期</h2>
+  <div class="map">
+    <div class="station"><div class="no">STATION 1</div><div class="name">想法期</div><div class="what">能不能做<br>→ 可行性評估</div></div>
+    <div class="arrow">→</div>
+    <div class="station on"><div class="no">STATION 2</div><div class="name">設計期</div><div class="what">幫我寫<br>→ 選型＋計畫</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STATION 3</div><div class="name">開發驗收</div><div class="what">幫我測試<br>→ TDD＋E2E＋SOP</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STATION 4</div><div class="name">上線前</div><div class="what">查漏洞<br>→ 逐項稽核</div></div>
+  </div>
+</section>
+
+<section class="slide" data-station="站 2 設計期" data-note="不先分析，AI 會直接套訓練資料裡最常見的組合，那不見得符合你的限制。">
+  <h2>換三句話</h2>
+  <div class="pair">
+    <div class="line no"><span class="tag">❌</span>幫我用 React 寫一個報修系統</div>
+    <div class="line yes"><span class="tag">①</span>先做選型分析（列候選、優缺點、適用情境、推薦與理由）</div>
+    <div class="line yes"><span class="tag">②</span>再寫開發計畫（模組、里程碑、驗收標準）<strong>先不要寫程式碼</strong></div>
+    <div class="line yes"><span class="tag">③</span>才照計畫實作第一階段</div>
+  </div>
+</section>
+
+<section class="slide" data-station="站 2 設計期" data-note="關鍵：把限制講出來，選型才有意義。沒有限制的選型建議等於沒建議。">
+  <h3>①　選型分析</h3>
+  <pre>我要做【需求】。<span class="hl">我的限制是</span>：
+- 開發環境：【例：Windows + PowerShell】
+- 團隊技能：【例：熟 Java，前端只有一人】
+- 部署環境：【例：公司內網，不能連外】
+- 時程與人力：【…】
+
+請列出 2-4 個可行的技術選型方案，每個方案說明：
+優點、缺點、適用情境、<span class="hl">在我上述限制下的契合度</span>。
+最後給出你的推薦與理由，並說明<span class="hl">什麼情況下你會改推薦別的方案</span>。</pre>
+</section>
+
+<section class="slide" data-station="站 2 設計期" data-note="這張是站 2 的精華。「什麼情況下我會改推薦」讓你知道這個決定的有效邊界——限制變了，推薦就該變。">
+  <figure>
+    <img src="assets/03-tech-selection.png" alt="改推薦的條件">
+    <figcaption>比推薦本身更重要：這個決定的有效邊界</figcaption>
+  </figure>
+</section>
+
+<section class="slide" data-station="站 2 設計期" data-note="「先不要寫程式碼」這句話很重要。開發計畫是便宜的中間產物：計畫改一行，程式碼改一天。">
+  <h3>②　開發計畫</h3>
+  <pre>採用【選定方案】。請寫一份開發計畫：
+1. 模組拆解：每個模組的職責與相依關係
+2. 里程碑：分幾個階段，每階段的產出是什麼
+3. <span class="hl">每階段的驗收標準：怎樣算做完（要可驗證，不要「功能正常」這種寫法）</span>
+4. 風險點與對應的先行驗證
+
+<span class="hl">先不要寫程式碼。</span></pre>
+  <p class="lead" style="margin-top:20px">計畫改一行，程式碼改一天。</p>
+</section>
+
+<section class="slide" data-station="站 2 設計期" data-note="注意驗收標準的寫法：每一條都是可以打勾的判準，不是「功能正常」。這批標準等一下會直接變成測試。">
+  <figure>
+    <img src="assets/04-milestone-acceptance.png" alt="可驗證的驗收標準">
+    <figcaption>每一條都能打勾——這批標準等一下會直接變成測試</figcaption>
+  </figure>
+</section>
+
+<section class="slide center" data-station="站 2 設計期" data-note="Q2。解說：不是為了省，是為了讓錯誤發生在便宜的地方。">
+  <p><span class="badge quiz">Q2</span></p>
+  <h2>在請 AI 實作前，先加一句<br>「先不要寫程式碼，先給我開發計畫」<br>主要好處是？</h2>
+  <p class="lead">A. 節省 token　B. 計畫是便宜的中間產物——計畫改一行，程式碼改一天<br>C. AI 寫程式速度太慢　D. 避免版權爭議</p>
+</section>
+
+<!-- ══════════ 站 3 ══════════ -->
+<section class="slide" data-station="站 3 開發驗收" data-note="站 3 開始。11 分鐘，全場最大段。三層遞進。">
+  <h2>第三站：開發驗收期</h2>
+  <div class="map">
+    <div class="station"><div class="no">STATION 1</div><div class="name">想法期</div><div class="what">能不能做<br>→ 可行性評估</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STATION 2</div><div class="name">設計期</div><div class="what">幫我寫<br>→ 選型＋計畫</div></div>
+    <div class="arrow">→</div>
+    <div class="station on"><div class="no">STATION 3</div><div class="name">開發驗收</div><div class="what">幫我測試<br>→ TDD＋E2E＋SOP</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STATION 4</div><div class="name">上線前</div><div class="what">查漏洞<br>→ 逐項稽核</div></div>
+  </div>
+</section>
+
+<section class="slide" data-station="站 3 開發驗收" data-note="一句換成三層，而且是有順序的三層。">
+  <h2>一句話換成三層</h2>
+  <div class="pair">
+    <div class="line no"><span class="tag">❌</span>幫我測試程式有沒有問題</div>
+    <div class="line yes"><span class="tag">3-1</span>開發時就 TDD：先寫測試 → 紅 → 實作到綠 → 重構</div>
+    <div class="line yes"><span class="tag">3-2</span>完工後 Playwright E2E：寫成可重跑的腳本檔</div>
+    <div class="line yes"><span class="tag">3-3</span>E2E 每步截圖 → 用這批圖產出 SOP 操作手冊</div>
+  </div>
+</section>
+
+<section class="slide" data-station="站 3 開發驗收" data-note="為什麼要它先寫測試？因為 AI 寫完程式再補測試，它會寫出「證明自己對」的測試——測試變成實作的鏡子，失去驗證意義。最後那句約束不能少，否則它會一口氣寫完然後告訴你都過了。">
+  <h3>3-1　開發時就 TDD</h3>
+  <pre>用 TDD 實作【功能】：
+1. <span class="hl">先寫測試，跑一次，讓我看到它是紅的（失敗訊息貼給我）</span>
+2. 再寫最小實作讓測試轉綠
+3. 最後重構，重構後測試必須維持綠
+
+測試要涵蓋：正常路徑、邊界值、錯誤分支。
+<span class="hl">在我確認紅燈之前，不要寫實作程式碼。</span></pre>
+  <p class="lead" style="margin-top:18px">寫完程式再補的測試，是實作的鏡子，不是規格。</p>
+</section>
+
+<section class="slide" data-station="站 3 開發驗收" data-note="紅燈。失敗原因是功能未實作，不是打錯字——這件事要唸出來。">
+  <figure>
+    <img src="assets/05-tdd-red.png" alt="TDD 紅燈">
+    <figcaption>先看它失敗，而且是為了對的理由失敗</figcaption>
+  </figure>
+</section>
+
+<section class="slide" data-station="站 3 開發驗收" data-note="★ 全場最強的一張。講法：「我根本沒給你看任何程式碼，但你現在已經知道這個系統的所有規則了。」停三秒讓觀眾讀。測試不是驗證工具，是規格文件。">
+  <figure>
+    <img src="assets/06-tdd-green.png" alt="TDD 綠燈：21 個測試">
+    <figcaption>我沒給你看任何程式碼——但你已經知道這個系統的所有規則了</figcaption>
+  </figure>
+</section>
+
+<section class="slide" data-station="站 3 開發驗收" data-note="LIVE：先手動點一下（15 秒），完成前置任務 → 紅底消失、下一步建議自動跳動。然後說「這個流程我不想每次都手動點」。">
+  <h3>3-2　完工後 E2E　<span class="badge live">LIVE 15 秒</span></h3>
+  <pre>用 Playwright 幫我寫 e2e 測試腳本，涵蓋這幾條使用者流程：
+【流程 1】【流程 2】【流程 3】
+
+要求：
+- <span class="hl">寫成可重跑的腳本檔</span>，放在 e2e/ 目錄下，加中文註解說明用途
+- <span class="hl">不要用一次性的互動指令</span>
+- 每個腳本可獨立執行，失敗時輸出足以定位問題的訊息</pre>
+  <p class="lead" style="margin-top:18px">一次性指令跑完就沒了。腳本是資產。</p>
+</section>
+
+<section class="slide center" data-station="站 3 開發驗收" data-note="LIVE：跑 npx playwright test，約 6 秒，瀏覽器自己開、自己填、自己點。備援：預錄影片。跑完切下一張。">
+  <p><span class="badge live">LIVE 6 秒</span></p>
+  <h2>讓它自己跑一次</h2>
+  <pre style="text-align:left">PS&gt; npx playwright test</pre>
+  <p class="lead" style="margin-top:20px">備援：若當場失敗，直接播預錄影片，不要現場除錯</p>
+</section>
+
+<section class="slide" data-station="站 3 開發驗收" data-note="跑完留下這些。10 張，一次執行的完整軌跡。">
+  <figure>
+    <img src="assets/07-e2e-screenshots.png" alt="E2E 步驟截圖軌跡牆">
+    <figcaption>跑完它留下這些——一次執行的完整軌跡</figcaption>
+  </figure>
+</section>
+
+<section class="slide" data-station="站 3 開發驗收" data-note="這一招最有「哇」感：測試腳本順便產出了教育訓練文件。同一次執行，一份給機器看（回歸測試），一份給人看（SOP）。而且 SOP 永遠跟程式同步，因為它是從實際跑過的畫面生出來的。">
+  <h3>3-3　把截圖變成文件</h3>
+  <pre>在 e2e 腳本的每個關鍵步驟後加上截圖，存到 e2e/screenshots/ 並依步驟編號命名。
+跑完後，<span class="hl">用這批截圖幫我產出一份操作 SOP 文件</span>：
+每個步驟一張圖 + 操作說明 + 預期結果 + 常見錯誤。
+輸出成 Markdown。</pre>
+  <p class="lead" style="margin-top:18px">同一次執行：一份給機器看，一份給人看。</p>
+</section>
+
+<section class="slide" data-station="站 3 開發驗收" data-note="SOP 永遠跟程式同步——因為它是從實際跑過的畫面生出來的，不是手寫的。流程改了、測試會改，SOP 下次重跑就自動更新。">
+  <figure>
+    <img src="assets/08b-generated-sop-step06.png" alt="自動生成的 SOP">
+    <figcaption>沒有人手寫這份文件——它是測試跑完自己長出來的</figcaption>
+  </figure>
+</section>
+
+<section class="slide center" data-station="站 3 開發驗收" data-note="Q3。解說：先寫程式再補測試，AI 傾向寫出證明自己對的測試。">
+  <p><span class="badge quiz">Q3</span></p>
+  <h2>為什麼要求 AI<br>「先寫測試、確認紅燈，才寫實作」？</h2>
+  <p class="lead">A. 測試比實作好寫<br>B. 先寫程式再補測試，AI 傾向寫出「證明自己對」的測試<br>C. 這樣執行比較快　D. 測試框架規定要這樣</p>
+</section>
+
+<!-- ══════════ 站 4 ══════════ -->
+<section class="slide" data-station="站 4 上線前" data-note="站 4 開始。6 分鐘，兩層基準各約 3 分。">
+  <h2>第四站：上線前</h2>
+  <div class="map">
+    <div class="station"><div class="no">STATION 1</div><div class="name">想法期</div><div class="what">能不能做<br>→ 可行性評估</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STATION 2</div><div class="name">設計期</div><div class="what">幫我寫<br>→ 選型＋計畫</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STATION 3</div><div class="name">開發驗收</div><div class="what">幫我測試<br>→ TDD＋E2E＋SOP</div></div>
+    <div class="arrow">→</div>
+    <div class="station on"><div class="no">STATION 4</div><div class="name">上線前</div><div class="what">查漏洞<br>→ 逐項稽核</div></div>
+  </div>
+</section>
+
+<section class="slide" data-station="站 4 上線前" data-note="沒有基準的「檢查漏洞」，AI 只會回泛泛而談的三五點。給它清單，就變成有覆蓋率可談的逐項稽核。">
+  <h2>給它一個外部基準</h2>
+  <div class="pair">
+    <div class="line no"><span class="tag">❌</span>幫我看看有沒有資安漏洞</div>
+    <div class="line yes"><span class="tag">第一層</span>我寫的程式碼 → OWASP Top 10:2025 ＋ CWE Top 25</div>
+    <div class="line yes"><span class="tag">第二層</span>我用的第三方元件 → 已知 CVE</div>
+  </div>
+</section>
+
+<section class="slide" data-station="站 4 上線前" data-note="關鍵在最後一句——逼它交出覆蓋率，而不是只挑幾個好講的講。清單版本要講：OWASP 2025 版新增 A03 供應鏈、A10 例外處理，SSRF 併進 A01。用 2021 版問會漏掉兩塊。">
+  <h3>第一層　我寫的程式碼</h3>
+  <pre>對照 <span class="hl">OWASP Top 10:2025</span> 與 <span class="hl">CWE Top 25（2025 版）</span>逐項檢查這份程式碼，
+輸出表格：分類代號、是否命中、程式位置、風險等級、修補建議。
+<span class="hl">沒命中的項目也要列出，並說明為什麼不適用。</span></pre>
+  <p class="small" style="margin-top:18px">OWASP Top 10:2025 — 2025/11 發表、2026/01 定版。新增 <em>A03 軟體供應鏈失效</em>、<em>A10 例外狀況處理不當</em>，SSRF 併入 A01。<br>CWE Top 25（2025 版）— 2025/12 CISA／MITRE 發布，取樣 3.9 萬個漏洞。前三名：XSS、SQL Injection、CSRF。</p>
+</section>
+
+<section class="slide" data-station="站 4 上線前" data-note="真的有抓到東西，不是全綠。而且「未命中也要列出理由」才是覆蓋率的證據——只列命中項目的報告，你無法判斷它查得仔細還是敷衍。">
+  <figure>
+    <img src="assets/09-security-audit.png" alt="稽核摘要">
+    <figcaption>命中 4 項 OWASP、1 項 CWE——不是全綠</figcaption>
+  </figure>
+</section>
+
+<section class="slide" data-station="站 4 上線前" data-note="這是實測驗證過的：蓄意毀損資料檔後呼叫 API，500 回應把檔案系統路徑吐出來。">
+  <figure>
+    <img src="assets/09b-owasp-a10.png" alt="A10 命中細節">
+    <figcaption>不是「可能有風險」——是實際跑出來的回應</figcaption>
+  </figure>
+</section>
+
+<section class="slide" data-station="站 4 上線前" data-note="第二層。0 漏洞但 5 個直接相依帶進 106 個套件——這是「今天乾淨」。沒有任何機制會在明天有新漏洞時通知你。這正對應 2025 新增的 A03。">
+  <h3>第二層　我用的第三方元件</h3>
+  <pre>列出本專案所有相依套件與版本，逐一查有無已知 CVE，
+標出 CVSS 分數、影響說明與建議升級版本，依風險排序。</pre>
+  <figure style="margin-top:18px">
+    <img src="assets/10-dependency-audit.png" alt="相依套件稽核" style="max-height:40vh">
+    <figcaption>0 漏洞，但 5 個直接相依帶進 106 個套件——這只是「今天乾淨」</figcaption>
+  </figure>
+</section>
+
+<section class="slide" data-station="站 4 上線前" data-note="10 秒帶過。重點講一句：資訊不是消失，是換了去處。想看現場修，Q&A 我做給你看。">
+  <figure>
+    <img src="assets/11-fix-before-after.png" alt="修補前後對比">
+    <figcaption>修補後：用戶端收到制式訊息，完整內容進日誌——資訊不是消失，是換了去處</figcaption>
+  </figure>
+</section>
+
+<section class="slide center" data-station="站 4 上線前" data-note="誠實話，建立信任用。不要跳過。">
+  <p class="big">AI 稽核<strong>取代不了滲透測試</strong></p>
+  <p class="lead" style="margin-top:26px">它的價值是<em>便宜的第一道網</em><br>在你花錢請人測之前，先把明顯的東西掃掉<br><br>稽核全綠不等於安全<br>只等於「清單上的項目都看過了」</p>
+</section>
+
+<section class="slide center" data-station="站 4 上線前" data-note="Q4。解說：A、B 沒有基準，D 是另一件事。只有 C 逼得出覆蓋率。">
+  <p><span class="badge quiz">Q4</span></p>
+  <h2>叫 AI 做資安檢查時，下列哪句<br>最能逼出「覆蓋率」而不是隨便挑幾點講？</h2>
+  <p class="lead">A. 幫我看看有沒有資安漏洞　B. 幫我找出所有的漏洞<br>C. 對照 OWASP Top 10:2025 逐項檢查，沒命中的項目也要列出並說明為什麼不適用<br>D. 幫我做一次滲透測試</p>
+</section>
+
+<!-- ══════════ 收尾 ══════════ -->
+<section class="slide center" data-station="收尾" data-note="★ 把開場 Q0 的統計圖叫出來。講：「開場的時候，選 A、B、C 的加起來佔了 XX%。這三句話，正好就是今天四站要換掉的三句。」">
+  <h2>還記得開場那一題嗎</h2>
+  <p class="big" style="margin-top:20px">A.「幫我寫一個 XXX」<br>B.「這個能不能做？」<br>C.「幫我看看有沒有問題」</p>
+  <p class="lead" style="margin-top:26px">這三句話，正好就是今天要換掉的三句</p>
+  <p class="small" style="margin-top:18px">（切到 EXAM 畫面顯示 Q0 統計）</p>
+</section>
+
+<section class="slide" data-station="收尾" data-note="這張讓觀眾截圖。停久一點，說「這張可以拍」。">
+  <h2>四句型總表</h2>
+  <table>
+    <tr><th style="width:14%">階段</th><th style="width:24%">❌ 別這樣問</th><th style="width:34%">✅ 這樣問</th><th>你會拿到的產物</th></tr>
+    <tr><td>想法期</td><td class="no">這個能不能做？</td><td class="yes">做一份可行性評估報告，含難易度分級、風險、驗證順序</td><td>可進會議、可被打槍的評估文件</td></tr>
+    <tr><td>設計期</td><td class="no">幫我寫一個 X</td><td class="yes">先選型分析 → 再開發計畫 → 才實作</td><td>選型比較表 + 里程碑與驗收標準</td></tr>
+    <tr><td>開發驗收</td><td class="no">幫我測試有沒有問題</td><td class="yes">TDD 紅綠重構 → Playwright 腳本 → 截圖生 SOP</td><td>回歸測試資產 + 操作手冊</td></tr>
+    <tr><td>上線前</td><td class="no">幫我看有沒有漏洞</td><td class="yes">對照 OWASP／CWE 逐項稽核，含未命中原因</td><td>有覆蓋率的稽核表</td></tr>
+  </table>
+  <p class="lead" style="margin-top:20px">這張可以拍。</p>
+</section>
+
+<section class="slide center" data-station="收尾" data-note="主張回扣。然後課程一句話輕輕帶過，不做促銷。開 Q5 離場題。進 Q&A。">
+  <p class="big">這四招的共通點只有一個<br><br><strong>你要求了一份別人可以審查的東西</strong></p>
+  <p class="lead" style="margin-top:34px">把「一句話回答」換成「可審查產物」</p>
+  <p style="margin-top:40px"><span class="badge quiz">Q5 離場題</span>　今天四站，你最想馬上用的是哪一個？</p>
+  <p class="small">（開著就好，散場前填，我照你選的寄對應的東西給你）</p>
+</section>
+
+<section class="slide center cover" data-station="Q&A" data-note="Q&A 10 分鐘。備料：想看現場修資安問題？現在做給你看。模型差異？這四招與模型無關。">
+  <h1>Q &amp; A</h1>
+  <p class="sub">謝謝大家</p>
+</section>
+
+<!-- ── 底部列與備註 ─────────────────────────────────── -->
+<div class="notes" id="notes"></div>
+<div class="bar">
+  <span class="station-name" id="bar-station"></span>
+  <span>← → 換頁　·　N 講者備註　·　F 全螢幕</span>
+  <span id="bar-page"></span>
+</div>
+
+<script>
+/**
+ * 投影片導航。
+ * 刻意不做自動播放與轉場動畫——直播時節奏由講者控制，
+ * 任何會自己動的東西都是風險。
+ */
+const slides = Array.from(document.querySelectorAll('.slide'));
+const notesBox = document.getElementById('notes');
+const barStation = document.getElementById('bar-station');
+const barPage = document.getElementById('bar-page');
+let current = 0;
+let notesVisible = false;
+
+/** 顯示指定頁次，並同步底部列與講者備註 */
+function show(index) {
+  current = Math.max(0, Math.min(index, slides.length - 1));
+  slides.forEach((slide, i) => slide.classList.toggle('active', i === current));
+
+  const slide = slides[current];
+  barStation.textContent = slide.dataset.station || '';
+  barPage.textContent = `${current + 1} / ${slides.length}`;
+  notesBox.textContent = slide.dataset.note || '（本頁無備註）';
+
+  // 記住目前頁次，重新整理後回到原處，避免直播中誤觸重載從頭開始
+  location.hash = String(current + 1);
+}
+
+document.addEventListener('keydown', (event) => {
+  switch (event.key) {
+    case 'ArrowRight':
+    case 'PageDown':
+    case ' ':
+      event.preventDefault();
+      show(current + 1);
+      break;
+    case 'ArrowLeft':
+    case 'PageUp':
+      event.preventDefault();
+      show(current - 1);
+      break;
+    case 'Home': show(0); break;
+    case 'End': show(slides.length - 1); break;
+    case 'n':
+    case 'N':
+      notesVisible = !notesVisible;
+      notesBox.classList.toggle('show', notesVisible);
+      break;
+    case 'f':
+    case 'F':
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen();
+      break;
+  }
+});
+
+// 點擊畫面右半往前、左半往後，方便用簡報筆或觸控操作
+document.addEventListener('click', (event) => {
+  if (event.target.closest('.notes')) return;
+  show(current + (event.clientX > window.innerWidth / 2 ? 1 : -1));
+});
+
+show(Number(location.hash.slice(1)) - 1 || 0);
+</script>
+</body>
+</html>
