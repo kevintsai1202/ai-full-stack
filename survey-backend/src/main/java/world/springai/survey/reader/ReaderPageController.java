@@ -16,6 +16,7 @@ import world.springai.survey.newsletter.CampaignRepository;
 import world.springai.survey.newsletter.ContentSplitter;
 import world.springai.survey.newsletter.MarkdownRenderer;
 import world.springai.survey.newsletter.PublicCampaignTagService;
+import world.springai.survey.newsletter.PublicRelatedArticleService;
 import world.springai.survey.newsletter.SurveyBlockRenderer;
 import world.springai.survey.media.MediaAssetService;
 import world.springai.survey.ReaderSiteLinks;
@@ -60,6 +61,8 @@ public class ReaderPageController {
      * （{@code PackageDependencyTest} 只禁止反方向），contentHtml 定案後統一展開。
      */
     private final SurveyBlockRenderer surveyBlockRenderer;
+    /** 側欄相關文章查詢；舊單元測試相容建構式為 null，此時側欄不輸出相關文章卡 */
+    private final PublicRelatedArticleService relatedArticleService;
 
     /**
      * 注入內容、授權與渲染所需的服務。
@@ -79,7 +82,8 @@ public class ReaderPageController {
                                ObjectProvider<PublicCampaignTagService> campaignTagServiceProvider,
                                MediaAssetService mediaAssetService,
                                ObjectProvider<ReaderSiteLinks> readerSiteLinksProvider,
-                               SurveyBlockRenderer surveyBlockRenderer) {
+                               SurveyBlockRenderer surveyBlockRenderer,
+                               PublicRelatedArticleService relatedArticleService) {
         this.campaignRepository = campaignRepository;
         this.markdownRenderer = markdownRenderer;
         this.contentSplitter = contentSplitter;
@@ -91,6 +95,7 @@ public class ReaderPageController {
         this.mediaAssetService = mediaAssetService;
         this.readerSiteLinks = readerSiteLinksProvider.getIfAvailable();
         this.surveyBlockRenderer = surveyBlockRenderer;
+        this.relatedArticleService = relatedArticleService;
     }
 
     /** 舊單元測試相容建構式；沒有標籤服務時維持原本列表行為。 */
@@ -112,6 +117,7 @@ public class ReaderPageController {
         this.mediaAssetService = null;
         this.readerSiteLinks = null;
         this.surveyBlockRenderer = null;
+        this.relatedArticleService = null;
     }
 
     /** 歷史內容列表：只列已發布者，登入者會看到自己的解鎖狀態 */
@@ -207,6 +213,7 @@ public class ReaderPageController {
         vars.put("<!--ARTICLE_TITLE-->", HtmlTemplate.escapeHtml(campaign.getSubject()));
         vars.put("<!--ARTICLE_META-->", renderMeta(campaign));
         vars.put("<!--ARTICLE_TAGS-->", renderArticleTags(campaign.getId()));
+        vars.put("<!--ARTICLE_SIDEBAR-->", renderSidebar(campaign));
         vars.put("<!--ARTICLE_COVER-->", renderArticleCover(campaign));
         vars.put("<!--ARTICLE_CONTENT-->", contentHtml); // 已是渲染後的 HTML，不可再跳脫
         vars.put("<!--NAV_LINKS-->", ReaderNav.links(current.isPresent()));
@@ -444,6 +451,92 @@ public class ReaderPageController {
         }
         return renderTagLinks(campaignTagService.tagsByCampaign(List.of(campaignId))
             .getOrDefault(campaignId, List.of()));
+    }
+
+    /** 側欄相關文章的顯示篇數上限 */
+    private static final int SIDEBAR_RELATED_LIMIT = 5;
+
+    /**
+     * 渲染文章頁右側欄：分類選單與相關文章兩張卡。
+     *
+     * <p>兩張卡各自可獨立缺席——服務未注入（舊相容建構式）或查無資料時
+     * 該卡輸出空字串，不留一張空卡在側欄。</p>
+     */
+    private String renderSidebar(Campaign campaign) {
+        return renderCategoryCard(campaign) + renderRelatedCard(campaign);
+    }
+
+    /** 分類卡：列出所有公開 hashtag 與篇數，本篇所屬者標 active */
+    private String renderCategoryCard(Campaign campaign) {
+        if (campaignTagService == null) {
+            return "";
+        }
+        List<PublicCampaignTagService.TagSummary> all = campaignTagService.publicTags();
+        if (all.isEmpty()) {
+            return "";
+        }
+        Set<String> own = campaign.getId() == null
+            ? Set.of()
+            : campaignTagService.tagsByCampaign(List.of(campaign.getId()))
+                .getOrDefault(campaign.getId(), List.of()).stream()
+                .map(PublicCampaignTagService.TagSummary::slug)
+                .collect(Collectors.toSet());
+        StringBuilder html = new StringBuilder(
+            "<section class=\"side-card\"><h2 class=\"side-title\">分類</h2><div class=\"side-tags\">");
+        for (PublicCampaignTagService.TagSummary tag : all) {
+            html.append("<a class=\"side-tag")
+                .append(own.contains(tag.slug()) ? " active" : "")
+                .append("\" href=\"/r/archive?tag=")
+                .append(java.net.URLEncoder.encode(tag.slug(), java.nio.charset.StandardCharsets.UTF_8))
+                .append("\">#").append(HtmlTemplate.escapeHtml(tag.name()))
+                .append(" <span>").append(tag.articleCount()).append("</span></a>");
+        }
+        return html.append("</div></section>").toString();
+    }
+
+    /**
+     * 相關文章卡：同標籤優先、不足補最新（規則見 PublicRelatedArticleService）。
+     *
+     * <p>只輸出標題、日期與封面——刻意不放摘要，避免多一條可能帶出受限區的路徑。</p>
+     */
+    private String renderRelatedCard(Campaign campaign) {
+        if (relatedArticleService == null || campaign.getId() == null) {
+            return "";
+        }
+        List<PublicRelatedArticleService.RelatedArticle> related =
+            relatedArticleService.relatedTo(campaign.getId(), SIDEBAR_RELATED_LIMIT);
+        if (related.isEmpty()) {
+            return "";
+        }
+        Map<Long, String> coverUrls = mediaAssetService == null
+            ? Map.of()
+            : mediaAssetService.publicUrls(related.stream()
+                .map(PublicRelatedArticleService.RelatedArticle::coverMediaId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList());
+        StringBuilder html = new StringBuilder(
+            "<section class=\"side-card\"><h2 class=\"side-title\">相關文章</h2><ul class=\"side-list\">");
+        for (var article : related) {
+            String coverUrl = article.coverMediaId() == null ? null : coverUrls.get(article.coverMediaId());
+            html.append("<li><a href=\"/r/news/")
+                .append(HtmlTemplate.escapeHtml(article.slug())).append("\">")
+                .append("<span class=\"side-thumb\">");
+            if (coverUrl != null) {
+                html.append("<img src=\"").append(HtmlTemplate.escapeHtml(coverUrl))
+                    .append("\" alt=\"\" loading=\"lazy\" decoding=\"async\">");
+            } else {
+                html.append(HtmlTemplate.escapeHtml(
+                    article.coverEmoji() == null ? "📝" : article.coverEmoji()));
+            }
+            html.append("</span><span class=\"side-copy\"><strong>")
+                .append(HtmlTemplate.escapeHtml(article.subject())).append("</strong>");
+            if (article.publishedAt() != null) {
+                html.append("<small>").append(article.publishedAt().format(DATE_FORMAT)).append("</small>");
+            }
+            html.append("</span></a></li>");
+        }
+        return html.append("</ul></section>").toString();
     }
 
     /** 渲染可點選的 hashtag 連結。 */

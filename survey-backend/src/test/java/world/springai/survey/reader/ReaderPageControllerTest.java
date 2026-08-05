@@ -68,6 +68,10 @@ class ReaderPageControllerTest {
     @MockBean ReaderContext readerContext;
     @MockBean AppSettingService appSettingService;
     @MockBean MediaAssetService mediaAssetService;
+    /** 側欄相關文章服務（mock）；未 stub 時 Mockito 對 List 回傳空清單，等於「沒有相關文章」 */
+    @MockBean world.springai.survey.newsletter.PublicRelatedArticleService relatedArticleService;
+    /** 側欄分類服務（mock）：controller 以 ObjectProvider 取得，此處提供 bean 讓分類卡有資料 */
+    @MockBean world.springai.survey.newsletter.PublicCampaignTagService campaignTagService;
     /** Task 9 接線：問卷標記展開器（mock），預設 stub 為直通避免影響既有斷言 */
     @MockBean SurveyBlockRenderer surveyBlockRenderer;
 
@@ -736,5 +740,77 @@ class ReaderPageControllerTest {
         int metaEnd = body.indexOf(">", metaStart);
         String metaTag = body.substring(metaStart, metaEnd + 1);
         assertFalse(metaTag.contains(SENTINEL), "meta description 不得含受限區的哨兵字串");
+    }
+
+    /** 側欄：相關文章與分類都渲染出來，且連結指向正確路徑 */
+    @Test
+    void 文章頁輸出側欄相關文章與分類() throws Exception {
+        Campaign article = gatedArticle(Campaign.TIER_BASIC, 0);
+        // 相關文章卡需要 campaign.getId() 非 null 才會查詢（與 renderArticleTags 的慣例一致，
+        // 真正已發布的文章一定有 id；gatedArticle() fixture 本身不設 id，故補上）
+        ReflectionTestUtils.setField(article, "id", 3L);
+        when(campaignRepository.findBySlug("test-article"))
+            .thenReturn(Optional.of(article));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+        when(relatedArticleService.relatedTo(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyInt()))
+            .thenReturn(List.of(new world.springai.survey.newsletter.PublicRelatedArticleService
+                .RelatedArticle("other-post", "另一篇文章", OffsetDateTime.parse("2026-06-01T10:00:00+08:00"),
+                    null, "🚀")));
+        when(campaignTagService.publicTags())
+            .thenReturn(List.of(new world.springai.survey.newsletter.PublicCampaignTagService
+                .TagSummary("RAG", "rag", 3)));
+
+        String body = mvc.perform(get("/r/news/test-article"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(body.contains("class=\"article-side\""), "文章頁必須輸出側欄容器");
+        assertTrue(body.contains("/r/news/other-post"), "側欄必須含相關文章連結");
+        assertTrue(body.contains("另一篇文章"), "側欄必須含相關文章標題");
+        assertTrue(body.contains("/r/archive?tag=rag"), "側欄分類必須連到 archive 的標籤篩選");
+        assertFalse(body.contains(SENTINEL), "側欄不得讓受限區內容外洩");
+    }
+
+    /** 沒有相關文章時整張卡不輸出，不留一張空卡在側欄 */
+    @Test
+    void 無相關文章時不輸出該卡() throws Exception {
+        when(campaignRepository.findBySlug("test-article"))
+            .thenReturn(Optional.of(gatedArticle(Campaign.TIER_BASIC, 0)));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+        when(relatedArticleService.relatedTo(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyInt())).thenReturn(List.of());
+
+        String body = mvc.perform(get("/r/news/test-article"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertFalse(body.contains("相關文章"), "沒有相關文章時不應輸出該卡標題");
+    }
+
+    /** 本篇所屬分類在側欄標成 active，讀者才看得出自己在哪一類 */
+    @Test
+    void 側欄標示本篇所屬分類() throws Exception {
+        Campaign article = gatedArticle(Campaign.TIER_BASIC, 0);
+        // Campaign 沒有公開的 setId，沿用本檔既有慣例（見第 181 行）以反射設定 id
+        ReflectionTestUtils.setField(article, "id", 7L);
+        when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(article));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+        when(campaignTagService.publicTags()).thenReturn(List.of(
+            new world.springai.survey.newsletter.PublicCampaignTagService.TagSummary("RAG", "rag", 3),
+            new world.springai.survey.newsletter.PublicCampaignTagService.TagSummary("AI", "ai", 5)));
+        when(campaignTagService.tagsByCampaign(List.of(7L))).thenReturn(java.util.Map.of(
+            7L, List.of(new world.springai.survey.newsletter.PublicCampaignTagService
+                .TagSummary("RAG", "rag", 0))));
+
+        String body = mvc.perform(get("/r/news/test-article"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(body.contains("side-tag active\" href=\"/r/archive?tag=rag"),
+            "本篇所屬分類必須帶 active；實際輸出：" + body);
     }
 }

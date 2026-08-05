@@ -28,4 +28,21 @@ class ReaderStylesheetTest {
         assertTrue(css.contains("background:transparent; color:inherit"),
             "fenced code 內層必須透明並繼承 pre 的高對比文字色");
     }
+
+    /**
+     * 文章頁兩欄版面：側欄樣式存在，且 .wrap 的 760px 單欄寬度未被改動
+     * ——放寬只能加在 .article-wrap 上，否則 archive／me／rules 全部跟著變寬。
+     */
+    @Test
+    void articleSidebarLayoutExistsWithoutWideningOtherPages() throws IOException {
+        String css = Files.readString(READER_STYLESHEET, StandardCharsets.UTF_8);
+
+        assertTrue(css.contains(".wrap { width:min(100% - 36px, 760px)"),
+            "共用 .wrap 的 760px 單欄寬度不得被改動");
+        assertTrue(css.contains(".article-wrap"), "文章頁需有自己的加寬容器");
+        assertTrue(css.contains(".article-layout"), "文章頁需有兩欄 grid 容器");
+        assertTrue(css.contains(".article-side"), "需有側欄樣式");
+        assertTrue(css.contains("@media (max-width:960px)"),
+            "需有窄螢幕斷點讓側欄降到內文下方");
+    }
 }
