@@ -17,6 +17,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 
 /**
  * {@link SurveyVoteService} 純 Mockito 單元測試：驗證投票目標合法性、
@@ -30,12 +31,14 @@ class SurveyVoteServiceTest {
     private final PromoRecipientTokenService tokenService = mock(PromoRecipientTokenService.class);
     private final ReaderSessionService sessionService = mock(ReaderSessionService.class);
     private final CampaignRepository campaignRepository = mock(CampaignRepository.class);
+    private final SurveyVoteRewardService rewardService = mock(SurveyVoteRewardService.class);
     private SurveyVoteService service;
 
     @BeforeEach
     void setUp() {
         service = new SurveyVoteService(
-            formSchemaService, voteRepository, tokenService, sessionService, campaignRepository);
+            formSchemaService, voteRepository, tokenService, sessionService, campaignRepository,
+            rewardService);
         // 預設：無 token、無 session、campaign 存在、查無既有投票列——各測試按需覆寫
         when(tokenService.verify(any())).thenReturn(Optional.empty());
         when(sessionService.readReaderId(any(), any())).thenReturn(Optional.empty());
@@ -175,5 +178,41 @@ class SurveyVoteServiceTest {
         verify(voteRepository).save(argThat(v -> SurveyVote.IDENTITY_ANON.equals(v.getIdentityType())
             && v.getIdentityKey() == null));
         verify(voteRepository, never()).findByFormKeyAndIdentityTypeAndIdentityKey(any(), any(), any());
+    }
+
+    /** 具名身分落票後必須觸發發點，且帶入正確的問卷、身分與活動 */
+    @Test
+    void 具名落票後觸發發點() {
+        givenQuestion("reader-poll", "rating", List.of("A", "B"));
+        when(sessionService.readReaderId(eq("cookie"), any())).thenReturn(Optional.of(9L));
+        when(campaignRepository.existsById(3L)).thenReturn(true);
+
+        service.vote("reader-poll", "rating", 0, 3L, null, "cookie");
+
+        verify(rewardService).grantIfEligible(eq("reader-poll"), eq("標題"),
+            eq(SurveyVote.IDENTITY_READER), eq("9"), eq(3L));
+    }
+
+    /** 匿名投票不得觸發發點（setUp 的預設就是無 token、無 session） */
+    @Test
+    void 匿名落票不觸發發點() {
+        givenQuestion("reader-poll", "rating", List.of("A", "B"));
+
+        service.vote("reader-poll", "rating", 0, null, null, null);
+
+        verify(rewardService, never()).grantIfEligible(any(), any(), any(), any(), any());
+    }
+
+    /** 發點拋例外時轉址照常回傳——發點是輔助，不得擋住讀者的主體驗 */
+    @Test
+    void 發點失敗不影響轉址() {
+        givenQuestion("reader-poll", "rating", List.of("A", "B"));
+        when(sessionService.readReaderId(eq("cookie"), any())).thenReturn(Optional.of(9L));
+        when(rewardService.grantIfEligible(any(), any(), any(), any(), any()))
+            .thenThrow(new IllegalStateException("發點壞了"));
+
+        Optional<String> redirect = service.vote("reader-poll", "rating", 0, null, null, "cookie");
+
+        assertTrue(redirect.isPresent(), "發點失敗時仍須回傳接續頁轉址");
     }
 }

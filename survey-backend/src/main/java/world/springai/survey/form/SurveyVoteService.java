@@ -24,6 +24,10 @@ import java.util.Optional;
  *
  * <p><b>落票失敗不擋轉址</b>：投票統計是輔助數據，讀者順利跳轉到接續頁才是主體驗，
  * 記錄失敗只寫 log 讓監控看到，沿用 {@code PromoClickService} 的 best-effort 哲學。</p>
+ *
+ * <p><b>投票發點</b>：具名身分（RECIPIENT／READER）且對應到已註冊讀者時，
+ * 落票成功後由 {@link SurveyVoteRewardService} 發放投票獎勵，每人每問卷一次
+ * （改票不重發）。發點失敗與落票失敗同屬 best-effort，只寫 log 不擋轉址。</p>
  */
 @Service
 public class SurveyVoteService {
@@ -35,18 +39,22 @@ public class SurveyVoteService {
     private final PromoRecipientTokenService tokenService;
     private final ReaderSessionService sessionService;
     private final CampaignRepository campaignRepository;
+    /** 投票發點：落票成功後呼叫；發點失敗不影響落票與轉址 */
+    private final SurveyVoteRewardService rewardService;
 
-    /** 注入表單 schema、投票資料層、token／session 歸戶服務與活動存在性檢查 */
+    /** 注入表單 schema、投票資料層、token／session 歸戶服務、活動存在性檢查與發點服務 */
     public SurveyVoteService(FormSchemaService formSchemaService,
                              SurveyVoteRepository voteRepository,
                              PromoRecipientTokenService tokenService,
                              ReaderSessionService sessionService,
-                             CampaignRepository campaignRepository) {
+                             CampaignRepository campaignRepository,
+                             SurveyVoteRewardService rewardService) {
         this.formSchemaService = formSchemaService;
         this.voteRepository = voteRepository;
         this.tokenService = tokenService;
         this.sessionService = sessionService;
         this.campaignRepository = campaignRepository;
+        this.rewardService = rewardService;
     }
 
     /** 驗證＋落票；empty＝目標不合法（controller 轉 404，不洩漏 schema 細節），present＝接續頁 redirect 路徑 */
@@ -129,5 +137,9 @@ public class SurveyVoteService {
             voteRepository.save(new SurveyVote(question.formKey(), question.fieldKey(),
                 optionValue, campaignId, channel, identityType, identityKey));
         }
+        // 落票成功後才發點：發點的冪等與帳本一致性由 SurveyVoteRewardService 自己的
+        // 交易保證；此處若拋例外會被 vote() 的 best-effort catch 接住，只寫 log 不擋轉址。
+        rewardService.grantIfEligible(question.formKey(), question.title(),
+            identityType, identityKey, campaignId);
     }
 }
