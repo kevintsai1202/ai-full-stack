@@ -94,3 +94,6 @@ cold-notes/
 
 # 示意圖 PNG 為 SVG 轉檔產物（可由 generate_diagrams.py + render-diagrams.mjs 重生成）
 newsletter/assets/png/
+
+# 直播投影片的驗證抽樣截圖，由 verify-slides.mjs 產生
+live-slides/verify-output/
