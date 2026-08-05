@@ -14,6 +14,8 @@ import org.springframework.web.server.ResponseStatusException;
 import world.springai.survey.ApiExceptionHandler;
 import world.springai.survey.promo.PromoRecipientTokenService;
 import world.springai.survey.reader.CreditPolicy;
+import world.springai.survey.reader.CreditTxn;
+import world.springai.survey.reader.CreditTxnRepository;
 import world.springai.survey.reader.HtmlTemplate;
 import world.springai.survey.reader.Reader;
 import world.springai.survey.reader.ReaderRepository;
@@ -48,6 +50,7 @@ class SurveyPortalControllerTest {
     private ReaderSessionService sessionService;
     private ReaderRepository readerRepository;
     private CreditPolicy creditPolicy;
+    private CreditTxnRepository creditTxnRepository;
     private MockMvc mvc;
 
     @BeforeEach
@@ -57,6 +60,7 @@ class SurveyPortalControllerTest {
         sessionService = mock(ReaderSessionService.class);
         readerRepository = mock(ReaderRepository.class);
         creditPolicy = mock(CreditPolicy.class);
+        creditTxnRepository = mock(CreditTxnRepository.class);
         // 預設：rt 與 session 都無效（未登入），問卷完整填答獎勵為 20 點
         when(tokenService.verify(any())).thenReturn(Optional.empty());
         when(sessionService.readReaderId(any(), any())).thenReturn(Optional.empty());
@@ -64,7 +68,7 @@ class SurveyPortalControllerTest {
 
         SurveyPortalController controller = new SurveyPortalController(
             formSchemaService, tokenService, sessionService, readerRepository,
-            creditPolicy, new HtmlTemplate(), new ObjectMapper());
+            creditPolicy, new HtmlTemplate(), new ObjectMapper(), creditTxnRepository);
         mvc = MockMvcBuilders.standaloneSetup(controller)
             .setControllerAdvice(new ApiExceptionHandler())
             .setMessageConverters(
@@ -80,6 +84,30 @@ class SurveyPortalControllerTest {
             false, null, false, false, false, 1, null);
         return new FormSchemaService.FormDefinition(
             1L, "survey-form", 1, "回饋問卷", "PUBLISHED", false, null, List.of(field));
+    }
+
+    /** 建一位有 id 的讀者，供帳本查詢的身分歸戶使用 */
+    private Reader reader(long id, String email) {
+        Reader r = new Reader(email, "CODE" + id);
+        r.setId(id);
+        return r;
+    }
+
+    /**
+     * 投票橫幅測試用的已發布問卷（formKey 為 reader-poll，對應一鍵題轉址場景）。
+     *
+     * <p>brief 原始測試碼未替 formSchemaService 的 {@code getDefinition("reader-poll", null)}
+     * 補樁；{@code survey()} 在渲染 VOTED_BANNER 之前就會先呼叫
+     * {@code form.title()}，若不補樁 mock 回傳 null 會先在那裡 NPE、
+     * 而非因為橫幅文案錯誤而失敗——與四個新測試想驗證的行為（橫幅文案）不符，
+     * 故新增本 helper 並在每個新測試裡補上這行 stub。</p>
+     */
+    private FormSchemaService.FormDefinition pollForm() {
+        FormSchemaService.FieldDefinition field = new FormSchemaService.FieldDefinition(
+            1L, "choice", "你的選擇", "single_choice", true, List.of("A", "B"),
+            false, null, false, false, false, 1, null);
+        return new FormSchemaService.FormDefinition(
+            1L, "reader-poll", 1, "讀者投票", "PUBLISHED", false, "choice", List.of(field));
     }
 
     @Test
@@ -215,5 +243,67 @@ class SurveyPortalControllerTest {
            .andExpect(status().isOk())
            .andExpect(header().string("Cache-Control", containsString("no-store")))
            .andExpect(header().string("Cache-Control", containsString("private")));
+    }
+
+    /** 已因投票發過點：橫幅顯示實際點數，數字取自 CreditPolicy 而非 URL */
+    @Test
+    void 已發點時橫幅顯示點數() throws Exception {
+        when(formSchemaService.getDefinition("reader-poll", null)).thenReturn(pollForm());
+        when(tokenService.verify("token")).thenReturn(Optional.of("a@example.com"));
+        when(readerRepository.findByEmailIgnoreCase("a@example.com"))
+            .thenReturn(Optional.of(reader(9L, "a@example.com")));
+        when(creditTxnRepository.existsByReaderIdAndSurveyFormKeyAndReason(
+            9L, "reader-poll", CreditTxn.REASON_SURVEY_VOTE_REWARD)).thenReturn(true);
+        when(creditPolicy.surveyVoteReward()).thenReturn(5);
+
+        String body = mvc.perform(get("/r/survey/reader-poll?voted=0&rt=token"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(body.contains("已發送 5 點"), body);
+    }
+
+    /** 帳本沒有投票發點紀錄但身分可歸戶：可能是改票或發點被關閉，不可宣稱已發點 */
+    @Test
+    void 未發點時橫幅不宣稱已發點() throws Exception {
+        when(formSchemaService.getDefinition("reader-poll", null)).thenReturn(pollForm());
+        when(tokenService.verify("token")).thenReturn(Optional.of("a@example.com"));
+        when(readerRepository.findByEmailIgnoreCase("a@example.com"))
+            .thenReturn(Optional.of(reader(9L, "a@example.com")));
+        when(creditTxnRepository.existsByReaderIdAndSurveyFormKeyAndReason(
+            9L, "reader-poll", CreditTxn.REASON_SURVEY_VOTE_REWARD)).thenReturn(false);
+
+        String body = mvc.perform(get("/r/survey/reader-poll?voted=0&rt=token"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(body.contains("已收到你的投票"), body);
+        assertFalse(body.contains("已發送"), "沒有帳本紀錄時不得宣稱已發點：" + body);
+    }
+
+    /** 未歸戶到讀者帳號（匿名）：明示要成為讀者才拿得到投票點數 */
+    @Test
+    void 未歸戶時橫幅引導成為讀者() throws Exception {
+        when(formSchemaService.getDefinition("reader-poll", null)).thenReturn(pollForm());
+        when(tokenService.verify(any())).thenReturn(Optional.empty());
+        when(sessionService.readReaderId(any(), any())).thenReturn(Optional.empty());
+
+        String body = mvc.perform(get("/r/survey/reader-poll?voted=0"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(body.contains("訂閱成為讀者即可獲得投票點數"), body);
+    }
+
+    /** 沒有 voted 參數時完全不顯示橫幅（既有行為，回歸護欄） */
+    @Test
+    void 無voted參數不顯示橫幅() throws Exception {
+        when(formSchemaService.getDefinition("reader-poll", null)).thenReturn(pollForm());
+
+        String body = mvc.perform(get("/r/survey/reader-poll"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertFalse(body.contains("已收到你的投票"), body);
     }
 }

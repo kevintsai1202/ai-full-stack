@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import world.springai.survey.promo.PromoRecipientTokenService;
 import world.springai.survey.reader.CreditPolicy;
+import world.springai.survey.reader.CreditTxn;
+import world.springai.survey.reader.CreditTxnRepository;
 import world.springai.survey.reader.HtmlTemplate;
 import world.springai.survey.reader.Reader;
 import world.springai.survey.reader.ReaderRepository;
@@ -52,8 +54,10 @@ public class SurveyPortalController {
     private final CreditPolicy creditPolicy;
     private final HtmlTemplate htmlTemplate;
     private final ObjectMapper objectMapper;
+    /** 帳本查詢：投票橫幅顯示的發點狀態必須來自實際紀錄，不可由 URL 參數決定 */
+    private final CreditTxnRepository creditTxnRepository;
 
-    /** 注入表單 schema、身分解析（token／session）、點數規則與頁面渲染工具 */
+    /** 注入表單 schema、身分解析（token／session）、點數規則、頁面渲染工具與點數帳本查詢 */
     public SurveyPortalController(
             FormSchemaService formSchemaService,
             PromoRecipientTokenService tokenService,
@@ -61,7 +65,8 @@ public class SurveyPortalController {
             ReaderRepository readerRepository,
             CreditPolicy creditPolicy,
             HtmlTemplate htmlTemplate,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            CreditTxnRepository creditTxnRepository) {
         this.formSchemaService = formSchemaService;
         this.tokenService = tokenService;
         this.sessionService = sessionService;
@@ -69,6 +74,7 @@ public class SurveyPortalController {
         this.creditPolicy = creditPolicy;
         this.htmlTemplate = htmlTemplate;
         this.objectMapper = objectMapper;
+        this.creditTxnRepository = creditTxnRepository;
     }
 
     /** 前端動態產生表單所需的最小欄位描述；不外洩 analytics／sensitive 等後台專用欄位。 */
@@ -92,7 +98,7 @@ public class SurveyPortalController {
 
         Map<String, String> vars = new HashMap<>();
         vars.put("<!--FORM_TITLE-->", HtmlTemplate.escapeHtml(form.title()));
-        vars.put("<!--VOTED_BANNER-->", votedBanner(voted));
+        vars.put("<!--VOTED_BANNER-->", votedBanner(voted, formKey, identifiedEmail));
         vars.put("<!--IDENTITY_BLOCK-->", identityBlock(identifiedEmail, formKey, rewardCredits));
         vars.put("<!--FIELDS_JSON-->", toJsLiteral(publicFields(form.fields())));
         vars.put("<!--FORM_KEY-->", toJsLiteral(formKey));
@@ -123,11 +129,33 @@ public class SurveyPortalController {
             .map(Reader::getEmail);
     }
 
-    /** 有 voted 參數（即使空字串）才顯示已收到投票的提示區塊。 */
-    private String votedBanner(String voted) {
+    /**
+     * 有 voted 參數（即使空字串）才顯示已收到投票的提示區塊；發點狀態<b>實查帳本</b>。
+     *
+     * <p><b>為什麼不用 URL 參數帶點數</b>：轉址網址是讀者可自由編輯的，若橫幅照
+     * URL 顯示「已獲得 N 點」，任何人都能自造一個宣稱發了點的頁面，而帳本上沒有
+     * 這筆——「頁面說的與實際不一致」正是 {@code CreditPolicy} 這一層存在要避免的
+     * 問題。因此這裡多付一次查詢的代價，換取顯示與帳本一致。</p>
+     */
+    private String votedBanner(String voted, String formKey, Optional<String> identifiedEmail) {
         if (voted == null) {
             return "";
         }
+        Optional<Long> readerId = identifiedEmail
+            .flatMap(readerRepository::findByEmailIgnoreCase)
+            .map(Reader::getId);
+        if (readerId.isEmpty()) {
+            return "<div class=\"msg ok show\">✅ 已收到你的投票，"
+                + "訂閱成為讀者即可獲得投票點數。</div>";
+        }
+        boolean rewarded = creditTxnRepository.existsByReaderIdAndSurveyFormKeyAndReason(
+            readerId.get(), formKey, CreditTxn.REASON_SURVEY_VOTE_REWARD);
+        if (rewarded) {
+            return "<div class=\"msg ok show\">✅ 已收到你的投票，已發送 "
+                + creditPolicy.surveyVoteReward() + " 點，歡迎補充更多想法！</div>";
+        }
+        // 可能是改票（先前已發過而不重發，但那時 existsBy 會回 true）、
+        // 後台關閉了投票發點，或發點在 best-effort 路徑上失敗。三者都不能宣稱已發點。
         return "<div class=\"msg ok show\">✅ 已收到你的投票，歡迎補充更多想法！</div>";
     }
 
