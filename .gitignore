@@ -97,3 +97,6 @@ newsletter/assets/png/
 
 # 直播投影片的驗證抽樣截圖，由 verify-slides.mjs 產生
 live-slides/verify-output/
+
+# SDD 工作區（ledger／briefs／review packages，純本機暫存）
+.superpowers/
