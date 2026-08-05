@@ -226,9 +226,31 @@
         <!-- 插入「工商提案」分頁已核准的提案版位（呼叫後端建立 DRAFT 版位並取回可貼上的 snippet）；
              刻意不加 format-btn class，避免被 applyMarkdownFormat 的 dataset 驅動邏輯誤處理。 -->
         <button type="button" class="btn ghost" id="insert-promo-btn" title="插入已核准工商提案的版位片段">插入工商提案</button>
-        <!-- 插入「已發布且已設信中一鍵題」的問卷投票標記（獨立一行的 HTML 註解，由 SurveyBlockRenderer
-             展開成投票卡）；同工商按鈕，刻意不加 format-btn class 避免被 dataset 驅動邏輯誤處理。 -->
-        <button type="button" class="btn ghost" id="insert-survey-btn" title="插入可嵌入的問卷一鍵投票標記">插入問卷</button>
+        <!-- 問卷投票面板：可「快速建立」新投票（呼叫 quick-vote 端點一次建好可嵌入問卷），
+             或插入既有可嵌入問卷。兩者都插入獨立一行的 HTML 註解標記，由 SurveyBlockRenderer
+             展開成投票卡；刻意不加 format-btn class，避免被 applyMarkdownFormat 的
+             dataset 驅動邏輯誤處理。 -->
+        <details class="media-panel" id="survey-panel">
+          <summary class="btn ghost" title="在信中插入問卷一鍵投票">插入問卷投票 ▾</summary>
+          <p class="hint">快速建立：填題目與 2–6 個選項即可，代號由系統自動產生，不必先到「動態表單」分頁設定。</p>
+          <div><label for="survey-quick-title">題目</label>
+            <input type="text" id="survey-quick-title" maxlength="120" placeholder="這期你最想看哪個主題？"></div>
+          <div><label for="survey-quick-label">題目說明（留空則沿用題目）</label>
+            <input type="text" id="survey-quick-label" maxlength="120" placeholder="選一個最想深入的"></div>
+          <label>選項（2–6 個，每個最多 40 字）</label>
+          <div id="survey-quick-options"></div>
+          <div class="form-row">
+            <button type="button" class="btn ghost" id="survey-add-option">＋ 新增選項</button>
+            <button type="button" class="btn" id="survey-quick-create">建立並插入</button>
+          </div>
+          <div class="msg" id="survey-quick-msg"></div>
+          <hr>
+          <label for="survey-existing">插入既有問卷</label>
+          <div class="form-row">
+            <select id="survey-existing"><option value="">載入中…</option></select>
+            <button type="button" class="btn ghost" id="survey-insert-existing">插入</button>
+          </div>
+        </details>
       </div>
       <textarea id="markdown" placeholder="# 標題&#10;&#10;支援 **粗體**、清單、[連結](https://...)"></textarea>
       <details class="media-panel" id="media-panel" open>
@@ -884,7 +906,7 @@
     $('#promo-status-filter').onchange=loadPromoProposals;
     $('#promo-refresh').onclick=()=>{loadPromoProposals();loadPromoStats();};
     $('#insert-promo-btn').onclick=insertPromo;
-    $('#insert-survey-btn').onclick=insertSurvey;
+    initSurveyPanel();
     // 優惠券：問卷/條件連動、建立、查詢、全選與寄送
     $('#coupon-form-key').onchange=loadCouponFilterFields;
     $('#coupon-filter-field').onchange=refreshCouponFilterValue;
@@ -2682,30 +2704,92 @@
     }catch(e){if(e.message!=='401')alert('插入失敗：'+e.message);}
   }
 
-  /**
-   * 編輯器插入：取可嵌入問卷清單 → 選定後在游標處插入獨立一行的問卷標記。
-   *
-   * 插入邏輯改用 markdownBlock（同「分隔線」等 data-block 按鈕），確保標記前後
-   * 補足空行成獨立一段，而不是像 insertPromo 直接夾在游標兩側——因為這裡插入的
-   * 是必須整行單獨、由 SurveyBlockRenderer 以行級比對展開的 HTML 註解標記。
-   */
-  async function insertSurvey(){
+  /** 問卷面板初始化：預設兩列選項、綁定事件、載入既有可嵌入問卷清單。 */
+  function initSurveyPanel(){
+    addSurveyOptionRow();addSurveyOptionRow();
+    $('#survey-add-option').onclick=()=>{
+      // 上限與後端 QUICK_VOTE_MAX_OPTIONS 一致；超過就不再加列，避免送出才被 400 退回
+      if($('#survey-quick-options').children.length>=6){
+        showMsg('survey-quick-msg','選項最多 6 個',false);return;
+      }
+      addSurveyOptionRow();
+    };
+    $('#survey-quick-create').onclick=createQuickVote;
+    $('#survey-insert-existing').onclick=insertExistingSurvey;
+    loadEmbeddableSurveys();
+  }
+
+  /** 新增一列選項輸入框（附刪除鈕；列數 <=2 時刪除鈕不作用，維持最低 2 列）。 */
+  function addSurveyOptionRow(){
+    const row=document.createElement('div');row.className='form-row';
+    const input=document.createElement('input');
+    input.type='text';input.maxLength=40;input.placeholder='選項文字';
+    const remove=document.createElement('button');
+    remove.type='button';remove.className='btn ghost';remove.textContent='移除';
+    remove.onclick=()=>{
+      if($('#survey-quick-options').children.length<=2){
+        showMsg('survey-quick-msg','至少需要 2 個選項',false);return;
+      }
+      row.remove();
+    };
+    row.append(input,remove);$('#survey-quick-options').append(row);
+  }
+
+  /** 快速建立：送出題目與選項，成功後直接把標記插入編輯器並清空面板。 */
+  async function createQuickVote(){
+    const title=$('#survey-quick-title').value.trim();
+    const label=$('#survey-quick-label').value.trim();
+    const options=[...$('#survey-quick-options').querySelectorAll('input')]
+      .map(input=>input.value.trim()).filter(Boolean);
+    if(!title){showMsg('survey-quick-msg','請填題目',false);return;}
+    if(options.length<2){showMsg('survey-quick-msg','請填至少 2 個選項',false);return;}
+    try{
+      const question=await api('/api/admin/forms/quick-vote',{
+        method:'POST',body:JSON.stringify({title,label,options})});
+      insertSurveyMarker(question.formKey);
+      showMsg('survey-quick-msg','已建立並插入：'+question.formKey,true);
+      $('#survey-quick-title').value='';$('#survey-quick-label').value='';
+      $('#survey-quick-options').replaceChildren();addSurveyOptionRow();addSurveyOptionRow();
+      loadEmbeddableSurveys();
+    }catch(error){
+      if(error.message!=='401')showMsg('survey-quick-msg','建立失敗：'+error.message,false);
+    }
+  }
+
+  /** 載入已發布且已設信中一鍵題的問卷，填入「插入既有問卷」下拉。 */
+  async function loadEmbeddableSurveys(){
     try{
       const list=await api('/api/admin/forms/embeddable');
-      if(!list.length){alert('目前沒有已發布且已設信中一鍵題的問卷可插入');return;}
-      const pick=prompt('輸入要插入的問卷編號：\n'
-        +list.map((f,i)=>(i+1)+'：'+f.title+'（'+f.formKey+'）').join('\n'));
-      if(!pick)return;
-      const index=parseInt(pick,10)-1;
-      if(!(index>=0&&index<list.length)){alert('輸入的編號不存在');return;}
-      const marker='<!--survey:'+list[index].formKey+'-->';
-      const editor=$('#markdown'),start=editor.selectionStart,end=editor.selectionEnd;
-      const block=markdownBlock(editor.value,start,end,marker);
-      editor.setRangeText(block.text,start,end,'end');editor.focus();
-      const cursor=start+block.text.length;
-      editor.setSelectionRange(cursor,cursor);
-      composeChanged();
-    }catch(e){if(e.message!=='401')alert('插入失敗：'+e.message);}
+      const select=$('#survey-existing');select.replaceChildren();
+      if(!list.length){select.add(new Option('（目前沒有可嵌入的問卷）',''));return;}
+      select.add(new Option('選擇問卷…',''));
+      list.forEach(question=>select.add(
+        new Option(question.title+'（'+question.formKey+'）',question.formKey)));
+    }catch(error){/* 401 已由 api 顯示閘門；其餘僅影響下拉，不打斷編輯 */}
+  }
+
+  /** 插入下拉選定的既有問卷標記。 */
+  function insertExistingSurvey(){
+    const formKey=$('#survey-existing').value;
+    if(!formKey){showMsg('survey-quick-msg','請先選擇要插入的問卷',false);return;}
+    insertSurveyMarker(formKey);
+    showMsg('survey-quick-msg','已插入：'+formKey,true);
+  }
+
+  /**
+   * 在游標處插入獨立一行的問卷標記。
+   *
+   * 用 markdownBlock（同「分隔線」等 data-block 按鈕）確保標記前後補足空行成獨立一段
+   * ——SurveyBlockRenderer 以行級比對展開，標記夾在文字中間不會被辨識。
+   */
+  function insertSurveyMarker(formKey){
+    const marker='<!--survey:'+formKey+'-->';
+    const editor=$('#markdown'),start=editor.selectionStart,end=editor.selectionEnd;
+    const block=markdownBlock(editor.value,start,end,marker);
+    editor.setRangeText(block.text,start,end,'end');editor.focus();
+    const cursor=start+block.text.length;
+    editor.setSelectionRange(cursor,cursor);
+    composeChanged();
   }
 
   // ── 優惠券活動：問卷/條件選單、建立、預覽信件、名單查詢與寄送 ──────────────────────

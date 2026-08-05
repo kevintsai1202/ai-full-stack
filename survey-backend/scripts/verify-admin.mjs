@@ -220,17 +220,30 @@ try {
       null, { timeout: 10000 });
     console.log('OK 發布問卷版本');
 
-    // 編輯器插入標記：先用 API 確認新問卷在可嵌入清單中的實際編號，避免猜測順序
+    // 編輯器插入標記：先用 API 確認新問卷已在可嵌入清單中（不再需要猜測 prompt 編號，
+    // 舊版 insertSurvey() 的 prompt() 輸入編號已換成「插入問卷投票」面板）
     const embeddableRes = await page.request.get(`${BASE}/api/admin/forms/embeddable`,
       { headers: { 'X-Admin-Key': KEY } });
     const embeddableList = await embeddableRes.json();
-    const embedIndex = embeddableList.findIndex((f) => f.formKey === formKey);
-    if (embedIndex < 0) fail('新問卷未出現在可嵌入清單中（未發布或未設信中一鍵題？）');
+    if (!embeddableList.some((f) => f.formKey === formKey)) {
+      fail('新問卷未出現在可嵌入清單中（未發布或未設信中一鍵題？）');
+    }
 
     await page.click('#tab-campaign');
     await page.fill('#markdown', '');
-    dialogQueue.push(String(embedIndex + 1));
-    await page.click('#insert-survey-btn');
+    const surveyPanel = page.locator('#survey-panel');
+    if (!(await surveyPanel.evaluate((el) => el.open))) {
+      await surveyPanel.locator('summary').click();
+    }
+    // 面板的「插入既有問卷」下拉只在頁面載入與快速建立成功後才重抓清單；這份問卷是靠
+    // 「動態表單」分頁另一條路徑剛發布的，直接呼叫頁面全域函式重新整理，避免整頁
+    // reload 還要重新過一次金鑰閘門。
+    await page.evaluate(() => loadEmbeddableSurveys());
+    await page.waitForFunction(
+      (fk) => [...document.querySelectorAll('#survey-existing option')].some((o) => o.value === fk),
+      formKey, { timeout: 10000 });
+    await page.selectOption('#survey-existing', formKey);
+    await page.click('#survey-insert-existing');
     await page.waitForFunction(
       (fk) => (document.querySelector('#markdown')?.value || '').includes(`<!--survey:${fk}-->`),
       formKey, { timeout: 10000 });
@@ -238,7 +251,7 @@ try {
     if (!markerMarkdown.startsWith(`<!--survey:${formKey}-->\n\n`)) {
       fail(`問卷標記插入格式錯誤：${JSON.stringify(markerMarkdown)}`);
     }
-    console.log('OK 編輯器插入問卷標記，獨立成段');
+    console.log('OK 編輯器插入問卷投票標記，獨立成段');
 
     // 預覽：投票卡必須出現、選項文字齊全，且標示「預覽不計票」
     await page.click('#preview-btn');
