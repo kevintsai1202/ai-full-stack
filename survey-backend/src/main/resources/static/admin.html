@@ -124,13 +124,15 @@
   /* 行銷漏斗圖（B3）：寬度依數值比例、嚴格遞減（§4.3.1），倒掛層標示警示不隱藏異常 */
   .funnel{display:flex;flex-direction:column;align-items:center;gap:2px}
   /* min-width 拿掉：固定像素下限在窄容器（Reader 漏斗分塊，約 220px）會把不同百分比寬拉平成
-     相同像素，違反 §4.3.1 嚴格遞減不變量；改用 white-space+ellipsis 處理窄寬度下的文字溢出 */
+     相同像素，違反 §4.3.1 嚴格遞減不變量。div 本身不設 overflow:hidden／white-space:nowrap，
+     只把「標籤＋數值」包進 .funnel-layer-text 做單行省略，警示 .funnel-warn 維持獨立一行、
+     white-space:normal 可換行——避免第 1 輪修復把警示一起裁掉（§4.3.1 異常不可被隱藏）。 */
   .funnel-layer{background:var(--accent-soft);color:var(--fg);border:1px solid var(--border);
-    border-radius:6px;text-align:center;padding:6px 8px;font-size:.85rem;transition:width .3s;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .funnel-layer strong{margin-left:6px}
+    border-radius:6px;text-align:center;padding:6px 8px;font-size:.85rem;transition:width .3s}
+  .funnel-layer-text{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .funnel-layer-text strong{margin-left:6px}
   .funnel-rate{color:var(--muted);font-size:.75rem;margin:0}
-  .funnel-warn{color:var(--amber,#b45309);font-size:.75rem}
+  .funnel-warn{display:block;color:var(--amber,#b45309);font-size:.75rem;white-space:normal}
   .funnel-split{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;justify-content:center}
   .funnel-split .funnel{flex:1;min-width:220px}
   .funnel-split-title{font-size:.8rem;color:var(--muted);text-align:center;margin:4px 0}
@@ -2934,6 +2936,8 @@
    * 漏斗圖（B3）：layers=[{label,count}]，寬度依數值比例、由上而下嚴格遞減（§4.3.1）。
    * 顯示寬度 = min(比例寬, 上一層顯示寬 - 6%)，下限 14%——資料異常（下層>上層）時
    * 形狀仍上大下小，但該層加註警示與實際數值，異常不被隱藏。相鄰層標示轉換率。
+   * 標籤＋數值放進 .funnel-layer-text（單行省略），警示 .funnel-warn 獨立一行、可換行，
+   * 避免窄容器下單行 nowrap+ellipsis 把警示一起視覺裁掉（審查 Important 第 2 輪修復）。
    */
   function renderFunnelChart(container,layers){
     container.replaceChildren();
@@ -2948,11 +2952,13 @@
       const ideal=layer.count/max*100;
       const width=Math.max(14,Math.min(ideal,prevWidth-6));
       const div=document.createElement('div');div.className='funnel-layer';div.style.width=width+'%';
-      div.textContent=layer.label;
-      const strong=document.createElement('strong');strong.textContent=layer.count;div.append(strong);
+      const text=document.createElement('span');text.className='funnel-layer-text';
+      text.textContent=layer.label;
+      const strong=document.createElement('strong');strong.textContent=layer.count;text.append(strong);
+      div.append(text);
       if(prevCount!==null&&layer.count>prevCount){
         const warn=document.createElement('span');warn.className='funnel-warn';
-        warn.textContent=' ⚠ 高於上一層';div.append(warn);
+        warn.textContent='⚠ 高於上一層';div.append(warn);
       }
       container.append(div);
       prevWidth=width;prevCount=layer.count;

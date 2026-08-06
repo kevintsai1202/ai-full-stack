@@ -134,7 +134,38 @@ const NARROW_READER_DASHBOARD = {
   },
 };
 
-/** 在既有 page 上攔截 dashboard API，回傳指定假資料，並觸發一次 loadGrowth。 */
+/**
+ * 假資料：「窄容器＋倒掛」組合（審查第 2 輪 Important 回歸測試）——訂閱路徑第 2 層
+ * （送出訂閱，150）大於第 1 層（進訂閱首頁，100），會觸發 .funnel-warn 警示；
+ * 同時整條路徑渲染在窄容器（480px 視窗、`.funnel-split .funnel{min-width:220px}`）內。
+ * 唯一會踩到「第 1 輪修復（拿掉固定 min-width）改用 nowrap+ellipsis 把警示一起裁掉」
+ * 這個新 Important 的組合，先前的窄容器測資用的是正常遞減資料，沒有警示可測。
+ */
+const NARROW_INVERTED_READER_DASHBOARD = {
+  ...NORMAL_DASHBOARD,
+  readerFunnelStructured: {
+    totalViews: 150,
+    subscribePath: [
+      { key: 'home_views', label: '進訂閱首頁', count: 100 },
+      { key: 'attempts', label: '送出訂閱', count: 150 },
+      { key: 'success', label: '訂閱成功', count: 20 },
+    ],
+    unlockPath: [
+      { key: 'article_views', label: '看文章', count: 50 },
+      { key: 'unlock_clicks', label: '點選解鎖', count: 15 },
+      { key: 'unlock_success', label: '解鎖成功', count: 12 },
+    ],
+  },
+};
+
+/**
+ * 在既有 page 上攔截 dashboard API，回傳指定假資料，並觸發一次 loadGrowth。
+ * 等待條件刻意比對「這次注入的 clicks 數值」是否已出現在畫面上，而不是只等
+ * `.funnel-layer` 數量 > 0——連續兩次呼叫若分享漏斗層數相同（例如都是 4 層），
+ * 用層數判斷會在舊一輪的 DOM 還沒被换掉前就提前判定「已完成」，造成後續讀到
+ * 尚未更新的 reader 漏斗內容（審查第 2 輪修復時發現的競態，曾導致誤判找不到
+ * .funnel-warn）。
+ */
 async function mockDashboardAndLoad(page, dashboardData) {
   await page.unroute('**/api/admin/referrals/dashboard').catch(() => {});
   await page.route('**/api/admin/referrals/dashboard', (route) => {
@@ -143,10 +174,38 @@ async function mockDashboardAndLoad(page, dashboardData) {
   await page.click('#tab-growth');
   await page.waitForSelector('#growth-view:not([hidden])', { timeout: 10000 });
   await page.click('#growth-refresh');
+  // 用「這組資料特有」的四組 label+count 全部比對，避免兩次呼叫剛好有相同 clicks 數值時
+  // 誤判成已經渲染完成（實際還是上一輪的舊 DOM）。
+  const f = dashboardData.funnel;
+  const expectedShareParts = [`分享點擊${f.clicks}`, `完成填表${f.submitted}`, `信箱確認${f.confirmed}`, `審核通過${f.approved}`];
   await page.waitForFunction(
-    () => document.querySelectorAll('#share-funnel-chart .funnel-layer').length > 0,
+    (parts) => {
+      const layers = document.querySelectorAll('#share-funnel-chart .funnel-layer');
+      if (layers.length === 0) return false;
+      const text = Array.from(layers).map((el) => el.textContent).join('|');
+      return parts.every((p) => text.includes(p));
+    },
+    expectedShareParts,
     { timeout: 10000 },
   );
+  if (dashboardData.readerFunnelStructured) {
+    // 逐一比對「這組資料特有」的 label+count 組合（不是只看層數或單一數值），
+    // 確保真的是這次注入的資料渲染完成，而不是還沒被换掉的上一輪畫面。
+    const s = dashboardData.readerFunnelStructured;
+    const expectedPairs = [
+      `總瀏覽（文章＋訂閱首頁）${s.totalViews}`,
+      ...s.subscribePath.map((step) => `${step.label}${step.count}`),
+      ...s.unlockPath.map((step) => `${step.label}${step.count}`),
+    ];
+    await page.waitForFunction(
+      (pairs) => {
+        const root = document.querySelector('#reader-funnel-chart');
+        return !!root && pairs.every((pair) => root.textContent.includes(pair));
+      },
+      expectedPairs,
+      { timeout: 10000 },
+    );
+  }
 }
 
 /** 讀取指定容器選擇器下 .funnel-layer 各層的 offsetWidth 陣列（share/reader 兩種漏斗共用）。 */
@@ -240,6 +299,45 @@ try {
   });
   ok(computedMinWidth === '0px' || computedMinWidth === 'auto',
     `.funnel-layer 的 CSS min-width 已不再是固定像素值（實際計算值：${computedMinWidth}）`);
+
+  // ---- 5. 窄容器（480px）＋倒掛資料組合：第 2 輪 Important 修復——
+  //         驗證 .funnel-warn 的「視覺可見性」，不只是 textContent 存在。
+  //         第 1 輪修復把 .funnel-layer 改成 white-space:nowrap+overflow:hidden+ellipsis 後，
+  //         警示 span 是該行最後一個 inline 子元素，行寬不夠時最先被視覺裁掉——
+  //         這個組合（窄容器＋倒掛）是唯一會踩到這個新缺陷的情境，先前測資都沒覆蓋。 ----
+  await mockDashboardAndLoad(page, NARROW_INVERTED_READER_DASHBOARD);
+
+  const warnGeom = await page.evaluate(() => {
+    const layers = Array.from(document.querySelectorAll('#reader-funnel-chart .funnel-layer'));
+    const warnLayer = layers.find((l) => l.querySelector('.funnel-warn'));
+    if (!warnLayer) return null;
+    const warn = warnLayer.querySelector('.funnel-warn');
+    const layerRect = warnLayer.getBoundingClientRect();
+    const warnRect = warn.getBoundingClientRect();
+    return {
+      text: warn.textContent,
+      offsetParent: warn.offsetParent !== null,
+      width: warnRect.width,
+      height: warnRect.height,
+      // 完整落在所屬層框內（右緣／下緣都沒超出），代表沒有被裁到看不見的地方
+      containedRight: warnRect.right <= layerRect.right + 0.5,
+      containedBottom: warnRect.bottom <= layerRect.bottom + 0.5,
+      // 沒有橫向被裁掉的內容（scrollWidth 超過 clientWidth 代表有東西溢出可視範圍外）
+      noHorizontalClip: warnLayer.scrollWidth <= warnLayer.clientWidth + 1,
+    };
+  });
+
+  ok(warnGeom !== null, '窄容器＋倒掛資料下，找得到含 .funnel-warn 的層');
+  if (warnGeom) {
+    ok(warnGeom.text.includes('高於上一層'), `警示文字仍含「高於上一層」（實際：「${warnGeom.text}」）`);
+    ok(warnGeom.offsetParent, '.funnel-warn 有 offsetParent（未被 display:none 之類隱藏）');
+    ok(warnGeom.width > 0 && warnGeom.height > 0,
+      `.funnel-warn 有實際渲染尺寸，非零寬高（寬 ${warnGeom.width.toFixed(1)}px，高 ${warnGeom.height.toFixed(1)}px）`);
+    ok(warnGeom.containedRight && warnGeom.containedBottom,
+      '.funnel-warn 完整落在所屬層框內（未超出邊界，代表沒有被裁到看不見的地方）');
+    ok(warnGeom.noHorizontalClip,
+      `所屬層無橫向視覺裁切（scrollWidth ${warnGeom.noHorizontalClip ? '<=' : '>'} clientWidth，代表警示未被 overflow 吃掉）`);
+  }
 
   await page.close();
 
