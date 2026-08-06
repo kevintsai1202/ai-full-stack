@@ -146,6 +146,14 @@ const main = async () => {
         : [];
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     });
+    // Task 10（後台登入 gate）新增了 GET /api/admin/me：進站流程會先打這支端點問
+    // 「是否已有有效 session」，若被上面的萬用攔截一起吞掉回 200，前端會誤判成已用
+    // email/JWT 登入而直接略過金鑰閘門——下面 [1] 的 fill('#gate-key', ...) 就會對著
+    // 一個已經被隱藏的閘門操作而逾時。這支腳本驗的是金鑰路徑，因此把 /me 明確攔截回
+    // 401，讓流程照舊落回「輸入金鑰」這條路。
+    await page.route('**/api/admin/me', async route => {
+      await route.fulfill({ status: 401 });
+    });
     await page.route('**/api/admin/settings', async route => {
       settingsCalls++;
       await route.fulfill({
@@ -164,7 +172,9 @@ const main = async () => {
 
     await page.goto(`http://127.0.0.1:${site.port}/admin.html`, { waitUntil: 'domcontentloaded' });
 
-    // 解鎖金鑰閘門（/api/admin/survey 已被攔截成 200，任何金鑰都會通過）
+    // 解鎖金鑰閘門（/api/admin/survey 已被攔截成 200，任何金鑰都會通過）。
+    // Task 10 把金鑰輸入框改成預設隱藏、點「改用管理金鑰登入」才展開，故填值前需先展開。
+    await page.click('#gate-use-key');
     await page.fill('#gate-key', 'stub-key');
     await page.click('#gate-btn');
     await page.waitForSelector('#app:not([hidden])', { timeout: 10000 });

@@ -666,6 +666,8 @@ async function runBrowserStage() {
     const page2 = await browser.newPage();
     await page2.goto(`${BASE}/admin.html`, { waitUntil: 'domcontentloaded' });
     // 後台以 sessionStorage 存金鑰；填入閘門欄位並送出
+    // Task 10 把金鑰輸入框改成預設隱藏、點「改用管理金鑰登入」才展開，故填值前需先展開。
+    await page2.click('#gate-use-key');
     await page2.fill('#gate-key', ADMIN_KEY);
     await page2.click('#gate-btn');
     await page2.waitForSelector('.tab[data-view="campaign"]', { state: 'visible', timeout: 15000 });

@@ -352,6 +352,8 @@ try {
   // 後台：實際操作快建面板
   const adminPage = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await adminPage.goto(`${BASE}/admin.html`, { waitUntil: 'networkidle' });
+  // Task 10 把金鑰輸入框改成預設隱藏、點「改用管理金鑰登入」才展開，故填值前需先展開。
+  await adminPage.click('#gate-use-key');
   await adminPage.fill('#gate-key', ADMIN_KEY);
   await adminPage.click('#gate-btn');
   await adminPage.waitForSelector('#tab-campaign', { timeout: 10000 });

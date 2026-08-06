@@ -119,6 +119,8 @@ async function verifyBrowser() {
     await page.goto(`${BASE}/admin.html`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#gate', { state: 'visible' });
     ok(!(await page.locator('#app').isVisible()), '未驗證前主畫面不顯示');
+    // Task 10 把金鑰輸入框改成預設隱藏、點「改用管理金鑰登入」才展開，故填值前需先展開。
+    await page.click('#gate-use-key');
     await page.fill('#gate-key', KEY);
     await page.click('#gate-btn');
     await page.waitForSelector('#app', { state: 'visible', timeout: 15000 });
