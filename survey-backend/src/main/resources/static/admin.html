@@ -14,13 +14,23 @@
      若卡片底色（--surface）維持亮色而 --fg 轉亮，卡片內文字（絕大多數畫面內容）會變得無法閱讀；
      --accent 維持不變：它只用來當按鈕底色配白字／裝飾用邊框，這兩種用法都與頁面主題無關；
      --danger 維持不變：唯一的用法是搭配寫死的淺色底（#fde8e8）或當按鈕底色配白字，同樣與主題無關；
-     --accent-deep 身兼「按鈕底色配白字」（.tab.active）與「卡片上的強調文字」（.count/.btn.ghost）兩種角色，
-     兩者對比度需求互斥，故取一折衷值：優先確保後者（畫面上出現頻率高很多）達到 AA，前者退讓為可讀但非滿分。 */
+     --accent-deep 身兼「按鈕底色配白字」（.tab.active）與「卡片上的強調文字」（.count/.btn.ghost）兩種角色。
+     兩者對比度需求互斥（前者要夠深才襯得起白字，後者要夠亮才能在暗卡片上被讀到），
+     單一變數無法兩全，故把角色拆開：--accent-deep 只服務「卡片強調文字」這個高頻角色，
+     .tab.active 另外用下面的專屬覆寫解決（見下一個規則區塊），不與 --accent-deep 共用同一個值。 */
   :root[data-theme="dark"]{
     --bg:#16181c;--fg:#e8e8e8;--muted:#9aa0a6;--border:#2c2f36;--border-strong:#3a3f47;
     --surface:#1f2229;--surface-2:#272b33;
     --accent-deep:#3ca596;--accent-soft:#1c3a36;--amber:#e8b158;
   }
+  /* .tab.active 專屬修正（Code Review Finding 1）：
+     16px／font-weight:750 不符合 WCAG 大字門檻（需 ≥18.66px 且 bold），故適用一般文字的 4.5:1，
+     而非「大字/UI 元件」的 3:1。--accent-deep 目前值（#3ca596）配白字實測只有 2.99:1，未達標。
+     這裡不改動 .tab.active 這條既有規則本身（背景仍是 var(--accent-deep) 的宣告原封不動），
+     而是用選擇器特異性更高、只在暗色主題下生效的新規則覆寫其計算後的背景值——
+     取原本亮色模式就在用、本來就是為白字設計的 #08665c，實測對白字達 6.8:1，同時完全不影響
+     --accent-deep 供 .count/.btn.ghost 使用時維持的高對比。 */
+  :root[data-theme="dark"] .tab.active{background:#08665c}
   /* 右上工具列（Task 11 新增元件，非既有元件的樣式規則）：身分文字＋日夜切換＋登出，皆重用既有 .hint／.btn.ghost，故不需另訂顏色。 */
   .admin-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .admin-toolbar #tb-identity{white-space:nowrap}

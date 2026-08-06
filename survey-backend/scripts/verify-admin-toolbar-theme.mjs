@@ -70,6 +70,39 @@ let failed = 0;
 const fail = (msg) => { console.error('FAIL:', msg); failed++; };
 const ok = (cond, label) => { if (!cond) fail(label); else console.log(`OK   ${label}`); };
 
+/**
+ * WCAG 2.1 對比度計算（Code Review Finding 2：把報告裡手算的對比數字改成可重跑的斷言）。
+ * 解析 getComputedStyle 回傳的 rgb()/rgba() 字串 → sRGB 相對亮度 → 對比比值，
+ * 公式與計算過程比照 W3C WCAG 2.1 SC 1.4.3 的定義（含 sRGB gamma 校正）。
+ */
+function parseRgb(str) {
+  const found = (str || '').match(/rgba?\(([^)]+)\)/);
+  if (!found) throw new Error(`無法解析顏色字串：${str}`);
+  const [r, g, b] = found[1].split(',').slice(0, 3).map((v) => Number(v.trim()));
+  return { r, g, b };
+}
+function relativeLuminance({ r, g, b }) {
+  const linear = (c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+}
+function contrastRatio(rgbStrA, rgbStrB) {
+  const lA = relativeLuminance(parseRgb(rgbStrA));
+  const lB = relativeLuminance(parseRgb(rgbStrB));
+  const lighter = Math.max(lA, lB);
+  const darker = Math.min(lA, lB);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+/** 斷言一組「文字色 vs 底色」的實際對比比值達到門檻，並印出算出來的數字（可重跑、可交叉驗證）。 */
+function okContrast(fgColor, bgColor, minRatio, label) {
+  const ratio = contrastRatio(fgColor, bgColor);
+  ok(ratio >= minRatio,
+    `${label}：對比 ${ratio.toFixed(2)}:1（門檻 ${minRatio}:1，文字 ${fgColor} / 底色 ${bgColor}）`);
+  return ratio;
+}
+
 /** 用金鑰模式登入到主畫面，回傳已登入的 page。 */
 async function loginWithKey(browser) {
   const page = await browser.newPage();
@@ -127,6 +160,60 @@ try {
   await page.waitForSelector('#app:not([hidden])', { timeout: 15000 });
   const themeAfterReload = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
   ok(themeAfterReload === after.theme, `重新整理後主題保持不變（${themeAfterReload}）`);
+
+  // ---- 4.5 暗色模式對比度斷言（Code Review Finding 2）：
+  //      改成實際計算，而非報告裡的手算敘述；不足 4.5:1 者算失敗，不因「大字例外」放水
+  //      （.tab 是 16px／font-weight:750，不符合 WCAG 大字門檻 ≥18.66px+bold，故一律套用 4.5:1）。
+  if (themeAfterReload !== 'dark') {
+    await page.click('#tb-theme');
+    await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark');
+  }
+  await page.click('#tab-campaign');
+  await page.waitForSelector('#campaign-view:not([hidden])', { timeout: 10000 });
+  const contrastSamples = await page.evaluate(() => {
+    const pairOf = (el) => {
+      const s = getComputedStyle(el);
+      return { color: s.color, bg: s.backgroundColor };
+    };
+    const result = {};
+    const tabActive = document.querySelector('.tab.active');
+    if (tabActive) result.tabActive = pairOf(tabActive);
+    const count = document.querySelector('.count');
+    if (count) {
+      const card = count.closest('.card') || document.body;
+      result.count = { color: getComputedStyle(count).color, bg: getComputedStyle(card).backgroundColor };
+    }
+    const ghostBtn = document.querySelector('#tb-theme');
+    if (ghostBtn) result.ghostBtn = pairOf(ghostBtn);
+    const th = document.querySelector('th');
+    if (th) result.th = pairOf(th);
+    const input = document.querySelector('#subject');
+    if (input) result.input = pairOf(input);
+    return result;
+  });
+  await page.click('#tab-analytics');
+  await page.waitForSelector('#analytics-view:not([hidden])', { timeout: 10000 });
+
+  if (contrastSamples.tabActive) {
+    okContrast(contrastSamples.tabActive.color, contrastSamples.tabActive.bg, 4.5,
+      '暗色模式 .tab.active 文字對其底色');
+  } else fail('找不到 .tab.active 元素，無法驗證分頁籤對比度');
+  if (contrastSamples.count) {
+    okContrast(contrastSamples.count.color, contrastSamples.count.bg, 4.5,
+      '暗色模式 .count 強調文字對卡片底色');
+  } else fail('找不到 .count 元素，無法驗證強調文字對比度');
+  if (contrastSamples.ghostBtn) {
+    okContrast(contrastSamples.ghostBtn.color, contrastSamples.ghostBtn.bg, 4.5,
+      '暗色模式 .btn.ghost（工具列日夜切換鈕）文字對其底色');
+  } else fail('找不到 .btn.ghost 元素，無法驗證按鈕對比度');
+  if (contrastSamples.th) {
+    okContrast(contrastSamples.th.color, contrastSamples.th.bg, 4.5,
+      '暗色模式表格欄名（th）文字對其底色');
+  } else fail('找不到 th 元素，無法驗證表格欄名對比度');
+  if (contrastSamples.input) {
+    okContrast(contrastSamples.input.color, contrastSamples.input.bg, 4.5,
+      '暗色模式輸入欄位文字對其底色');
+  } else fail('找不到輸入欄位元素，無法驗證表單對比度');
 
   // 截圖前確保停在暗色（若目前不是 dark，再切一次）
   if (themeAfterReload !== 'dark') {
