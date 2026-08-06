@@ -30,7 +30,7 @@
 | D5 | 寄券按鈕採「彈視窗選券並確認」，不做下拉預選 | 每次明確看到收件人與券別再送出；寄錯券的代價（寄到讀者信箱、不可撤回）高於多點一次的成本 |
 | D6 | 單筆寄券**不**把 `coupon_campaign.status` 翻成 `SENT` | `SENT` 語意是「批次發放已完成」；逐人發放是持續動作，第一次單筆就結案會與實際狀態不符 |
 | D7 | 漏斗圖**先修資料語意再畫圖**：頂端為平行入口的加總 | 使用者指出「倒掛就是數據換算錯誤，上層應加總」——這是對的，形狀問題的根因在資料建模 |
-| D8 | 讀者站暗色模式需**先把文字色抽成 CSS 變數**再做 | `reader.css` 目前沒有任何文字色變數，且有 17 處硬編 `color:#…`（見 §3.2） |
+| D8 | 讀者站暗色模式的所有修改**一律 scoped 於 `[data-theme="dark"]`**，亮色規則零改動 | `reader.css` 已有完整變數（`--fg`、`--muted` 等），但有 17 處硬編 `color:#…` 與 16 處硬編亮底；比照 admin.html 以暗色補丁規則覆蓋，亮色模式不動任何一行（見 §3.2） |
 
 ## 3. 章節 A：讀者站
 
@@ -46,18 +46,18 @@
 
 ### 3.2 A1：日夜模式
 
-**現況盤點（實測）**：`reader.css` 的 `:root` 只有 9 個變數——`--accent`、`--bg`、`--border`、`--font-main`、`--ok`、`--r-sm`、`--shadow-nav`、`--shadow-sm`、`--surface`。
+**現況盤點（2026-08-07 重新實測，修正前版誤讀）**：`reader.css` 的 `:root`（第 2–13 行）已有**完整的設計 token**——`--fg`、`--muted`、`--muted-2`、`--surface`／`--surface-2`／`--surface-3`、`--border`／`--border-strong`、`--accent`／`--accent-deep`／`--accent-soft`、`--accent-2` 系列、`--ok`、`--err` 等共 22 個變數。前版 spec 稱「只有 9 個變數、無文字色變數」為誤讀，已更正。
 
-**沒有任何文字色變數**（無 `--fg`／`--muted`／`--text`），且檔案內有 **17 處硬編 `color:#…`**、**7 處硬編亮底 `background:#f…`**。
+實際的暗色模式障礙是：
 
-這與 admin.html 的情況不同：admin 本來就有 `--fg`，所以暗色模式只需一組變數覆寫。讀者站必須分兩步：
+1. **完全沒有 `[data-theme="dark"]` 區塊**——讀者站目前零暗色支援。
+2. **17 處硬編 `color:#…`**（如第 95 行 `.subscriber-count` 的 `#0f766e`、第 198 行 placeholder 的 `#71817c`）。
+3. **16 處硬編亮底**（如第 197 行 `input` 的 `background:#fff`、第 367 行 `.campaign-banner` 的 `#fff8df`）與 `.site-head` 的半透明亮色 `rgb(...)`。
+4. **一處死引用**：第 372 行 `.account-jump` 引用未定義的 `var(--shadow-soft)`（應為 `--shadow-sm`），該 `box-shadow` 目前靜默失效——順手修復，屬本任務範圍。
 
-1. **先抽變數**：引入 `--fg`（主文字）與 `--muted`（次要文字），把 17 處硬編 `color:#…` 與 7 處硬編亮底遷移到變數。此步驟**不改變亮色模式的任何視覺結果**——是純重構，以截圖比對驗證。
-2. **再加暗色覆寫**：`:root[data-theme="dark"]` 一組變數覆寫。
+**做法（比照 admin.html 第 21–61 行的已驗證模式）**：所有暗色修改**一律 scoped 於 `:root[data-theme="dark"]`**——一組變數覆寫 + 對硬編亮底元素的暗色補丁規則。亮色模式的規則**一行都不改**（唯一例外是上述第 4 點的死引用修復），因此不需要截圖比對，亮色迴歸風險趨近於零。
 
-**附帶修復**：CSS 中引用了 `var(--border-strong)`、`var(--muted)`、`var(--accent-deep)`、`var(--accent-soft)`、`var(--err)` 等**未定義變數**，這些宣告目前靜默失效。抽變數時一併定義，屬於本任務範圍內的必要修復。
-
-**行為**：偏好存 `localStorage`；首次進站跟隨 `prefers-color-scheme`；切換只改 `documentElement` 的 `data-theme`，即時生效。沿用 admin 的實作模式。
+**行為**：偏好存 `localStorage`（key：`reader-theme`）；首次進站跟隨 `prefers-color-scheme`；每個讀者模板 `<head>` 內、樣式表載入前，放一段內聯啟動腳本設定 `documentElement` 的 `data-theme`，避免暗色偏好者進站閃白。
 
 **驗收**：暗色模式下所有文字須達 WCAG AA（正常文字 4.5:1、大字 3:1），以可重跑腳本實際量測，不以目視判定。
 
@@ -81,7 +81,8 @@
 
 首頁列出**後台勾選曝光**的問卷，連向既有的 `/r/survey/{formKey}` 讀者填答頁。
 
-- 資料層：`form_schema` 新增 `homepage_visible BOOLEAN NOT NULL DEFAULT false` 與 `homepage_order INT`
+- 資料層：`form_definition` 新增 `homepage_visible BOOLEAN NOT NULL DEFAULT false` 與 `homepage_order INT`（**注意**：專案沒有 `form_schema` 表也沒有 JPA entity——表單存在 `form_definition` + `form_field`，由 `FormSchemaService` 以 JdbcTemplate 直接下 SQL；前版 spec 誤植表名，已更正）
+- 曝光旗標語意：以 `form_key` 為單位——後台切換時對該 key 的**所有版本列**一致寫入，避免版本間旗標漂移；讀者端查詢取「已發布且勾選曝光」的每個 key 最新已發布版本的標題
 - 預設 `false`：既有問卷（含 `verify-*` 測試問卷與 `vote-*` 信中一鍵題）不會突然曝光
 - 後台：表單管理處提供勾選與排序
 - 讀者端：無勾選任何問卷時整個區塊不顯示（不出現空標題）
@@ -107,12 +108,14 @@
 
 **券別下拉的內容**：列出**未過期**（`expires_at` 為 null 或未來）的優惠券活動，依建立時間新到舊。已過期的券不列出——寄出一張當下就無法使用的券，對讀者是負面體驗且無法撤回。該收件人**已收過的券**在下拉中標示並停用，避免明知故犯（後端本就會擋，此處是把結果前移到操作當下）。
 
-**後端完全複用既有機制**，不新增端點：
+**寄送本身完全複用既有機制**（新增的只有：send 請求的一個選填欄位，與一個唯讀的已寄總覽端點 `GET /api/admin/coupons/sent-map`）：
 
-```
+```text
 POST /api/admin/coupons/{id}/send
-body: { emails: ["one@example.com"], limit: 1 }
+body: { emails: ["one@example.com"], limit: 1, single: true }
 ```
+
+（`single: true` 為本輪新增的選填欄位，用來承載 D6 的狀態語意：單筆寄送不把 `status` 翻成 `SENT`、`sent_at` 記錄最後一次寄送時間；不帶此欄位的既有批次路徑行為完全不變。）
 
 `CouponSendService` 已具備本需求所需的全部性質：
 
@@ -169,9 +172,9 @@ articleViews / subscriptionHomeViews / subscribeAttempts / subscribeSuccess / un
 **8 項需求中只有 1 項需要 migration。**
 
 ```sql
--- Flyway V25
-ALTER TABLE form_schema ADD COLUMN homepage_visible BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE form_schema ADD COLUMN homepage_order INT;
+-- Flyway V25（目標表為 form_definition；專案沒有 form_schema 表）
+ALTER TABLE form_definition ADD COLUMN homepage_visible BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE form_definition ADD COLUMN homepage_order INT;
 ```
 
 | 需求 | 資料層 |
@@ -190,7 +193,7 @@ ALTER TABLE form_schema ADD COLUMN homepage_order INT;
 | 寄券冪等 | 同一人同一張券連按兩次，只寄一封；`email_log` 只有一列 `sent` |
 | 寄券狀態 | 單筆寄送後 `coupon_campaign.status` 仍為 `DRAFT`（D6） |
 | 暗色模式 | 以可重跑腳本實測 WCAG 對比（斷言比值，非硬編數字），涵蓋文字、輸入框、表頭、卡片 |
-| 亮色不回歸 | A1 第一步（抽變數）以截圖比對確認亮色模式視覺完全不變 |
+| 亮色不回歸 | 所有暗色修改 scoped 於 `[data-theme="dark"]`，亮色規則零改動（結構性保證，不需截圖比對）；驗證腳本同時斷言亮色模式對比達標 |
 | 導覽列安全 | `ReaderNavGuardTest` 維持原樣通過，證明 email 未進入導覽列 |
 | 迴歸 | 既有 9 支 `verify-*.mjs` 全數通過 |
 
@@ -205,7 +208,7 @@ ALTER TABLE form_schema ADD COLUMN homepage_order INT;
 
 | 風險 | 緩解 |
 | --- | --- |
-| A1 抽變數時改壞亮色模式 | 分兩步：先純重構（截圖比對驗證視覺不變），再加暗色覆寫 |
+| A1 改壞亮色模式 | 所有暗色修改 scoped 於 `[data-theme="dark"]`，亮色規則零改動（唯一例外：修復 `--shadow-soft` 死引用） |
 | email 進入導覽列造成 XSS | D2 讓 email 只出現在首頁區塊並經 `escapeHtml`；`ReaderNavGuardTest` 不放寬 |
 | 單筆寄券把整張券標記為已結案 | D6 明定 `status` 維持 `DRAFT`，並以測試鎖住 |
 | 漏斗改造動到既有 KPI 數字 | 保留原始事件計數不變，只改「如何組成漏斗」；新舊數值並存驗證 |
