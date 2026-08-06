@@ -488,4 +488,78 @@ class AdminCampaignControllerTest {
            .andExpect(status().isBadRequest());
         org.mockito.Mockito.verifyNoInteractions(campaignService);
     }
+
+    /**
+     * ★ 內容更新：有金鑰時應以請求內容呼叫 {@code CampaignService.updateContent}，並回 200。
+     *
+     * <p>這是電子報寄送後修正錯字的唯一路徑（Task 9）：與 reschedule 徹底分開，
+     * 這條端點只改資料庫內容，不重寄任何信。</p>
+     */
+    @Test
+    void updateContentDelegatesToService() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .put("/api/admin/campaigns/5/content").header("X-Admin-Key", "test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"subject\":\"新標題\",\"markdown\":\"新內文\",\"coverEmoji\":\"📮\","
+                    + "\"coverMediaId\":7,\"tags\":[\"AI\"]}"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.updated").value(true));
+
+        org.mockito.Mockito.verify(campaignService).updateContent(eq(5L), eq("新標題"), eq("新內文"),
+            eq("📮"), eq(7L), eq(List.of("AI")), any());
+    }
+
+    /**
+     * ★ 內容更新：無金鑰一律 401，且完全不呼叫 CampaignService。
+     *
+     * <p>這條端點能改寫已發布文章的公開內容，權限等級與其餘後台端點相同。
+     * 把 {@code guard.verify(key)} 拿掉，本測試立刻變紅。</p>
+     */
+    @Test
+    void updateContentWithoutKeyReturns401() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .put("/api/admin/campaigns/5/content")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"subject\":\"新標題\",\"markdown\":\"新內文\"}"))
+           .andExpect(status().isUnauthorized());
+        org.mockito.Mockito.verifyNoInteractions(campaignService);
+    }
+
+    /**
+     * 內容更新：請求 JSON 額外帶入不可變欄位（tier／creditCost／slug／publishedAt）時，
+     * 仍須回 200 而非 400，這些值也不得以任何形式傳進服務層。
+     *
+     * <p>本專案未設定 {@code FAIL_ON_UNKNOWN_PROPERTIES}，Spring Boot 預設會忽略未知欄位
+     * ——但這是設定驅動的行為，一旦有人日後開啟嚴格模式，這條端點就會對正常請求回 400。
+     * 這個測試就是那道護欄；spec 明訂「請求帶入時忽略，不報錯」。</p>
+     */
+    @Test
+    void updateContentIgnoresImmutableFields() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .put("/api/admin/campaigns/5/content").header("X-Admin-Key", "test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"subject\":\"新標題\",\"markdown\":\"新內文\","
+                    + "\"tier\":\"PREMIUM\",\"creditCost\":9999,\"slug\":\"竄改網址\","
+                    + "\"publishedAt\":\"2020-01-01T00:00:00Z\"}"))
+           .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(campaignService).updateContent(eq(5L), eq("新標題"), eq("新內文"),
+            eq((String) null), eq((Long) null), eq((List<String>) null), any());
+    }
+
+    /**
+     * 內容更新：服務層拋出 404（campaign 不存在）時端點應原樣回 404，不得被吞成 500。
+     */
+    @Test
+    void updateContentPropagates404FromService() throws Exception {
+        org.mockito.Mockito.doThrow(new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.NOT_FOUND, "campaign not found"))
+            .when(campaignService).updateContent(eq(999L), any(), any(), any(), any(), any(), any());
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .put("/api/admin/campaigns/999/content").header("X-Admin-Key", "test-key")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"subject\":\"新標題\",\"markdown\":\"新內文\"}"))
+           .andExpect(status().isNotFound());
+    }
 }

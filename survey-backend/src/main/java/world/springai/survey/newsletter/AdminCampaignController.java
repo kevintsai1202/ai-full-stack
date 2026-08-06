@@ -495,4 +495,26 @@ public class AdminCampaignController {
             req.filter() == null ? null : req.filter().audience(),
             req.filter() == null ? null : req.filter().savedSegmentId());
     }
+
+    /** 內容更新請求；刻意不含 tier、creditCost、slug，帶了也不會被採用 */
+    public record ContentRequest(String subject, String markdown, String coverEmoji,
+                                 Long coverMediaId, List<String> tags) {}
+
+    /**
+     * 更新已發布文章的內容欄位，<b>不寄任何信</b>。
+     *
+     * <p>與 reschedule 徹底分開：reschedule 會用新內容重寄整批信，這條端點只改
+     * 資料庫內容。讀者站即時渲染 markdown，因此回應成功即代表網頁已更新。</p>
+     */
+    @org.springframework.web.bind.annotation.PutMapping("/api/admin/campaigns/{id}/content")
+    public Map<String, Object> updateContent(
+            @RequestHeader(value = KEY_HEADER, required = false) String key,
+            @PathVariable("id") Long id,
+            @RequestBody ContentRequest req) {
+        guard.verify(key);
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
+        campaignService.updateContent(id, req.subject(), req.markdown(),
+            req.coverEmoji(), req.coverMediaId(), req.tags(), now);
+        return Map.of("updated", true, "updatedAt", now.toString());
+    }
 }
