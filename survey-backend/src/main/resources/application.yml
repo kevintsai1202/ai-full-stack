@@ -56,6 +56,7 @@ app:
   # 管理後台專用入口；設定後該 Host 只允許 admin.html 與 /api/admin/**。
   admin:
     entry-host: ${ADMIN_ENTRY_HOST:}
+    emails: ${ADMIN_EMAILS:}
   # 問卷公開入口；設定後會在此 Host 隱藏管理頁與管理 API。
   # 建議確認管理網域 DNS/HTTPS 正常後再設定，避免切換期間無法進入後台。
   survey:
