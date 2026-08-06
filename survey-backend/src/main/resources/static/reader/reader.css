@@ -369,7 +369,7 @@ input::placeholder { color:#71817c; }
 .account-jump {
   display:flex; flex-wrap:wrap; gap:8px; margin:18px 0 24px;
   padding:6px; border:1px solid var(--border); border-radius:14px; background:var(--surface);
-  box-shadow:var(--shadow-soft);
+  box-shadow:var(--shadow-sm); /* 修復死引用：--shadow-soft 從未定義，box-shadow 原本靜默失效 */
 }
 .account-jump a {
   flex:1 1 130px; padding:9px 14px; border-radius:10px;
@@ -620,3 +620,40 @@ input::placeholder { color:#71817c; }
 /* 首頁身分區（A3）：登入後取代訂閱表單的識別列 */
 .identity-line { margin:4px 0 0; font-size:1.05rem; }
 .identity-line strong { color:var(--accent-deep); word-break:break-all; }
+
+/* ========== 暗色模式（A1）：所有覆寫 scoped 於 [data-theme="dark"]，亮色規則零改動 ========== */
+:root[data-theme="dark"]{
+  --bg:#141817; --fg:#e4ebe9; --muted:#a3b4af; --muted-2:#87988f;
+  --surface:#1c2321; --surface-2:#232c29; --surface-3:#2a3431;
+  --border:#32403c; --border-strong:#4c5f5a;
+  /* --accent 維持 #087f72 不覆寫：它作為按鈕底色搭配 color:#fff，變亮會摔破對比 */
+  --accent-deep:#5ec9bb;        /* 連結色：暗底需要更亮的 accent */
+  --accent-soft:#173430;
+  --accent-2-soft:#3a2f14; --accent-2-deep:#e8b158;
+  --err:#f28b8b; --ok:#4ade80;
+  --shadow-sm:0 8px 24px rgb(0 0 0 / .4);
+  --shadow-nav:0 12px 34px rgb(0 0 0 / .5);
+}
+/* 硬編亮底的暗色補丁（比照 admin.html 的做法；選擇器對應 reader.css 亮色原行號） */
+:root[data-theme="dark"] .site-head{background:rgb(28 35 33 / .88);border-bottom-color:rgb(50 64 60 / .82)}
+:root[data-theme="dark"] .site-head nav{background:rgb(35 44 41 / .82);border-color:rgb(50 64 60 / .88)}
+:root[data-theme="dark"] .site-head nav a:hover{background:rgb(42 52 49 / .82)}
+:root[data-theme="dark"] .site-head a.brand::before{background:linear-gradient(145deg,#0b7264,#08564e)}
+:root[data-theme="dark"] .subscriber-count{background:#173430;border-color:#2a5a51;color:#8fd8cb}
+:root[data-theme="dark"] input[type=email],
+:root[data-theme="dark"] input[type=text]{background:var(--surface-2);color:var(--fg);border-color:var(--border)}
+:root[data-theme="dark"] input::placeholder{color:var(--muted-2)}
+:root[data-theme="dark"] .msg.err{background:#3a1f1f}
+:root[data-theme="dark"] .article-cover,
+:root[data-theme="dark"] .side-thumb,
+:root[data-theme="dark"] .share-subscribe-cta{background:linear-gradient(135deg,var(--accent-soft),#2a2a1c)}
+:root[data-theme="dark"] .campaign-banner{background:#332b14;border-color:#5c4d1f}
+:root[data-theme="dark"] .milestone-track{background:#2a3431}
+:root[data-theme="dark"] .milestone-dot{background:#3c4a46;box-shadow:0 0 0 2px #3c4a46}
+:root[data-theme="dark"] .promo-form input,
+:root[data-theme="dark"] .promo-form select,
+:root[data-theme="dark"] .promo-form textarea{background:var(--surface-2);color:var(--fg);border-color:var(--border)}
+:root[data-theme="dark"] .promo-cost-bar.lack{background:#3a1f1f}
+:root[data-theme="dark"] .promo-status.pending{background:#3a2f14;color:#e8b158}
+:root[data-theme="dark"] .promo-status.rejected{background:#3a1f1f}
+:root[data-theme="dark"] .promo-status.archived{background:#2a2f2d;color:#9aa8a3}

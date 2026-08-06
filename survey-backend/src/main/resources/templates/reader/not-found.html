@@ -7,6 +7,12 @@
 <!-- 錯誤頁不該被索引：搜尋引擎若收錄它，讀者會從搜尋結果點進一個永遠沒有內容的網址。
      這也是與 login.html 一致的作法（同樣是 noindex）。 -->
 <meta name="robots" content="noindex">
+<script>
+// 主題啟動：在 CSS 套用前寫入 data-theme，避免暗色偏好者進站閃白（偏好存 localStorage，首訪跟隨系統）
+document.documentElement.setAttribute('data-theme',
+  localStorage.getItem('reader-theme') ||
+  (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+</script>
 <link rel="stylesheet" href="/r/reader.css">
 <script src="/tracking.js" defer></script>
 <script src="/r/reader-nav.js" defer></script>
