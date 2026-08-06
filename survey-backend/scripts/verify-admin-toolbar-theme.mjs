@@ -103,6 +103,25 @@ function okContrast(fgColor, bgColor, minRatio, label) {
   return ratio;
 }
 
+/**
+ * 確保頁面目前處於指定主題，冪等操作（Code Review Finding：過期變數導致的雙重切換）。
+ *
+ * 每次呼叫都即時從頁面讀取當前的 data-theme，不依賴呼叫端快取的舊變數——原本兩處
+ * 各自用同一個「重新整理後讀到的 themeAfterReload」判斷是否要點擊，但點擊之後
+ * 這個變數從未更新，若環境剛好是 light（例如另一台機器或 CI 的 prefers-color-scheme
+ * 預設值不同），第一處會點成 dark，第二處讀到同一個過期的 'light' 又點一次變回
+ * light——結果是「暗色截圖其實存到亮色畫面」且沒有任何斷言會發現。
+ * 改成每次都重新讀取現況再決定是否要點擊，兩處（以及未來若再新增）都呼叫同一個
+ * helper，就不會再犯同樣的錯。
+ */
+async function ensureTheme(page, theme) {
+  const current = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+  if (current !== theme) {
+    await page.click('#tb-theme');
+    await page.waitForFunction((t) => document.documentElement.getAttribute('data-theme') === t, theme);
+  }
+}
+
 /** 用金鑰模式登入到主畫面，回傳已登入的 page。 */
 async function loginWithKey(browser) {
   const page = await browser.newPage();
@@ -164,10 +183,7 @@ try {
   // ---- 4.5 暗色模式對比度斷言（Code Review Finding 2）：
   //      改成實際計算，而非報告裡的手算敘述；不足 4.5:1 者算失敗，不因「大字例外」放水
   //      （.tab 是 16px／font-weight:750，不符合 WCAG 大字門檻 ≥18.66px+bold，故一律套用 4.5:1）。
-  if (themeAfterReload !== 'dark') {
-    await page.click('#tb-theme');
-    await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark');
-  }
+  await ensureTheme(page, 'dark');
   await page.click('#tab-campaign');
   await page.waitForSelector('#campaign-view:not([hidden])', { timeout: 10000 });
   const contrastSamples = await page.evaluate(() => {
@@ -215,17 +231,18 @@ try {
       '暗色模式輸入欄位文字對其底色');
   } else fail('找不到輸入欄位元素，無法驗證表單對比度');
 
-  // 截圖前確保停在暗色（若目前不是 dark，再切一次）
-  if (themeAfterReload !== 'dark') {
-    await page.click('#tb-theme');
-    await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'dark');
-  }
+  // 截圖前確保停在暗色（用 ensureTheme 即時讀取現況，不沿用任何快取變數），
+  // 並在存檔前再斷言一次實際 data-theme，讓「存錯截圖」變成會失敗的測試，而不是無聲錯誤。
+  await ensureTheme(page, 'dark');
+  const themeBeforeDarkShot = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+  ok(themeBeforeDarkShot === 'dark', `暗色截圖存檔前，data-theme 確實為 dark（實際：${themeBeforeDarkShot}）`);
   await page.screenshot({ path: join(OUTPUT_DIR, 'admin-theme-dark.png'), fullPage: true });
   console.log('OK   已截暗色模式全頁圖：scripts/output/admin-theme-dark.png');
 
   // 切回亮色再截一張
-  await page.click('#tb-theme');
-  await page.waitForFunction(() => document.documentElement.getAttribute('data-theme') === 'light');
+  await ensureTheme(page, 'light');
+  const themeBeforeLightShot = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+  ok(themeBeforeLightShot === 'light', `亮色截圖存檔前，data-theme 確實為 light（實際：${themeBeforeLightShot}）`);
   await page.screenshot({ path: join(OUTPUT_DIR, 'admin-theme-light.png'), fullPage: true });
   console.log('OK   已截亮色模式全頁圖：scripts/output/admin-theme-light.png');
 
