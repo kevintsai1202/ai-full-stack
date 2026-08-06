@@ -74,11 +74,14 @@ class CampaignSurveyWiringTest {
     private final MailBodyRenderer mailBodyRenderer = new MailBodyRenderer(
         contentSplitter, markdownRenderer, readerSiteLinks, surveyBlockRenderer, READER_BASE_URL);
 
+    // Task 8：封面／標籤驗證與落庫委派給 metadataService，本檔只關心問卷接線，一律 mock
+    private final CampaignMetadataService metadataService = mock(CampaignMetadataService.class);
+
     private final CampaignService svc = new CampaignService(
         mailSender, recipientService, campaignRepository, emailLogRepository,
         markdownRenderer, emailTemplate, linkBuilder, mailQuotaService, contentSplitter,
         readerSiteLinks, mailBodyRenderer, promoPlacementService, promoTokenService,
-        surveyBlockRenderer);
+        surveyBlockRenderer, metadataService);
 
     {
         // 額度與工商 token 皆給充足／非 null 的預設值，理由同 CampaignServiceTest：

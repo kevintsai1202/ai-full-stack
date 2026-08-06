@@ -149,6 +149,10 @@ public class Campaign {
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
+    /** 內容最後修改時間；僅記錄時間，不保存修改歷史（決策 D8） */
+    @Column(name = "updated_at")
+    private OffsetDateTime updatedAt;
+
     /** JPA 需要的無參數建構子 */
     protected Campaign() {
     }
@@ -184,6 +188,8 @@ public class Campaign {
     public int getFailedCount() { return failedCount; }
     public String getStatus() { return status; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
+    public OffsetDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
 
     /**
      * 回傳給 Admin 的排程操作權限；時間以後端時鐘為準，前端不可自行用狀態字串推測。

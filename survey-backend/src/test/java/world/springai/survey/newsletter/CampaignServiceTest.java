@@ -79,13 +79,16 @@ class CampaignServiceTest {
     private final SurveyBlockRenderer surveyBlockRenderer =
         new SurveyBlockRenderer(formSchemaService, rewardView);
 
+    // Task 8：封面／標籤驗證與落庫委派給 metadataService，本檔既有測試不驗證其行為，一律 mock
+    private final CampaignMetadataService metadataService = mock(CampaignMetadataService.class);
+
     private final CampaignService svc = new CampaignService(
         mailSender, recipientService, campaignRepository, emailLogRepository,
         markdownRenderer, emailTemplate, linkBuilder, mailQuotaService, contentSplitter,
         readerSiteLinks,
         new MailBodyRenderer(contentSplitter, markdownRenderer, readerSiteLinks,
             surveyBlockRenderer, "https://reader.example.com"),
-        promoPlacementService, promoTokenService, surveyBlockRenderer);
+        promoPlacementService, promoTokenService, surveyBlockRenderer, metadataService);
 
     {
         // 除非測試特別 stub 更小的量，否則額度視為充足——避免所有既有發送測試
@@ -1033,7 +1036,7 @@ class CampaignServiceTest {
             trailingSlashLinks,
             new MailBodyRenderer(contentSplitter, markdownRenderer, trailingSlashLinks,
                 surveyBlockRenderer, "https://reader.example.com"),
-            promoPlacementService, promoTokenService, surveyBlockRenderer);
+            promoPlacementService, promoTokenService, surveyBlockRenderer, metadataService);
         when(campaignRepository.findBySlug("slash")).thenReturn(Optional.empty());
         when(campaignRepository.save(any(Campaign.class))).thenAnswer(i -> i.getArgument(0));
 

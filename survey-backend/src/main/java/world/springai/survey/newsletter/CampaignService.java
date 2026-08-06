@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.HtmlUtils;
@@ -72,6 +73,11 @@ public class CampaignService {
      * {@link MailBodyRenderer#html}，是同一個 Spring 單例，兩處各自注入即可。
      */
     private final SurveyBlockRenderer surveyBlockRenderer;
+    /**
+     * 封面與標籤的驗證／落庫唯一入口：{@code updateContent}（本次擴充）與
+     * publish 端點共用同一套規則，避免兩條路徑各自實作導致驗證邏輯分歧。
+     */
+    private final CampaignMetadataService metadataService;
 
     public CampaignService(MailSender mailSender,
                            RecipientService recipientService,
@@ -86,7 +92,8 @@ public class CampaignService {
                            MailBodyRenderer mailBodyRenderer,
                            PromoPlacementService promoPlacementService,
                            PromoRecipientTokenService promoTokenService,
-                           SurveyBlockRenderer surveyBlockRenderer) {
+                           SurveyBlockRenderer surveyBlockRenderer,
+                           CampaignMetadataService metadataService) {
         this.contentSplitter = contentSplitter;
         this.readerSiteLinks = readerSiteLinks;
         this.mailBodyRenderer = mailBodyRenderer;
@@ -101,6 +108,7 @@ public class CampaignService {
         this.promoPlacementService = promoPlacementService;
         this.promoTokenService = promoTokenService;
         this.surveyBlockRenderer = surveyBlockRenderer;
+        this.metadataService = metadataService;
     }
 
     /**
@@ -680,6 +688,44 @@ public class CampaignService {
         log.info("重新上架文章：campaignId={} slug={} publishedAt={}（未動 article_access 與 credit_txn，"
                 + "已解鎖者無需再付）", campaignId, campaign.getSlug(), now);
         return new RepublishResult(campaignId, campaign.getSlug(), now, articleUrl(campaign.getSlug()));
+    }
+
+    /**
+     * 更新已發布文章的內容欄位。
+     *
+     * <p><b>刻意不做三件事</b>：不重寄信（不碰 {@code email_log} 與排程）、
+     * 不改 {@code bodyHtml}（那是寄出信件的歷史快照，改它等於竄改「當初寄了什麼」）、
+     * 不動解鎖與扣點。讀者站即時渲染 markdown，因此更新完成即生效。</p>
+     *
+     * <p><b>驗證必須先於落庫</b>：{@code metadataService.validate} 要在
+     * {@code campaignRepository.save} 之前執行——若順序寫反，封面驗證失敗時就會留下
+     * 「標題已改、封面沒改」的部分更新（見 CampaignUpdateContentTest 的呼叫順序測試）。</p>
+     *
+     * @param campaignId   要更新的文章 id；找不到時回 404
+     * @param subject      新主旨
+     * @param markdown     新內文（markdown 原文，網頁端即時渲染）
+     * @param coverEmoji   新封面 Emoji；與 {@code coverMediaId} 二擇一，交給 metadataService 驗證
+     * @param coverMediaId 新封面圖片媒體 id
+     * @param tags         新標籤清單
+     * @param now          更新時間，由呼叫端注入（不直接讀取系統時鐘，利於測試）
+     */
+    @Transactional
+    public void updateContent(long campaignId, String subject, String markdown,
+                              String coverEmoji, Long coverMediaId, List<String> tags,
+                              OffsetDateTime now) {
+        Campaign campaign = campaignRepository.findById(campaignId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "campaign not found"));
+
+        // 封面與標籤走既有服務，確保與 publish 路徑的驗證規則一致；
+        // 必須在任何欄位寫入之前完成，驗證失敗時不得留下部分更新
+        metadataService.validate(coverEmoji, tags, coverMediaId);
+
+        campaign.setSubject(subject);
+        campaign.setMarkdown(markdown);
+        campaign.setUpdatedAt(now);
+        campaignRepository.save(campaign);
+
+        metadataService.update(campaignId, coverEmoji, tags, coverMediaId);
     }
 
     /**
