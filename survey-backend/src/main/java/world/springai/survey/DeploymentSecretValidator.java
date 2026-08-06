@@ -23,22 +23,37 @@ public class DeploymentSecretValidator implements SmartInitializingSingleton {
     private static final Map<String, String> INSECURE_DEFAULTS = Map.of(
         "ADMIN_API_KEY", "dev-admin-key",
         "UNSUBSCRIBE_SECRET", "dev-unsub-secret",
-        "READER_JWT_SECRET", "dev-reader-jwt-secret-change-me-32chars");
+        "READER_JWT_SECRET", "dev-reader-jwt-secret-change-me-32chars",
+        "ADMIN_JWT_SECRET", "dev-admin-jwt-secret-change-me-32chars");
 
     private final boolean allowInsecureDevSecrets;
     private final Map<String, String> secrets;
 
-    /** 注入三個安全邊界使用的祕密與開發 opt-in。 */
+    /**
+     * 注入四個安全邊界使用的祕密與開發 opt-in。
+     *
+     * <p><b>{@code ADMIN_JWT_SECRET} 為什麼一定要在這裡</b>：它簽的是
+     * {@code admin_session} cookie，而 {@code AdminKeyGuard} 認這枚 cookie 就等於認可
+     * 全部管理端點。{@code application.yml} 的開發預設值是已 commit 進版控的公開字串，
+     * 漏設環境變數時服務會<b>正常啟動、登入正常、零症狀</b>，但任何人都能用那個公開字串
+     * 自簽一枚 cookie。少了這一列，這裡就是唯一一個 fail-open 的祕密。</p>
+     *
+     * <p>它同時受下方的 distinct 檢查保護：{@code ADMIN_JWT_SECRET} 與
+     * {@code READER_JWT_SECRET} 刻意分離（spec §3.2「切開爆炸半徑」），
+     * 設成同一把會讓兩個信任域合而為一。</p>
+     */
     public DeploymentSecretValidator(
             @Value("${app.security.allow-insecure-dev-secrets:false}") boolean allowInsecureDevSecrets,
             @Value("${app.admin-api-key}") String adminApiKey,
             @Value("${app.unsubscribe-secret}") String unsubscribeSecret,
-            @Value("${app.reader.jwt-secret}") String readerJwtSecret) {
+            @Value("${app.reader.jwt-secret}") String readerJwtSecret,
+            @Value("${app.admin.jwt-secret}") String adminJwtSecret) {
         this.allowInsecureDevSecrets = allowInsecureDevSecrets;
         this.secrets = new LinkedHashMap<>();
         this.secrets.put("ADMIN_API_KEY", adminApiKey);
         this.secrets.put("UNSUBSCRIBE_SECRET", unsubscribeSecret);
         this.secrets.put("READER_JWT_SECRET", readerJwtSecret);
+        this.secrets.put("ADMIN_JWT_SECRET", adminJwtSecret);
     }
 
     /** Spring 完成單例建構後立即驗證；失敗會讓應用程式無法開始接受流量。 */
@@ -69,7 +84,7 @@ public class DeploymentSecretValidator implements SmartInitializingSingleton {
 
         if (secrets.values().stream().distinct().count() != secrets.size()) {
             throw new IllegalStateException(
-                "安全設定錯誤：ADMIN_API_KEY、UNSUBSCRIBE_SECRET、READER_JWT_SECRET 必須使用不同祕密");
+                "安全設定錯誤：" + String.join("、", secrets.keySet()) + " 必須使用不同祕密");
         }
     }
 
