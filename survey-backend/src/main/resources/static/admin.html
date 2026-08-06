@@ -121,6 +121,16 @@
   @media(max-width:900px){.kpis,.growth-kpis{grid-template-columns:repeat(2,1fr)}.chart-grid,#campaign-view,#readers-view{grid-template-columns:1fr}.full,#campaign-view>.card:nth-child(n),#readers-view>.card:nth-child(n){grid-column:auto}.filters,.dynamic-toolbar{grid-template-columns:1fr 1fr}.media-library{grid-template-columns:repeat(2,minmax(0,1fr))}.wrap{padding-inline:16px}.tabs{overflow-x:auto;position:static}.tab{flex:0 0 auto}}
   @media(max-width:520px){.kpis,.growth-kpis,.filters,.dynamic-toolbar,.media-upload,.media-library{grid-template-columns:1fr}.bar-row{grid-template-columns:minmax(95px,1.2fr) 2fr 44px}.form-row,.import-fields{align-items:stretch;flex-direction:column}.form-row .btn,.source-picker .btn,.media-upload .btn{width:100%}.source-picker{grid-template-columns:1fr}.page-head .btn{width:100%}}
   @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  /* 行銷漏斗圖（B3）：寬度依數值比例、嚴格遞減（§4.3.1），倒掛層標示警示不隱藏異常 */
+  .funnel{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .funnel-layer{background:var(--accent-soft);color:var(--fg);border:1px solid var(--border);
+    border-radius:6px;text-align:center;padding:6px 8px;font-size:.85rem;min-width:72px;transition:width .3s}
+  .funnel-layer strong{margin-left:6px}
+  .funnel-rate{color:var(--muted);font-size:.75rem;margin:0}
+  .funnel-warn{color:var(--amber,#b45309);font-size:.75rem}
+  .funnel-split{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;justify-content:center}
+  .funnel-split .funnel{flex:1;min-width:220px}
+  .funnel-split-title{font-size:.8rem;color:var(--muted);text-align:center;margin:4px 0}
 </style>
 </head>
 <body>
@@ -617,6 +627,10 @@
       <div><h2 style="margin:0">分享漏斗</h2><p class="hint">分享點擊 → 填表 → 信箱確認；點擊採每日唯一訪客計數。</p></div>
       <button class="btn ghost" id="growth-refresh">重新整理</button>
     </div>
+    <h3 style="margin:14px 0 6px">分享漏斗</h3>
+    <div class="funnel" id="share-funnel-chart"></div>
+    <h3 style="margin:14px 0 6px">Reader 漏斗</h3>
+    <div class="funnel-split" id="reader-funnel-chart"></div>
     <div id="growth-kpis" class="kpis growth-kpis"></div>
     <div class="card">
       <h2>Reader 閱讀／訂閱／解鎖漏斗</h2>
@@ -2913,10 +2927,57 @@
     'vip.default_days':['VIP 預設效期（天）','授予 VIP 時未指定天數就用這個值']
   };
 
+  /**
+   * 漏斗圖（B3）：layers=[{label,count}]，寬度依數值比例、由上而下嚴格遞減（§4.3.1）。
+   * 顯示寬度 = min(比例寬, 上一層顯示寬 - 6%)，下限 14%——資料異常（下層>上層）時
+   * 形狀仍上大下小，但該層加註警示與實際數值，異常不被隱藏。相鄰層標示轉換率。
+   */
+  function renderFunnelChart(container,layers){
+    container.replaceChildren();
+    const max=Math.max(1,...layers.map(l=>l.count));
+    let prevWidth=100,prevCount=null;
+    layers.forEach(layer=>{
+      if(prevCount!==null){
+        const rate=document.createElement('p');rate.className='funnel-rate';
+        rate.textContent=prevCount>0?`↓ ${(layer.count/prevCount*100).toFixed(1)}%`:'↓ —';
+        container.append(rate);
+      }
+      const ideal=layer.count/max*100;
+      const width=Math.max(14,Math.min(ideal,prevWidth-6));
+      const div=document.createElement('div');div.className='funnel-layer';div.style.width=width+'%';
+      div.textContent=layer.label;
+      const strong=document.createElement('strong');strong.textContent=layer.count;div.append(strong);
+      if(prevCount!==null&&layer.count>prevCount){
+        const warn=document.createElement('span');warn.className='funnel-warn';
+        warn.textContent=' ⚠ 高於上一層';div.append(warn);
+      }
+      container.append(div);
+      prevWidth=width;prevCount=layer.count;
+    });
+  }
+  /** Reader 漏斗（D7）：頂端總瀏覽一層，其下訂閱／解鎖兩條路徑並排各自渲染 */
+  function renderReaderFunnel(structured){
+    const root=$('#reader-funnel-chart');root.replaceChildren();
+    const top=document.createElement('div');top.className='funnel';top.style.flexBasis='100%';
+    renderFunnelChart(top,[{label:'總瀏覽（文章＋訂閱首頁）',count:structured.totalViews}]);
+    root.append(top);
+    [['訂閱路徑',structured.subscribePath],['解鎖路徑',structured.unlockPath]].forEach(([title,steps])=>{
+      const wrap=document.createElement('div');wrap.className='funnel';
+      const t=document.createElement('p');t.className='funnel-split-title';t.textContent=title;wrap.append(t);
+      const chart=document.createElement('div');chart.className='funnel';wrap.append(chart);
+      renderFunnelChart(chart,steps.map(s=>({label:s.label,count:s.count})));
+      root.append(wrap);
+    });
+  }
+
   /** 載入分享漏斗、熱門文章、人工審核與活動。 */
   async function loadGrowth(){
     try{
       const data=await api('/api/admin/referrals/dashboard'),f=data.funnel;
+      renderFunnelChart($('#share-funnel-chart'),[
+        {label:'分享點擊',count:f.clicks},{label:'完成填表',count:f.submitted},
+        {label:'信箱確認',count:f.confirmed},{label:'審核通過',count:f.approved}]);
+      if(data.readerFunnelStructured)renderReaderFunnel(data.readerFunnelStructured);
       const root=$('#growth-kpis');root.replaceChildren();
       [['分享點擊',f.clicks],['完成填表',f.submitted],['信箱確認',f.confirmed],['點擊→填表',f.clickToSubmitRate+'%'],['填表→確認',f.submitToConfirmRate+'%']]
         .forEach(([label,value])=>{const box=document.createElement('div');box.className='kpi';const strong=document.createElement('strong');strong.className='kpi-value';strong.textContent=value;const span=document.createElement('span');span.className='kpi-label';span.textContent=label;box.append(span,strong);root.append(box);});
