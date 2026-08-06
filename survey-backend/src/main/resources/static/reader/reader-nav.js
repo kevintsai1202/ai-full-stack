@@ -139,8 +139,51 @@ function initializeReaderFunnel() {
 // 讓頁面內既有訂閱／解鎖流程能回報結果，不重複實作傳送細節。
 window.ReaderAnalytics = { event: recordReaderEvent };
 
+/**
+ * 右上工具列（A2）：日夜切換恆顯示；登出僅在登入時顯示。
+ * 登入判定：ReaderNav 只在登入時輸出「我的帳戶」連結——這是 server 對 session
+ * 的真實判斷，前端不需要（也拿不到，cookie 是 httpOnly）另外的登入 API。
+ */
+function mountHeadTools() {
+  const head = document.querySelector('.site-head-inner');
+  if (!head || head.querySelector('.head-tools')) return;
+  const tools = document.createElement('div');
+  tools.className = 'head-tools';
+
+  const themeBtn = document.createElement('button');
+  themeBtn.type = 'button';
+  themeBtn.id = 'reader-theme-btn';
+  themeBtn.className = 'head-tool-btn';
+  themeBtn.title = '切換日夜模式';
+  themeBtn.setAttribute('aria-label', '切換日夜模式');
+  themeBtn.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '🌙' : '☀';
+  themeBtn.addEventListener('click', () => {
+    const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('reader-theme', next);
+    themeBtn.textContent = next === 'dark' ? '🌙' : '☀';
+  });
+  tools.append(themeBtn);
+
+  if (document.querySelector('nav a[href="/r/me"]')) {
+    const logoutBtn = document.createElement('button');
+    logoutBtn.type = 'button';
+    logoutBtn.id = 'reader-logout-btn';
+    logoutBtn.className = 'head-tool-btn';
+    logoutBtn.textContent = '登出';
+    logoutBtn.addEventListener('click', async () => {
+      // 既有登出端點會清除 reader_session cookie；成功後回首頁重載
+      await fetch('/api/reader/logout', { method: 'POST' });
+      location.href = '/r/';
+    });
+    tools.append(logoutBtn);
+  }
+  head.append(tools);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   highlightCurrentReaderNavigation();
   showSubscriberCount();
   initializeReaderFunnel();
+  mountHeadTools();
 });
