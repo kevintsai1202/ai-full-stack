@@ -13,6 +13,8 @@ import java.util.List;
 import java.time.OffsetDateTime;
 
 import world.springai.survey.AdminKeyGuard;
+import world.springai.survey.admin.AdminAllowlist;
+import world.springai.survey.admin.AdminSessionAccess;
 import world.springai.survey.audience.RecipientService;
 import world.springai.survey.mail.MailQuotaService;
 import world.springai.survey.mail.MailTemplate;
@@ -36,6 +38,9 @@ class AdminCampaignControllerTest {
     @MockBean RecipientService recipientService;
     @MockBean InviteService inviteService;
     @MockBean MailQuotaService mailQuotaService;
+    // AdminKeyGuard 建構子新增依賴（Task 7）：@WebMvcTest slice 需補上這兩個 bean，context 才能建構真實 AdminKeyGuard
+    @MockBean AdminSessionAccess sessionAccess;
+    @MockBean AdminAllowlist allowlist;
 
     /** 測試用額度：月額度 50000、剩餘 49000、單批上限 500（模擬 Zeabur Pro 偵測結果） */
     private static final MailQuotaService.Quota QUOTA = new MailQuotaService.Quota(

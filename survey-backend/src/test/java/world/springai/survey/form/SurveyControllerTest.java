@@ -14,6 +14,8 @@ import java.util.Map;
 import java.time.OffsetDateTime;
 
 import world.springai.survey.AdminKeyGuard;
+import world.springai.survey.admin.AdminAllowlist;
+import world.springai.survey.admin.AdminSessionAccess;
 import world.springai.survey.audience.SurveyResponse;
 import world.springai.survey.audience.SurveyResponseRepository;
 import world.springai.survey.audience.WelcomeMailService;
@@ -46,6 +48,9 @@ class SurveyControllerTest {
     @MockBean SurveyResponseRepository repository;
     @MockBean WelcomeMailService welcomeMailService;
     @MockBean SurveySubmissionService surveySubmissionService;
+    // AdminKeyGuard 建構子新增依賴（Task 7）：@WebMvcTest slice 需補上這兩個 bean，context 才能建構真實 AdminKeyGuard
+    @MockBean AdminSessionAccess sessionAccess;
+    @MockBean AdminAllowlist allowlist;
 
     @Test
     void validSurveyReturns201() throws Exception {

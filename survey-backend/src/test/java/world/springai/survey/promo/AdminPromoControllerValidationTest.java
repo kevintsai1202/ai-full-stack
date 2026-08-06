@@ -9,6 +9,8 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import world.springai.survey.AdminKeyGuard;
+import world.springai.survey.admin.AdminAllowlist;
+import world.springai.survey.admin.AdminSessionAccess;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -34,6 +36,9 @@ class AdminPromoControllerValidationTest {
     @MockBean PromoPlacementService placementService;
     @MockBean PromoStatsService statsService;
     @MockBean PromoProposalRepository proposalRepository;
+    // AdminKeyGuard 建構子新增依賴（Task 7）：@WebMvcTest slice 需補上這兩個 bean，context 才能建構真實 AdminKeyGuard
+    @MockBean AdminSessionAccess sessionAccess;
+    @MockBean AdminAllowlist allowlist;
 
     /** service 拋出 PromoValidationException 時，端點須回 400 且 body 帶原始訊息 */
     @Test

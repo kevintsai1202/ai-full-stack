@@ -9,6 +9,8 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import world.springai.survey.AdminKeyGuard;
+import world.springai.survey.admin.AdminAllowlist;
+import world.springai.survey.admin.AdminSessionAccess;
 
 import java.util.List;
 
@@ -27,6 +29,9 @@ class AdminMediaControllerTest {
 
     @Autowired MockMvc mvc;
     @MockBean MediaAssetService mediaService;
+    // AdminKeyGuard 建構子新增依賴（Task 7）：@WebMvcTest slice 需補上這兩個 bean，context 才能建構真實 AdminKeyGuard
+    @MockBean AdminSessionAccess sessionAccess;
+    @MockBean AdminAllowlist allowlist;
 
     /** 沒有管理金鑰不得列出媒體庫。 */
     @Test

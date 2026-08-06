@@ -12,6 +12,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.mock.web.MockMultipartFile;
 
 import world.springai.survey.AdminKeyGuard;
+import world.springai.survey.admin.AdminAllowlist;
+import world.springai.survey.admin.AdminSessionAccess;
 
 import java.util.List;
 
@@ -40,6 +42,9 @@ class AdminImportControllerTest {
     @MockBean AudienceSpreadsheetReader spreadsheetReader;
     @MockBean AudienceSourceService sourceService;
     @MockBean AudienceImportService importService;
+    // AdminKeyGuard 建構子新增依賴（Task 7）：@WebMvcTest slice 需補上這兩個 bean，context 才能建構真實 AdminKeyGuard
+    @MockBean AdminSessionAccess sessionAccess;
+    @MockBean AdminAllowlist allowlist;
 
     /** 來源清單需通過管理金鑰，並完整回傳內部鍵與顯示名稱。 */
     @Test
