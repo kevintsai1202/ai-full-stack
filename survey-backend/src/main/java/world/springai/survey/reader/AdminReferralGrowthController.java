@@ -77,6 +77,9 @@ public class AdminReferralGrowthController {
             "unlockSuccess", unlockSuccess,
             "homeToSubscribeRate", rate(subscribeSuccess, subscriptionHomeViews),
             "unlockSuccessRate", rate(unlockSuccess, unlockClicks)));
+        // D7：語意正確的漏斗結構——頂端為平行入口加總，其下分訂閱／解鎖兩條路徑
+        result.put("readerFunnelStructured", ReaderFunnelView.from(
+            articleViews, subscriptionHomeViews, subscribeAttempts, subscribeSuccess, unlockClicks, unlockSuccess));
         result.put("readerTopArticles", jdbc.queryForList("""
             select article_slug,
                    count(distinct visitor_key) filter (where event_name = 'ARTICLE_VIEW') views,
