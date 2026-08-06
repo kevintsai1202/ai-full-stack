@@ -57,6 +57,12 @@ app:
   admin:
     entry-host: ${ADMIN_ENTRY_HOST:}
     emails: ${ADMIN_EMAILS:}
+    # 管理後台的公開網址：判斷 session cookie 是否需帶 Secure（未設定時沿用 APP_PUBLIC_BASE_URL）
+    base-url: ${ADMIN_BASE_URL:${APP_PUBLIC_BASE_URL:http://127.0.0.1:8080}}
+    # JWT 簽章秘鑰（線上務必換成 32 字元以上的強隨機字串；與讀者站秘鑰刻意分離）
+    jwt-secret: ${ADMIN_JWT_SECRET:dev-admin-jwt-secret-change-me-32chars}
+    # 登入態有效天數
+    jwt-ttl-days: ${ADMIN_JWT_TTL_DAYS:7}
   # 問卷公開入口；設定後會在此 Host 隱藏管理頁與管理 API。
   # 建議確認管理網域 DNS/HTTPS 正常後再設定，避免切換期間無法進入後台。
   survey:
