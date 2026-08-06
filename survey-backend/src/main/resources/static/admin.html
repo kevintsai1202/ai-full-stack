@@ -9,6 +9,46 @@
   :root{--bg:#f3f6f5;--fg:#152521;--muted:#52645f;--border:#d6e0dc;--border-strong:#9db0aa;--surface:#fff;--surface-2:#edf3f1;
     --accent:#087f72;--accent-deep:#08665c;--accent-soft:#d9f1ec;--amber:#a85b00;--danger:#c62828;
     --r:12px;--shadow:0 12px 34px rgba(21,37,33,.08);--font:system-ui,-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif}
+  /* 暗色主題（Task 11）：只覆寫變數值，不改動任何既有元件的樣式規則。
+     --surface / --surface-2 也一併覆寫成暗色——因為全站文字色只有一個 --fg 變數，
+     若卡片底色（--surface）維持亮色而 --fg 轉亮，卡片內文字（絕大多數畫面內容）會變得無法閱讀；
+     --accent 維持不變：它只用來當按鈕底色配白字／裝飾用邊框，這兩種用法都與頁面主題無關；
+     --danger 維持不變：唯一的用法是搭配寫死的淺色底（#fde8e8）或當按鈕底色配白字，同樣與主題無關；
+     --accent-deep 身兼「按鈕底色配白字」（.tab.active）與「卡片上的強調文字」（.count/.btn.ghost）兩種角色，
+     兩者對比度需求互斥，故取一折衷值：優先確保後者（畫面上出現頻率高很多）達到 AA，前者退讓為可讀但非滿分。 */
+  :root[data-theme="dark"]{
+    --bg:#16181c;--fg:#e8e8e8;--muted:#9aa0a6;--border:#2c2f36;--border-strong:#3a3f47;
+    --surface:#1f2229;--surface-2:#272b33;
+    --accent-deep:#3ca596;--accent-soft:#1c3a36;--amber:#e8b158;
+  }
+  /* 右上工具列（Task 11 新增元件，非既有元件的樣式規則）：身分文字＋日夜切換＋登出，皆重用既有 .hint／.btn.ghost，故不需另訂顏色。 */
+  .admin-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .admin-toolbar #tb-identity{white-space:nowrap}
+  .admin-toolbar .btn{min-height:38px;padding:6px 12px;font-size:1rem;line-height:1}
+  /* 暗色主題下，少數元件把底色寫死成淺色字面值（不是變數），變數覆寫對它們不生效；
+     若不額外處理，登入卡與所有表單欄位會維持白底、卻套用暗色主題轉亮的 --fg，文字幾乎看不見。
+     這裡以「只在暗色主題下追加規則」的方式修正，並未更動、也未刪除任一條既有規則本身。 */
+  :root[data-theme="dark"] .gate .box,
+  :root[data-theme="dark"] input[type=text],
+  :root[data-theme="dark"] input[type=email],
+  :root[data-theme="dark"] input[type=password],
+  :root[data-theme="dark"] input[type=date],
+  :root[data-theme="dark"] input[type=datetime-local],
+  :root[data-theme="dark"] input[type=search],
+  :root[data-theme="dark"] input[type=number],
+  :root[data-theme="dark"] input[type=file],
+  :root[data-theme="dark"] select,
+  :root[data-theme="dark"] textarea{background:var(--surface-2);color:var(--fg)}
+  /* 同一類問題還出現在 th／表格列 hover／幾個提示面板：底色同樣是寫死的淺色字面值，
+     文字則是繼承 body 的 --fg（暗色主題下已轉亮），實測會整排看不到字（如表格欄名）。
+     這些元件的文字色原本就正確地跟著 --fg 走，只需把寫死的底色在暗色主題下追加覆寫即可，
+     同樣不改動、不刪除既有規則。 */
+  :root[data-theme="dark"] th,
+  :root[data-theme="dark"] tbody tr:hover,
+  :root[data-theme="dark"] .media-panel,
+  :root[data-theme="dark"] .media-item,
+  :root[data-theme="dark"] .suggestion,
+  :root[data-theme="dark"] .advanced-filters{background:var(--surface-2)}
   *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:var(--font);color:var(--fg);background:var(--bg);line-height:1.65}
   button,input,select,textarea{font:inherit}.wrap{max-width:1360px;margin:0 auto;padding:32px 24px 88px}
   button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid rgba(8,127,114,.25);outline-offset:2px}
@@ -102,7 +142,14 @@
 <main class="wrap" id="app" hidden>
   <header class="page-head">
     <div><h1>課程管理後台</h1><p class="sub">受保護的問卷分析、原始資料匯出與電子報工具。</p></div>
-    <button class="btn ghost" id="lock-btn">鎖定並登出</button>
+    <!-- 右上工具列（Task 11）：取代舊的「鎖定並登出」按鈕——舊按鈕只清 sessionStorage，
+         JWT 模式下並不會呼叫後端登出、httpOnly cookie 仍有效，等於登出失敗；
+         新工具列的登出邏輯涵蓋兩種模式，故不保留舊按鈕以免出現兩顆行為不一致的登出鈕。 -->
+    <div class="admin-toolbar">
+      <span id="tb-identity" class="hint"></span>
+      <button id="tb-theme" type="button" class="btn ghost" title="切換日夜模式" aria-label="切換日夜模式">☀</button>
+      <button id="tb-logout" type="button" class="btn ghost" title="登出" aria-label="登出">⏻</button>
+    </div>
   </header>
   <nav class="tabs" aria-label="管理功能">
     <button class="tab active" id="tab-analytics" data-view="analytics">問卷分析</button>
@@ -719,6 +766,22 @@
   const COST_FREEZE_HINT='發布後價格即凍結（沒有改價路徑，只能下架重發）。';
   function sourceLabel(code){return SOURCE_LABELS[code]||code||'';}
   const $=selector=>document.querySelector(selector);
+
+  /**
+   * 套用日夜主題並記住偏好（Task 11）。
+   * 以 documentElement 的 data-theme 屬性驅動 CSS 變數覆寫，切換即時生效；
+   * 偏好存 localStorage，跨次造訪保留。
+   * 這段在腳本最上方、DOMContentLoaded 前就執行——即使還在登入 gate 畫面也要套用正確主題，
+   * 避免「先看到亮色 gate、登入後才變暗」的畫面閃爍。
+   */
+  function applyTheme(theme){
+    document.documentElement.setAttribute('data-theme',theme);
+    localStorage.setItem('admin-theme',theme);
+    const btn=$('#tb-theme');
+    if(btn)btn.textContent=theme==='dark'?'🌙':'☀';
+  }
+  // 首次進站沒有已存偏好時，跟隨系統的 prefers-color-scheme。
+  applyTheme(localStorage.getItem('admin-theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'));
   let surveyRows=[];
   let analyticsLoaded=false;
   /** 後端表單 schema 與目前動態分析結果。 */
@@ -911,7 +974,22 @@
     // 重開後台會看到「編輯區已有內容、預覽區卻停在別的東西」，正是最容易被誤判成壞掉的畫面。
     if($('#markdown').value.trim()||$('#subject').value.trim())doPreview();
     document.querySelectorAll('.tab').forEach(tab=>tab.onclick=()=>switchView(tab.dataset.view));
-    $('#lock-btn').onclick=()=>{sessionStorage.removeItem(KEY);location.reload();};
+    // 右上工具列（Task 11）：日夜切換鈕點擊即翻轉主題；登出鈕依目前登入模式做對應的清除動作。
+    $('#tb-theme').onclick=()=>{
+      const next=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+      applyTheme(next);
+    };
+    $('#tb-logout').onclick=async()=>{
+      // JWT 模式：cookie 是 httpOnly，前端讀不到也清不掉，須呼叫後端登出端點使其失效；
+      // 金鑰模式：金鑰只存在 sessionStorage，直接清除即可，兩種模式最後都重新整理頁面回到登入 gate。
+      if(adminAuthMode()==='jwt'){
+        try{await fetch('/api/admin/logout',{method:'POST'});}catch(e){/* 網路錯誤也照樣清除本地狀態並重整，避免卡在無法登出的畫面 */}
+      }
+      sessionStorage.removeItem(KEY);
+      location.reload();
+    };
+    // 身分顯示：JWT 模式顯示登入者 email（bootAuth 已寫入 window.__adminEmail）；金鑰模式顯示固定文字。
+    $('#tb-identity').textContent=adminAuthMode()==='jwt'?(window.__adminEmail||''):'金鑰模式';
     $('#analytics-refresh').onclick=()=>loadAnalytics(true);$('#export-json').onclick=()=>downloadProtected('/api/admin/survey','survey-responses.json');$('#export-csv').onclick=()=>downloadProtected('/api/admin/survey?format=csv','survey-responses.csv');$('#export-pdf').onclick=exportPdf;
     $('#dynamic-form').onchange=()=>{refreshDynamicVersions();loadDynamicAnalytics();};$('#dynamic-version').onchange=loadDynamicAnalytics;$('#dynamic-all-versions').onchange=loadDynamicAnalytics;['#dynamic-from','#dynamic-to','#dynamic-source','#dynamic-campaign'].forEach(selector=>$(selector).onchange=loadDynamicAnalytics);$('#dynamic-refresh').onclick=loadDynamicAnalytics;
     $('#dynamic-json').onclick=()=>downloadDynamic('json');$('#dynamic-csv').onclick=()=>downloadDynamic('csv');$('#dynamic-pdf').onclick=exportDynamicPdf;
