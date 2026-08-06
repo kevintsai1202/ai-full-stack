@@ -5,6 +5,7 @@ import world.springai.survey.form.FormSchemaService;
 import world.springai.survey.form.FormSchemaService.EmailVoteQuestion;
 import world.springai.survey.promo.PromoRecipientTokenService;
 
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
@@ -143,6 +144,22 @@ public class SurveyBlockRenderer {
                     "問卷標記無法嵌入（未發布或未設定信中一鍵題）：" + formKey);
             }
         }
+    }
+
+    /**
+     * 依內文出現順序列出所有內嵌問卷標記的 formKey（去重、保留首次出現順序）；
+     * 供文章側邊欄投票統計（B1）決定要列哪些卡。
+     */
+    public List<String> embeddedFormKeys(String html) {
+        if (html == null || html.isBlank()) {
+            return List.of();
+        }
+        LinkedHashSet<String> keys = new LinkedHashSet<>();
+        Matcher matcher = MARKER.matcher(html);
+        while (matcher.find()) {
+            keys.add(matcher.group(1));
+        }
+        return List.copyOf(keys);
     }
 
     /**

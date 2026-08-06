@@ -21,6 +21,7 @@ import world.springai.survey.media.MediaAssetService;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -74,6 +75,10 @@ class ReaderPageControllerTest {
     @MockBean world.springai.survey.newsletter.PublicCampaignTagService campaignTagService;
     /** Task 9 接線：問卷標記展開器（mock），預設 stub 為直通避免影響既有斷言 */
     @MockBean SurveyBlockRenderer surveyBlockRenderer;
+    /** Task 7 接線：投票統計服務（mock），供側邊欄投票卡取用 */
+    @MockBean world.springai.survey.form.SurveyVoteStatsService surveyVoteStatsService;
+    /** Task 7 接線：問卷 schema 服務（mock），供側邊欄投票卡取用信中一鍵題標題與選項 */
+    @MockBean world.springai.survey.form.FormSchemaService formSchemaService;
 
     /**
      * 預設直通：多數既有測試不關心問卷卡展開。若不 stub，Mockito 對未 stub 的
@@ -85,6 +90,8 @@ class ReaderPageControllerTest {
     void stubSurveyBlockRendererPassthrough() {
         when(surveyBlockRenderer.expandForWeb(any(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
             .thenAnswer(invocation -> invocation.getArgument(0));
+        // 預設無內嵌問卷標記：多數既有測試不關心側邊欄投票卡
+        when(surveyBlockRenderer.embeddedFormKeys(any())).thenReturn(List.of());
     }
 
     /** 建立一篇含 paywall 標記的文章 */
@@ -812,5 +819,50 @@ class ReaderPageControllerTest {
 
         assertTrue(body.contains("side-tag active\" href=\"/r/archive?tag=rag"),
             "本篇所屬分類必須帶 active；實際輸出：" + body);
+    }
+
+    /** 內文含 survey 標記時，側邊欄出現投票卡：題目、各選項票數與百分比、共 N 人參與；不含轉換率（D4） */
+    @Test
+    void sidebarShowsVoteStatsForEmbeddedSurveys() throws Exception {
+        Campaign article = gatedArticle(Campaign.TIER_BASIC, 0);
+        String markdown = FREE_MARKER + "\n\n<!--survey:vote-key-->\n\n<!--paywall-->\n\n" + SENTINEL;
+        ReflectionTestUtils.setField(article, "markdown", markdown);
+        when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(article));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+        when(surveyBlockRenderer.embeddedFormKeys(any())).thenReturn(List.of("vote-key"));
+        when(surveyVoteStatsService.voteStats("vote-key")).thenReturn(Map.of(
+            "options", List.of(
+                Map.of("value", "選項Ａ", "named", 6L, "anon", 2L),
+                Map.of("value", "選項Ｂ", "named", 3L, "anon", 3L)),
+            "totalVotes", 14L, "totalNamed", 9L));
+        when(formSchemaService.emailVoteQuestion("vote-key")).thenReturn(Optional.of(
+            new world.springai.survey.form.FormSchemaService.EmailVoteQuestion(
+                "vote-key", "你最想學什麼？", "q1", "題目", List.of())));
+
+        String body = mvc.perform(get("/r/news/test-article"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(body.contains("你最想學什麼？"), body);
+        assertTrue(body.contains("選項Ａ"), body);
+        assertTrue(body.contains("8 票"), body); // 6+2
+        assertTrue(body.contains("57%"), body); // 8/14 四捨五入
+        assertTrue(body.contains("共 14 人參與"), body);
+        assertFalse(body.contains("轉換率"), body); // D4
+    }
+
+    /** 無內嵌問卷的文章：側邊欄維持原樣（無投票卡） */
+    @Test
+    void sidebarUnchangedWithoutEmbeddedSurvey() throws Exception {
+        when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(gatedArticle(Campaign.TIER_BASIC, 0)));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+
+        String body = mvc.perform(get("/r/news/test-article"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertFalse(body.contains("人參與"), body);
     }
 }

@@ -663,3 +663,11 @@ input::placeholder { color:#71817c; }
 :root[data-theme="dark"] .promo-status.pending{background:#3a2f14;color:#e8b158}
 :root[data-theme="dark"] .promo-status.rejected{background:#3a1f1f}
 :root[data-theme="dark"] .promo-status.archived{background:#2a2f2d;color:#9aa8a3}
+
+/* 文章側邊欄投票統計卡（B1） */
+.side-votes { list-style:none; margin:0; padding:0; }
+.side-votes li { display:grid; grid-template-columns:1fr auto; gap:2px 8px; margin:8px 0; font-size:.85rem; }
+.side-votes .vote-bar { grid-column:1 / -1; height:6px; border-radius:var(--r-pill); background:var(--surface-3); overflow:hidden; }
+.side-votes .vote-bar i { display:block; height:100%; background:var(--accent); }
+.side-votes .vote-count { color:var(--muted); }
+.side-note { margin:8px 0 0; color:var(--muted); font-size:.8rem; }

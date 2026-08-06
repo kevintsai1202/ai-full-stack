@@ -63,6 +63,16 @@ public class ReaderPageController {
     private final SurveyBlockRenderer surveyBlockRenderer;
     /** 側欄相關文章查詢；舊單元測試相容建構式為 null，此時側欄不輸出相關文章卡 */
     private final PublicRelatedArticleService relatedArticleService;
+    /**
+     * 投票統計服務（Task 7 / B1）：查詢內嵌問卷的選項票數分布，供文章側邊欄投票卡使用。
+     * 舊單元測試相容建構式為 null，此時側邊欄不輸出投票卡。
+     */
+    private final world.springai.survey.form.SurveyVoteStatsService surveyVoteStatsService;
+    /**
+     * 問卷 schema 服務（Task 7 / B1）：查詢內嵌問卷的信中一鍵題標題與選項文字。
+     * 舊單元測試相容建構式為 null，此時側邊欄不輸出投票卡。
+     */
+    private final world.springai.survey.form.FormSchemaService formSchemaService;
 
     /**
      * 注入內容、授權與渲染所需的服務。
@@ -83,7 +93,9 @@ public class ReaderPageController {
                                MediaAssetService mediaAssetService,
                                ObjectProvider<ReaderSiteLinks> readerSiteLinksProvider,
                                SurveyBlockRenderer surveyBlockRenderer,
-                               PublicRelatedArticleService relatedArticleService) {
+                               PublicRelatedArticleService relatedArticleService,
+                               world.springai.survey.form.SurveyVoteStatsService surveyVoteStatsService,
+                               world.springai.survey.form.FormSchemaService formSchemaService) {
         this.campaignRepository = campaignRepository;
         this.markdownRenderer = markdownRenderer;
         this.contentSplitter = contentSplitter;
@@ -96,6 +108,8 @@ public class ReaderPageController {
         this.readerSiteLinks = readerSiteLinksProvider.getIfAvailable();
         this.surveyBlockRenderer = surveyBlockRenderer;
         this.relatedArticleService = relatedArticleService;
+        this.surveyVoteStatsService = surveyVoteStatsService;
+        this.formSchemaService = formSchemaService;
     }
 
     /** 舊單元測試相容建構式；沒有標籤服務時維持原本列表行為。 */
@@ -118,6 +132,8 @@ public class ReaderPageController {
         this.readerSiteLinks = null;
         this.surveyBlockRenderer = null;
         this.relatedArticleService = null;
+        this.surveyVoteStatsService = null;
+        this.formSchemaService = null;
     }
 
     /** 歷史內容列表：只列已發布者，登入者會看到自己的解鎖狀態 */
@@ -195,6 +211,11 @@ public class ReaderPageController {
             contentHtml += markdownRenderer.toHtml(split.gatedMarkdown());
         }
 
+        // 側邊欄投票統計（B1）：標記在 expandForWeb 後會被換成投票卡 HTML，必須先掃，
+        // 否則 embeddedFormKeys 對著已展開的 HTML 找不到任何 <!--survey:...--> 標記。
+        List<String> embeddedFormKeys = surveyBlockRenderer != null
+            ? surveyBlockRenderer.embeddedFormKeys(contentHtml) : List.of();
+
         // 問卷標記展開（Task 9 接線）：contentHtml 定案（免費區／全文皆已決定）後
         // 統一展開，campaignId 在讀者頁一律已知，選項連結改由 session 歸戶不帶 rt。
         // 第三參數為登入狀態——匿名投票不發點，提示文字必須跟著分歧，否則會對
@@ -215,7 +236,7 @@ public class ReaderPageController {
         vars.put("<!--ARTICLE_TITLE-->", HtmlTemplate.escapeHtml(campaign.getSubject()));
         vars.put("<!--ARTICLE_META-->", renderMeta(campaign));
         vars.put("<!--ARTICLE_TAGS-->", renderArticleTags(campaign.getId()));
-        vars.put("<!--ARTICLE_SIDEBAR-->", renderSidebar(campaign));
+        vars.put("<!--ARTICLE_SIDEBAR-->", renderSidebar(campaign, embeddedFormKeys));
         vars.put("<!--ARTICLE_COVER-->", renderArticleCover(campaign));
         vars.put("<!--ARTICLE_CONTENT-->", contentHtml); // 已是渲染後的 HTML，不可再跳脫
         vars.put("<!--NAV_LINKS-->", ReaderNav.links(current.isPresent()));
@@ -459,13 +480,56 @@ public class ReaderPageController {
     private static final int SIDEBAR_RELATED_LIMIT = 5;
 
     /**
-     * 渲染文章頁右側欄：分類選單與相關文章兩張卡。
+     * 渲染文章頁右側欄：投票統計卡、分類選單與相關文章卡。
      *
-     * <p>兩張卡各自可獨立缺席——服務未注入（舊相容建構式）或查無資料時
-     * 該卡輸出空字串，不留一張空卡在側欄。</p>
+     * <p>各卡皆可獨立缺席——服務未注入（舊相容建構式）或查無資料時
+     * 該卡輸出空字串，不留一張空卡在側欄。投票卡排最前：文章專屬資訊
+     * 優先於通用的分類／相關文章。</p>
      */
-    private String renderSidebar(Campaign campaign) {
-        return renderCategoryCard(campaign) + renderRelatedCard(campaign);
+    private String renderSidebar(Campaign campaign, List<String> embeddedFormKeys) {
+        return renderVoteStatsCards(embeddedFormKeys) + renderCategoryCard(campaign) + renderRelatedCard(campaign);
+    }
+
+    /**
+     * 內嵌問卷投票統計卡（B1）：每份問卷一張卡，依標記在內文出現的順序全部列出（spec §4.1 不截斷）。
+     * 顯示各選項票數＋百分比與「共 N 人參與」；不顯示轉換率（D4）。
+     * 未設定信中一鍵題（emailVoteQuestion 為空）的 key 跳過——該標記本來就不會被渲染成投票卡。
+     */
+    private String renderVoteStatsCards(List<String> formKeys) {
+        if (formKeys.isEmpty() || surveyVoteStatsService == null || formSchemaService == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String formKey : formKeys) {
+            Optional<world.springai.survey.form.FormSchemaService.EmailVoteQuestion> question =
+                formSchemaService.emailVoteQuestion(formKey);
+            if (question.isEmpty()) {
+                continue;
+            }
+            Map<String, Object> stats = surveyVoteStatsService.voteStats(formKey);
+            long total = ((Number) stats.getOrDefault("totalVotes", 0L)).longValue();
+            sb.append("<section class=\"side-card\"><h2 class=\"side-title\">")
+              .append(HtmlTemplate.escapeHtml(question.get().title())).append("</h2>");
+            if (total == 0) {
+                sb.append("<p class=\"side-note\">尚無人投票</p></section>");
+                continue;
+            }
+            sb.append("<ul class=\"side-votes\">");
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> options = (List<Map<String, Object>>) stats.getOrDefault("options", List.of());
+            for (Map<String, Object> option : options) {
+                long votes = ((Number) option.getOrDefault("named", 0L)).longValue()
+                           + ((Number) option.getOrDefault("anon", 0L)).longValue();
+                long percent = Math.round(votes * 100.0 / total);
+                sb.append("<li><span class=\"vote-label\">")
+                  .append(HtmlTemplate.escapeHtml(String.valueOf(option.get("value"))))
+                  .append("</span><span class=\"vote-bar\"><i style=\"width:").append(percent)
+                  .append("%\"></i></span><span class=\"vote-count\">").append(votes)
+                  .append(" 票 · ").append(percent).append("%</span></li>");
+            }
+            sb.append("</ul><p class=\"side-note\">共 ").append(total).append(" 人參與</p></section>");
+        }
+        return sb.toString();
     }
 
     /** 分類卡：列出所有公開 hashtag 與篇數，本篇所屬者標 active */
