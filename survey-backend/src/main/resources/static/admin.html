@@ -123,8 +123,11 @@
   @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
   /* 行銷漏斗圖（B3）：寬度依數值比例、嚴格遞減（§4.3.1），倒掛層標示警示不隱藏異常 */
   .funnel{display:flex;flex-direction:column;align-items:center;gap:2px}
+  /* min-width 拿掉：固定像素下限在窄容器（Reader 漏斗分塊，約 220px）會把不同百分比寬拉平成
+     相同像素，違反 §4.3.1 嚴格遞減不變量；改用 white-space+ellipsis 處理窄寬度下的文字溢出 */
   .funnel-layer{background:var(--accent-soft);color:var(--fg);border:1px solid var(--border);
-    border-radius:6px;text-align:center;padding:6px 8px;font-size:.85rem;min-width:72px;transition:width .3s}
+    border-radius:6px;text-align:center;padding:6px 8px;font-size:.85rem;transition:width .3s;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .funnel-layer strong{margin-left:6px}
   .funnel-rate{color:var(--muted);font-size:.75rem;margin:0}
   .funnel-warn{color:var(--amber,#b45309);font-size:.75rem}
