@@ -2240,6 +2240,19 @@
     // 與「修改排程」模式互斥：兩者對同一組欄位有不同的停用規則，混用會讓其中一邊的
     // 狀態被另一邊的收尾函式（exitEditMode／setPublishFieldsEnabled）誤還原。
     if(editingCampaignId!=null){alert('正在修改排程，請先完成或取消後再編輯文章內容。');return;}
+    // 與「自己」互斥（審查修正）：歷史列表與編輯區同屬 campaign 這個 view，編輯模式下
+    // 每一列的「編輯」按鈕仍可見且啟用，因此「編輯 A 途中改點 B」是必然會發生的操作。
+    // 沒有這道擋，下面的 preContentEditDraft 會被覆寫成「文章 A 的已發布內容」——
+    // 之後退出 B 時，exitContentEditMode() 會忠實還原那份快照，把 A 的完整內文放回
+    // 編輯區，而按鈕已恢復成「發送」、#publish-btn 也已啟用：按下去就是把 A 重寄給
+    // 全體訂閱者，且 A 的內容同時被寫進 localStorage 草稿（跨 session 存活）。
+    // 作法比照 doEditSchedule() 對本模式的既有擋法，兩個模式的互斥自此對稱；
+    // 這同時也修掉「編輯中改點另一列會靜默丟棄未存編輯」——現在會明講而不是默默丟掉。
+    if(contentEditCampaignId!=null){
+      alert(`正在編輯批次 #${contentEditCampaignId} 的內容，請先「儲存內容」或按「取消編輯」，再編輯另一篇。`);
+      $('#cancel-edit-btn').scrollIntoView({behavior:'smooth',block:'center'});
+      return;
+    }
     switchView('campaign');
     // 先把使用者「自己正在寫的稿」整組留存下來，離開編輯模式時原樣還原（見 exitContentEditMode）。
     // 沒有這一步的話，編輯完一篇舊文之後畫面上仍是那篇舊文的完整內容，而按鈕已還原成「發送」——

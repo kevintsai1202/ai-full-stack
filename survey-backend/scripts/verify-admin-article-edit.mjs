@@ -393,6 +393,27 @@ try {
     (expected) => document.getElementById('subject')?.value === expected,
     UPDATED_SUBJECT, { timeout: 5000 },
   );
+  // ── 8a. ★ 審查修正：編輯 A 期間點擊另一列 B 的「編輯」必須被擋下 ──
+  // 歷史列表與編輯區同屬 campaign 這個 view，編輯模式下每一列的 btn-edit 仍可見且啟用，
+  // 所以「編輯 A 途中改點 B」是必然會發生的操作。少了互斥擋，第二次 enterContentEditMode
+  // 會把 preContentEditDraft 覆寫成「文章 A 的已發布內容」——退出 B 之後 A 的全文會回到
+  // 編輯區，而按鈕已恢復成「發送」、#publish-btn 也已啟用，按下去就把 A 重寄給全體訂閱者
+  //（同時 A 的內容會被寫進 localStorage 草稿，跨 session 存活）。
+  // 這條斷言是防止該危害再次復發的唯一機制——先前的腳本每次重進編輯模式前都已先退出，
+  // 因此結構上不可能踩到這條路徑。
+  {
+    const otherRow = page.locator('#hist tbody tr', { hasText: SAVEBUILD_SUBJECT });
+    await otherRow.waitFor({ state: 'visible', timeout: 10000 });
+    const crossEditMessage = await withConfirm(
+      dialogState, () => otherRow.locator('button.btn-edit').click(), { accept: true });
+    ok(!!crossEditMessage && crossEditMessage.includes(String(editCampaignId)),
+      `★ 編輯中再點另一列的「編輯」被擋下，且明講目前正在編輯哪一篇（實際訊息：「${crossEditMessage}」）`);
+    ok((await page.inputValue('#subject')) === UPDATED_SUBJECT,
+      '★ 被擋下後仍停留在原本那篇的編輯狀態，編輯區未被另一篇的內容覆寫');
+    ok((await page.locator('#send-btn').textContent()).trim() === '儲存內容',
+      '★ 被擋下後仍在編輯模式（未被誤判為已離開）');
+  }
+
   await page.fill('#subject', THROWAWAY_SUBJECT);
   requestLog.length = 0;
   await withConfirm(dialogState, () => page.click('#cancel-edit-btn'), { accept: true });
@@ -409,6 +430,12 @@ try {
       `★ 取消退出後主旨還原成進入編輯前的內容（實際「${afterCancelSubject}」）`);
     ok(!afterCancelSubject.includes(UPDATED_SUBJECT) && afterCancelSubject !== THROWAWAY_SUBJECT,
       '★ 取消退出後編輯區既不含舊文內容、也不含被丟棄的編輯草稿');
+    // 上一項同時證明 §8a 的互斥擋有效：若那次點擊沒被擋下，preContentEditDraft 早已被
+    // 覆寫成文章 A 的已發布內容，這裡還原出來的就會是 A 的主旨與內文而非乾淨草稿。
+    // 內文要單獨查：主旨與內文是兩個獨立的還原欄位，只驗主旨會漏掉「主旨對、內文是舊文」。
+    const afterCancelMarkdown = await page.inputValue('#markdown');
+    ok(!afterCancelMarkdown.includes(UPDATED_SENTINEL),
+      '★ 取消退出後的內文未被跨篇編輯污染（preContentEditDraft 未遭覆寫）');
   }
   const putCallsDuringCancel = requestLog.filter((r) => r.method === 'PUT' && r.pathname.includes('/content'));
   ok(putCallsDuringCancel.length === 0, '取消編輯過程沒有發出任何 PUT .../content 請求');
