@@ -16,7 +16,15 @@ class LoginTokenPurposeTest {
 
     private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-08-06T12:00:00+08:00");
 
-    /** 以 reader 用途簽發的 token，用 admin 用途兌換必須失敗（提權防護） */
+    /**
+     * 以 reader 用途簽發的 token，用 admin 用途兌換必須失敗（提權防護），
+     * <b>且該 token 不得因此被消耗掉</b>。
+     *
+     * <p>「不消耗」這一半同樣是不變量：若用途不符時仍把 token 標記成已使用，
+     * 任何人只要對讀者的 magic-link 打一次 admin 兌換，就能讓那條連結失效——
+     * 一個免費的阻斷服務。原本的測試只斷言「兌換失敗」，把實作改成
+     * 「先標記已使用再檢查用途」照樣全綠，所以這裡補上第二段。</p>
+     */
     @Test
     void readerTokenCannotBeConsumedAsAdmin() {
         LoginTokenService service = newService();
@@ -25,6 +33,8 @@ class LoginTokenPurposeTest {
         Optional<String> result = service.consume(raw, LoginToken.PURPOSE_ADMIN, NOW);
 
         assertTrue(result.isEmpty(), "reader token 不得兌換成 admin");
+        assertEquals(Optional.of("kevin@example.com"), service.consume(raw, LoginToken.PURPOSE_READER, NOW),
+            "用途不符的兌換嘗試不得消耗 token，否則等於任何人都能讓別人的登入連結失效");
     }
 
     /** 用途相符時應正常兌換並回傳 email */

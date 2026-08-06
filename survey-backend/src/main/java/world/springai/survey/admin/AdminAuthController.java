@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import world.springai.survey.reader.LoginAbuseGuard;
 import world.springai.survey.reader.LoginToken;
 import world.springai.survey.reader.LoginTokenService;
 
@@ -37,18 +38,22 @@ public class AdminAuthController {
     private final AdminSessionService sessionService;
     /** 從請求 cookie 讀出目前登入的管理者 */
     private final AdminSessionAccess sessionAccess;
+    /** 來源 IP 與全站的寄信配額；與讀者登入端點共用同一組計數 */
+    private final LoginAbuseGuard loginAbuseGuard;
 
-    /** 注入登入信、token、白名單、session 服務與 cookie 讀取器 */
+    /** 注入登入信、token、白名單、session 服務、cookie 讀取器與濫用守門 */
     public AdminAuthController(AdminLoginMailService loginMailService,
                                LoginTokenService tokenService,
                                AdminAllowlist allowlist,
                                AdminSessionService sessionService,
-                               AdminSessionAccess sessionAccess) {
+                               AdminSessionAccess sessionAccess,
+                               LoginAbuseGuard loginAbuseGuard) {
         this.loginMailService = loginMailService;
         this.tokenService = tokenService;
         this.allowlist = allowlist;
         this.sessionService = sessionService;
         this.sessionAccess = sessionAccess;
+        this.loginAbuseGuard = loginAbuseGuard;
     }
 
     /** 登入請求內容 */
@@ -57,12 +62,23 @@ public class AdminAuthController {
     /**
      * 請求後台登入信。
      *
-     * <p><b>一律回相同結果</b>，不論該 email 是否為管理者——回應若有差異，
-     * 這個端點就會變成管理者名單的查詢工具。</p>
+     * <p><b>一律回相同結果</b>，不論該 email 是否為管理者、也不論是否被節流——
+     * 回應若有差異，這個端點就會變成管理者名單的查詢工具。</p>
+     *
+     * <p><b>兩道節流缺一不可</b>（與 {@code ReaderAuthController.requestLogin} 同一組機制）：
+     * 這裡的 {@link LoginAbuseGuard} 擋來源 IP 與全站配額，
+     * {@code AdminLoginMailService} 內的 per-email 節流擋單一信箱的轟炸。
+     * 只有後者時，攻擊者輪替 email 仍可耗盡交易信額度；只有前者時，
+     * 換 IP 就能繼續灌爆同一個管理者信箱。差別在於本端點<b>不把節流結果回報給呼叫端</b>，
+     * 讀者端則需要回 {@code throttled} 讓使用者知道要等一下。</p>
      */
     @PostMapping("/api/admin/login")
-    public Map<String, Boolean> requestLogin(@Valid @RequestBody LoginRequest request) {
-        loginMailService.sendIfAdmin(request.email(), OffsetDateTime.now());
+    public Map<String, Boolean> requestLogin(@Valid @RequestBody LoginRequest request,
+                                             HttpServletRequest servletRequest) {
+        OffsetDateTime now = OffsetDateTime.now();
+        if (loginAbuseGuard.tryAcquire(servletRequest.getRemoteAddr(), now)) {
+            loginMailService.sendIfAdmin(request.email(), now);
+        }
         return Map.of("accepted", true);
     }
 

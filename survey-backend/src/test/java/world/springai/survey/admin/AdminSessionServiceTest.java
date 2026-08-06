@@ -3,7 +3,6 @@ package world.springai.survey.admin;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseCookie;
 
-import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 
@@ -40,6 +39,31 @@ class AdminSessionServiceTest {
         String jwt = service.issueJwt("kevin@example.com", NOW);
 
         assertTrue(service.readEmail(jwt, NOW.plusDays(8)).isEmpty());
+    }
+
+    /**
+     * <b>spec §3.2「兩把秘鑰刻意分離」在 code 層面唯一的可執行證明</b>：
+     * 以另一把秘鑰簽出的 JWT，即使結構完全合法、未過期，也必須被拒。
+     *
+     * <p>沒有這個測試時，「{@code ADMIN_JWT_SECRET} 與 {@code READER_JWT_SECRET}
+     * 不可相同」只是一句設定檔註解——把驗證改成不檢查簽章、或兩邊共用同一把秘鑰，
+     * 既有測試（都用同一個 SECRET 簽發與驗證）全部照樣綠。
+     * 它同時是 {@code DeploymentSecretValidator} 新增 ADMIN_JWT_SECRET 檢查的另一半：
+     * 那邊擋住「設成同一把」，這邊證明「不同把就進不來」。</p>
+     */
+    @Test
+    void jwtSignedWithDifferentSecretIsRejected() {
+        // 模擬讀者站那把秘鑰：長度合法、格式合法，只是不同把
+        AdminSessionService foreignIssuer =
+            new AdminSessionService("reader-jwt-secret-at-least-32-bytes!!!", 7, "https://admin.example.com");
+        String foreignJwt = foreignIssuer.issueJwt("kevin@example.com", NOW);
+
+        // 先證明這枚 token 本身是好的（用簽它的那把秘鑰讀得回來），
+        // 否則本測試可能因為 token 根本是壞的而假通過
+        assertEquals(Optional.of("kevin@example.com"), foreignIssuer.readEmail(foreignJwt, NOW));
+
+        assertTrue(httpsService().readEmail(foreignJwt, NOW).isEmpty(),
+            "以不同秘鑰簽發的 JWT 必須被拒——兩把秘鑰分離的保護才成立");
     }
 
     /** 被篡改的 JWT 一律視為未登入，且不得拋出例外 */

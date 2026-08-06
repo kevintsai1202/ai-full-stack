@@ -59,7 +59,7 @@
 
 | 變數 | 用途 | 範例 |
 | --- | --- | --- |
-| `ADMIN_EMAILS` | admin 白名單，逗號分隔 | `kevintsai1202@gmail.com` |
+| `ADMIN_EMAILS` | admin 白名單，逗號分隔 | `admin@example.com` |
 | `ADMIN_BASE_URL` | magic-link 連結的目標站 | `https://admin.springai.world` |
 | `ADMIN_JWT_SECRET` | admin session 簽章金鑰，與讀者的分開 | 32 字元以上 |
 | `ADMIN_JWT_TTL_DAYS` | session 效期 | `7` |
@@ -175,7 +175,7 @@ GET /api/admin/me ─── 200 ──▶ 直接進後台
 ### 5.2 右上角工具列
 
 ```text
-電子報後台          kevintsai1202@gmail.com  ☀  ⏻
+電子報後台          admin@example.com  ☀  ⏻
                                             ↑   ↑
                                      日夜切換  登出
 ```

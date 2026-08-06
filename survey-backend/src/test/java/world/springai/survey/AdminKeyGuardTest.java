@@ -91,6 +91,43 @@ class AdminKeyGuardTest {
         }
     }
 
+    /**
+     * <b>降級路徑的 fail-closed 保證</b>：{@code ADMIN_EMAILS} 未設（白名單完全空）時，
+     * 即使持有一枚簽章與效期都合法的 JWT，也必須回 401。
+     *
+     * <p>spec §「{@code ADMIN_EMAILS} 未設時停用 JWT 登入路徑、金鑰照常運作」是一條
+     * <b>降級</b>承諾，而降級路徑最容易寫成 fail-open——例如把空白名單當成
+     * 「沒有限制」而全部放行。既有測試只驗過「白名單含其他 email」，
+     * 那個情況下擋住它的是「比對不相符」；白名單完全空是另一條分支
+     *（{@code AdminAllowlist} 內部集合為空），必須各自有證據。</p>
+     */
+    @Test
+    void validJwtWithEmptyAllowlistStillFails() {
+        AdminSessionService session = new AdminSessionService(SECRET, 7, "https://admin.example.com");
+        // 以真實時鐘簽發，確保 token 永遠落在 7 天效期中段（理由同上一個測試）
+        String validJwt = session.issueJwt("kevin@example.com", OffsetDateTime.now());
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setCookies(new Cookie(AdminSessionService.COOKIE_NAME, validJwt));
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        try {
+            // ADMIN_EMAILS 未設：application.yml 的預設就是空字串
+            AdminKeyGuard guard = new AdminKeyGuard("secret-key", new AdminSessionAccess(session),
+                new AdminAllowlist(""));
+
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> guard.verify(null),
+                "白名單為空時 JWT 路徑必須整條停用，不得因『沒有限制』而放行");
+
+            assertEquals(401, ex.getStatusCode().value());
+            // 同一組設定下，金鑰路徑必須照常運作——這正是「降級」而非「停擺」的意思
+            assertDoesNotThrow(() -> guard.verify("secret-key"));
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+        }
+    }
+
     /** 建構受測 guard；白名單含測試用 email */
     private AdminKeyGuard newGuard() {
         return new AdminKeyGuard("secret-key",

@@ -204,7 +204,7 @@ class AdminCouponControllerTest {
     /** 缺 X-Admin-Key 拋 401 */
     @Test
     void 缺Admin金鑰回401() throws Exception {
-        doThrow(new ResponseStatusException(UNAUTHORIZED, "invalid admin key"))
+        doThrow(new ResponseStatusException(UNAUTHORIZED, "invalid admin credential"))
             .when(guard).verify(nullable(String.class));
 
         mvc.perform(post("/api/admin/coupons")
@@ -213,7 +213,7 @@ class AdminCouponControllerTest {
                     "Python 入門", "學習 Python", "https://example.com",
                     "COUPON123", "2026-09-30", "survey-key", Map.of())))
             .andExpect(status().isUnauthorized())
-            .andExpect(jsonPath("$.detail").value("invalid admin key"));
+            .andExpect(jsonPath("$.detail").value("invalid admin credential"));
     }
 
     // ========== 列表測試 ==========
@@ -341,7 +341,7 @@ class AdminCouponControllerTest {
     /** preview-mail 缺 X-Admin-Key 回 401，不觸發任何渲染 */
     @Test
     void previewMail缺Admin金鑰回401() throws Exception {
-        doThrow(new ResponseStatusException(UNAUTHORIZED, "invalid admin key"))
+        doThrow(new ResponseStatusException(UNAUTHORIZED, "invalid admin credential"))
             .when(guard).verify(nullable(String.class));
 
         mvc.perform(post("/api/admin/coupons/preview-mail")
@@ -350,6 +350,6 @@ class AdminCouponControllerTest {
                     "Python 入門", "學習 Python 的好夥伴", "https://example.com/course",
                     "SAVE300", "2026-09-30", "survey-key")))
             .andExpect(status().isUnauthorized())
-            .andExpect(jsonPath("$.detail").value("invalid admin key"));
+            .andExpect(jsonPath("$.detail").value("invalid admin credential"));
     }
 }

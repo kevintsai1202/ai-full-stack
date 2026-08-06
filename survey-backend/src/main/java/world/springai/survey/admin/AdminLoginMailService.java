@@ -39,18 +39,37 @@ public class AdminLoginMailService {
         this.siteLinks = siteLinks;
     }
 
-    /** 若 email 為管理者則寄出登入信；否則靜默略過（不得讓呼叫端得知差異） */
+    /**
+     * 若 email 為管理者則寄出登入信；否則靜默略過（不得讓呼叫端得知差異）。
+     *
+     * <p><b>節流是必要的</b>：本方法對外只回 void，端點一律回相同結果，所以沒有任何
+     * 回應差異能讓外部得知是否被節流——防枚舉設計完全不受影響。但少了它，
+     * 任何人只要猜中管理者 email 就能無限觸發寄信：信箱被灌爆事小，
+     * <b>吃光交易信額度會讓讀者無法登入</b>（見 {@code app.mail.transactional-reserve}
+     * 的說明，那是產品故障而非延遲），{@code login_token} 也會無限增長。
+     * 讀者路徑的 {@code LoginMailService.sendLoginLink} 第一行就是同一道檢查，
+     * 這裡沿用同一個服務、同一組門檻，不另立一套。</p>
+     *
+     * <p>節流<b>必須在 {@code issue} 之前</b>：先簽發再判斷等於每次請求都寫一列
+     * {@code login_token}，節流形同虛設。</p>
+     */
     public void sendIfAdmin(String email, OffsetDateTime now) {
         if (!allowlist.isAdmin(email)) {
             log.info("非管理者的後台登入請求，略過寄送");
+            return;
+        }
+        if (tokenService.isThrottled(email, now)) {
+            log.info("後台登入信節流，暫不寄送");
             return;
         }
         try {
             String rawToken = tokenService.issue(email, LoginToken.PURPOSE_ADMIN, now);
             mailSender.send(email, SUBJECT, buildHtml(siteLinks.verifyLogin(rawToken)));
         } catch (Exception e) {
-            // 不得往外拋：端點回 500 等於告訴對方這個 email 是管理者
-            log.warn("後台登入信寄送失敗：{}", e.getMessage());
+            // 不得往外拋：端點回 500 等於告訴對方這個 email 是管理者。
+            // 但必須帶著 stack trace 進日誌：magic-link 是本功能唯一的登入手段，
+            // 只印 e.getMessage() 時「連結一直收不到」這種故障沒有任何可診斷的線索。
+            log.warn("後台登入信寄送失敗", e);
         }
     }
 

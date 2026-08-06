@@ -6,11 +6,7 @@ import world.springai.survey.reader.LoginToken;
 import world.springai.survey.reader.LoginTokenService;
 
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -18,7 +14,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** admin 登入信：只寄給白名單，且必須以 admin 用途簽發 token */
+/** admin 登入信：只寄給白名單、必須以 admin 用途簽發 token，且受同一組 per-email 節流保護 */
 class AdminLoginMailServiceTest {
 
     private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-08-06T12:00:00+08:00");
@@ -31,11 +27,7 @@ class AdminLoginMailServiceTest {
         when(tokenService.issue(eq("kevin@example.com"), eq(LoginToken.PURPOSE_ADMIN), any()))
             .thenReturn("raw-token");
 
-        AdminLoginMailService service = new AdminLoginMailService(
-            new AdminAllowlist("kevin@example.com"), tokenService, mailSender,
-            new AdminSiteLinks("https://admin.example.com"));
-
-        service.sendIfAdmin("kevin@example.com", NOW);
+        newService(tokenService, mailSender).sendIfAdmin("kevin@example.com", NOW);
 
         verify(tokenService).issue(eq("kevin@example.com"), eq(LoginToken.PURPOSE_ADMIN), any());
         verify(mailSender).send(eq("kevin@example.com"), any(), any());
@@ -47,11 +39,27 @@ class AdminLoginMailServiceTest {
         LoginTokenService tokenService = mock(LoginTokenService.class);
         MailSender mailSender = mock(MailSender.class);
 
-        AdminLoginMailService service = new AdminLoginMailService(
-            new AdminAllowlist("kevin@example.com"), tokenService, mailSender,
-            new AdminSiteLinks("https://admin.example.com"));
+        newService(tokenService, mailSender).sendIfAdmin("attacker@example.com", NOW);
 
-        service.sendIfAdmin("attacker@example.com", NOW);
+        verify(tokenService, never()).issue(any(), any(), any());
+        verify(mailSender, never()).send(any(), any(), any());
+    }
+
+    /**
+     * 已達 per-email 節流上限時，既不得寄信也<b>不得簽發 token</b>。
+     *
+     * <p>沒有這道檢查時，只要猜中管理者 email 就能無限觸發寄信：信箱被灌爆事小，
+     * 吃光交易信額度會讓讀者無法登入（產品故障），{@code login_token} 也會無限增長。
+     * 特別斷言「不得 issue」——若把節流放在 issue 之後，每次請求仍會寫一列 token，
+     * 節流形同虛設。</p>
+     */
+    @Test
+    void doesNotSendWhenEmailIsThrottled() throws Exception {
+        LoginTokenService tokenService = mock(LoginTokenService.class);
+        MailSender mailSender = mock(MailSender.class);
+        when(tokenService.isThrottled(eq("kevin@example.com"), any())).thenReturn(true);
+
+        newService(tokenService, mailSender).sendIfAdmin("kevin@example.com", NOW);
 
         verify(tokenService, never()).issue(any(), any(), any());
         verify(mailSender, never()).send(any(), any(), any());
@@ -65,10 +73,13 @@ class AdminLoginMailServiceTest {
         when(tokenService.issue(any(), any(), any())).thenReturn("raw-token");
         when(mailSender.send(any(), any(), any())).thenThrow(new RuntimeException("smtp down"));
 
-        AdminLoginMailService service = new AdminLoginMailService(
-            new AdminAllowlist("kevin@example.com"), tokenService, mailSender,
-            new AdminSiteLinks("https://admin.example.com"));
+        newService(tokenService, mailSender).sendIfAdmin("kevin@example.com", NOW);  // 不應拋例外
+    }
 
-        service.sendIfAdmin("kevin@example.com", NOW);  // 不應拋例外
+    /** 建構受測服務；白名單固定含 kevin@example.com */
+    private AdminLoginMailService newService(LoginTokenService tokenService, MailSender mailSender) {
+        return new AdminLoginMailService(
+            new AdminAllowlist("kevin@example.com"), tokenService, mailSender,
+            new AdminSiteLinks("https://admin.example.com", ""));
     }
 }

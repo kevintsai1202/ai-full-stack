@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import world.springai.survey.reader.LoginAbuseGuard;
 import world.springai.survey.reader.LoginToken;
 import world.springai.survey.reader.LoginTokenService;
 
@@ -19,6 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** admin 認證端點：白名單二次比對、用途隔離、cookie 種發 */
@@ -82,9 +85,11 @@ class AdminAuthControllerTest {
         AdminAuthController controller = newController(tokenService, "kevin@example.com");
 
         Map<String, Boolean> allowlistedResponse =
-            controller.requestLogin(new AdminAuthController.LoginRequest("kevin@example.com"));
+            controller.requestLogin(new AdminAuthController.LoginRequest("kevin@example.com"),
+                new MockHttpServletRequest());
         Map<String, Boolean> nonAllowlistedResponse =
-            controller.requestLogin(new AdminAuthController.LoginRequest("stranger@example.com"));
+            controller.requestLogin(new AdminAuthController.LoginRequest("stranger@example.com"),
+                new MockHttpServletRequest());
 
         assertEquals(allowlistedResponse, nonAllowlistedResponse, "白名單內外的回應不得有差異");
     }
@@ -157,6 +162,34 @@ class AdminAuthControllerTest {
         assertEquals(401, response.getStatusCode().value());
     }
 
+    /**
+     * IP／全站配額用盡時，仍須回與正常情況完全相同的回應，且<b>不得</b>寄出登入信。
+     *
+     * <p>節流結果一旦反映在回應上（例如多一個 {@code throttled} 欄位），這個端點就
+     * 重新變回可枚舉的——攻擊者只要看哪個 email 讓計數往前跳就知道誰是管理者。
+     * 讀者端刻意回報 {@code throttled}（使用者需要知道要等一下），本端點刻意不回報。</p>
+     */
+    @Test
+    void requestLoginStaysSilentAndIdenticalWhenAbuseGuardRejects() {
+        AdminLoginMailService mailService = mock(AdminLoginMailService.class);
+        LoginAbuseGuard guard = mock(LoginAbuseGuard.class);
+        AdminAuthController controller = newController(mock(LoginTokenService.class),
+            "kevin@example.com", new AdminSessionService(SECRET, 7, "https://admin.example.com"),
+            mailService, guard);
+
+        when(guard.tryAcquire(any(), any())).thenReturn(true);
+        Map<String, Boolean> allowedResponse = controller.requestLogin(
+            new AdminAuthController.LoginRequest("kevin@example.com"), new MockHttpServletRequest());
+
+        when(guard.tryAcquire(any(), any())).thenReturn(false);
+        Map<String, Boolean> throttledResponse = controller.requestLogin(
+            new AdminAuthController.LoginRequest("kevin@example.com"), new MockHttpServletRequest());
+
+        assertEquals(allowedResponse, throttledResponse, "被節流與未被節流的回應不得有差異");
+        // 放行一次、擋下一次：寄信服務總共只能被呼叫到一次
+        verify(mailService, times(1)).sendIfAdmin(eq("kevin@example.com"), any());
+    }
+
     /** 建構受測 controller，白名單內容可指定；session 服務用固定測試密鑰 */
     private AdminAuthController newController(LoginTokenService tokenService, String allowlist) {
         return newController(tokenService, allowlist,
@@ -166,9 +199,25 @@ class AdminAuthControllerTest {
     /** 建構受測 controller，白名單內容與 session 服務皆可指定 */
     private AdminAuthController newController(LoginTokenService tokenService, String allowlist,
                                               AdminSessionService sessionService) {
+        return newController(tokenService, allowlist, sessionService,
+            mock(AdminLoginMailService.class), alwaysAllowingGuard());
+    }
+
+    /** 建構受測 controller，寄信服務與濫用守門也可指定（節流相關案例使用） */
+    private AdminAuthController newController(LoginTokenService tokenService, String allowlist,
+                                              AdminSessionService sessionService,
+                                              AdminLoginMailService mailService,
+                                              LoginAbuseGuard abuseGuard) {
         AdminAllowlist list = new AdminAllowlist(allowlist);
         return new AdminAuthController(
-            mock(AdminLoginMailService.class), tokenService, list,
-            sessionService, new AdminSessionAccess(sessionService));
+            mailService, tokenService, list,
+            sessionService, new AdminSessionAccess(sessionService), abuseGuard);
+    }
+
+    /** 預設守門一律放行，讓其他案例的行為與加入節流前完全相同 */
+    private LoginAbuseGuard alwaysAllowingGuard() {
+        LoginAbuseGuard guard = mock(LoginAbuseGuard.class);
+        when(guard.tryAcquire(any(), any())).thenReturn(true);
+        return guard;
     }
 }
