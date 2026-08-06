@@ -21,7 +21,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class AdminKeyGuardTest {
 
     private static final String SECRET = "admin-test-secret-at-least-32-bytes!!!!";
-    private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-08-06T12:00:00+08:00");
 
     /** 正確金鑰應通過（既有 78 處呼叫點與 9 支腳本的行為必須維持） */
     @Test
@@ -34,8 +33,10 @@ class AdminKeyGuardTest {
     void validSessionCookiePasses() {
         AdminSessionService session = new AdminSessionService(SECRET, 7, "https://admin.example.com");
         MockHttpServletRequest request = new MockHttpServletRequest();
+        // 以真實時鐘簽發：AdminKeyGuard 用 OffsetDateTime.now() 驗證，token 需落在效期中段，
+        // 不可用固定時間常數（否則 7 天效期一過，測試就會無故變紅，詳見 Task 7 審查意見）
         request.setCookies(new Cookie(AdminSessionService.COOKIE_NAME,
-            session.issueJwt("kevin@example.com", NOW)));
+            session.issueJwt("kevin@example.com", OffsetDateTime.now())));
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
 
         try {
@@ -67,8 +68,10 @@ class AdminKeyGuardTest {
     @Test
     void validJwtButEmailNotInAllowlistFails() {
         AdminSessionService session = new AdminSessionService(SECRET, 7, "https://admin.example.com");
-        // 真實簽發、簽章與效期皆合法的 JWT，subject 為已被撤權的舊管理者
-        String jwtForRevokedAdmin = session.issueJwt("former@example.com", NOW);
+        // 真實簽發、簽章與效期皆合法的 JWT，subject 為已被撤權的舊管理者；
+        // 以 OffsetDateTime.now() 簽發使 token 永遠落在 7 天效期中段，避免固定時間常數
+        // 隨真實時鐘推進而在未來某天過期，導致本測試改用「因過期被拒」而非「因白名單被拒」通過
+        String jwtForRevokedAdmin = session.issueJwt("former@example.com", OffsetDateTime.now());
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setCookies(new Cookie(AdminSessionService.COOKIE_NAME, jwtForRevokedAdmin));
