@@ -812,6 +812,9 @@
   // 刻意獨立於 editingCampaignId（修改排程）之外——兩者語意不同（reschedule 會重寄信，
   // 本模式只覆寫資料庫內容、完全不寄信），共用會誤觸 setPublishFieldsEnabled 等排程專屬副作用。
   let contentEditCampaignId=null;
+  // 進入「編輯已發布內容」模式前，使用者自己那份未送出草稿的完整快照（離開編輯模式時原樣還原）。
+  // null 表示目前沒有留存內容——此時離開編輯模式一律清空編輯區，絕不把舊文內容留在畫面上。
+  let preContentEditDraft=null;
   /** 目前開啟的電子報收件人頁、分頁結果與跨頁勾選。 */
   let deliveryCampaignId=null;
   let deliveryPage=0;
@@ -1590,8 +1593,16 @@
     editor.setRangeText(value,start,end,'end');editor.focus();composeChanged();
   }
 
-  /** 儲存本機草稿並延遲更新預覽，避免每次按鍵都打 API。 */
+  /**
+   * 儲存本機草稿並延遲更新預覽，避免每次按鍵都打 API。
+   *
+   * <p><b>「編輯已發布文章」模式期間不得寫草稿</b>：那個模式下編輯區裝的是一篇
+   * <b>已經存在的舊文章</b>，不是使用者正在寫的新稿。若照寫，在編輯模式下打一個字就會把
+   * 舊文內容蓋進 localStorage 的新稿草稿，且<b>跨 session 存活</b>——使用者下次打開後台，
+   * 自己寫到一半的稿子已經被那篇舊文取代，而且沒有任何提示。預覽照常更新（那只是畫面）。</p>
+   */
   function composeChanged(){
+    if(contentEditCampaignId!=null){clearTimeout(previewTimer);previewTimer=setTimeout(doPreview,300);return;}
     try{localStorage.setItem('newsletter-compose-draft',JSON.stringify({
       subject:$('#subject').value,markdown:$('#markdown').value,coverEmoji:$('#cover-emoji').value,
       coverMediaId:selectedCoverMediaId,tags:[...selectedCampaignTags],savedAt:new Date().toISOString()
@@ -1737,6 +1748,20 @@
       selectedCampaignTags.forEach(name=>{if(!names.has(name))tags.push({name,preset:false});});
       renderCampaignTags(tags);
     }catch(error){$('#campaign-tag-options').textContent='Hashtag 載入失敗：'+error.message;}
+  }
+
+  /**
+   * 把目前勾選的 hashtag 整組換成指定名稱清單，並重繪勾選框。
+   *
+   * <p>清單中若有選項列裡還沒有的名稱（例如某篇舊文用過、但已從預設清單移除的自訂標籤），
+   * 會一併補進選項——否則那個標籤就算勾了也顯示不出來，使用者會以為它不存在而存檔清掉。</p>
+   */
+  function setSelectedCampaignTags(names){
+    selectedCampaignTags.clear();
+    (names||[]).forEach(name=>{if(name)selectedCampaignTags.add(name);});
+    const existing=[...document.querySelectorAll('#campaign-tag-options input')].map(item=>({name:item.value}));
+    selectedCampaignTags.forEach(name=>{if(!existing.some(tag=>tag.name===name))existing.push({name,preset:false});});
+    renderCampaignTags(existing);
   }
 
   /** 使用安全 DOM API 渲染可勾選 hashtag。 */
@@ -2216,6 +2241,15 @@
     // 狀態被另一邊的收尾函式（exitEditMode／setPublishFieldsEnabled）誤還原。
     if(editingCampaignId!=null){alert('正在修改排程，請先完成或取消後再編輯文章內容。');return;}
     switchView('campaign');
+    // 先把使用者「自己正在寫的稿」整組留存下來，離開編輯模式時原樣還原（見 exitContentEditMode）。
+    // 沒有這一步的話，編輯完一篇舊文之後畫面上仍是那篇舊文的完整內容，而按鈕已還原成「發送」——
+    // 按下去就是把舊文重寄給全體訂閱者（send 不需要 slug，沒有任何東西會擋）。
+    preContentEditDraft={
+      subject:$('#subject').value,markdown:$('#markdown').value,
+      coverEmoji:$('#cover-emoji').value,slug:$('#art-slug').value,
+      tier:$('#art-tier').value,cost:$('#art-cost').value,
+      coverMediaId:selectedCoverMediaId,tags:[...selectedCampaignTags],
+    };
     contentEditCampaignId=c.id;
     $('#subject').value=c.subject||'';
     $('#markdown').value=c.markdown||'';
@@ -2225,38 +2259,64 @@
     $('#art-tier').value=c.tier||'BASIC';
     $('#art-cost').value=c.creditCost==null?'':c.creditCost;
     $('#art-slug').value=c.slug||'';
-    ['#art-tier','#art-cost','#art-slug'].forEach(sel=>{const el=$(sel);el.readOnly=true;el.disabled=true;});
+    // #art-tier 是 <select>，沒有 readOnly 屬性（設了也不會有任何效果），只靠 disabled 鎖住
+    ['#art-tier','#art-cost','#art-slug'].forEach(sel=>{$(sel).disabled=true;});
+    ['#art-cost','#art-slug'].forEach(sel=>{$(sel).readOnly=true;});
     // 欄位停用後不會自動觸發 change 事件，手動補上凍結提示（與 doPublish 成功後的作法一致）。
     $('#cost-hint').textContent=$('#art-tier').value==='PREMIUM'?COST_FREEZE_HINT:'';
     // 「只發布不寄送」會另建一篇新文章，與「編輯既有文章」是兩件互斥的事，故停用。
     $('#publish-btn').disabled=true;
     $('#send-btn').textContent='儲存內容';
     $('#cancel-edit-btn').hidden=false; // 審查修正：給一個不必成功存檔也能離開的手動出口
-    // Hashtag 目前沒有「取得單一文章既有標籤」的查詢端點（列表 API 也不含 tags 欄位），
-    // 且 CampaignMetadataService.update() 存檔時一律整批覆寫（先刪再依送出清單重建，
-    // 沒有「維持原樣」語意）。若放著上一次操作殘留的勾選狀態不管，可能把不相關的
-    // hashtag 寫進這篇文章——比「清空」更糟（審查修正：原本只警告不清空，會沿用殘留狀態）。
-    // 因此一律清空目前勾選，讓畫面與「即將送出的內容」保持一致，真正的風險提示則移到
-    // 存檔當下的 confirm() 對話框（見 saveContentEdit()），在使用者按下確定的那一刻才是
-    // 真正不可逆的時間點。
-    selectedCampaignTags.clear();
-    document.querySelectorAll('#campaign-tag-options input').forEach(input=>{input.checked=false;});
+    // Hashtag 以該文章「目前實際的標籤」回填勾選（GET /api/admin/campaigns 的回應已含 tags）。
+    // 這一步不可省略：CampaignMetadataService.update() 存檔時一律整批覆寫（先刪再依送出清單
+    // 重建，沒有「維持原樣」語意），所以送出去的清單就是這篇文章存檔後的全部標籤——
+    // 若這裡不回填，改一個錯字就會把該文既有的 hashtag 全部刪光，
+    // 而管理者根本無從得知原本有哪些。
+    setSelectedCampaignTags(c.tags||[]);
     const m=$('#send-msg');m.className='msg';
-    m.textContent=`編輯中：批次 #${c.id}，主旨／內文／封面已載入。分級・解鎖點數・slug 唯讀不可改。`
-      +'　Hashtag 已清空（後端無法回填既有標籤），如需保留請重新勾選，存檔前會再次提醒。';
+    m.textContent=`編輯中：批次 #${c.id}，主旨／內文／封面／hashtag 已載入。分級・解鎖點數・slug 唯讀不可改。`
+      +'　存檔會以目前勾選的 hashtag 整批覆蓋，取消勾選等於刪除該標籤。';
     doPreview();
     $('#send-btn').scrollIntoView({behavior:'smooth',block:'center'});
   }
 
-  /** 離開「編輯內容」模式，還原按鈕文字與欄位鎖定，避免污染下一次新建流程。 */
+  /**
+   * 離開「編輯內容」模式：還原按鈕文字、欄位鎖定，<b>以及編輯區的全部內容</b>，
+   * 避免污染下一次新建流程。
+   *
+   * <p><b>還原編輯區是這個函式最重要的一件事，不是收尾細節</b>：只解鎖欄位、
+   * 只把按鈕文字改回「發送」，畫面上留下的就是一篇<b>已發布舊文的完整內容</b>，
+   * 而按鈕已經是正常的「發送」——按下去會走一般寄送路徑，
+   * <b>把舊文重寄給全體訂閱者</b>（{@code doSend} 不需要 slug，沒有任何條件會擋它）。
+   * 因此一律還原成「進入編輯模式之前使用者自己的草稿」：不只安全，
+   * 語意也正確（取消編輯＝回到我原本在做的事）。</p>
+   */
   function exitContentEditMode(){
+    // 先清旗標再還原欄位：composeChanged() 在編輯模式下不寫草稿，
+    // 要讓最後那次還原的內容正常寫回 localStorage，必須已經離開編輯模式。
     contentEditCampaignId=null;
     $('#send-btn').textContent='發送';
     $('#publish-btn').disabled=false;
     $('#cancel-edit-btn').hidden=true;
-    ['#art-tier','#art-cost','#art-slug'].forEach(sel=>{const el=$(sel);el.readOnly=false;el.disabled=false;});
+    ['#art-tier','#art-cost','#art-slug'].forEach(sel=>{$(sel).disabled=false;});
+    ['#art-cost','#art-slug'].forEach(sel=>{$(sel).readOnly=false;});
     // 清掉編輯模式殘留的凍結提示，避免使用者接著新建文章時被舊訊息誤導。
     $('#cost-hint').textContent='';
+    // 還原進入編輯模式前的草稿（沒有留存資料時一律清空，絕不留下舊文內容）
+    const draft=preContentEditDraft||{};
+    preContentEditDraft=null;
+    $('#subject').value=draft.subject||'';
+    $('#markdown').value=draft.markdown||'';
+    $('#cover-emoji').value=draft.coverEmoji||'';
+    $('#art-slug').value=draft.slug||'';
+    $('#art-cost').value=draft.cost||'';
+    if(draft.tier)$('#art-tier').value=draft.tier;
+    setCoverMedia(draft.coverMediaId==null?null:draft.coverMediaId);
+    setSelectedCampaignTags(draft.tags||[]);
+    // 分級提示由既有監聽器依還原後的 tier 重算，並把還原後的草稿寫回 localStorage 與預覽
+    $('#art-tier').dispatchEvent(new Event('change'));
+    composeChanged();
   }
 
   /**

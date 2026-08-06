@@ -6,9 +6,13 @@
 //   2. 點擊後，編輯器確實載入該筆的「實際值」（比對主旨／內文全文字串，非只檢查非空）
 //   3. 編輯模式下，分級（#art-tier）／解鎖點數（#art-cost）／slug（#art-slug）
 //      三個唯讀不可改欄位皆被停用（disabled）
-//   4. 進入編輯模式時，既有 hashtag 的勾選狀態被清空（不是靜默沿用畫面殘留狀態）；
-//      存檔的 confirm() 對話框本身會依目前勾選狀態明講「將清空」或「將設為 X」；
-//      實際存檔後以公開的 /r/archive 頁面驗證 hashtag 確實依「當下勾選」覆蓋（審查修正）
+//   4. 進入編輯模式時，該文章「目前實際的 hashtag」被回填成勾選狀態（終審 I3）——
+//      光改個錯字不得刪光既有標籤；存檔的 confirm() 對話框本身會依目前勾選狀態
+//      明講「將清空」或「將設為 X」；實際存檔後以公開的 /r/archive 頁面驗證
+//      hashtag 確實依「當下勾選」落庫（既有標籤保留、新標籤加入）
+//  4c. 離開編輯模式（存檔成功／按取消都算）後，編輯區必須還原成「進入編輯前使用者
+//      自己的草稿」，不得留下那篇已發布舊文的內容（終審 I2）——若留著，按鈕已是
+//      正常的「發送」，按下去就把舊文重寄給全體訂閱者
 //   5. 修改內容後存檔，實際發出的請求是 PUT /api/admin/campaigns/{id}/content
 //      （以 page.on('request') 攔截驗證方法與路徑，不只看有沒有出錯）
 //   6. 存檔後重新透過 API 讀取該筆，內容確實已更新（直接打後端 API 核對，非只信任畫面）
@@ -66,10 +70,17 @@ const UPDATED_MARKDOWN = `# ${UPDATED_SUBJECT}\n\n${UPDATED_SENTINEL}\n`;
 // 「取消編輯」測試用：故意打進去、期望被丟棄、不該存進資料庫的內容
 const THROWAWAY_SUBJECT = EDIT_SUBJECT + '（取消編輯不該存進去）';
 
-// 「離開編輯模式後仍能正常新建」測試用的第二篇文章
+// 「離開編輯模式後仍能正常新建」測試用的另外兩篇文章（存檔退出路徑一篇、取消退出路徑一篇）
 const NEWBUILD_SLUG = `admin-article-edit-newbuild-fixture-${RUN_ID}`;
 const NEWBUILD_SUBJECT = `Task12 編輯後新建迴歸文章（fixture ${RUN_ID}）`;
 const NEWBUILD_MARKDOWN = `# ${NEWBUILD_SUBJECT}\n\nARTICLE_EDIT_NEWBUILD_SENTINEL\n`;
+const SAVEBUILD_SLUG = `admin-article-edit-savebuild-fixture-${RUN_ID}`;
+const SAVEBUILD_SUBJECT = `Task12 存檔退出後新建迴歸文章（fixture ${RUN_ID}）`;
+const SAVEBUILD_MARKDOWN = `# ${SAVEBUILD_SUBJECT}\n\nARTICLE_EDIT_SAVEBUILD_SENTINEL\n`;
+
+// 終審 I2 用：進入編輯模式「之前」使用者自己正在寫的草稿，離開編輯模式後必須原樣還原
+const PRE_EDIT_SUBJECT = `Task12 使用者自己的新稿（fixture ${RUN_ID}）`;
+const PRE_EDIT_MARKDOWN = `# 我自己的稿\n\nARTICLE_EDIT_PRE_EDIT_SENTINEL ${RUN_ID}\n`;
 
 let failed = 0;
 /** 記錄一項失敗（不中斷後續案例，讓一次執行就看到所有問題） */
@@ -191,6 +202,7 @@ console.log(`OK   fixture 建立：批次 #${editCampaignId}（slug=${EDIT_SLUG}
 
 const browser = await chromium.launch();
 let newBuildCampaignId = null;
+let saveBuildCampaignId = null;
 
 try {
   const page = await browser.newPage();
@@ -229,6 +241,9 @@ try {
   ok((await editButton.textContent()).trim() === '編輯', '編輯按鈕文字為「編輯」');
 
   // ── 2. 點擊後載入該筆「實際值」（比對全文字串，不只檢查非空） ─────────
+  // 先在編輯區放進「使用者自己正在寫的稿」，作為終審 I2（離開編輯模式必須還原）的基準值
+  await page.fill('#subject', PRE_EDIT_SUBJECT);
+  await page.fill('#markdown', PRE_EDIT_MARKDOWN);
   await editButton.click();
   await page.waitForFunction(
     (expected) => document.getElementById('subject')?.value === expected,
@@ -248,21 +263,26 @@ try {
   const sendBtnLabel = (await page.locator('#send-btn').textContent()).trim();
   ok(sendBtnLabel === '儲存內容', `存檔按鈕文字已改為「儲存內容」（實際「${sendBtnLabel}」）`);
 
-  // ── 4. 進入編輯模式時，既有 hashtag 勾選狀態已被清空（審查修正核心） ──
+  // ── 4. ★ 終審 I3：進入編輯模式時，該文章「目前實際的 hashtag」被回填成已勾選 ──
+  // 這是本次修正的核心：先前實作進入編輯即清空勾選，淨效果是「每次改錯字都刪光該文標籤」，
+  // 且管理者無從得知原本有哪些。回填的資料來源是 GET /api/admin/campaigns 新增的 tags 欄位。
   const originalTagCheckbox = page.locator(`#campaign-tag-options input[value="${ORIGINAL_TAG}"]`);
   await originalTagCheckbox.waitFor({ state: 'attached', timeout: 5000 });
-  ok(!(await originalTagCheckbox.isChecked()),
-    '進入編輯模式後，原有 hashtag 的勾選已被清空（不是靜默沿用畫面殘留狀態）');
+  ok(await originalTagCheckbox.isChecked(),
+    `★ 進入編輯模式後，該文既有 hashtag #${ORIGINAL_TAG} 已回填為勾選（改錯字不會刪光標籤）`);
 
-  // ── 4b. 不勾任何 hashtag 就嘗試存檔：confirm() 本身要明講「將清空」，且此次先按取消，不真的存檔 ──
+  // ── 4b. 手動取消勾選後嘗試存檔：confirm() 本身要明講「將清空」，且此次先按取消，不真的存檔 ──
+  await originalTagCheckbox.uncheck();
   const wipeWarningMessage = await withConfirm(dialogState, () => page.click('#send-btn'), { accept: false });
   ok(/hashtag/i.test(wipeWarningMessage) && /清空/.test(wipeWarningMessage),
-    `未勾選任何 hashtag 時，存檔確認框本身明講將清空既有 hashtag（實際訊息：「${wipeWarningMessage}」）`);
+    `取消勾選全部 hashtag 時，存檔確認框本身明講將清空既有 hashtag（實際訊息：「${wipeWarningMessage}」）`);
   // 取消後應仍停留在編輯模式（沒有被誤判成功）
   ok((await page.locator('#send-btn').textContent()).trim() === '儲存內容',
     '拒絕「將清空 hashtag」的確認框後，仍停留在編輯模式（未被誤判為已存檔）');
+  // 勾回原標籤，接下來要驗證「既有標籤保留 + 新標籤加入」
+  await originalTagCheckbox.check();
 
-  // ── 5. 勾選新 hashtag、修改內容後存檔，confirm() 要列出即將覆蓋的 hashtag，
+  // ── 5. 加一個新 hashtag、修改內容後存檔，confirm() 要列出即將覆蓋的 hashtag，
   //      實際發出的請求是 PUT /api/admin/campaigns/{id}/content ──────────
   await page.fill('#campaign-custom-tag', NEW_TAG);
   await page.click('#campaign-add-tag');
@@ -304,9 +324,9 @@ try {
     const afterSaveCard = extractArticleCard(afterSaveHtml, UPDATED_SUBJECT);
     ok(!!afterSaveCard, '存檔後能在 /r/archive 找到更新後主旨對應的文章卡片');
     ok(!!afterSaveCard && afterSaveCard.includes(`#${NEW_TAG}`),
-      `★ /r/archive 卡片顯示存檔時勾選的新 hashtag #${NEW_TAG}`);
-    ok(!!afterSaveCard && !afterSaveCard.includes(`#${ORIGINAL_TAG}`),
-      `★ /r/archive 卡片不再顯示原始 hashtag #${ORIGINAL_TAG}（已被覆蓋，而非疊加保留）`);
+      `★ /r/archive 卡片顯示存檔時新增的 hashtag #${NEW_TAG}`);
+    ok(!!afterSaveCard && afterSaveCard.includes(`#${ORIGINAL_TAG}`),
+      `★ 終審 I3：/r/archive 卡片仍顯示原始 hashtag #${ORIGINAL_TAG}（改內容不會刪光既有標籤）`);
   }
 
   // ── 7. 離開編輯模式後檢查狀態已清除 ─────────────────────────────────
@@ -319,6 +339,48 @@ try {
   ok(!(await page.locator('#art-cost').isDisabled()), '存檔成功後「解鎖點數」欄位已重新啟用');
   ok(!(await page.locator('#art-slug').isDisabled()), '存檔成功後「slug」欄位已重新啟用');
   ok(!(await page.locator('#cancel-edit-btn').isVisible()), '存檔成功後「取消編輯」按鈕已重新隱藏');
+
+  // ── 7b. ★ 終審 I2：存檔退出後，編輯區必須還原成「進入編輯前使用者自己的草稿」 ──
+  // 若留著那篇已發布舊文的內容，而按鈕已經是正常的「發送」，按下去就是把舊文重寄給
+  // 全體訂閱者（doSend 不需要 slug，沒有任何條件會擋）。這是本次終審最嚴重的前端問題。
+  {
+    const restoredSubject = await page.inputValue('#subject');
+    const restoredMarkdown = await page.inputValue('#markdown');
+    ok(restoredSubject === PRE_EDIT_SUBJECT,
+      `★ 存檔退出後主旨已還原成進入編輯前的自有草稿（實際「${restoredSubject}」）`);
+    ok(restoredMarkdown === PRE_EDIT_MARKDOWN, '★ 存檔退出後內文已還原成進入編輯前的自有草稿');
+    ok(!restoredSubject.includes(UPDATED_SUBJECT) && !restoredMarkdown.includes(UPDATED_SENTINEL),
+      '★ 存檔退出後編輯區不含剛編輯過的已發布舊文內容（否則按「發送」會誤寄舊文給全體訂閱者）');
+    // 編輯模式期間的輸入不得寫進 localStorage 草稿（那會跨 session 覆蓋使用者自己的稿）
+    const persistedDraft = await page.evaluate(
+      () => JSON.parse(localStorage.getItem('newsletter-compose-draft') || 'null'));
+    ok(!!persistedDraft && persistedDraft.subject === PRE_EDIT_SUBJECT,
+      `★ localStorage 草稿仍是使用者自己的稿，未被編輯模式的輸入污染（實際「${persistedDraft?.subject}」）`);
+  }
+
+  // ── 7c. ★ 存檔退出路徑也要驗「立即新建無 PUT 洩漏」（審查 minor：先前只在取消路徑後驗過） ──
+  await page.fill('#subject', SAVEBUILD_SUBJECT);
+  await page.fill('#markdown', SAVEBUILD_MARKDOWN);
+  await page.fill('#art-slug', SAVEBUILD_SLUG);
+  await page.selectOption('#art-tier', 'BASIC');
+  requestLog.length = 0;
+  await withConfirm(dialogState, () => page.click('#publish-btn'), { accept: true });
+  await page.waitForFunction(
+    () => (document.getElementById('send-msg')?.textContent || '').includes('已發布'),
+    null, { timeout: 10000 },
+  );
+  ok(requestLog.filter((r) => r.method === 'POST' && r.pathname === '/api/admin/campaign/publish').length === 1,
+    `★ 存檔退出後立即新建走的是 POST /api/admin/campaign/publish（實際攔到：${JSON.stringify(requestLog)}）`);
+  ok(requestLog.filter((r) => r.method === 'PUT' && r.pathname.includes('/content')).length === 0,
+    `★ 存檔退出後立即新建沒有誤送 PUT .../content 到舊文章（實際攔到：${JSON.stringify(requestLog)}）`);
+  {
+    const afterSaveBuild = await admin('/api/admin/campaigns');
+    const saveBuildRow = afterSaveBuild.find((c) => c.slug === SAVEBUILD_SLUG);
+    ok(!!saveBuildRow, '存檔退出後新建的文章確實以新 slug 出現在列表中');
+    saveBuildCampaignId = saveBuildRow?.id ?? null;
+    ok(saveBuildRow?.id !== editCampaignId,
+      `存檔退出後新建的是全新 campaign（id ${saveBuildRow?.id}，非被編輯的 #${editCampaignId}）`);
+  }
 
   // ── 8.「取消編輯」出口：重新進入編輯模式、打入不該被保留的內容、按取消 ──
   // 目的：驗證審查 Finding 2——編輯模式必須有不必成功存檔就能離開的手動出口，
@@ -340,6 +402,14 @@ try {
   );
   ok(!(await page.locator('#art-tier').isDisabled()), '取消編輯後「分級」欄位重新啟用');
   ok(!(await page.locator('#cancel-edit-btn').isVisible()), '取消編輯後「取消編輯」按鈕重新隱藏');
+  // ★ 終審 I2：取消退出後編輯區同樣必須還原，不得留下那篇已發布舊文的內容
+  {
+    const afterCancelSubject = await page.inputValue('#subject');
+    ok(afterCancelSubject === SAVEBUILD_SUBJECT,
+      `★ 取消退出後主旨還原成進入編輯前的內容（實際「${afterCancelSubject}」）`);
+    ok(!afterCancelSubject.includes(UPDATED_SUBJECT) && afterCancelSubject !== THROWAWAY_SUBJECT,
+      '★ 取消退出後編輯區既不含舊文內容、也不含被丟棄的編輯草稿');
+  }
   const putCallsDuringCancel = requestLog.filter((r) => r.method === 'PUT' && r.pathname.includes('/content'));
   ok(putCallsDuringCancel.length === 0, '取消編輯過程沒有發出任何 PUT .../content 請求');
   const afterCancel = await admin('/api/admin/campaigns');
@@ -389,7 +459,8 @@ try {
   await browser.close();
   // 收尾（best-effort）：把兩篇測試文章下架，減少對 /r/archive 與後台列表的干擾
   await bestEffortUnpublish(editCampaignId, 'fixture');
-  await bestEffortUnpublish(newBuildCampaignId, '新建迴歸 fixture');
+  await bestEffortUnpublish(saveBuildCampaignId, '存檔退出新建迴歸 fixture');
+  await bestEffortUnpublish(newBuildCampaignId, '取消退出新建迴歸 fixture');
 }
 
 process.exitCode = failed === 0 ? 0 : 1;

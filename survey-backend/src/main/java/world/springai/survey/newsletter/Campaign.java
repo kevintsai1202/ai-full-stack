@@ -153,6 +153,21 @@ public class Campaign {
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
 
+    /**
+     * 後台列表回傳用的 hashtag 名稱；<b>不是資料庫欄位</b>（標籤存在 {@code campaign_tag} 關聯表）。
+     *
+     * <p><b>為什麼要掛在實體上</b>：後台「編輯已發布文章」進入編輯模式時必須回填既有標籤，
+     * 而後台原本<b>沒有任何管道</b>讀得到某篇文章目前有哪些標籤——列表 API 不回傳、
+     * 也沒有取單篇的端點。少了它，編輯畫面只能從「一個都沒勾」開始，
+     * 存檔時就會把該文既有的 hashtag 全部刪光（{@code CampaignMetadataService.update()}
+     * 是先刪再依送出清單重建，沒有「維持不變」語意）——改一個錯字就掉光標籤。</p>
+     *
+     * <p>由 {@code AdminCampaignController} 以一次批次查詢填入（不是 N+1），
+     * 未填入時為 {@code null}，序列化後為 {@code "tags": null}，對舊呼叫端無害。</p>
+     */
+    @jakarta.persistence.Transient
+    private java.util.List<String> tags;
+
     /** JPA 需要的無參數建構子 */
     protected Campaign() {
     }
@@ -190,6 +205,8 @@ public class Campaign {
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(OffsetDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public java.util.List<String> getTags() { return tags; }
+    public void setTags(java.util.List<String> tags) { this.tags = tags; }
 
     /**
      * 回傳給 Admin 的排程操作權限；時間以後端時鐘為準，前端不可自行用狀態字串推測。

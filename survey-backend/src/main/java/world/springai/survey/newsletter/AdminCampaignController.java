@@ -42,6 +42,8 @@ public class AdminCampaignController {
     private final MailQuotaService mailQuotaService;
     /** 文章 Emoji 與 hashtag 服務 */
     private final CampaignMetadataService metadataService;
+    /** 批次讀取文章既有 hashtag，供後台列表回填編輯畫面 */
+    private final PublicCampaignTagService tagService;
 
     /** Spring 正式執行時注入完整依賴。 */
     @Autowired
@@ -50,13 +52,15 @@ public class AdminCampaignController {
                                    RecipientService recipientService,
                                    InviteService inviteService,
                                    MailQuotaService mailQuotaService,
-                                   ObjectProvider<CampaignMetadataService> metadataServiceProvider) {
+                                   ObjectProvider<CampaignMetadataService> metadataServiceProvider,
+                                   ObjectProvider<PublicCampaignTagService> tagServiceProvider) {
         this.guard = guard;
         this.campaignService = campaignService;
         this.recipientService = recipientService;
         this.inviteService = inviteService;
         this.mailQuotaService = mailQuotaService;
         this.metadataService = metadataServiceProvider.getIfAvailable();
+        this.tagService = tagServiceProvider.getIfAvailable();
     }
 
     /** 舊單元測試相容建構式；不處理新文章中繼資料。 */
@@ -71,6 +75,7 @@ public class AdminCampaignController {
         this.inviteService = inviteService;
         this.mailQuotaService = mailQuotaService;
         this.metadataService = null;
+        this.tagService = null;
     }
 
     /** 預覽用請求：主旨、markdown 與文章封面／hashtag。 */
@@ -451,12 +456,40 @@ public class AdminCampaignController {
         return inviteService.overview(source);
     }
 
-    /** 取得歷史 campaign 列表（依建立時間降冪），需提供有效金鑰 */
+    /**
+     * 取得歷史 campaign 列表（依建立時間降冪），需提供有效金鑰。
+     *
+     * <p>回應會帶上每篇文章目前的 hashtag（{@code tags}）——這是後台<b>唯一</b>讀得到
+     * 既有標籤的管道，「編輯已發布文章」進入編輯模式時要靠它回填勾選。
+     * 詳見 {@link #attachTags} 與 {@link Campaign#getTags()}。</p>
+     */
     @GetMapping("/api/admin/campaigns")
     public List<Campaign> campaigns(
             @RequestHeader(value = KEY_HEADER, required = false) String key) {
         guard.verify(key);
-        return campaignService.list();
+        List<Campaign> campaigns = campaignService.list();
+        attachTags(campaigns);
+        return campaigns;
+    }
+
+    /**
+     * 以<b>一次</b>批次查詢把既有 hashtag 掛回列表（不是逐篇查詢的 N+1）。
+     *
+     * <p>複用 {@code PublicCampaignTagService.tagsByCampaign}（讀者站文章列表已在用的
+     * 同一支查詢），不另寫一套；後台只需要名稱，slug 與計數在這裡用不到。
+     * 標籤是 {@link jakarta.persistence.Transient} 欄位，寫入它不會產生任何 UPDATE。</p>
+     */
+    private void attachTags(List<Campaign> campaigns) {
+        if (tagService == null || campaigns.isEmpty()) {
+            return;
+        }
+        Map<Long, List<PublicCampaignTagService.TagSummary>> byCampaign =
+            tagService.tagsByCampaign(campaigns.stream().map(Campaign::getId).toList());
+        for (Campaign campaign : campaigns) {
+            campaign.setTags(byCampaign.getOrDefault(campaign.getId(), List.of()).stream()
+                .map(PublicCampaignTagService.TagSummary::name)
+                .toList());
+        }
     }
 
     /** 取消指定 campaign 的排程，需提供有效金鑰 */
