@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import world.springai.survey.form.FormSchemaService;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -45,6 +46,7 @@ class ReaderAuthControllerTest {
     @MockBean ReaderAccountService readerAccountService;
     @MockBean ReaderContext readerContext;
     @MockBean LoginAbuseGuard loginAbuseGuard;
+    @MockBean FormSchemaService formSchemaService;
 
     /** 建立一位讀者 */
     private Reader reader() {

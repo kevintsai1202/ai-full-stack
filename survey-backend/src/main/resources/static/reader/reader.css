@@ -612,3 +612,7 @@ input::placeholder { color:#71817c; }
   .promo-table tr { display:block; border-bottom:1px solid var(--border-strong); padding:12px 0; }
   .promo-table td { display:block; border-bottom:0; padding:4px 0; }
 }
+
+/* 首頁問卷列表（A4） */
+.survey-list { margin:0; padding-left:20px; }
+.survey-list li { margin:6px 0; }

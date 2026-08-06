@@ -14,7 +14,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import world.springai.survey.form.FormSchemaService;
+
 import java.time.OffsetDateTime;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -37,6 +41,8 @@ public class ReaderAuthController {
     private final ReaderContext readerContext;
     private final HtmlTemplate htmlTemplate;
     private final LoginAbuseGuard loginAbuseGuard;
+    /** 首頁問卷列表（A4）所需：查詢後台勾選曝光且已發布的問卷 */
+    private final FormSchemaService formSchemaService;
 
     /** 注入登入流程所需的服務 */
     public ReaderAuthController(LoginMailService loginMailService,
@@ -45,7 +51,8 @@ public class ReaderAuthController {
                                ReaderSessionService sessionService,
                                ReaderContext readerContext,
                                HtmlTemplate htmlTemplate,
-                               LoginAbuseGuard loginAbuseGuard) {
+                               LoginAbuseGuard loginAbuseGuard,
+                               FormSchemaService formSchemaService) {
         this.loginMailService = loginMailService;
         this.loginTokenService = loginTokenService;
         this.readerAccountService = readerAccountService;
@@ -53,6 +60,7 @@ public class ReaderAuthController {
         this.readerContext = readerContext;
         this.htmlTemplate = htmlTemplate;
         this.loginAbuseGuard = loginAbuseGuard;
+        this.formSchemaService = formSchemaService;
     }
 
     /** 登入請求：email 必填且需為合法格式，redirect 選填 */
@@ -98,8 +106,10 @@ public class ReaderAuthController {
     public ResponseEntity<String> indexPage(
             @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
         boolean loggedIn = readerContext.resolve(sessionCookie).isPresent();
-        String html = htmlTemplate.render("templates/reader/index.html",
-            Map.of("<!--NAV_LINKS-->", ReaderNav.links(loggedIn)));
+        Map<String, String> vars = new HashMap<>();
+        vars.put("<!--NAV_LINKS-->", ReaderNav.links(loggedIn));
+        vars.put("<!--SURVEY_LIST-->", renderSurveyList());
+        String html = htmlTemplate.render("templates/reader/index.html", vars);
         return ResponseEntity.ok()
             .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
             .header(HttpHeaders.VARY, HttpHeaders.COOKIE)
@@ -173,6 +183,20 @@ public class ReaderAuthController {
             "tier", r.getTier(),
             "credits", r.getCredits(),
             "referralCode", r.getReferralCode()));
+    }
+
+    /** 首頁問卷列表（A4）：列出後台勾選曝光的問卷；無任何曝光問卷時回空字串，整個區塊不顯示 */
+    private String renderSurveyList() {
+        List<FormSchemaService.HomepageForm> forms = formSchemaService.listHomepageForms();
+        if (forms.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder("<div class=\"card\"><h2 class=\"section-title\">問卷調查</h2><ul class=\"survey-list\">");
+        for (FormSchemaService.HomepageForm form : forms) {
+            sb.append("<li><a href=\"/r/survey/").append(HtmlTemplate.escapeHtml(form.key()))
+              .append("\">").append(HtmlTemplate.escapeHtml(form.title())).append("</a></li>");
+        }
+        return sb.append("</ul></div>").toString();
     }
 
     /** 由 session cookie 取出目前登入的讀者；無效一律視為未登入 */
