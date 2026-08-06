@@ -74,14 +74,28 @@
 </style>
 </head>
 <body>
-<!-- 金鑰閘門：未驗證前遮蔽所有分析與個資內容 -->
+<!-- 登入 gate：未登入前遮蔽所有分析與個資內容。三層降級：
+     ① GET /api/admin/me 回 200（已有有效 session）→ 直接進後台；
+     ② 未登入 → 顯示 email 一鍵登入表單（寄送 magic link，後端對任何 email 一律回同樣結果，避免枚舉管理者信箱）；
+     ③「改用管理金鑰登入」為常駐次要連結，任何時候都在畫面上，點擊後才展開金鑰輸入框
+        （沿用既有 sessionStorage + X-Admin-Key 機制，供腳本化操作／緊急路徑使用）。 -->
 <div class="gate" id="gate">
   <div class="box">
-    <h2 style="margin-top:0">輸入管理金鑰</h2>
-    <p class="hint">問卷分析含個人資料，僅授權管理者可存取。金鑰只存於本分頁（sessionStorage），不會放入網址。</p>
-    <input type="password" id="gate-key" placeholder="X-Admin-Key" autocomplete="current-password">
+    <h2 style="margin-top:0">管理後台登入</h2>
+    <p class="hint">問卷分析含個人資料，僅授權管理者可存取。</p>
     <div class="msg err" id="gate-msg"></div>
-    <button class="btn" id="gate-btn" style="margin-top:14px;width:100%">進入管理後台</button>
+    <!-- 主要路徑：email 一鍵登入連結 -->
+    <div id="gate-login">
+      <input id="gate-email" type="email" placeholder="管理者 email" autocomplete="email">
+      <button class="btn" id="gate-send" type="button" style="margin-top:14px;width:100%">寄送登入連結</button>
+      <p id="gate-login-msg" class="hint" style="margin-top:10px"></p>
+      <p style="margin-top:16px"><a href="#" id="gate-use-key" class="hint">改用管理金鑰登入</a></p>
+    </div>
+    <!-- 次要路徑：既有金鑰輸入（#gate-key / #gate-btn 的 id 與行為維持不變，供既有自動化腳本沿用） -->
+    <div id="gate-key-box" hidden>
+      <input type="password" id="gate-key" placeholder="X-Admin-Key" autocomplete="current-password">
+      <button class="btn" id="gate-btn" style="margin-top:14px;width:100%">進入管理後台</button>
+    </div>
   </div>
 </div>
 
@@ -746,6 +760,31 @@
 
   /** 取得目前分頁保存的管理金鑰。 */
   function getKey(){return sessionStorage.getItem(KEY)||'';}
+
+  /**
+   * 進站流程第一步：問後端目前分頁是否已有有效的登入 session（httpOnly cookie，
+   * JS 讀不到也不該嘗試讀，只能靠呼叫 API 看狀態碼判斷）。
+   * 200 → 已用 email/JWT 登入，記下 email 與模式 'jwt'；
+   * 401 或連線失敗 → 視為未登入，退回檢查 sessionStorage 是否存有管理金鑰
+   * （模式 'key'，沿用既有金鑰路徑，供腳本化操作／緊急路徑使用）。
+   * 回傳 true 代表「已登入」，交由呼叫端決定是否還要進一步驗證金鑰有效性。
+   */
+  async function bootAuth(){
+    try{
+      const res=await fetch('/api/admin/me');
+      if(res.ok){
+        const me=await res.json();
+        window.__adminMode='jwt';
+        window.__adminEmail=me.email;
+        return true;
+      }
+    }catch(e){ /* 網路錯誤一律視為未登入，往下改看有沒有存金鑰 */ }
+    if(getKey()){ window.__adminMode='key'; return true; }
+    return false;
+  }
+
+  /** 目前的登入驗證模式，供工具列等畫面判斷要顯示哪一種登出方式（Task 11 會呼叫）。 */
+  function adminAuthMode(){ return window.__adminMode||'key'; }
 
   /**
    * 從錯誤回應的 body 取出可讀原因。
@@ -3008,9 +3047,35 @@
     }catch(error){if(error.message!=='401')showMsg('coupon-campaign-msg','活動列表載入失敗：'+error.message,false);}
   }
 
-  $('#gate-btn').onclick=async()=>{sessionStorage.setItem(KEY,$('#gate-key').value.trim());try{await api('/api/admin/survey');showApp();init();}catch(error){/* 401 已由 api 顯示閘門。 */}};
+  /** 金鑰入口：既有行為完全保留，只是多記錄目前模式為 'key' 供 adminAuthMode() 使用。 */
+  $('#gate-btn').onclick=async()=>{sessionStorage.setItem(KEY,$('#gate-key').value.trim());try{await api('/api/admin/survey');window.__adminMode='key';showApp();init();}catch(error){/* 401 已由 api 顯示閘門。 */}};
   $('#gate-key').addEventListener('keydown',event=>{if(event.key==='Enter')$('#gate-btn').click();});
-  (async()=>{if(getKey()){try{await api('/api/admin/survey');showApp();init();}catch(error){/* 401 已由 api 顯示閘門。 */}}else showGate();})();
+
+  /** email 一鍵登入：一律呼叫後端寄送連結，且不論該信箱是否為管理者都顯示同一句話，避免枚舉管理者信箱。 */
+  $('#gate-send').addEventListener('click',async()=>{
+    const email=$('#gate-email').value.trim();
+    const sendBtn=$('#gate-send');
+    sendBtn.disabled=true;
+    try{
+      await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+    }catch(e){ /* 網路錯誤也顯示同一句話，不讓失敗原因洩漏後端狀態差異 */ }
+    finally{ sendBtn.disabled=false; }
+    $('#gate-login-msg').textContent='若該信箱為管理員，登入連結已寄出，請至信箱查收。';
+  });
+  $('#gate-email').addEventListener('keydown',event=>{if(event.key==='Enter')$('#gate-send').click();});
+
+  /** 「改用管理金鑰登入」常駐次要連結：任何時候都顯示，點擊後才展開金鑰輸入框（不依 email 判定結果決定是否出現）。 */
+  $('#gate-use-key').addEventListener('click',event=>{event.preventDefault();$('#gate-key-box').hidden=false;$('#gate-key').focus();});
+
+  /** 進站入口：先問後端是否已有有效 session；有金鑰時沿用既有「打一次 API 驗證」流程。 */
+  (async()=>{
+    if(await bootAuth()){
+      if(window.__adminMode==='jwt'){showApp();init();return;}
+      try{await api('/api/admin/survey');showApp();init();}catch(error){/* 401 已由 api 顯示閘門。 */}
+      return;
+    }
+    showGate();
+  })();
 </script>
 </body>
 </html>
