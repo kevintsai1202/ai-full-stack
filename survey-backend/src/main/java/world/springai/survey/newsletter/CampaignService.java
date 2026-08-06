@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.util.HtmlUtils;
@@ -698,32 +699,57 @@ public class CampaignService {
      * 不動解鎖與扣點。讀者站即時渲染 markdown，因此更新完成即生效。</p>
      *
      * <p><b>驗證必須先於落庫</b>：{@code metadataService.validate} 要在
-     * {@code campaignRepository.save} 之前執行——若順序寫反，封面驗證失敗時就會留下
-     * 「標題已改、封面沒改」的部分更新（見 CampaignUpdateContentTest 的呼叫順序測試）。</p>
+     * {@code campaignRepository.updateContentFields} 之前執行——若順序寫反，封面驗證
+     * 失敗時就會留下「標題已改、封面沒改」的部分更新（見 CampaignUpdateContentTest
+     * 的呼叫順序測試）。</p>
+     *
+     * <p><b>絕不可改用 {@code campaignRepository.save(campaign)}</b>：本方法與
+     * {@code metadataService.update()} 在同一個交易內，而後者是用 {@code JdbcTemplate}
+     * 直接下原生 SQL 更新封面欄位——不觸發 Hibernate flush、也不讓一級快取失效。
+     * 用 {@code save} 會在提交時以載入當下的舊快照整列寫回，把剛寫好的封面
+     * <b>靜默還原</b>（API 仍回 updated: true）。細節見
+     * {@link CampaignRepository#updateContentFields} 的說明。</p>
      *
      * @param campaignId   要更新的文章 id；找不到時回 404
-     * @param subject      新主旨
-     * @param markdown     新內文（markdown 原文，網頁端即時渲染）
+     * @param subject      新主旨；空白一律 400（DB 為 NOT NULL，且空字串等同靜默清空已發布文章）
+     * @param markdown     新內文（markdown 原文，網頁端即時渲染）；空白一律 400
      * @param coverEmoji   新封面 Emoji；與 {@code coverMediaId} 二擇一，交給 metadataService 驗證
      * @param coverMediaId 新封面圖片媒體 id
-     * @param tags         新標籤清單
+     * @param tags         新標籤清單，整批覆寫（{@code null} 或空清單＝清空該文所有標籤，
+     *                     沒有「維持原樣」語意）。因此呼叫端必須送出完整清單——後台
+     *                     {@code GET /api/admin/campaigns} 回應已含 {@code tags} 供編輯畫面回填
      * @param now          更新時間，由呼叫端注入（不直接讀取系統時鐘，利於測試）
      */
     @Transactional
     public void updateContent(long campaignId, String subject, String markdown,
                               String coverEmoji, Long coverMediaId, List<String> tags,
                               OffsetDateTime now) {
-        Campaign campaign = campaignRepository.findById(campaignId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "campaign not found"));
+        // 主旨與內文是 TEXT NOT NULL：null 會在 flush 時炸成 500（應為 400），
+        // 空字串則會通過 NOT NULL 而把一篇已發布文章靜默清空。兩者都必須在寫入前擋掉。
+        // 前端雖已擋，但這是可被直接呼叫的 admin API，防線不能只留在瀏覽器裡。
+        if (!StringUtils.hasText(subject)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "主旨不得空白");
+        }
+        if (!StringUtils.hasText(markdown)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "內文不得空白");
+        }
+
+        // 存在性檢查刻意用 existsById 而非 findById：這條路徑一個實體欄位都不需要，
+        // 而載入實體會讓它被 Hibernate 管理——那正是整列寫回缺陷的起點。
+        if (!campaignRepository.existsById(campaignId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "campaign not found");
+        }
 
         // 封面與標籤走既有服務，確保與 publish 路徑的驗證規則一致；
         // 必須在任何欄位寫入之前完成，驗證失敗時不得留下部分更新
         metadataService.validate(coverEmoji, tags, coverMediaId);
 
-        campaign.setSubject(subject);
-        campaign.setMarkdown(markdown);
-        campaign.setUpdatedAt(now);
-        campaignRepository.save(campaign);
+        // 只寫三欄的條件式 UPDATE（不是 save 整列寫回，理由見 javadoc）。
+        // 受影響筆數為 0 表示該列在上面的存在性檢查之後被刪除——正確性來自受影響筆數，
+        // 不是來自先前的檢查（作法比照 markUnpublished）。
+        if (campaignRepository.updateContentFields(campaignId, subject, markdown, now) == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "campaign not found");
+        }
 
         metadataService.update(campaignId, coverEmoji, tags, coverMediaId);
     }

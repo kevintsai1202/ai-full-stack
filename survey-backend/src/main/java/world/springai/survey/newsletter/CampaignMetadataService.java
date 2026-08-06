@@ -37,11 +37,19 @@ public class CampaignMetadataService {
             """);
     }
 
-    /** 儲存文章 Emoji 與 hashtag；同名標籤會自動共用。 */
+    /**
+     * 儲存文章 Emoji 與 hashtag；同名標籤會自動共用。
+     *
+     * <p><b>呼叫端必須先自行呼叫 {@link #validate}</b>——本方法不再重複驗證一次。
+     * 那次內部呼叫不只是多餘，還會給人錯誤的安全感：發布／寄送路徑是
+     * 「先寄信、後寫中繼資料」，等執行到這裡才發現封面不合法早已來不及，
+     * 信都寄出去了。真正有意義的驗證點只有一個，就是副作用發生之前
+     * （{@code AdminCampaignController.validateMetadata} 與
+     * {@code CampaignService.updateContent} 都是這麼做的）。</p>
+     */
     @Transactional
     public void update(long campaignId, String coverEmoji, List<String> requestedTags,
                        Long coverMediaId) {
-        validate(coverEmoji, requestedTags, coverMediaId);
         if (jdbc.queryForObject("SELECT count(*) FROM campaign WHERE id = ?", Long.class, campaignId) == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到指定文章");
         }

@@ -81,6 +81,39 @@ public interface CampaignRepository extends JpaRepository<Campaign, Long> {
                         @Param("newStatus") String newStatus,
                         @Param("publishedAt") java.time.OffsetDateTime publishedAt);
 
+    /**
+     * 編輯已發布文章：只寫 {@code subject}、{@code markdown}、{@code updated_at} 三欄。
+     *
+     * <p><b>為什麼不能用 {@code save(campaign)}</b>：理由與 {@link #markUnpublished}
+     * 完全相同（{@link Campaign} 無 {@code @DynamicUpdate}／{@code @Version}，
+     * Hibernate 的 UPDATE 會帶所有可更新欄位），但這條路徑上還多一個更直接的災難：
+     * 同一個交易裡，{@code CampaignMetadataService.update()} 是用 {@code JdbcTemplate}
+     * 直接下 {@code UPDATE campaign SET cover_emoji = ?, cover_media_id = ?}——那是
+     * 繞過 Hibernate 的原生 SQL，<b>不會觸發 flush，也不會讓一級快取裡的實體失效</b>。
+     * 於是提交時 Hibernate 拿著載入當下的舊快照整列寫回，把剛寫進去的新封面
+     * <b>還原成舊值</b>，而 API 仍回 {@code {"updated": true}}。
+     * 結果是「封面永遠改不動」這種零錯誤訊息的靜默失效，同時
+     * {@code published_at}／{@code status}／{@code accepted_count}／{@code failed_count}
+     * ／{@code body_html} 也會被舊快照覆蓋。</p>
+     *
+     * <p><b>{@code clearAutomatically = true}</b>：清掉一級快取，確保呼叫端在同一交易內
+     * 就算還握著被管理的 {@link Campaign} 實體，提交時也不會再發一次帶全欄位的 UPDATE
+     * 把本方法的效果洗掉——這正是本缺陷的成因，必須從機制上封死。</p>
+     *
+     * <p><b>刻意不碰 {@code body_html}</b>：那是寄出信件的歷史快照，
+     * 改它等於竄改「當初到底寄了什麼」。</p>
+     *
+     * @return 受影響筆數，0 表示該列不存在
+     */
+    @Modifying(clearAutomatically = true)
+    @Transactional
+    @Query("update Campaign c set c.subject = :subject, c.markdown = :markdown, "
+        + "c.updatedAt = :updatedAt where c.id = :id")
+    int updateContentFields(@Param("id") Long id,
+                            @Param("subject") String subject,
+                            @Param("markdown") String markdown,
+                            @Param("updatedAt") OffsetDateTime updatedAt);
+
     /** 依建立時間新到舊列出（歷史頁用） */
     List<Campaign> findAllByOrderByCreatedAtDesc();
 
