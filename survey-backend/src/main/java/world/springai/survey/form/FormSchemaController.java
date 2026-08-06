@@ -170,6 +170,20 @@ public class FormSchemaController {
         return ResponseEntity.noContent().build();
     }
 
+    /** 首頁曝光設定請求：visible 是否在讀者首頁曝光、order 排序（可空＝未指定，排最後） */
+    public record HomepageExposureRequest(boolean visible, Integer order) {}
+
+    /** 設定問卷是否於讀者首頁曝光與排序（A4）；以 form_key 為單位作用於所有版本 */
+    @PutMapping("/api/admin/forms/{formKey}/homepage")
+    public ResponseEntity<Void> updateHomepageExposure(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key,
+            @PathVariable String formKey,
+            @RequestBody HomepageExposureRequest request) {
+        guard.verify(key);
+        service.updateHomepageExposure(formKey, request.visible(), request.order());
+        return ResponseEntity.noContent().build();
+    }
+
     /** Admin 列出全部已發布且已設信中一鍵題的問卷，供電子報編輯器插入選單。 */
     @GetMapping("/api/admin/forms/embeddable")
     public List<FormSchemaService.EmailVoteQuestion> listEmbeddable(

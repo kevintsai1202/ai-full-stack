@@ -213,6 +213,11 @@
             <select id="email-vote-field" disabled><option value="">（未設定）</option></select>
             <p class="hint">選單只列出此版本的單選（select）欄位；新建草稿版本一律從「未設定」開始，不會沿用舊版本的設定。</p></div>
         </div>
+        <div class="form-row" style="margin-top:10px">
+          <label><span class="hint">讀者首頁曝光</span><input type="checkbox" id="homepage-visible"></label>
+          <label><span class="hint">首頁排序（小的在前，可留空）</span><input type="number" id="homepage-order" style="width:90px"></label>
+          <button class="btn ghost" id="homepage-save">儲存首頁曝光</button>
+        </div>
         <div class="msg" id="schema-msg"></div>
       </details>
     </div>
@@ -1017,6 +1022,7 @@
     $('#form-create-btn').onclick=createForm;
     $('#form-create-version').onclick=createFormVersion;$('#form-publish-version').onclick=publishFormVersion;$('#field-add').onclick=addFormField;
     $('#email-vote-field').onchange=updateEmailVoteField;
+    $('#homepage-save').onclick=saveHomepageExposure;
     ['#raw-search','#raw-source','#raw-role','#raw-budget','#raw-subscription','#raw-sort'].forEach(selector=>$(selector).addEventListener(selector==='#raw-search'?'input':'change',renderRawTable));
     $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=()=>{doCount();doQuota();};$('#role').onchange=doCount;$('#interest').onchange=doCount;['#campaign-source','#campaign-consent','#campaign-vip','#campaign-segment'].forEach(selector=>$(selector).onchange=doCount);$('#campaign-segment-save').onclick=saveCampaignSegment;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#publish-btn').onclick=doPublish;$('#cancel-edit-btn').onclick=cancelContentEdit;$('#hist-btn').onclick=doHistory;
     document.querySelectorAll('.format-btn').forEach(button=>button.onclick=()=>applyMarkdownFormat(button));
@@ -1140,6 +1146,7 @@
     });
     if([...select.options].some(option=>Number(option.value)===Number(current)))select.value=String(current);
     refreshEmailVoteField();
+    refreshHomepageExposure();
   }
 
   /**
@@ -1172,6 +1179,29 @@
     }catch(error){
       if(error.message!=='401')showMsg('schema-msg','設定信中一鍵題失敗：'+error.message,false);
       refreshEmailVoteField();
+    }
+  }
+
+  /** 依目前選取的表單，把首頁曝光勾選與排序帶入畫面（取該 key 最新版本列的值） */
+  function refreshHomepageExposure(){
+    const key=$('#dynamic-form').value;
+    const definition=formDefinitions.find(item=>item.key===key);
+    $('#homepage-visible').checked=!!definition?.homepageVisible;
+    $('#homepage-order').value=definition?.homepageOrder??'';
+  }
+
+  /** 儲存首頁曝光設定並重載表單清單，讓快取與畫面同步 */
+  async function saveHomepageExposure(){
+    const key=$('#dynamic-form').value;
+    if(!key){showMsg('schema-msg','請先選擇表單',false);return;}
+    const order=$('#homepage-order').value;
+    try{
+      await api(`/api/admin/forms/${encodeURIComponent(key)}/homepage`,
+        {method:'PUT',body:JSON.stringify({visible:$('#homepage-visible').checked,order:order===''?null:Number(order)})});
+      await loadFormDefinitions();
+      showMsg('schema-msg','已更新首頁曝光設定',true);
+    }catch(error){
+      if(error.message!=='401')showMsg('schema-msg','更新首頁曝光設定失敗：'+error.message,false);
     }
   }
 
