@@ -25,12 +25,7 @@
 
   <div class="card feature-card">
     <h2 class="section-title">訂閱電子報</h2>
-    <p class="muted">填入 Email，訂閱立即生效，之後會收到一封歡迎信。</p>
-    <form id="subscribe-form" class="form-row">
-      <input type="email" id="email" name="email" placeholder="your@email.com" required autocomplete="email">
-      <button class="btn" type="submit">訂閱</button>
-    </form>
-    <div class="msg" id="msg"></div>
+    <!--SUBSCRIBE_BLOCK-->
   </div>
 
   <!--SURVEY_LIST-->
@@ -56,44 +51,47 @@
   const form = document.getElementById('subscribe-form');
   const msg = document.getElementById('msg');
 
-  /** 顯示提示訊息 */
-  function showMsg(text, ok) {
-    msg.textContent = text;
-    msg.className = 'msg show ' + (ok ? 'ok' : 'err');
-  }
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    window.ReaderAnalytics?.event('SUBSCRIBE_ATTEMPT', 'subscribe_attempt');
-    const button = form.querySelector('button');
-    button.disabled = true;
-    try {
-      // source: "newsletter" 讓後端能與課程問卷（survey_form）區分，
-      // 避免電子報訂閱者污染 /api/survey/stats 對外公開的問卷統計
-      const body = { email: document.getElementById('email').value, consent: true, source: 'newsletter' };
-      if (ref) { body.ref = ref; }
-      // 文章來源只與推薦碼一起送出；後端會再次驗證 slug 格式。
-      if (ref && share) { body.share = share; }
-      const res = await fetch('/api/survey', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (res.status === 201 || res.status === 204) {
-        window.ReaderAnalytics?.event('SUBSCRIBE_SUCCESS', 'subscribe_success');
-        showMsg('已訂閱成功，歡迎信已經寄到你的信箱。', true);
-        form.reset();
-      } else {
-        window.ReaderAnalytics?.event('SUBSCRIBE_ERROR', 'subscribe_error');
-        showMsg('送出失敗，請確認 email 格式後再試一次。', false);
-      }
-    } catch (err) {
-      window.ReaderAnalytics?.event('SUBSCRIBE_ERROR', 'subscribe_error');
-      showMsg('連線失敗，請稍後再試。', false);
-    } finally {
-      button.disabled = false;
+  // 已登入時 server 端不渲染訂閱表單（改顯示身分區），此 script 直接不動作
+  if (form) {
+    /** 顯示提示訊息 */
+    function showMsg(text, ok) {
+      msg.textContent = text;
+      msg.className = 'msg show ' + (ok ? 'ok' : 'err');
     }
-  });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      window.ReaderAnalytics?.event('SUBSCRIBE_ATTEMPT', 'subscribe_attempt');
+      const button = form.querySelector('button');
+      button.disabled = true;
+      try {
+        // source: "newsletter" 讓後端能與課程問卷（survey_form）區分，
+        // 避免電子報訂閱者污染 /api/survey/stats 對外公開的問卷統計
+        const body = { email: document.getElementById('email').value, consent: true, source: 'newsletter' };
+        if (ref) { body.ref = ref; }
+        // 文章來源只與推薦碼一起送出；後端會再次驗證 slug 格式。
+        if (ref && share) { body.share = share; }
+        const res = await fetch('/api/survey', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (res.status === 201 || res.status === 204) {
+          window.ReaderAnalytics?.event('SUBSCRIBE_SUCCESS', 'subscribe_success');
+          showMsg('已訂閱成功，歡迎信已經寄到你的信箱。', true);
+          form.reset();
+        } else {
+          window.ReaderAnalytics?.event('SUBSCRIBE_ERROR', 'subscribe_error');
+          showMsg('送出失敗，請確認 email 格式後再試一次。', false);
+        }
+      } catch (err) {
+        window.ReaderAnalytics?.event('SUBSCRIBE_ERROR', 'subscribe_error');
+        showMsg('連線失敗，請稍後再試。', false);
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
 </script>
 <footer class="site-foot">
   <p>合作與聯絡：<a href="mailto:contact@springai.world">contact@springai.world</a></p>

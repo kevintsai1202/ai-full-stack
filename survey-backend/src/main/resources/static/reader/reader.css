@@ -616,3 +616,7 @@ input::placeholder { color:#71817c; }
 /* 首頁問卷列表（A4） */
 .survey-list { margin:0; padding-left:20px; }
 .survey-list li { margin:6px 0; }
+
+/* 首頁身分區（A3）：登入後取代訂閱表單的識別列 */
+.identity-line { margin:4px 0 0; font-size:1.05rem; }
+.identity-line strong { color:var(--accent-deep); word-break:break-all; }

@@ -34,6 +34,15 @@ public class ReaderAuthController {
     /** 登入成功後的預設落點 */
     private static final String DEFAULT_REDIRECT = "/r/archive";
 
+    /** 未登入時的訂閱表單區塊（自 index.html 原樣搬入；行為由頁內既有 script 驅動） */
+    private static final String SUBSCRIBE_FORM_HTML = """
+        <p class="muted">填入 Email，訂閱立即生效，之後會收到一封歡迎信。</p>
+        <form id="subscribe-form" class="form-row">
+          <input type="email" id="email" name="email" placeholder="your@email.com" required autocomplete="email">
+          <button class="btn" type="submit">訂閱</button>
+        </form>
+        <div class="msg" id="msg"></div>""";
+
     private final LoginMailService loginMailService;
     private final LoginTokenService loginTokenService;
     private final ReaderAccountService readerAccountService;
@@ -105,10 +114,11 @@ public class ReaderAuthController {
     @GetMapping(value = "/r/", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> indexPage(
             @CookieValue(value = ReaderSessionService.COOKIE_NAME, required = false) String sessionCookie) {
-        boolean loggedIn = readerContext.resolve(sessionCookie).isPresent();
+        Optional<ReaderContext.Current> current = readerContext.resolve(sessionCookie);
         Map<String, String> vars = new HashMap<>();
-        vars.put("<!--NAV_LINKS-->", ReaderNav.links(loggedIn));
+        vars.put("<!--NAV_LINKS-->", ReaderNav.links(current.isPresent()));
         vars.put("<!--SURVEY_LIST-->", renderSurveyList());
+        vars.put("<!--SUBSCRIBE_BLOCK-->", renderSubscribeBlock(current));
         String html = htmlTemplate.render("templates/reader/index.html", vars);
         return ResponseEntity.ok()
             .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
@@ -197,6 +207,14 @@ public class ReaderAuthController {
               .append("\">").append(HtmlTemplate.escapeHtml(form.title())).append("</a></li>");
         }
         return sb.append("</ul></div>").toString();
+    }
+
+    /** 首頁身分區（A3）：登入顯示「已訂閱：email」（經跳脫），未登入顯示訂閱表單 */
+    private String renderSubscribeBlock(Optional<ReaderContext.Current> current) {
+        return current
+            .map(c -> "<p class=\"identity-line\">已訂閱：<strong>"
+                + HtmlTemplate.escapeHtml(c.reader().getEmail()) + "</strong></p>")
+            .orElse(SUBSCRIBE_FORM_HTML);
     }
 
     /** 由 session cookie 取出目前登入的讀者；無效一律視為未登入 */
