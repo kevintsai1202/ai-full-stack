@@ -250,7 +250,7 @@
       <article class="card full"><h2>全部自由填寫建議</h2><div class="suggestions" id="suggestions"></div></article>
     </div>
     <div class="card" style="margin-top:20px">
-      <div class="section-head"><h2 style="margin:0">完整原始資料</h2><span class="hint" id="raw-count">0 筆</span></div>
+      <div class="section-head"><h2 style="margin:0">完整原始資料</h2><span class="hint" id="raw-count">0 筆</span><span class="hint" id="raw-coupon-msg"></span></div>
       <div class="filters">
         <label><span class="hint">全文搜尋</span><input type="search" id="raw-search" placeholder="姓名、Email、答案或 UTM"></label>
         <label><span class="hint">來源</span><select id="raw-source"><option value="">全部</option><option value="survey_form">問卷填寫</option><option value="exam">線上測驗</option><option value="dify">Dify 學員</option></select></label>
@@ -760,6 +760,20 @@
       </div>
     </div>
   </section>
+
+  <!-- 放在所有 .view 區塊之外（不受 switchView 的 hidden 切換影響），
+       這樣無論目前停在哪個分頁，原始資料表（分析分頁）觸發的逐列寄券視窗都能正常顯示。 -->
+  <dialog id="coupon-send-dialog" class="reader-detail-dialog" style="width:min(480px,94vw)">
+    <h3 style="margin-top:0">寄送優惠券</h3>
+    <p>收件人：<strong id="coupon-send-dialog-email"></strong></p>
+    <label><span class="hint">選擇券別（僅列未過期；已寄過的停用）</span>
+      <select id="coupon-send-dialog-select" style="width:100%"></select></label>
+    <div class="msg" id="coupon-send-dialog-msg"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="btn ghost" id="coupon-send-dialog-cancel" type="button">取消</button>
+      <button class="btn" id="coupon-send-dialog-confirm" type="button">確認寄出</button>
+    </div>
+  </dialog>
 </main>
 
 <script>
@@ -846,6 +860,10 @@
   let couponFormFields=[];
   /** 最近一次查詢到的優惠券收件人清單（含 alreadySent 旗標）。 */
   let couponRecipients=[];
+  /** email(小寫) → 已收過的活動 id 陣列（/api/admin/coupons/sent-map），供原始資料表逐列寄券判斷已寄狀態用。 */
+  let couponSentMap={};
+  /** 全部優惠券活動（/api/admin/coupons），逐列寄券下拉選單資料來源。 */
+  let couponCampaignsAll=[];
 
   /** 取得目前分頁保存的管理金鑰。 */
   function getKey(){return sessionStorage.getItem(KEY)||'';}
@@ -1024,6 +1042,7 @@
     $('#email-vote-field').onchange=updateEmailVoteField;
     $('#homepage-save').onclick=saveHomepageExposure;
     ['#raw-search','#raw-source','#raw-role','#raw-budget','#raw-subscription','#raw-sort'].forEach(selector=>$(selector).addEventListener(selector==='#raw-search'?'input':'change',renderRawTable));
+    $('#coupon-send-dialog-confirm').onclick=confirmCouponSend;$('#coupon-send-dialog-cancel').onclick=()=>$('#coupon-send-dialog').close();
     $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=()=>{doCount();doQuota();};$('#role').onchange=doCount;$('#interest').onchange=doCount;['#campaign-source','#campaign-consent','#campaign-vip','#campaign-segment'].forEach(selector=>$(selector).onchange=doCount);$('#campaign-segment-save').onclick=saveCampaignSegment;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#publish-btn').onclick=doPublish;$('#cancel-edit-btn').onclick=cancelContentEdit;$('#hist-btn').onclick=doHistory;
     document.querySelectorAll('.format-btn').forEach(button=>button.onclick=()=>applyMarkdownFormat(button));
     $('#emoji-picker').onchange=event=>{insertEmoji(event.target.value);event.target.value='';};
@@ -1361,6 +1380,10 @@
     if(analyticsLoaded&&!force)return;const msg=$('#analytics-msg');msg.className='msg';
     try{surveyRows=await api('/api/admin/survey');analyticsLoaded=true;renderAnalytics();$('#analytics-updated').textContent='更新時間：'+new Date().toLocaleString('zh-TW');}
     catch(error){if(error.message!=='401'){msg.className='msg err';msg.textContent='問卷資料載入失敗：'+error.message;}}
+    // 逐列寄券（B2）所需資料：券活動清單與已寄總覽；失敗時操作欄顯示「載入失敗」但不影響原始資料表本身
+    try{[couponCampaignsAll,couponSentMap]=await Promise.all([api('/api/admin/coupons'),api('/api/admin/coupons/sent-map')]);$('#raw-coupon-msg').textContent='';}
+    catch(e){couponCampaignsAll=[];couponSentMap={};$('#raw-coupon-msg').textContent='寄券資料載入失敗，操作欄暫不可用';}
+    if(analyticsLoaded)renderRawTable();  // 券資料是在原始資料表首次渲染之後才回來，需要補渲染一次讓已寄標示與下拉正確
   }
 
   /** 重繪 KPI、分布、自由文字與完整明細。 */
@@ -1392,13 +1415,68 @@
   function setDynamicOptions(selector,values){const el=$(selector);const current=el.value;el.replaceChildren(new Option('全部',''));[...new Set(values.filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'zh-Hant')).forEach(value=>el.add(new Option(value,value)));el.value=[...el.options].some(option=>option.value===current)?current:'';}
 
   /** 建立完整原始資料表表頭。 */
-  function buildRawHeader(){const head=$('#raw-head');RAW_COLUMNS.forEach(([label])=>{const th=document.createElement('th');th.textContent=label;head.append(th);});}
+  function buildRawHeader(){const head=$('#raw-head');RAW_COLUMNS.forEach(([label])=>{const th=document.createElement('th');th.textContent=label;head.append(th);});const actionTh=document.createElement('th');actionTh.textContent='操作';head.append(actionTh);}
 
   /** 套用搜尋、篩選與排序後顯示全部符合的原始資料。 */
   function renderRawTable(){
     const term=$('#raw-search').value.trim().toLowerCase(),source=$('#raw-source').value,role=$('#raw-role').value,budget=$('#raw-budget').value,subscription=$('#raw-subscription').value,sort=$('#raw-sort').value;
     const filtered=surveyRows.filter(row=>{if(term&&!jsonText(row).toLowerCase().includes(term))return false;if(source&&row.source!==source)return false;if(role&&row.role!==role)return false;if(budget&&row.budget!==budget)return false;if(subscription==='contactable'&&!(row.consent&&!row.unsubscribed))return false;if(subscription==='unsubscribed'&&!row.unsubscribed)return false;if(subscription==='no-consent'&&row.consent)return false;return true;}).sort((a,b)=>dateValue(a.createdAt)-dateValue(b.createdAt));if(sort==='desc')filtered.reverse();
-    const body=$('#raw-table tbody');body.replaceChildren();filtered.forEach(row=>{const tr=document.createElement('tr');RAW_COLUMNS.forEach(([,getter])=>{const td=document.createElement('td');const value=getter(row);td.textContent=value==null?'':String(value);td.title=td.textContent;tr.append(td);});body.append(tr);});if(!filtered.length){const tr=document.createElement('tr'),td=emptyNode('沒有符合條件的資料');td.colSpan=RAW_COLUMNS.length;tr.append(td);body.append(tr);}$('#raw-count').textContent=filtered.length+' / '+surveyRows.length+' 筆';
+    const body=$('#raw-table tbody');body.replaceChildren();filtered.forEach(row=>{const tr=document.createElement('tr');RAW_COLUMNS.forEach(([,getter])=>{const td=document.createElement('td');const value=getter(row);td.textContent=value==null?'':String(value);td.title=td.textContent;tr.append(td);});
+      // 操作欄（B2）：寄券按鈕＋已寄券別標示
+      const actionTd=document.createElement('td');
+      const sendBtn=document.createElement('button');
+      sendBtn.className='btn ghost';sendBtn.type='button';sendBtn.textContent='寄券';
+      sendBtn.onclick=()=>openCouponSendDialog(row.email);
+      actionTd.append(sendBtn);
+      const sentLabel=sentCouponLabel(row.email);
+      if(sentLabel){const span=document.createElement('span');span.className='hint';span.style.display='block';span.textContent=sentLabel;actionTd.append(span);}
+      tr.append(actionTd);
+      body.append(tr);});if(!filtered.length){const tr=document.createElement('tr'),td=emptyNode('沒有符合條件的資料');td.colSpan=RAW_COLUMNS.length+1;tr.append(td);body.append(tr);}$('#raw-count').textContent=filtered.length+' / '+surveyRows.length+' 筆';
+  }
+
+  /** 該 email 已收過的券別標示文字：以優惠碼呈現（找不到活動時退回 #id） */
+  function sentCouponLabel(email){
+    const ids=couponSentMap[(email||'').trim().toLowerCase()]||[];
+    if(!ids.length)return '';
+    return '已寄：'+ids.map(id=>{const c=couponCampaignsAll.find(x=>x.id===id);return c?c.couponCode:('#'+id);}).join('、');
+  }
+  /** 開啟逐列寄券視窗（D5）：下拉僅列未過期券（建立時間新到舊）；已寄過的標示並停用 */
+  function openCouponSendDialog(email){
+    const dialog=$('#coupon-send-dialog');
+    $('#coupon-send-dialog-email').textContent=email;
+    const select=$('#coupon-send-dialog-select');select.replaceChildren();
+    const today=new Date().toISOString().slice(0,10);
+    const sent=couponSentMap[(email||'').trim().toLowerCase()]||[];
+    const candidates=couponCampaignsAll
+      .filter(c=>!c.expiresAt||c.expiresAt>=today)          // 過期券不列（spec §4.2）
+      .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+    candidates.forEach(c=>{
+      const opt=new Option(`${c.courseName}（${c.couponCode}）${sent.includes(c.id)?'（已寄過）':''}`,c.id);
+      opt.disabled=sent.includes(c.id);
+      select.add(opt);
+    });
+    $('#coupon-send-dialog-msg').textContent=candidates.length?'':'沒有可寄送的未過期優惠券';
+    dialog.dataset.email=email;
+    dialog.showModal();
+  }
+  /** 確認寄出：single:true 走單筆語意（D6），成功後就地更新已寄快取與表格 */
+  async function confirmCouponSend(){
+    const dialog=$('#coupon-send-dialog');
+    const email=dialog.dataset.email;
+    const id=Number($('#coupon-send-dialog-select').value);
+    if(!id)return;
+    const msgBox=$('#coupon-send-dialog-msg');
+    try{
+      const result=await api(`/api/admin/coupons/${id}/send`,{method:'POST',body:JSON.stringify({emails:[email],limit:1,single:true})});
+      if(result.sent>0){
+        const key=email.trim().toLowerCase();
+        (couponSentMap[key]=couponSentMap[key]||[]).push(id);
+        renderRawTable();
+        dialog.close();
+      }else{
+        msgBox.textContent=`未寄出（skipped ${result.skipped}、failed ${result.failed}）`;
+      }
+    }catch(e){msgBox.textContent='寄送失敗：'+e.message;}  // 含「不在命中名單」的 400 訊息原样呈現
   }
 
   /** 透過受保護請求下載資料，不將管理金鑰放進 URL。 */
