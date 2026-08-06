@@ -344,8 +344,11 @@ const main = async () => {
       pubMsg.includes('訂閱者不會自動收到通知'), pubMsg);
     check('★ 指引另寄一封 BASIC 通知信',
       pubMsg.includes('BASIC 通知信'), pubMsg);
-    check('★ 警告受限內容不要貼進信裡',
-      pubMsg.includes('受限內容不要貼進信裡'), pubMsg);
+    // commit ea2968d（fold paywall content out of every outgoing email）之後，
+    // 折疊已對所有寄信路徑無條件生效，文案從「警告不要貼」改為「貼了也不會外洩」的
+    // 保證說明，斷言需對齊現行文案。
+    check('★ 說明貼了受限內容也不會外洩（折疊保證）',
+      pubMsg.includes('就算不小心把受限內容貼進去也不會外洩'), pubMsg);
     // 發布成功後點數欄位必須清空：殘留上一篇的價格會擋掉下一篇的預填
     //（第一道守門看到欄位非空就 return），且可能被誤信為預設值直接發布。
     eq(await page.inputValue('#art-cost'), '', '★ 發布成功後解鎖點數欄位已清空');

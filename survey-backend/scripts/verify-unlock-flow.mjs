@@ -247,10 +247,13 @@ console.log('\n[8] VIP 直接 POST 解鎖端點（不得扣點）');
 //    必須回 409 而不是讓 UnlockService 的 fail-closed IllegalStateException 變成 500。
 console.log('\n[9] BASIC 文章 POST 解鎖端點（不得回 500）');
 {
+  // V18（ck_campaign_paywall_requires_premium）之後，BASIC 文章的 markdown
+  // 不得含 <!--paywall--> 標記——這條約束比本測資更晚加入，這裡改用純免費內容，
+  // 因為本案例要驗的是「對 BASIC 文章呼叫解鎖端點回 409」，不需要受限區存在。
   sql(`
     INSERT INTO campaign (subject, markdown, mode, recipient_count, accepted_count, failed_count,
                           status, tier, credit_cost, slug, published_at)
-    VALUES ('端到端 BASIC 測試文章', ${quote(`${FREE_TEXT}\n\n<!--paywall-->\n\n${GATED_TEXT}`)},
+    VALUES ('端到端 BASIC 測試文章', ${quote(FREE_TEXT)},
             'now', 1, 1, 0, 'sent', 'BASIC', 0, '${BASIC_SLUG}', now())
     ON CONFLICT (slug) WHERE slug IS NOT NULL
     DO UPDATE SET tier = 'BASIC', credit_cost = 0, published_at = now();

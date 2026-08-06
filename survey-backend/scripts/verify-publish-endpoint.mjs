@@ -12,7 +12,9 @@
 //   ⑤ 跑完後「餘額 == credit_txn 總和」仍成立（直接查資料庫驗算）
 //   ⑥ 該文章出現在 /r/archive
 //   ⑦ 後台歷史列表不把它顯示成失敗的群發（mode=publish、status=published、寄送統計全 0）
-//   ⑧ 守門仍在：同一篇 PREMIUM 用 /api/admin/campaign/send 寄送必須被拒（400）
+//   ⑧ PREMIUM 用 /api/admin/campaign/send 寄送允許成立（commit f9a17df 起移除了
+//      舊的「PREMIUM 一律 400」守門——網頁端付費牆與信件端折疊都已就位，見下方
+//      案例 [4] 的說明），寄出的信件版內文（campaign.body_html）不含受限段落
 //   ⑨ 缺 slug 回 400、未帶金鑰回 401、重複 slug 回 400
 //   ⑩ PREMIUM 缺 <!--paywall--> 標記（含大小寫打錯）一律 400——否則頁面說「解鎖 N 點」
 //      而 ContentSplitter 把全文當免費區，未登入訪客整篇免費拿走
@@ -186,8 +188,10 @@ function resetFixtures() {
     console.error('測試 email 不符白名單，中止（避免誤刪真實資料）');
     process.exit(1);
   }
-  // 文章：先刪依賴它的 article_access，再刪 campaign（email_log 一律沒有，因為不寄信）
-  for (const slug of [SLUG, BASIC_SLUG]) {
+  // 文章：先刪依賴它的 article_access，再刪 campaign。
+  // ${SLUG}-mail 是案例 [4] 用 send 端點寄出的 PREMIUM 測試批次（真的會寫 email_log），
+  // 不清掉的話 slug 的 UNIQUE 約束會讓下一次重跑在案例 [4] 就 400。
+  for (const slug of [SLUG, BASIC_SLUG, `${SLUG}-mail`]) {
     sql(`DELETE FROM article_access
           WHERE campaign_id IN (SELECT id FROM campaign WHERE slug = ${quote(slug)});`);
     sql(`DELETE FROM email_log
@@ -347,8 +351,15 @@ try {
     eq(sql(`SELECT count(*) FROM campaign WHERE slug = ${quote(SLUG)};`), 1, '仍只有一列');
   }
 
-  // ── [4] 寄送守門仍在：同一篇 PREMIUM 內容用 send 端點必須被拒 ──────────
-  console.log('\n[4] 寄送守門仍在（publish 放行 ≠ send 放行）');
+  // ── [4] PREMIUM 用 send 端點寄送：舊守門已於 commit f9a17df 移除 ────────
+  //
+  // 舊版本（本檔案原本的斷言）認為 PREMIUM 走 send 一律 400，理由是「階段 D
+  // 折疊尚未實作，寄出會把受限區送給所有收件人」。commit ea2968d 已讓
+  // mailBodyHtml() 對所有 tier 無條件折疊（付費牆之後的內容一律不進信件），
+  // 因此 f9a17df 移除了這道守門——PREMIUM 現在可以正常經 send 寄出，
+  // 這裡改驗「寄出的信件版內文（campaign.body_html）不含受限段落」這條
+  // 真正要守住的性質，而不是一個已經不存在的 400。
+  console.log('\n[4] PREMIUM 用 send 端點寄送（信件版內文不得含受限段落）');
   {
     const sent = await admin('/api/admin/campaign/send', {
       method: 'POST',
@@ -357,9 +368,17 @@ try {
         tier: 'PREMIUM', creditCost: COST, slug: `${SLUG}-mail`,
       }),
     });
-    eq(sent.status, 400, '★ PREMIUM 走 send 端點仍回 400（階段 D 前不得寄送）');
-    eq(sql(`SELECT count(*) FROM campaign WHERE slug = ${quote(`${SLUG}-mail`)};`), 0,
-      '被守門擋下時未寫入 campaign');
+    eq(sent.status, 200, '★ PREMIUM 走 send 端點的回應碼（舊 400 守門已移除）');
+    const row = sql(`SELECT mode, status, tier, body_html IS NULL,
+                            position('${GATED}' in coalesce(body_html, '')) > 0,
+                            position('${FREE}' in coalesce(body_html, '')) > 0
+                       FROM campaign WHERE slug = ${quote(`${SLUG}-mail`)};`).split('|');
+    eq(row[0], 'now', 'campaign.mode');
+    eq(row[1], 'sent', 'campaign.status');
+    eq(row[2], 'PREMIUM', 'campaign.tier');
+    eq(row[3], 'f', 'campaign.body_html 非 NULL（信件版內文已產生）');
+    eq(row[4], 'f', '★ 信件版內文不含受限段落（折疊生效）');
+    eq(row[5], 't', '信件版內文含免費區');
   }
 
   // ── [5] 未登入讀者：回應本文不得含受限段落 ────────────────────────────
@@ -369,7 +388,9 @@ try {
     eq(res.status, 200, '回應碼');
     check('看得到免費區', body.includes(FREE));
     check('★ 回應本文完全不含受限段落', !body.includes(GATED), '受限內容外洩給未登入者');
-    check('顯示「需要登入」的 gate', body.includes('登入繼續閱讀'));
+    // 現行文案（commit f9a17df）刻意改成「登入後仍需點數解鎖」，
+    // 避免讓讀者誤以為單純登入就能看到付費內容，斷言需對齊現行文案。
+    check('顯示「需要登入」的 gate', body.includes('登入查看解鎖方式'));
     check('標示為進階內容', body.includes('進階'));
   }
 
@@ -455,8 +476,11 @@ try {
 
     const { res, body } = await page('/r/archive');
     eq(res.status, 200, '/r/archive 回應碼');
-    check(`★ /r/archive 列出 PREMIUM 那篇（/r/news/${SLUG}）`, body.includes(`/r/news/${SLUG}`));
-    check(`★ /r/archive 列出 BASIC 那篇（/r/news/${BASIC_SLUG}）`, body.includes(`/r/news/${BASIC_SLUG}`));
+    // 用 href="...slug" 這個含右引號的完整字串比對，而不是裸 slug 子字串——
+    // 案例 [4] 現在會真的建立並發布 `${SLUG}-mail`，裸子字串比對會被它撞成假陽性
+    // （反過來也會讓下架後的「不再列出」斷言撞成假陰性）。
+    check(`★ /r/archive 列出 PREMIUM 那篇（/r/news/${SLUG}）`, body.includes(`href="/r/news/${SLUG}"`));
+    check(`★ /r/archive 列出 BASIC 那篇（/r/news/${BASIC_SLUG}）`, body.includes(`href="/r/news/${BASIC_SLUG}"`));
     check('★ archive 不含任何受限段落', !body.includes(GATED));
   }
 
@@ -542,7 +566,8 @@ try {
     eq(single.res.status, 404, '★ /r/news/{slug} 下架後回應碼');
     check('★ 下架後單篇頁不含受限段落', !single.body.includes(GATED));
     const archive = await page('/r/archive');
-    check(`★ /r/archive 不再列出這篇（/r/news/${SLUG}）`, !archive.body.includes(`/r/news/${SLUG}`));
+    // 同樣改用含右引號的完整 href 比對，避免被仍在架上的 `${SLUG}-mail` 撞成假陰性
+    check(`★ /r/archive 不再列出這篇（/r/news/${SLUG}）`, !archive.body.includes(`href="/r/news/${SLUG}"`));
     check('★ archive 不含任何受限段落', !archive.body.includes(GATED));
 
     // ★ 已發生的交易完全不受影響（帳本只增不改；已買過的人重新發布後仍有效）
@@ -557,8 +582,10 @@ try {
       '★ 那筆 READ 扣點紀錄仍在（不得因下架而退點或刪除）');
     checkLedgerInvariant('下架後測試讀者', READER_EMAIL);
 
-    // 其餘欄位一個都不能被動到——條件式 UPDATE 只寫 published_at 一欄；
-    // 若改成 save(entity) 整列寫回，這裡驗的是「沒有資料遺失」，
+    // 其餘欄位一個都不能被非預期地動到——條件式 UPDATE 只寫 published_at 與 status
+    // 兩欄（CampaignService.unpublish 的 javadoc：status 一併改為 UNPUBLISHED，
+    // 才有 republish 的守門依據，也讓後台列表不必再靠 publishedAt 是否為 null
+    // 反推狀態）；若改成 save(entity) 整列寫回，這裡驗的是「沒有資料遺失」，
     // 而併發覆蓋的性質由 CampaignServiceTest 的 verify(clearPublishedAt) 守著。
     const after = sql(`SELECT subject, tier, credit_cost, mode, status, slug
                          FROM campaign WHERE slug = ${quote(SLUG)};`).split('|');
@@ -566,7 +593,7 @@ try {
     eq(after[1], 'PREMIUM', '下架後 tier 不變');
     eq(after[2], COST, '下架後 credit_cost 不變');
     eq(after[3], 'publish', '下架後 mode 不變');
-    eq(after[4], 'published', '下架後 status 不變（下架只改 published_at 一欄）');
+    eq(after[4], 'unpublished', '★ 下架後 status 改為 unpublished（republish 的守門依據）');
 
     // ⑥ 下架後 slug 仍被那一列佔用，所以「同 slug 重新發布」依舊回 400——
     //    這是刻意的：重新上架應該是把 published_at 設回來（或改用新 slug），

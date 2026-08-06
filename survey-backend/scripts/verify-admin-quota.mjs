@@ -116,6 +116,10 @@ async function openAdmin(q, count, sendResult) {
     if (url.includes('/api/admin/invites')) return json({ invitedCount: 0, remindedCount: 0, confirmedCount: 0, pendingCount: 0, logs: [] });
     if (url.includes('/api/admin/campaigns')) return json([]);
     if (url.includes('/api/admin/templates/invite')) return json({ subject: 's', bodyHtml: '{{confirmLink}}' });
+    // 切到電子報頁籤會觸發 loadMediaLibrary()，其 mediaLibrary.find() 要求陣列；
+    // 沒攔到這條路徑會退回下面的 json({})，讓 mediaLibrary 變成物件，
+    // 案例 7 送出成功後呼叫 setCoverMedia(null) 就會炸在 mediaLibrary.find is not a function。
+    if (url.includes('/api/admin/media')) return json([]);
     return json({});
   });
   // sessionStorage 已有金鑰時，頁面載入即自行驗證並進入主畫面（不需操作金鑰閘門）
@@ -163,14 +167,20 @@ try {
   has(await page.locator('#quota-warn').textContent(), '其餘 40 人本次不會收到', '超量警告文案（被略過人數）');
   await page.close();
 
-  // 案例 4：剩餘額度小於欄位預設值 50 → 欄位既有值應被下修，避免送出後才被後端截掉
-  console.log('\n[4] 剩餘額度小於欄位預設值');
+  // 案例 4：剩餘額度小於保留額度（reserve）→ 欄位應下修到「行銷可用」而非原始 remaining。
+  // remaining=30、reserve 預設 50 → marketingRemaining=max(0,30-50)=0：
+  // 交易信保留額度會把這 30 封全吃光，欄位必須下修到 0，不能只下修到 remaining 本身，
+  // 否則管理者按下發送仍會被後端依 marketingRemaining 全數截斷（MailQuotaService §102-104）。
+  console.log('\n[4] 剩餘額度小於保留額度（行銷可用應下修為 0）');
   page = await openAdmin(quota({ remaining: 30, monthlyRemaining: 30, batchMax: 30 }), 10);
-  eq(await page.locator('#invite-limit').getAttribute('max'), 30, '單次上限欄位 max');
-  eq(await page.locator('#invite-limit').inputValue(), 30, '單次上限欄位既有值（應被下修）');
+  eq(await page.locator('#invite-limit').getAttribute('max'), 0, '單次上限欄位 max');
+  eq(await page.locator('#invite-limit').inputValue(), 0, '單次上限欄位既有值（應被下修）');
   await page.close();
 
-  // 案例 5：偵測不可用（未設 ZEABUR_API_TOKEN）→ 明確告知未偵測到，並以保守額度為上限
+  // 案例 5：偵測不可用（未設 ZEABUR_API_TOKEN）→ 明確告知未偵測到，並以保守額度為上限。
+  // fallback 額度同樣受 reserve 約束（MailQuotaService.fallback() 呼叫 marketingLimits）：
+  // remaining=100、reserve 預設 50 → marketingRemaining=50，故欄位 max 應為 50，
+  // 而非未扣除保留額度前的原始 100（那會讓表單允許輸入的數字比後端實際會放行的還多）。
   console.log('\n[5] 未設定 token，退回保守額度');
   page = await openAdmin(quota({
     source: 'fallback', status: 'unknown',
@@ -180,7 +190,7 @@ try {
   }), 10);
   has(await page.locator('#quota-info').textContent(), '未偵測到 Zeabur 額度', '額度說明列（fallback）');
   has(await page.locator('#quota-info').textContent(), '暫以 100 封為上限', '額度說明列（fallback）');
-  eq(await page.locator('#invite-limit').getAttribute('max'), 100, '單次上限欄位 max');
+  eq(await page.locator('#invite-limit').getAttribute('max'), 50, '單次上限欄位 max（扣除保留額度後）');
   await page.close();
 
   // 案例 6：帳號狀態異常 → 警告優先提示帳號狀態，而非只看額度數字

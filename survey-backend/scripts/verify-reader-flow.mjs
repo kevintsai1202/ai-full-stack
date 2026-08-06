@@ -55,7 +55,9 @@ console.log('\n[2] 未登入讀單篇（受限區不得洩漏）');
   check('★ 回應完全不含受限區', !body.includes(GATED_TEXT),
     '受限內容洩漏到未登入者的回應中');
   check('paywall 標記未洩漏', !body.includes('<!--paywall-->'));
-  check('顯示登入提示', body.includes('需要登入'));
+  // 現行文案（commit f9a17df）刻意改成「登入後仍需點數解鎖」，
+  // 避免讓讀者誤以為單純登入就能看到付費內容；斷言需對齊現行文案。
+  check('顯示登入提示', body.includes('請先用訂閱時的 email 登入'));
 }
 
 // 3. 不存在的文章

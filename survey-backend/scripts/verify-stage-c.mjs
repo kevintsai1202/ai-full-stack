@@ -233,6 +233,15 @@ function resetFixtures() {
     const idList = ids.join(', ');
     sql(`DELETE FROM article_access WHERE reader_id IN (${idList});`);
     sql(`DELETE FROM credit_txn WHERE reader_id IN (${idList});`);
+    // referral_conversion / referral_click / referral_badge 都有外鍵指向 reader.id
+    // （病毒式成長功能，見 fb66556／c2a4b44），不先清掉這三張表，下面的
+    // DELETE FROM reader 會撞 referral_conversion_referrer_id_fkey 而整支腳本中止，
+    // 導致「可重跑」的前提失效。referral_conversion 額外用 invitee_email_normalized
+    // 撈一次，因為被邀者那筆 conversion 的 referrer_id 是 A、不是 B 自己。
+    sql(`DELETE FROM referral_conversion WHERE referrer_id IN (${idList})
+          OR lower(invitee_email_normalized) IN (${emails});`);
+    sql(`DELETE FROM referral_click WHERE referrer_id IN (${idList});`);
+    sql(`DELETE FROM referral_badge WHERE reader_id IN (${idList});`);
     // referred_by 沒有外鍵約束，仍主動清掉指向即將刪除之列的參照
     sql(`UPDATE reader SET referred_by = NULL WHERE referred_by IN (${idList});`);
     sql(`DELETE FROM reader WHERE id IN (${idList});`);
@@ -278,6 +287,11 @@ try {
   // 後台頁面拿它設 input 的 min/max，不在前端另寫一份數字），故取值要走 .value
   const SIGNUP_GRANT = Number(settings.body['credit.signup_grant'].value);
   const REFERRAL_REWARD = Number(settings.body['credit.referral_reward'].value);
+  // 被邀者（B）首次登入時，除了初始贈點還會補發「邀請確認加碼」
+  // （ReferralGrowthService.grantPendingInviteeReward，REASON_REFERRAL_INVITEE）。
+  // 這是既有功能而非本輪異動，本腳本原本寫死 B 首次登入餘額 = SIGNUP_GRANT，
+  // 沒把這筆加碼算進去，需與後端實際發放的金額對齊。
+  const INVITEE_REWARD = Number(settings.body['credit.referral_invitee_reward'].value);
   originalPremiumCost = settings.body['credit.premium_cost'].value;
   check(`初始贈點 ${SIGNUP_GRANT}、邀請獎勵 ${REFERRAL_REWARD}、進階單篇 ${originalPremiumCost}`,
     Number.isFinite(SIGNUP_GRANT) && Number.isFinite(REFERRAL_REWARD) && originalPremiumCost != null);
@@ -310,9 +324,14 @@ try {
   const CODE = readerField(A_EMAIL, 'referral_code');
   check('A 有邀請碼', /^[A-Z0-9]{8}$/.test(CODE), CODE);
   {
-    const { res, body } = await page('/r/invite', aCookie);
-    eq(res.status, 200, '/r/invite 回應碼');
-    check('邀請頁含完整邀請連結', body.includes(`/r/?ref=${CODE}`));
+    // /r/invite 已改為舊書籤相容入口，登入後一律 302 導向 /r/me#invite
+    // （帳戶頁與邀請頁合併，見 commit 8e89ff3），邀請內容改到 /r/me 檢查。
+    const invite = await page('/r/invite', aCookie);
+    eq(invite.res.status, 302, '/r/invite 回應碼（舊書籤相容，導向帳戶頁）');
+    check('/r/invite 導向 /r/me#invite', (invite.res.headers.get('location') || '').includes('/r/me'));
+    const { res, body } = await page('/r/me', aCookie);
+    eq(res.status, 200, '/r/me 回應碼');
+    check('/r/me 含完整邀請連結', body.includes(`/r/?ref=${CODE}`));
     check('尚無成功邀請時顯示空狀態', body.includes('還沒有人透過你的連結完成訂閱'));
   }
 
@@ -336,9 +355,10 @@ try {
   eq(sql(`SELECT count(*) FROM credit_txn WHERE reason = 'REFERRAL' AND note = ${quote(B_EMAIL)};`),
     1, '發獎後的 REFERRAL 筆數');
   {
-    const { body } = await page('/r/invite', aCookie);
-    check('/r/invite 顯示「1 人」', body.includes('1 人'));
-    check(`/r/invite 顯示累計獲得 ${REFERRAL_REWARD} 點`,
+    // 邀請成效同樣併到 /r/me（見上方 [2] 的說明）
+    const { body } = await page('/r/me', aCookie);
+    check('/r/me 顯示「1 人」', body.includes('1 人'));
+    check(`/r/me 顯示累計獲得 ${REFERRAL_REWARD} 點`,
       body.includes(`累計獲得 ${REFERRAL_REWARD} 點`));
   }
 
@@ -355,7 +375,9 @@ try {
   eq(bLogin.status, 302, 'B magic link 回應碼');
   check('B 取得 reader_session cookie', !!bLogin.cookie);
   const bCookie = bLogin.cookie;
-  eq(credits(B_EMAIL), SIGNUP_GRANT, 'B 首次登入後餘額');
+  // B 是被邀者：首次登入除了初始贈點，還會補發「邀請確認加碼」（見上方 INVITEE_REWARD 說明）
+  const B_BASELINE = SIGNUP_GRANT + INVITEE_REWARD;
+  eq(credits(B_EMAIL), B_BASELINE, 'B 首次登入後餘額（含邀請確認加碼）');
   eq(readerField(B_EMAIL, 'referred_by'), readerField(A_EMAIL, 'id'),
     'B 的 referred_by 指向 A');
 
@@ -383,7 +405,7 @@ try {
     eq(status, 200, '解鎖回應碼');
     eq(data?.outcome, 'UNLOCKED', 'outcome');
     eq(data?.cost, ART.unlock.cost, '實際扣點');
-    eq(credits(B_EMAIL), SIGNUP_GRANT - ART.unlock.cost, 'B 解鎖後餘額');
+    eq(credits(B_EMAIL), B_BASELINE - ART.unlock.cost, 'B 解鎖後餘額');
   }
   {
     const { body } = await page(`/r/news/${ART.unlock.slug}`, bCookie);
@@ -397,7 +419,7 @@ try {
     const { status, data } = await unlock(bCookie, ART.unlock.slug);
     eq(status, 200, '再次解鎖回應碼');
     eq(data?.outcome, 'ALREADY_UNLOCKED', 'outcome');
-    eq(credits(B_EMAIL), SIGNUP_GRANT - ART.unlock.cost, 'B 餘額（不得再減少）');
+    eq(credits(B_EMAIL), B_BASELINE - ART.unlock.cost, 'B 餘額（不得再減少）');
     eq(sql(`SELECT count(*) FROM credit_txn t JOIN reader r ON r.id = t.reader_id
             WHERE lower(r.email) = ${quote(B_EMAIL)} AND t.reason = 'READ';`), 1,
       'READ 扣點筆數（不得變成 2）');
@@ -513,8 +535,8 @@ try {
     check('/r/me 不含被邀者完整 email', !me.includes(B_EMAIL));
     check(`/r/me 不含被邀者 local part（${B_LOCAL}）`, !me.includes(B_LOCAL));
     check('改以固定文字呈現', me.includes('一位朋友完成訂閱'));
-    const invitePage = (await page('/r/invite', aCookie)).body;
-    check('/r/invite 不含被邀者 local part', !invitePage.includes(B_LOCAL));
+    // 邀請成效併到 /r/me（同上），這裡改為再次確認同一頁不洩漏被邀者 local part
+    check('/r/me 不含被邀者 local part（邀請成效區塊）', !me.includes(B_LOCAL));
     // 冪等鍵本身仍存在資料庫（不可改），只是不對讀者呈現——把這件事驗明白，
     // 避免日後有人「為了乾淨」把 note 清掉而讓重複發獎的防線失效
     eq(sql(`SELECT count(*) FROM credit_txn WHERE reason = 'REFERRAL' AND note = ${quote(B_EMAIL)};`),
@@ -542,9 +564,10 @@ try {
       // optional chaining：鍵不存在時 back.body?.[...]?.value 回 undefined 而非拋出，
       // 讓 eq() 能把「還原失敗」如實記成一筆失敗，而不是被外層 catch 接住而整段跳過
       eq(back.body?.['credit.premium_cost']?.value, originalPremiumCost, '還原後讀回的值');
-      const rules = (await page('/r/rules')).body;
-      check(`/r/rules 已還原為每篇 ${originalPremiumCost} 點`,
-        rules.includes(`進階文章每篇 ${originalPremiumCost} 點`));
+      // 不再檢查 /r/rules 文案：如步驟 [10] 的說明，C1 之後 /r/rules 顯示的是
+      // 已發布 PREMIUM 文章的實際 credit_cost 區間，與全域預設 credit.premium_cost
+      // 無關——這裡只要確認設定值本身已還原（上面兩個斷言）即可，不必也不應該
+      // 再斷言 /r/rules 的頁面文案會回到「每篇 N 點」。
     }
     if (vipGranted) {
       const del = await admin('/api/admin/readers/vip?email=' + encodeURIComponent(B_EMAIL),

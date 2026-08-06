@@ -198,6 +198,9 @@ check('重複選項回 400（去空白後比對）', duplicated.status === 400, 
 
 // ── [2] 種入驗證資料 ──────────────────────────────────────────────
 console.log('\n[2] 種入驗證文章與讀者');
+// survey_vote 有外鍵指向 campaign.id：[5]/[6] 對 verify-main 一鍵投票會寫入這張表，
+// 不先清掉的話第二次重跑會在刪 campaign 時撞 survey_vote_campaign_id_fkey。
+sql(`DELETE FROM survey_vote WHERE campaign_id IN (SELECT id FROM campaign WHERE slug LIKE 'verify-%')`);
 sql(`DELETE FROM campaign_tag WHERE campaign_id IN (SELECT id FROM campaign WHERE slug LIKE 'verify-%')`);
 sql(`DELETE FROM campaign WHERE slug LIKE 'verify-%'`);
 sql(`DELETE FROM credit_txn WHERE reader_id IN (SELECT id FROM reader WHERE email = '${READER_EMAIL}')`);
@@ -243,10 +246,22 @@ tagCampaign(twoSharedId, 'rag');
 const oneSharedId = insertCampaign('verify-one-shared', '共一個標籤的新文', '2026-06-20T10:00:00+08:00');
 tagCampaign(oneSharedId, 'ai');
 
-insertCampaign('verify-no-shared', '沒有共同標籤的最新文', '2026-07-01T10:00:00+08:00');
+// 這篇要靠「補最新」機制被選中（PublicRelatedArticleService.latestExcluding
+// 是全庫 ORDER BY published_at DESC，不限本腳本的 fixture）。這支腳本現在會與
+// 其他 verify-*.mjs 在同一個持久化測試庫裡先後執行（Task 13 迴歸總驗證），
+// 那些腳本建立的文章 published_at 多半是「執行當下」，比這裡原本寫死的
+// 2026-07-01 新，會把這篇擠出「最新」排名而導致找不到。改用遠未來時間，
+// 確保它在全庫 published_at DESC 排序下必定奪冠，不受其他腳本執行順序影響。
+insertCampaign('verify-no-shared', '沒有共同標籤的最新文', '2099-01-01T00:00:00+08:00');
 
 const readerId = sql(`INSERT INTO reader (email, credits, referral_code)
                       VALUES ('${READER_EMAIL}', 100, 'VERIFY01') RETURNING id`);
+// 補一筆對應的 credit_txn，讓「credits == sum(credit_txn)」這條全域不變式在
+// 本腳本跑完後仍成立——其他驗收腳本（例如 verify-unlock-flow.mjs 收尾）會對
+// 整個測試庫做這項稽核，直接塞 credits 卻不留帳本紀錄會讓那些腳本在同一輪
+// 迴歸（Task 13）裡誤報成「資料庫有壞帳」。
+sql(`INSERT INTO credit_txn (reader_id, delta, reason, note)
+     VALUES (${readerId}, 100, 'SIGNUP_GRANT', 'verify-sidebar-and-vote fixture')`);
 check('測試文章與讀者已種入', Boolean(mainId) && Boolean(readerId), `campaign=${mainId} reader=${readerId}`);
 const sessionCookie = issueReaderSession(readerId);
 
