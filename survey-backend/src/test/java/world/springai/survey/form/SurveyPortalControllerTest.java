@@ -83,7 +83,7 @@ class SurveyPortalControllerTest {
             1L, "feedback", "你的回饋", "short_text", true, List.of(),
             false, null, false, false, false, 1, null);
         return new FormSchemaService.FormDefinition(
-            1L, "survey-form", 1, "回饋問卷", "PUBLISHED", false, null, List.of(field));
+            1L, "survey-form", 1, "回饋問卷", "PUBLISHED", false, null, false, null, List.of(field));
     }
 
     /** 建一位有 id 的讀者，供帳本查詢的身分歸戶使用 */
@@ -107,7 +107,7 @@ class SurveyPortalControllerTest {
             1L, "choice", "你的選擇", "single_choice", true, List.of("A", "B"),
             false, null, false, false, false, 1, null);
         return new FormSchemaService.FormDefinition(
-            1L, "reader-poll", 1, "讀者投票", "PUBLISHED", false, "choice", List.of(field));
+            1L, "reader-poll", 1, "讀者投票", "PUBLISHED", false, "choice", false, null, List.of(field));
     }
 
     @Test
@@ -167,7 +167,7 @@ class SurveyPortalControllerTest {
             1L, "feedback", "</script><script>alert(1)</script>", "short_text", true, List.of(),
             false, null, false, false, false, 1, null);
         FormSchemaService.FormDefinition maliciousForm = new FormSchemaService.FormDefinition(
-            1L, "survey-form", 1, "回饋問卷", "PUBLISHED", false, null, List.of(field));
+            1L, "survey-form", 1, "回饋問卷", "PUBLISHED", false, null, false, null, List.of(field));
         when(formSchemaService.getDefinition("survey-form", null)).thenReturn(maliciousForm);
 
         MvcResult result = mvc.perform(get("/r/survey/survey-form"))

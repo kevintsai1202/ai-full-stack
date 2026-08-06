@@ -97,7 +97,7 @@ class NewsletterSubmissionServiceTest {
 
     /** 測試用問卷版本：不需要欄位即可驗證身分解析與衝突解法路徑。 */
     private FormDefinition form() {
-        return new FormDefinition(1L, "news-form", 1, "電子報問卷", "PUBLISHED", false, null, List.of());
+        return new FormDefinition(1L, "news-form", 1, "電子報問卷", "PUBLISHED", false, null, false, null, List.of());
     }
 
     @Test

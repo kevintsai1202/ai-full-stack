@@ -63,7 +63,10 @@ public class FormSchemaService {
             int displayOrder,
             String factKey) {}
 
-    /** 表單版本 schema。emailVoteFieldKey 為此版本信中一鍵題所綁定的欄位 key，未設為 null。 */
+    /**
+     * 表單版本 schema。emailVoteFieldKey 為此版本信中一鍵題所綁定的欄位 key，未設為 null。
+     * homepageVisible／homepageOrder 為首頁曝光設定（以 form_key 為單位對所有版本一致寫入）。
+     */
     public record FormDefinition(
             long id,
             String key,
@@ -72,6 +75,8 @@ public class FormSchemaService {
             String status,
             boolean publicAnalyticsEnabled,
             String emailVoteFieldKey,
+            boolean homepageVisible,
+            Integer homepageOrder,
             List<FieldDefinition> fields) {}
 
     /** 信中一鍵題完整描述；options 為選項文字（依序，optionIndex 對映） */
@@ -114,7 +119,7 @@ public class FormSchemaService {
     public List<FormDefinition> listDefinitions() {
         return jdbc.query("""
             SELECT id, form_key, version, title, status, public_analytics_enabled,
-                   email_vote_field_key
+                   email_vote_field_key, homepage_visible, homepage_order
               FROM form_definition
              ORDER BY form_key, version DESC
             """, (rs, rowNum) -> definition(
@@ -124,7 +129,9 @@ public class FormSchemaService {
                 rs.getString("title"),
                 rs.getString("status"),
                 rs.getBoolean("public_analytics_enabled"),
-                rs.getString("email_vote_field_key")));
+                rs.getString("email_vote_field_key"),
+                rs.getBoolean("homepage_visible"),
+                (Integer) rs.getObject("homepage_order")));
     }
 
     /** 取得指定版本；version 為 null 時取最新發布版本。 */
@@ -132,7 +139,7 @@ public class FormSchemaService {
         List<Map<String, Object>> rows = version == null
             ? jdbc.queryForList("""
                 SELECT id, form_key, version, title, status, public_analytics_enabled,
-                       email_vote_field_key
+                       email_vote_field_key, homepage_visible, homepage_order
                   FROM form_definition
                  WHERE form_key = ? AND status = 'PUBLISHED'
                  ORDER BY version DESC
@@ -140,7 +147,7 @@ public class FormSchemaService {
                 """, formKey)
             : jdbc.queryForList("""
                 SELECT id, form_key, version, title, status, public_analytics_enabled,
-                       email_vote_field_key
+                       email_vote_field_key, homepage_visible, homepage_order
                   FROM form_definition
                  WHERE form_key = ? AND version = ?
                 """, formKey, version);
@@ -155,7 +162,9 @@ public class FormSchemaService {
             String.valueOf(row.get("title")),
             String.valueOf(row.get("status")),
             Boolean.TRUE.equals(row.get("public_analytics_enabled")),
-            (String) row.get("email_vote_field_key"));
+            (String) row.get("email_vote_field_key"),
+            Boolean.TRUE.equals(row.get("homepage_visible")),
+            (Integer) row.get("homepage_order"));
     }
 
     /** 建立全新問卷：v1 DRAFT 空殼；formKey 限 [a-z0-9-]{3,50} 且不可重複。 */
@@ -411,6 +420,48 @@ public class FormSchemaService {
             .toList();
     }
 
+    /** 首頁曝光問卷：key 連結 /r/survey/{key}，title 顯示用，homepageOrder 供排序（NULL 排最後） */
+    public record HomepageForm(String key, String title, Integer homepageOrder) {}
+
+    /**
+     * 列出後台勾選曝光且已發布的問卷；每個 key 取最新已發布版本的標題。
+     * 排序：homepage_order 升冪、NULL 排最後、NULL 內部依建立時間新到舊（spec §3.5）。
+     */
+    public List<HomepageForm> listHomepageForms() {
+        record Row(String key, String title, Integer order, OffsetDateTime createdAt) {}
+        List<Row> rows = jdbc.query("""
+            SELECT DISTINCT ON (form_key) form_key, title, homepage_order, created_at
+              FROM form_definition
+             WHERE homepage_visible = true AND status = 'PUBLISHED'
+             ORDER BY form_key, version DESC
+            """,
+            (rs, i) -> new Row(
+                rs.getString("form_key"),
+                rs.getString("title"),
+                (Integer) rs.getObject("homepage_order"),
+                rs.getObject("created_at", OffsetDateTime.class)));
+        return rows.stream()
+            .sorted(Comparator
+                .comparing(Row::order, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(Row::createdAt, Comparator.reverseOrder()))
+            .map(row -> new HomepageForm(row.key(), row.title(), row.order()))
+            .toList();
+    }
+
+    /**
+     * 更新指定問卷的首頁曝光設定。以 form_key 為單位對所有版本列一致寫入，
+     * 避免版本間旗標漂移（新版本發布後首頁不會突然掉線）。
+     */
+    @Transactional
+    public void updateHomepageExposure(String formKey, boolean visible, Integer order) {
+        int updated = jdbc.update(
+            "UPDATE form_definition SET homepage_visible = ?, homepage_order = ?, updated_at = now() WHERE form_key = ?",
+            visible, order, formKey);
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到指定表單");
+        }
+    }
+
     /** 依表單版本與其 emailVoteFieldKey 組出信中一鍵題描述；條件不符回 empty。 */
     private Optional<EmailVoteQuestion> toEmailVoteQuestion(FormDefinition form) {
         if (!StringUtils.hasText(form.emailVoteFieldKey())) {
@@ -600,9 +651,12 @@ public class FormSchemaService {
             String title,
             String status,
             boolean publicAnalyticsEnabled,
-            String emailVoteFieldKey) {
+            String emailVoteFieldKey,
+            boolean homepageVisible,
+            Integer homepageOrder) {
         return new FormDefinition(
-            id, key, version, title, status, publicAnalyticsEnabled, emailVoteFieldKey, fields(id));
+            id, key, version, title, status, publicAnalyticsEnabled, emailVoteFieldKey,
+            homepageVisible, homepageOrder, fields(id));
     }
 
     /** 依顯示順序讀取欄位定義。 */
