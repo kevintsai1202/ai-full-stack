@@ -12,6 +12,7 @@ class AdminAllowlistTest {
     void matchesIgnoringCaseAndWhitespace() {
         AdminAllowlist allowlist = new AdminAllowlist(" Kevin@Example.com , other@example.com ");
 
+        assertTrue(allowlist.isEnabled());
         assertTrue(allowlist.isAdmin("kevin@example.com"));
         assertTrue(allowlist.isAdmin("  OTHER@EXAMPLE.COM  "));
     }
