@@ -238,7 +238,7 @@
     </div>
     <div class="card">
       <div class="section-head">
-        <div><h2 style="margin:0">信中投票</h2><p class="hint" style="margin:4px 0 0">依表單信中一鍵題統計具名／匿名票數，並依電子報活動拆解投票→完填轉換率。</p></div>
+        <div><h2 style="margin:0">信中投票</h2><p class="hint" style="margin:4px 0 0">信中一鍵題點擊數，<strong>不受上方篩選條件影響</strong>（上方圖表吃版本／日期／來源／期別篩選，本卡永遠是該表單全量）。投票與上方「完整提交」是同一條漏斗的兩端：先在信中點一票，再回站完成整份問卷。</p></div>
       </div>
       <p class="hint" id="vote-summary">尚未載入。</p>
       <div class="chart" id="vote-options-chart"></div>
@@ -1289,13 +1289,22 @@
     return query;
   }
 
-  /** 讀取信中一鍵題投票統計：選項具名／匿名分層，以及各電子報活動的投票→完填轉換率。 */
+  /** 信中投票卡（B4）：投票統計外，加上與完整提交的漏斗兩端關係與轉換率（點擊→完填） */
   async function loadVoteStats(){
     const key=$('#dynamic-form').value;
     if(!key){$('#vote-summary').textContent='請先選擇表單。';return;}
     try{
-      const stats=await api(`/api/admin/analytics/forms/${encodeURIComponent(key)}/votes`);
-      $('#vote-summary').textContent=`累計 ${stats.totalVotes||0} 票 · 具名 ${stats.totalNamed||0} 票 · 匿名 ${(stats.totalVotes||0)-(stats.totalNamed||0)} 票`;
+      const [stats,analytics]=await Promise.all([
+        api(`/api/admin/analytics/forms/${encodeURIComponent(key)}/votes`),
+        api(`/api/admin/analytics/forms/${encodeURIComponent(key)}?allVersions=true`).catch(()=>null)]);
+      const total=stats.totalVotes||0,named=stats.totalNamed||0;
+      const submissions=analytics?.summary?.submissions;
+      let text=`累計 ${total} 票 · 具名 ${named} 票 · 匿名 ${total-named} 票`;
+      if(submissions!=null){
+        text+=` ｜ 完整提交（全版本不分期）${submissions} 筆`;
+        if(total>0)text+=` · 點擊→完填轉換率 ${(submissions/total*100).toFixed(1)}%`;
+      }
+      $('#vote-summary').textContent=text;
       renderVoteOptions(stats.options||[]);
       renderVoteCampaignTable(stats.byCampaign||[]);
     }catch(error){if(error.message!=='401')$('#vote-summary').textContent='投票統計載入失敗：'+error.message;}
