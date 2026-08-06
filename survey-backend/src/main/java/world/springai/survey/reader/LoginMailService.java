@@ -68,7 +68,7 @@ public class LoginMailService {
             return new SendResult(false, true);
         }
 
-        String rawToken = tokenService.issue(email, now);
+        String rawToken = tokenService.issue(email, LoginToken.PURPOSE_READER, now);
         String link = buildLoginLink(rawToken, redirect);
         String html = buildHtml(link);
 

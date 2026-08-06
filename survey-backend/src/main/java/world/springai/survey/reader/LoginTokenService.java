@@ -51,17 +51,22 @@ public class LoginTokenService {
     }
 
     /**
-     * 簽發一個新的登入 token。
+     * 簽發指定用途的 token。
      *
      * @return **明文** token，呼叫端應立即組成連結寄出，不得記錄於日誌
      */
-    public String issue(String email, OffsetDateTime now) {
+    public String issue(String email, String purpose, OffsetDateTime now) {
         byte[] raw = new byte[TOKEN_BYTES];
         random.nextBytes(raw);
         String rawToken = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
 
-        repository.save(new LoginToken(hash(rawToken), normalize(email), now.plusMinutes(ttlMinutes)));
+        repository.save(new LoginToken(hash(rawToken), normalize(email), now.plusMinutes(ttlMinutes), purpose));
         return rawToken;
+    }
+
+    /** 相容既有呼叫端：未指定用途即為讀者登入 */
+    public String issue(String email, OffsetDateTime now) {
+        return issue(email, LoginToken.PURPOSE_READER, now);
     }
 
     /**
@@ -81,7 +86,7 @@ public class LoginTokenService {
      * 帶條件的原子 UPDATE：只有 usedAt 仍是 NULL 時才會更新成功，回傳受影響
      * 筆數。若日後想把這段「簡化」回先查再存，請先讀這段註解。</p>
      */
-    public Optional<String> consume(String rawToken, OffsetDateTime now) {
+    public Optional<String> consume(String rawToken, String purpose, OffsetDateTime now) {
         if (!StringUtils.hasText(rawToken)) {
             return Optional.empty();
         }
@@ -90,7 +95,8 @@ public class LoginTokenService {
             return Optional.empty();
         }
         LoginToken token = found.get();
-        if (token.isUsed() || token.isExpired(now)) {
+        // 用途不符一律拒絕，且不消耗 token：reader 的連結不得換到 admin 權限
+        if (!purpose.equals(token.getPurpose()) || token.isUsed() || token.isExpired(now)) {
             return Optional.empty();
         }
         // 正確性依賴這裡的回傳值，不是上面 isUsed() 的前置檢查：
@@ -100,6 +106,11 @@ public class LoginTokenService {
             return Optional.empty();
         }
         return Optional.of(token.getEmail());
+    }
+
+    /** 相容既有呼叫端：未指定用途即為讀者登入 */
+    public Optional<String> consume(String rawToken, OffsetDateTime now) {
+        return consume(rawToken, LoginToken.PURPOSE_READER, now);
     }
 
     /** 該 email 在節流視窗內是否已達上限（避免服務被當成寄信放大器） */

@@ -22,6 +22,11 @@ import java.time.OffsetDateTime;
 @Table(name = "login_token")
 public class LoginToken {
 
+    /** 用途：讀者站登入 */
+    public static final String PURPOSE_READER = "reader";
+    /** 用途：管理後台登入 */
+    public static final String PURPOSE_ADMIN = "admin";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -46,15 +51,25 @@ public class LoginToken {
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
+    /** token 用途；防止讀者登入連結被拿去兌換管理權限 */
+    @Column(nullable = false)
+    private String purpose = PURPOSE_READER;
+
     /** JPA 需要的無參數建構子 */
     protected LoginToken() {
     }
 
-    /** 建立一筆待使用的登入 token */
+    /** 建立一筆待使用的登入 token；未指定用途者一律視為讀者登入 */
     public LoginToken(String tokenHash, String email, OffsetDateTime expiresAt) {
         this.tokenHash = tokenHash;
         this.email = email;
         this.expiresAt = expiresAt;
+    }
+
+    /** 建立一筆待使用、指定用途的登入 token */
+    public LoginToken(String tokenHash, String email, OffsetDateTime expiresAt, String purpose) {
+        this(tokenHash, email, expiresAt);
+        this.purpose = purpose;
     }
 
     /** 是否已被使用過 */
@@ -78,4 +93,5 @@ public class LoginToken {
     public OffsetDateTime getExpiresAt() { return expiresAt; }
     public OffsetDateTime getUsedAt() { return usedAt; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
+    public String getPurpose() { return purpose; }
 }

@@ -44,7 +44,7 @@ class LoginMailServiceTest {
     @Test
     void sendsMailWithMagicLink() {
         when(tokenService.isThrottled("user@example.com", NOW)).thenReturn(false);
-        when(tokenService.issue("user@example.com", NOW)).thenReturn("RAW-TOKEN-123");
+        when(tokenService.issue("user@example.com", LoginToken.PURPOSE_READER, NOW)).thenReturn("RAW-TOKEN-123");
         when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
 
         LoginMailService.SendResult result = service.sendLoginLink("user@example.com", null, NOW);
@@ -62,7 +62,7 @@ class LoginMailServiceTest {
     @Test
     void loginMailDoesNotContainUnsubscribeLink() {
         when(tokenService.isThrottled(anyString(), any())).thenReturn(false);
-        when(tokenService.issue(anyString(), any())).thenReturn("RAW-TOKEN-123");
+        when(tokenService.issue(anyString(), eq(LoginToken.PURPOSE_READER), any())).thenReturn("RAW-TOKEN-123");
         when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
 
         service.sendLoginLink("user@example.com", null, NOW);
@@ -77,7 +77,7 @@ class LoginMailServiceTest {
     @Test
     void redirectIsAppendedAndEncoded() {
         when(tokenService.isThrottled(anyString(), any())).thenReturn(false);
-        when(tokenService.issue(anyString(), any())).thenReturn("TOK");
+        when(tokenService.issue(anyString(), eq(LoginToken.PURPOSE_READER), any())).thenReturn("TOK");
         when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
 
         service.sendLoginLink("user@example.com", "/r/news/hello-world", NOW);
@@ -97,7 +97,7 @@ class LoginMailServiceTest {
 
         assertFalse(result.sent());
         assertTrue(result.throttled());
-        verify(tokenService, never()).issue(anyString(), any());
+        verify(tokenService, never()).issue(anyString(), anyString(), any());
         verify(mailSender, never()).send(anyString(), anyString(), anyString());
     }
 
@@ -105,7 +105,7 @@ class LoginMailServiceTest {
     @Test
     void logsSuccessfulSend() {
         when(tokenService.isThrottled(anyString(), any())).thenReturn(false);
-        when(tokenService.issue(anyString(), any())).thenReturn("TOK");
+        when(tokenService.issue(anyString(), eq(LoginToken.PURPOSE_READER), any())).thenReturn("TOK");
         when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-9");
 
         service.sendLoginLink("user@example.com", null, NOW);
@@ -123,7 +123,7 @@ class LoginMailServiceTest {
     @Test
     void failedSendIsReportedAndLogged() {
         when(tokenService.isThrottled(anyString(), any())).thenReturn(false);
-        when(tokenService.issue(anyString(), any())).thenReturn("TOK");
+        when(tokenService.issue(anyString(), eq(LoginToken.PURPOSE_READER), any())).thenReturn("TOK");
         when(mailSender.send(anyString(), anyString(), anyString()))
             .thenThrow(new RuntimeException("provider down"));
 
@@ -164,7 +164,7 @@ class LoginMailServiceTest {
     @Test
     void externalRedirectIsRejected() {
         when(tokenService.isThrottled(anyString(), any())).thenReturn(false);
-        when(tokenService.issue(anyString(), any())).thenReturn("TOK");
+        when(tokenService.issue(anyString(), eq(LoginToken.PURPOSE_READER), any())).thenReturn("TOK");
         when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
 
         String[] unsafeRedirects = {
