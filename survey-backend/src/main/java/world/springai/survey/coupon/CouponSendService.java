@@ -43,6 +43,14 @@ import world.springai.survey.mail.MailSender;
  * email，但前端若有重整、跨分頁重複勾選等邊界情況把同一人送兩次，迴圈若不去重會對同一人
  * 寄兩封信、{@code sent_count} 也會被誤算兩次——這與「已寄過跳過」的冪等意圖矛盾（已寄過的
  * 判斷是跨批次的，批內重複則是同一次呼叫內的，兩者需要分開處理）。</p>
+ *
+ * <p><b>single 模式（D6）</b>：{@link #send(long, List, Integer, boolean)} 第四參數
+ * {@code single} 為 {@code true} 時代表「單筆寄送」——後台逐人手動發放優惠券，而非一次性
+ * 批次公告。此模式下活動狀態刻意維持 {@code DRAFT} 不翻 {@code SENT}（逐人發放是持續性動作，
+ * 不應被單次寄送就標記成「已批次發送完畢」），且 {@code sentAt} 每次成功寄送都覆寫為本次時間
+ * （記錄最後一次寄送時間，而非批次模式的「首次寄送時間」）；{@code sentCount} 累加邏輯與批次
+ * 模式相同。既有三參 {@link #send(long, List, Integer)} overload 委派 {@code single=false}，
+ * 行為與此改動前完全一致。</p>
  */
 @Service
 public class CouponSendService {
@@ -98,6 +106,21 @@ public class CouponSendService {
      * @param limit      單次最多寄送封數，null 或 &le;0 視為不限（配合寄信額度分批寄送）
      */
     public SendResult send(long campaignId, List<String> emails, Integer limit) {
+        return send(campaignId, emails, limit, false);
+    }
+
+    /**
+     * 對指定活動的收件人子集逐封寄送優惠券信；單封失敗不中斷整批。
+     *
+     * <p>驗證順序與三參 overload 相同；額外的 {@code single} 參數僅影響寄送成功後的活動狀態
+     * 更新語意，見類別 Javadoc「single 模式（D6）」說明。</p>
+     *
+     * @param campaignId 優惠券活動 id
+     * @param emails     後台指定的收件人子集（大小寫不敏感比對）
+     * @param limit      單次最多寄送封數，null 或 &le;0 視為不限（配合寄信額度分批寄送）
+     * @param single     是否為單筆寄送模式（D6）：true 時活動維持 DRAFT、sentAt 記最後一次時間
+     */
+    public SendResult send(long campaignId, List<String> emails, Integer limit, boolean single) {
         CouponCampaign campaign = campaignRepository.findById(campaignId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "找不到指定優惠券活動"));
 
@@ -148,12 +171,18 @@ public class CouponSendService {
             }
         }
 
-        // 至少一封成功才更新活動狀態；sentAt 只在首次成功寄送時寫入，補寄不覆蓋原始時間
+        // 至少一封成功才更新活動狀態；single 與批次模式的狀態語意不同，見類別 Javadoc「single 模式（D6）」
         if (sent > 0) {
-            if (campaign.getSentAt() == null) {
+            if (single) {
+                // 單筆寄送（D6）：逐人發放是持續動作，不把活動翻成 SENT；sent_at 記錄最後一次寄送時間
                 campaign.setSentAt(OffsetDateTime.now());
+            } else {
+                // 批次寄送：沿用原語意——sentAt 只在首次成功寄送時寫入，狀態翻 SENT
+                if (campaign.getSentAt() == null) {
+                    campaign.setSentAt(OffsetDateTime.now());
+                }
+                campaign.setStatus(CouponCampaign.STATUS_SENT);
             }
-            campaign.setStatus(CouponCampaign.STATUS_SENT);
             campaign.setSentCount(campaign.getSentCount() + sent);
             campaignRepository.save(campaign);
         }

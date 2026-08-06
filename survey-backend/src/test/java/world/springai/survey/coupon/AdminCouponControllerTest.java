@@ -278,7 +278,7 @@ class AdminCouponControllerTest {
     void send回200帶寄送結果() throws Exception {
         var sendResult = new CouponSendService.SendResult(2, 2, 0, 0, 0);
 
-        when(sendService.send(1L, List.of("user1@example.com", "user2@example.com"), 100))
+        when(sendService.send(1L, List.of("user1@example.com", "user2@example.com"), 100, false))
             .thenReturn(sendResult);
 
         mvc.perform(post("/api/admin/coupons/1/send")
@@ -296,7 +296,7 @@ class AdminCouponControllerTest {
     /** send 活動不存在拋 404，透傳為 404 JSON 回應 */
     @Test
     void send活動不存在透傳404() throws Exception {
-        when(sendService.send(anyLong(), anyList(), nullable(Integer.class)))
+        when(sendService.send(anyLong(), anyList(), nullable(Integer.class), org.mockito.ArgumentMatchers.anyBoolean()))
             .thenThrow(new ResponseStatusException(NOT_FOUND, "找不到指定優惠券活動"));
 
         mvc.perform(post("/api/admin/coupons/999/send")
@@ -310,7 +310,7 @@ class AdminCouponControllerTest {
     /** send 名單驗證失敗拋 400，透傳為 400 JSON 回應 */
     @Test
     void send名單驗證失敗透傳400() throws Exception {
-        when(sendService.send(anyLong(), anyList(), nullable(Integer.class)))
+        when(sendService.send(anyLong(), anyList(), nullable(Integer.class), org.mockito.ArgumentMatchers.anyBoolean()))
             .thenThrow(new ResponseStatusException(BAD_REQUEST, "以下收件人不在本活動命中名單內，拒絕寄送：bad@example.com"));
 
         mvc.perform(post("/api/admin/coupons/1/send")
@@ -351,5 +351,28 @@ class AdminCouponControllerTest {
                     "SAVE300", "2026-09-30", "survey-key")))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.detail").value("invalid admin credential"));
+    }
+
+    // ========== 已寄總覽 / single 寄送測試（Task 8） ==========
+
+    /** sent-map 端點：guard 先行，回傳 recipientService 的彙整結果 */
+    @Test
+    void sentMapEndpointReturnsAggregation() throws Exception {
+        when(recipientService.sentCouponsByEmail()).thenReturn(Map.of("one@example.com", List.of(1L)));
+
+        mvc.perform(get("/api/admin/coupons/sent-map").header("X-Admin-Key", "test-key"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$['one@example.com'][0]").value(1));
+    }
+
+    /** send 端點透傳 single 旗標；未帶時為 false（既有批次行為） */
+    @Test
+    void sendEndpointPassesSingleFlag() throws Exception {
+        mvc.perform(post("/api/admin/coupons/1/send").header("X-Admin-Key", "test-key")
+                .contentType(APPLICATION_JSON)
+                .content("{\"emails\":[\"one@example.com\"],\"limit\":1,\"single\":true}"))
+            .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(sendService).send(1L, List.of("one@example.com"), 1, true);
     }
 }

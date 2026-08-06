@@ -27,4 +27,7 @@ public interface EmailLogRepository extends JpaRepository<EmailLog, Long> {
 
     /** 特定類型的所有寄送記錄，依時間新到舊（後台邀請記錄列表用） */
     List<EmailLog> findByTypeOrderByCreatedAtDesc(String type);
+
+    /** 依 type 前綴＋狀態查詢：供優惠券「已寄總覽」以 coupon: 前綴一次撈出所有活動的寄送記錄 */
+    List<EmailLog> findByTypeStartingWithAndStatus(String typePrefix, String status);
 }

@@ -68,10 +68,11 @@ public class AdminCouponController {
             String formKey,
             Map<String, Object> answerFilter) {}
 
-    /** 寄送優惠券請求 */
+    /** 寄送優惠券請求；single 為 true 時走單筆寄送模式（D6），未帶時視為 false（既有批次行為） */
     public record SendRequest(
             List<String> emails,
-            Integer limit) {}
+            Integer limit,
+            Boolean single) {}
 
     /** 預覽信件請求：與 {@link CreateCampaignRequest} 同七欄位，僅供渲染、不落庫 */
     public record PreviewMailRequest(
@@ -196,8 +197,21 @@ public class AdminCouponController {
         // 驗證 Admin 金鑰
         guard.verify(key);
 
-        // 委派給寄送服務（會自行驗證活動存在與名單合法性）
-        return sendService.send(id, request.emails(), request.limit());
+        // 委派給寄送服務（會自行驗證活動存在與名單合法性）；single 未帶（null）視為 false，維持既有批次行為
+        return sendService.send(id, request.emails(), request.limit(), Boolean.TRUE.equals(request.single()));
+    }
+
+    /**
+     * 已寄券總覽（B2）：email → 已成功收過的優惠券活動 id 清單，供原始資料表逐列顯示與下拉停用判斷
+     */
+    @GetMapping("/api/admin/coupons/sent-map")
+    public Map<String, List<Long>> sentMap(
+            @RequestHeader(value = KEY_HEADER, required = false) String key) {
+        // 驗證 Admin 金鑰
+        guard.verify(key);
+
+        // 委派給名單服務彙整已寄總覽
+        return recipientService.sentCouponsByEmail();
     }
 
     /**

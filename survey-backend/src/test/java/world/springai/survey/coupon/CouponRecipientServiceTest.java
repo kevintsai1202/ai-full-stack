@@ -194,4 +194,18 @@ class CouponRecipientServiceTest {
         assertEquals(List.of(), illegal);
         verify(audienceSearchService, never()).search(any());
     }
+
+    /** 已寄總覽：跨活動彙整每個 email（小寫正規化）收過哪些券 */
+    @Test
+    void sentCouponsByEmailGroupsAcrossCampaigns() {
+        when(emailLogRepository.findByTypeStartingWithAndStatus("coupon:", "sent")).thenReturn(List.of(
+            new EmailLog("One@Example.com", "s", "coupon:1", "a", "sent", null),
+            new EmailLog("one@example.com", "s", "coupon:2", "b", "sent", null),
+            new EmailLog("two@example.com", "s", "coupon:1", "c", "sent", null)));
+
+        Map<String, List<Long>> map = service.sentCouponsByEmail();
+
+        assertEquals(List.of(1L, 2L), map.get("one@example.com"));
+        assertEquals(List.of(1L), map.get("two@example.com"));
+    }
 }

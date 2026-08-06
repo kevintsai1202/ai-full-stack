@@ -224,4 +224,46 @@ class CouponSendServiceTest {
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
         verifyNoInteractions(mailSender);
     }
+
+    /** D6：單筆寄送成功後 status 維持 DRAFT、sent_count 累加、sent_at 記錄本次時間 */
+    @Test
+    void singleSendKeepsDraftStatus() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        CouponSendService.SendResult result = service.send(1L, List.of("one@example.com"), 1, true);
+
+        assertEquals(1, result.sent());
+        assertEquals(CouponCampaign.STATUS_DRAFT, campaign.getStatus());   // 不翻 SENT
+        assertNotNull(campaign.getSentAt());
+        assertEquals(1, campaign.getSentCount());
+    }
+
+    /** D6 對照組：批次寄送（single=false）行為不變——status 翻 SENT、sentAt 首次寫入後不覆蓋 */
+    @Test
+    void batchSendStillMarksSent() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        CouponSendService.SendResult result = service.send(1L, List.of("one@example.com"), 1, false);
+
+        assertEquals(CouponCampaign.STATUS_SENT, campaign.getStatus());
+    }
+
+    /** 單筆重複寄送：同一人同一張券第二次呼叫被已寄過濾擋下（400），email_log 不會多一列 sent */
+    @Test
+    void singleResendIsRejectedByIdempotencyFilter() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+        when(emailLogRepository.findByTypeAndStatus("coupon:1", "sent"))
+            .thenReturn(List.of(new EmailLog("one@example.com", "s", "coupon:1", "id", "sent", null)));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> service.send(1L, List.of("one@example.com"), 1, true));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        verify(mailSender, never()).send(any(), any(), any());
+    }
 }

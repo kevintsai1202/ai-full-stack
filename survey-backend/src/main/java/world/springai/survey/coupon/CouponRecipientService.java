@@ -193,4 +193,20 @@ public class CouponRecipientService {
     private String normalize(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
     }
+
+    /**
+     * 已寄總覽（B2）：彙整 email_log 中所有 type=coupon:{id}、status=sent 的記錄，
+     * 回傳「email（小寫正規化）→ 已成功收過的活動 id 清單（依 id 升冪）」。
+     * 資料本就存在 email_log，不需新表（spec §4.2）。
+     */
+    public Map<String, List<Long>> sentCouponsByEmail() {
+        Map<String, java.util.SortedSet<Long>> grouped = new java.util.HashMap<>();
+        for (EmailLog log : emailLogRepository.findByTypeStartingWithAndStatus("coupon:", "sent")) {
+            long campaignId = Long.parseLong(log.getType().substring("coupon:".length()));
+            grouped.computeIfAbsent(normalize(log.getRecipient()), k -> new java.util.TreeSet<>()).add(campaignId);
+        }
+        Map<String, List<Long>> result = new java.util.HashMap<>();
+        grouped.forEach((email, ids) -> result.put(email, List.copyOf(ids)));
+        return result;
+    }
 }
