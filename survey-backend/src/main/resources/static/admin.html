@@ -378,6 +378,10 @@
       <p class="hint" id="tier-hint">設了 slug 才會出現在 /r/archive 與單篇頁面。</p>
       <button class="btn" id="send-btn" style="margin-top:14px">發送</button>
       <button class="btn ghost" id="publish-btn" style="margin-top:14px;margin-left:8px">只發布不寄送</button>
+      <!-- 「編輯內容」模式的手動出口（Task 12 審查修正）：平時隱藏，只在 enterContentEditMode()
+           時顯示，比照既有「修改排程」模式的取消慣例，避免存檔失敗或臨時改變主意時
+           只能靠成功存檔或重新整理頁面才能離開。 -->
+      <button class="btn danger" id="cancel-edit-btn" style="margin-top:14px;margin-left:8px" hidden>取消編輯</button>
       <p class="hint" style="margin:8px 0 0">「只發布不寄送」只把文章放上網頁（<code>/r/news/{slug}</code> 與 <code>/r/archive</code>），不寄任何信、不消耗寄信額度；PREMIUM 也可正常寄送，信件只含免費區與解鎖連結。</p>
       <div class="msg" id="send-msg"></div></div>
     <div class="card"><h2>⑥ 寄送歷史　<button class="btn ghost" id="hist-btn">重新整理</button></h2><div class="table-wrap"><table id="hist"><thead><tr><th>主旨</th><th>模式</th><th>時間</th><th>狀態</th><th>成功/失敗</th><th></th></tr></thead><tbody></tbody></table></div></div>
@@ -1011,7 +1015,7 @@
     $('#form-create-version').onclick=createFormVersion;$('#form-publish-version').onclick=publishFormVersion;$('#field-add').onclick=addFormField;
     $('#email-vote-field').onchange=updateEmailVoteField;
     ['#raw-search','#raw-source','#raw-role','#raw-budget','#raw-subscription','#raw-sort'].forEach(selector=>$(selector).addEventListener(selector==='#raw-search'?'input':'change',renderRawTable));
-    $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=()=>{doCount();doQuota();};$('#role').onchange=doCount;$('#interest').onchange=doCount;['#campaign-source','#campaign-consent','#campaign-vip','#campaign-segment'].forEach(selector=>$(selector).onchange=doCount);$('#campaign-segment-save').onclick=saveCampaignSegment;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#publish-btn').onclick=doPublish;$('#hist-btn').onclick=doHistory;
+    $('#preview-btn').onclick=doPreview;$('#rcount-btn').onclick=()=>{doCount();doQuota();};$('#role').onchange=doCount;$('#interest').onchange=doCount;['#campaign-source','#campaign-consent','#campaign-vip','#campaign-segment'].forEach(selector=>$(selector).onchange=doCount);$('#campaign-segment-save').onclick=saveCampaignSegment;$('#test-btn').onclick=doTest;$('#send-btn').onclick=doSend;$('#publish-btn').onclick=doPublish;$('#cancel-edit-btn').onclick=cancelContentEdit;$('#hist-btn').onclick=doHistory;
     document.querySelectorAll('.format-btn').forEach(button=>button.onclick=()=>applyMarkdownFormat(button));
     $('#emoji-picker').onchange=event=>{insertEmoji(event.target.value);event.target.value='';};
     $('#campaign-add-tag').onclick=addCampaignTag;
@@ -2227,13 +2231,19 @@
     // 「只發布不寄送」會另建一篇新文章，與「編輯既有文章」是兩件互斥的事，故停用。
     $('#publish-btn').disabled=true;
     $('#send-btn').textContent='儲存內容';
-    const m=$('#send-msg');m.className='msg';
+    $('#cancel-edit-btn').hidden=false; // 審查修正：給一個不必成功存檔也能離開的手動出口
     // Hashtag 目前沒有「取得單一文章既有標籤」的查詢端點（列表 API 也不含 tags 欄位），
-    // 因此無法在此自動回填勾選狀態；若不重新勾選就存檔，會被 CampaignMetadataService.update()
-    // 整批清空既有 hashtag（該方法固定先 DELETE 再依送出的清單重建，沒有「維持原樣」語意）。
-    // 這裡明講風險，避免管理者在不知情下弄丟既有 hashtag。
+    // 且 CampaignMetadataService.update() 存檔時一律整批覆寫（先刪再依送出清單重建，
+    // 沒有「維持原樣」語意）。若放著上一次操作殘留的勾選狀態不管，可能把不相關的
+    // hashtag 寫進這篇文章——比「清空」更糟（審查修正：原本只警告不清空，會沿用殘留狀態）。
+    // 因此一律清空目前勾選，讓畫面與「即將送出的內容」保持一致，真正的風險提示則移到
+    // 存檔當下的 confirm() 對話框（見 saveContentEdit()），在使用者按下確定的那一刻才是
+    // 真正不可逆的時間點。
+    selectedCampaignTags.clear();
+    document.querySelectorAll('#campaign-tag-options input').forEach(input=>{input.checked=false;});
+    const m=$('#send-msg');m.className='msg';
     m.textContent=`編輯中：批次 #${c.id}，主旨／內文／封面已載入。分級・解鎖點數・slug 唯讀不可改。`
-      +'　注意：Hashtag 無法自動回填，如需保留原有 hashtag 請重新勾選，否則存檔會清空。';
+      +'　Hashtag 已清空（後端無法回填既有標籤），如需保留請重新勾選，存檔前會再次提醒。';
     doPreview();
     $('#send-btn').scrollIntoView({behavior:'smooth',block:'center'});
   }
@@ -2243,9 +2253,23 @@
     contentEditCampaignId=null;
     $('#send-btn').textContent='發送';
     $('#publish-btn').disabled=false;
+    $('#cancel-edit-btn').hidden=true;
     ['#art-tier','#art-cost','#art-slug'].forEach(sel=>{const el=$(sel);el.readOnly=false;el.disabled=false;});
     // 清掉編輯模式殘留的凍結提示，避免使用者接著新建文章時被舊訊息誤導。
     $('#cost-hint').textContent='';
+  }
+
+  /**
+   * 取消編輯（Task 12 審查修正）：內容編輯模式的手動出口，比照既有「修改排程」模式有
+   * doCancel() 可離開的慣例。純前端狀態重置，不呼叫任何後端端點——與 reschedule 的
+   * doCancel() 不同，內容編輯模式沒有「已建立的排程」需要後端取消，單純離開畫面即可。
+   * 用途：存檔失敗、或臨時改變主意時，不必被迫成功存檔一次或重新整理頁面才能離開。
+   */
+  function cancelContentEdit(){
+    if(contentEditCampaignId==null)return;
+    if(!confirm('確定取消編輯？目前畫面上尚未存檔的修改不會被保留。'))return;
+    exitContentEditMode();
+    const m=$('#send-msg');m.className='msg';m.textContent='已取消編輯，未寫入任何變更。';
   }
 
   /**
@@ -2257,8 +2281,15 @@
     const m=$('#send-msg');m.className='msg';
     if(!$('#subject').value.trim()){m.className='msg err';m.textContent='請填主旨';return;}
     if(!$('#markdown').value.trim()){m.className='msg err';m.textContent='請填內文';return;}
-    if(!confirm(`確定儲存批次 #${contentEditCampaignId} 的內容修改？（不會重寄信件，已寄出的舊信不受影響）`))return;
-    $('#send-btn').disabled=true;
+    // 審查修正：hashtag 的覆蓋風險必須出現在 confirm() 本身——這是真正不可逆的那一刻，
+    // 進入編輯模式時的環境訊息使用者很容易略過。依目前實際勾選狀態組出對應警語，
+    // 而不是一句固定文案，讓使用者按下確定前看到的是「即將發生的事」而非安撫語句。
+    const currentTags=[...selectedCampaignTags];
+    const tagWarning=currentTags.length
+      ?`此次存檔會把 hashtag 設為：${currentTags.map(t=>'#'+t).join(' ')}（會覆蓋原有的 hashtag）。`
+      :'此次存檔目前沒有勾選任何 hashtag，原本這篇文章的 hashtag 將被全部清空！';
+    if(!confirm(`確定儲存批次 #${contentEditCampaignId} 的內容修改？（不會重寄信件，已寄出的舊信不受影響）\n${tagWarning}`))return;
+    $('#send-btn').disabled=true;$('#cancel-edit-btn').disabled=true;
     const savingId=contentEditCampaignId;
     try{
       // 封面／標籤沿用既有 publishFields() 同一組取值來源（#cover-emoji、selectedCoverMediaId、
@@ -2266,13 +2297,13 @@
       await api(`/api/admin/campaigns/${savingId}/content`,{method:'PUT',body:JSON.stringify({
         subject:$('#subject').value,markdown:$('#markdown').value,
         coverEmoji:$('#cover-emoji').value||null,coverMediaId:selectedCoverMediaId,
-        tags:[...selectedCampaignTags]
+        tags:currentTags
       })});
       m.className='msg ok';m.textContent=`已儲存批次 #${savingId} 的內容修改。`;
       exitContentEditMode();
       doHistory();
     }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='儲存失敗：'+e.message;}}
-    finally{$('#send-btn').disabled=false;}
+    finally{$('#send-btn').disabled=false;$('#cancel-edit-btn').disabled=false;}
   }
   /** 載入邀請記錄與成效統計（invitedCount 已寄、confirmedCount 已確認、pendingCount 待邀請）。 */
   async function doInviteOverview(){try{const source=$('#invite-source').value,o=await api('/api/admin/invites?source='+encodeURIComponent(source));
