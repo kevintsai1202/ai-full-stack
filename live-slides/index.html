@@ -9,15 +9,17 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0b1020;
-  --panel: #151c33;
-  --border: #26304f;
-  --text: #e8ecf7;
-  --dim: #94a3c4;
-  --accent: #6ea8ff;
-  --bad: #ff7b72;
-  --good: #4ade80;
-  --warn: #fbbf24;
+  /* 投影機取向配色：底更深、文字更亮、強調色更飽和——實體投影會吃掉約一級對比，
+     螢幕上看起來「稍微過亮」才是投出來剛好的狀態 */
+  --bg: #05070f;
+  --panel: #131b33;
+  --border: #2c3a63;
+  --text: #f4f7ff;
+  --dim: #aebfe0;
+  --accent: #7cb8ff;
+  --bad: #ff8a80;
+  --good: #57f097;
+  --warn: #ffd23e;
 }
 
 body {
@@ -41,18 +43,26 @@ body {
 .slide.active { display: flex; }
 @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-h1 { font-size: 46px; line-height: 1.35; margin-bottom: 18px; }
-h2 { font-size: 34px; margin-bottom: 22px; color: #fff; }
-h3 { font-size: 24px; margin-bottom: 14px; color: var(--accent); }
+h1 { font-size: 58px; font-weight: 900; line-height: 1.3; margin-bottom: 20px; }
+/* 主標加大加粗＋accent 漸層底線條：投影時觀眾第一眼要能鎖定本頁主題 */
+h2 { font-size: 46px; font-weight: 900; margin-bottom: 26px; color: #fff;
+     position: relative; padding-bottom: 16px; letter-spacing: .01em; }
+h2::after { content: ""; position: absolute; left: 0; bottom: 0; width: 96px; height: 7px;
+            border-radius: 4px; background: linear-gradient(90deg, var(--accent), transparent); }
+/* 置中版面的主標：底線條跟著置中，避免棒子孤懸左緣 */
+.center h2 { padding-bottom: 18px; }
+.center h2::after { left: 50%; transform: translateX(-50%);
+                    background: linear-gradient(90deg, transparent, var(--accent), transparent); }
+h3 { font-size: 28px; font-weight: 800; margin-bottom: 14px; color: var(--accent); }
 p  { font-size: 21px; margin-bottom: 14px; }
-.lead { font-size: 25px; color: var(--dim); }
+.lead { font-size: 26px; color: var(--dim); }
 .small { font-size: 17px; color: var(--dim); }
 strong { color: var(--warn); }
 em { font-style: normal; color: var(--accent); }
 
 /* ── 封面 ───────────────────────────────────────────── */
 .cover { text-align: center; align-items: center; }
-.cover h1 { font-size: 54px; }
+.cover h1 { font-size: 72px; }
 .cover .sub { font-size: 26px; color: var(--dim); margin-top: 10px; }
 .cover .by { margin-top: 46px; font-size: 20px; color: var(--dim); }
 
@@ -122,7 +132,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
 .kp b { color: var(--accent); }
 
 .center { text-align: center; align-items: center; }
-.big { font-size: 34px; line-height: 1.6; }
+.big { font-size: 42px; font-weight: 800; line-height: 1.55; }
 
 /* ── 底部列 ─────────────────────────────────────────── */
 .bar {
@@ -199,7 +209,19 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   <p class="kp">💡 <b>知識點｜錯誤成本放大</b>：錯誤越晚被發現，修正成本越高——需求期修一個誤解只要改一句話，寫完程式才發現要改一天，上線後發現再放大十倍。<b>正確的提示詞，就是把錯誤攔在最便宜的階段。</b></p>
 </section>
 
-<!-- 6 地圖總覽 -->
+<!-- 6 市場證據：半導體大廠職缺 -->
+<section class="slide" data-station="開場" data-note="真實職缺（台積電）。重點唸「資歷需求」那行：熟悉 AI Coding 工具寫在門檻裡、不在加分欄。加分項的 Harness/Loop Engineering 正是上一頁的迴圈——harness 是給 AI 跑的執行環境與工具鏈，loop engineering 是設計「生成→驗證→修正」迴圈。60 秒帶過，別戀戰。">
+  <h2>這不是未來式：企業已經在徵這種人</h2>
+  <div class="pair">
+    <div class="line"><span class="tag">職缺</span>半導體大廠 軟體工程師（後端 80%／前端 20%）｜Java Spring Boot / React｜新竹</div>
+    <div class="line"><span class="tag">資歷需求</span>6～10 年全端經驗・快速理解需求・獨立解決問題・<strong>熟悉 AI Coding 工具</strong></div>
+    <div class="line yes"><span class="tag">加分</span>熟悉 Spring Boot 生態系・<strong>AI Coding 能力強（Harness／Loop Engineering）</strong></div>
+  </div>
+  <p class="lead">「熟悉 AI Coding 工具」寫在<strong>資歷需求</strong>，不在加分欄——AI 協作已經是門檻，不是亮點<br>加分欄要的 Harness／Loop Engineering，就是上一頁那個「生成 → 驗證 → 修正」迴圈的設計能力</p>
+  <p class="kp">💡 <b>知識點｜框架 × AI Coding 是相乘、不是相加</b>：框架深度（Spring Boot／React）讓你<b>審查得動</b> AI 交出的產物；AI Coding 讓你的框架經驗<b>規模化</b>。只會框架＝產出慢；只會 AI＝驗收不了它寫的東西——所以企業兩個都要。</p>
+</section>
+
+<!-- 7 地圖總覽 -->
 <section class="slide" data-station="開場" data-note="攤開地圖。說明規則：每站一句對比、一段原理、一個產物、一題測驗。反例只用講的不 demo。">
   <h2>今天走這四站</h2>
   <div class="map all">

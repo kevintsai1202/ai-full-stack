@@ -83,8 +83,9 @@ try {
 
   // 抽樣存檔，讓人眼確認排版沒有破版
   mkdirSync(outputDir, { recursive: true });
-  // 抽樣頁涵蓋：封面、開場新增的流程頁與除錯成本頁、四張知識點小卡（站1/站2/站3/站4）、收尾總表
-  const samples = [1, 4, 5, 9, 16, 23, 34, total - 2];
+  // 抽樣頁涵蓋：封面、開場的流程頁／除錯成本頁／職缺市場證據頁、置中測驗頁（Q1，驗主標底線置中）、
+  // 四張知識點小卡（站1/站2/站3/站4）、收尾總表
+  const samples = [1, 4, 5, 6, 10, 14, 17, 24, 35, total - 2];
   for (const pageNumber of samples) {
     if (pageNumber < 1 || pageNumber > total) continue;
     // 呼叫投影片自己的 show()，底部列與備註才會跟著更新；
