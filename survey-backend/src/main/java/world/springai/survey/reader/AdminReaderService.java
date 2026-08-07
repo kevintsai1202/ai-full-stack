@@ -78,6 +78,35 @@ public class AdminReaderService implements world.springai.survey.audience.Audien
     }
 
     /**
+     * 邀請／問卷獲點排行榜：依「邀請獎勵＋問卷獎勵」合計降冪取前 N 名。
+     *
+     * <p>彙總邏輯（reason 白名單、只計正項、排序）都在
+     * {@link CreditTxnRepository#sumRewardsByReader} 的查詢裡，這裡只補 email
+     * 與名次。讀者列可能在彙總後被刪除（帳本以 readerId 留存），此時顯示
+     * 佔位文字而不是讓整個榜 500——排行榜是營運概覽，缺一列的名字不影響其他列。</p>
+     */
+    public List<Map<String, Object>> rewardLeaderboard(int limit) {
+        List<Object[]> rows = creditTxnRepository.sumRewardsByReader(PageRequest.of(0, limit));
+        // 一次撈齊上榜讀者的 email，避免逐列查詢
+        Map<Long, String> emails = readerRepository.findAllById(
+                rows.stream().map(row -> (Long) row[0]).toList())
+            .stream().collect(java.util.stream.Collectors.toMap(Reader::getId, Reader::getEmail));
+        List<Map<String, Object>> board = new java.util.ArrayList<>();
+        for (int i = 0; i < rows.size(); i++) {
+            Object[] row = rows.get(i);
+            long referral = ((Number) row[1]).longValue();
+            long survey = ((Number) row[2]).longValue();
+            board.add(Map.of(
+                "rank", i + 1,
+                "email", emails.getOrDefault((Long) row[0], "(已刪除讀者 #" + row[0] + ")"),
+                "referralCredits", referral,
+                "surveyCredits", survey,
+                "totalCredits", referral + survey));
+        }
+        return board;
+    }
+
+    /**
      * 授予或延長 VIP。
      *
      * <p>對還沒有 reader 帳戶的 email 會先建立帳戶——這是實際情境：

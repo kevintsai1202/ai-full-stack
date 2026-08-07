@@ -545,6 +545,24 @@
       <div class="msg" id="reader-msg"></div>
     </div>
 
+    <div class="card full">
+      <h2>邀請／問卷獲點排行榜</h2>
+      <p class="hint">依「邀請獎勵＋問卷獎勵」合計排序；初始贈點與後台加點不計入——看的是誰在幫忙擴散與回饋，不是誰餘額多。</p>
+      <div class="form-row" style="margin-bottom:10px">
+        <label><span class="hint">顯示名次</span>
+          <select id="leaderboard-limit"><option>10</option><option selected>20</option><option>50</option><option>100</option></select>
+        </label>
+        <button class="btn ghost" id="leaderboard-reload">重新整理</button>
+      </div>
+      <div class="table-wrap">
+        <table id="leaderboard-table">
+          <thead><tr><th>名次</th><th>Email</th><th>邀請點數</th><th>問卷點數</th><th>合計</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="msg" id="leaderboard-msg" role="status" aria-live="polite"></div>
+    </div>
+
     <dialog id="reader-detail-dialog" class="reader-detail-dialog">
       <form method="dialog"><button class="btn ghost" value="close" style="float:right">關閉</button></form>
       <h2 id="reader-detail-title">讀者詳細資料</h2>
@@ -954,7 +972,7 @@
   function showApp(){$('#gate').style.display='none';$('#app').hidden=false;}
 
   /** 切換分頁（問卷分析／電子報／讀者管理／參數設定）；參數設定首次進入時才載入欄位。 */
-  function switchView(name){document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!==name+'-view');document.querySelectorAll('.tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.view===name));if(name==='analytics'&&!analyticsLoaded)loadAnalytics();if(name==='readers'&&!audienceResult.loaded)searchReaders();if(name==='growth'&&!loadGrowth.done)loadGrowth();if(name==='settings'&&!loadSettings.done)loadSettings();if(name==='promo'){if(!loadPromoProposals.done)loadPromoProposals();if(!loadPromoStats.done)loadPromoStats();}if(name==='coupon'&&!loadCouponCampaigns.done){loadCouponForms();loadCouponCampaigns();}}
+  function switchView(name){document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!==name+'-view');document.querySelectorAll('.tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.view===name));if(name==='analytics'&&!analyticsLoaded)loadAnalytics();if(name==='readers'&&!audienceResult.loaded)searchReaders();if(name==='readers'&&!loadRewardLeaderboard.done)loadRewardLeaderboard();if(name==='growth'&&!loadGrowth.done)loadGrowth();if(name==='settings'&&!loadSettings.done)loadSettings();if(name==='promo'){if(!loadPromoProposals.done)loadPromoProposals();if(!loadPromoStats.done)loadPromoStats();}if(name==='coupon'&&!loadCouponCampaigns.done){loadCouponForms();loadCouponCampaigns();}}
 
   /** 把固定選項填入下拉選單。 */
   function fillSelect(selector,items){const el=$(selector);items.forEach(value=>{const option=document.createElement('option');option.value=value;option.textContent=value;el.appendChild(option);});}
@@ -2572,6 +2590,33 @@
   }
 
   // ===== 讀者管理 =====
+
+  /**
+   * 邀請／問卷獲點排行榜：讀者管理分頁首次進入時載入一次，之後由「重新整理」手動更新。
+   * 資料列全部以 textContent 寫入 DOM——email 是使用者可控內容，不走 innerHTML。
+   */
+  async function loadRewardLeaderboard(){
+    const msg=$('#leaderboard-msg');const tbody=$('#leaderboard-table tbody');
+    try{
+      const limit=$('#leaderboard-limit').value;
+      const rows=await api('/api/admin/readers/reward-leaderboard?limit='+encodeURIComponent(limit));
+      loadRewardLeaderboard.done=true;
+      tbody.replaceChildren();
+      if(!rows.length){msg.className='msg';msg.textContent='還沒有人拿過邀請或問卷獎勵。';return;}
+      msg.className='msg';msg.textContent='';
+      rows.forEach(row=>{
+        const tr=document.createElement('tr');
+        [row.rank,row.email,row.referralCredits,row.surveyCredits].forEach(value=>{
+          const td=document.createElement('td');td.textContent=String(value);tr.append(td);
+        });
+        const total=document.createElement('td');const strong=document.createElement('strong');
+        strong.textContent=String(row.totalCredits);total.append(strong);tr.append(total);
+        tbody.append(tr);
+      });
+    }catch(err){if(err.message==='401')return;msg.className='msg err';msg.textContent='排行榜載入失敗：'+err.message;}
+  }
+  $('#leaderboard-reload').addEventListener('click',loadRewardLeaderboard);
+  $('#leaderboard-limit').addEventListener('change',loadRewardLeaderboard);
 
   /**
    * 統一的訊息顯示：ok=true 顯示成功樣式、false 顯示錯誤樣式。

@@ -165,6 +165,27 @@ public class AdminReaderController {
         return service.grantCredits(request.emails(), delta, note);
     }
 
+    /** 排行榜單次最多回傳的名次數；營運概覽不需要全表 */
+    private static final int MAX_LEADERBOARD_SIZE = 100;
+
+    /**
+     * 邀請／問卷獲點排行榜：全體讀者依「邀請獎勵＋問卷獎勵」合計降冪。
+     *
+     * <p>初始贈點與後台加點不計入——榜的目的是看「誰在幫忙擴散與回饋」，
+     * 不是誰的餘額多。彙總規則見 {@link CreditTxnRepository#sumRewardsByReader}。</p>
+     */
+    @GetMapping("/api/admin/readers/reward-leaderboard")
+    public List<Map<String, Object>> rewardLeaderboard(
+            @RequestHeader(value = KEY_HEADER, required = false) String key,
+            @RequestParam(value = "limit", defaultValue = "20") int limit) {
+        guard.verify(key);
+        if (limit < 1 || limit > MAX_LEADERBOARD_SIZE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "limit 必須介於 1 與 " + MAX_LEADERBOARD_SIZE + " 之間");
+        }
+        return service.rewardLeaderboard(limit);
+    }
+
     /** 某讀者的交易明細（客訴對帳用），回傳完整帳本 */
     @GetMapping("/api/admin/readers/ledger")
     public List<CreditTxn> ledger(
