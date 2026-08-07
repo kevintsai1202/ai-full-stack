@@ -79,6 +79,8 @@ class ReaderPageControllerTest {
     @MockBean world.springai.survey.form.SurveyVoteStatsService surveyVoteStatsService;
     /** Task 7 接線：問卷 schema 服務（mock），供側邊欄投票卡取用信中一鍵題標題與選項 */
     @MockBean world.springai.survey.form.FormSchemaService formSchemaService;
+    /** 側欄問卷卡贈點說明（mock）：顯示數字必須與實際發點同源（CreditPolicy） */
+    @MockBean CreditPolicy creditPolicy;
 
     /**
      * 預設直通：多數既有測試不關心問卷卡展開。若不 stub，Mockito 對未 stub 的
@@ -915,12 +917,13 @@ class ReaderPageControllerTest {
         assertFalse(body.contains("人參與"), body);
     }
 
-    /** 首頁曝光問卷存在時：文章側邊欄出現「問卷調查」卡，連向 /r/survey/{key}，標題經跳脫 */
+    /** 首頁曝光問卷存在時：文章側邊欄出現「問卷調查」卡，連向 /r/survey/{key}，標題經跳脫，並說明填答贈點 */
     @Test
     void sidebarShowsHomepageSurveyCard() throws Exception {
         when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(gatedArticle(Campaign.TIER_BASIC, 0)));
         when(readerContext.resolve(any())).thenReturn(Optional.empty());
         stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+        when(creditPolicy.surveyReward()).thenReturn(20);
         when(formSchemaService.listHomepageForms()).thenReturn(List.of(
             new world.springai.survey.form.FormSchemaService.HomepageForm(
                 "fullstack-course-interest", "AI 全端課程興趣問卷 <b>", 1)));
@@ -932,6 +935,7 @@ class ReaderPageControllerTest {
         assertTrue(body.contains("href=\"/r/survey/fullstack-course-interest\""), body);
         assertTrue(body.contains("AI 全端課程興趣問卷 &lt;b&gt;"), body); // escapeHtml 生效
         assertTrue(body.contains("問卷調查"), body);
+        assertTrue(body.contains("登入填答完成問卷，即贈 20 點"), body); // 贈點說明取自 CreditPolicy
     }
 
     /** 無任何曝光問卷（mock 預設空清單）：側邊欄不出現問卷卡，不留空卡 */

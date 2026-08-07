@@ -28,21 +28,36 @@ class ReaderIndexPageTest {
     private final HtmlTemplate htmlTemplate = new HtmlTemplate();
     private final LoginAbuseGuard loginAbuseGuard = mock(LoginAbuseGuard.class);
     private final FormSchemaService formSchemaService = mock(FormSchemaService.class);
+    private final CreditPolicy creditPolicy = mock(CreditPolicy.class);
 
     private final ReaderAuthController controller = new ReaderAuthController(
         loginMailService, loginTokenService, readerAccountService, sessionService,
-        readerContext, htmlTemplate, loginAbuseGuard, formSchemaService);
+        readerContext, htmlTemplate, loginAbuseGuard, formSchemaService, creditPolicy);
 
-    /** 有曝光問卷時：首頁出現「問卷調查」區塊，每份問卷連向 /r/survey/{key}，標題經跳脫 */
+    /** 有曝光問卷時：首頁出現「問卷調查」區塊，每份問卷連向 /r/survey/{key}，標題經跳脫，並說明填答贈點 */
     @Test
     void homepageListsExposedSurveys() {
         when(readerContext.resolve(null)).thenReturn(Optional.empty());
+        when(creditPolicy.surveyReward()).thenReturn(20);
         when(formSchemaService.listHomepageForms()).thenReturn(List.of(
             new FormSchemaService.HomepageForm("course-interest", "課程興趣調查 <b>", null)));
         String html = controller.indexPage(null).getBody();
         assertTrue(html.contains("href=\"/r/survey/course-interest\""));
         assertTrue(html.contains("課程興趣調查 &lt;b&gt;"));   // escapeHtml 生效
         assertTrue(html.contains("問卷調查"));
+        assertTrue(html.contains("登入填答完成問卷，即贈 20 點"));  // 贈點說明取自 CreditPolicy
+    }
+
+    /** 後台把問卷獎勵關成 0 點時：清單照列，但不出現贈點說明（不能對讀者許下不會兌現的承諾） */
+    @Test
+    void homepageHidesRewardHintWhenRewardDisabled() {
+        when(readerContext.resolve(null)).thenReturn(Optional.empty());
+        when(creditPolicy.surveyReward()).thenReturn(0);
+        when(formSchemaService.listHomepageForms()).thenReturn(List.of(
+            new FormSchemaService.HomepageForm("course-interest", "課程興趣調查", null)));
+        String html = controller.indexPage(null).getBody();
+        assertTrue(html.contains("href=\"/r/survey/course-interest\""));
+        assertFalse(html.contains("即贈"));
     }
 
     /** 無任何曝光問卷時：整個區塊不出現（不出現空標題） */

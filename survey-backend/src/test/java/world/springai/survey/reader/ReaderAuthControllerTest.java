@@ -47,6 +47,8 @@ class ReaderAuthControllerTest {
     @MockBean ReaderContext readerContext;
     @MockBean LoginAbuseGuard loginAbuseGuard;
     @MockBean FormSchemaService formSchemaService;
+    /** 首頁問卷區塊贈點說明所需（@WebMvcTest 切片不含 @Component，須以 mock 補上） */
+    @MockBean CreditPolicy creditPolicy;
 
     /** 建立一位讀者 */
     private Reader reader() {

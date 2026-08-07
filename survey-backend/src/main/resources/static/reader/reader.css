@@ -631,6 +631,8 @@ input::placeholder { color:#71817c; }
 /* 首頁問卷列表（A4） */
 .survey-list { margin:0; padding-left:20px; }
 .survey-list li { margin:6px 0; }
+/* 首頁問卷區塊的贈點說明：次要資訊層級，但要在清單前先講清楚誘因 */
+.survey-reward-note { margin:0 0 10px; color:var(--muted); font-size:.9rem; }
 
 /* 首頁身分區（A3）：登入後取代訂閱表單的識別列 */
 .identity-line { margin:4px 0 0; font-size:1.05rem; }
@@ -680,3 +682,25 @@ input::placeholder { color:#71817c; }
 .side-votes .vote-bar i { display:block; height:100%; background:var(--accent); }
 .side-votes .vote-count { color:var(--muted); }
 .side-note { margin:8px 0 0; color:var(--muted); font-size:.8rem; }
+
+/* ========== 接續填答頁（/r/survey/*）視覺升級：一題一卡、選項膠囊化 ==========
+   對齊 survey.springai.world 課程問卷頁的質感，但全部沿用本站設計 token，
+   暗色模式由 token 自動翻轉、無需另行覆寫。所有規則 scoped 於 .survey-page，
+   不影響同樣使用 .promo-form / .choice-option 的工商合作頁。 */
+.survey-shell { max-width:720px; margin:4vh auto 0; }
+.survey-page .promo-form { grid-template-columns:1fr; gap:16px; }
+/* 一題一卡：題目彼此有明確邊界，長問卷不再是一整面牆的欄位 */
+.survey-page .q-block { background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-md); padding:18px 20px 16px; }
+.survey-page .q-head { display:flex; align-items:baseline; gap:10px; margin-bottom:10px; }
+.survey-page .q-no { flex:0 0 auto; font-size:.72rem; font-weight:800; letter-spacing:.06em; color:var(--accent-deep); background:var(--accent-soft); border-radius:var(--r-pill); padding:2px 10px; }
+.survey-page .q-head label { font-size:1.02rem; }
+/* 選項膠囊：可點的是整張小卡，選中以 accent 邊框＋底色回饋 */
+.survey-page .choice-group { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:8px; }
+.survey-page .choice-option { border:1.5px solid var(--border); border-radius:10px; padding:9px 12px; background:var(--surface); cursor:pointer; transition:border-color .12s ease, background .12s ease; }
+.survey-page .choice-option:hover { border-color:var(--accent); }
+.survey-page .choice-option:has(input:checked) { border-color:var(--accent); background:var(--accent-soft); font-weight:700; }
+.survey-page .promo-submit { width:100%; padding:14px; font-size:1.05rem; }
+/* 身分／贈點橫幅：填答前最重要的資訊（以誰的身分作答、有沒有點數），用 accent 底色墊高 */
+.survey-page .identity-block { margin:4px 0 4px; padding:12px 16px; border-radius:var(--r-sm); background:var(--accent-soft); border:1px solid var(--accent); }
+.survey-page .identity-block p { margin:0; font-size:.95rem; }
+@media (max-width:560px) { .survey-page .choice-group { grid-template-columns:1fr; } }

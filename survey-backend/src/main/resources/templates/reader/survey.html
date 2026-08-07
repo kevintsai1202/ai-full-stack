@@ -15,7 +15,7 @@ document.documentElement.setAttribute('data-theme',
 <script src="/tracking.js" defer></script>
 <script src="/r/reader-nav.js" defer></script>
 </head>
-<body>
+<body class="survey-page">
 <header class="site-head">
   <div class="site-head-inner">
     <a class="brand" href="/r/">凱文大叔的電子報</a>
@@ -25,7 +25,7 @@ document.documentElement.setAttribute('data-theme',
   </div>
 </header>
 
-<div class="wrap auth-shell">
+<div class="wrap survey-shell">
   <p class="page-kicker">Survey</p>
   <div class="card feature-card">
     <h1 class="page-title compact"><!--FORM_TITLE--></h1>
@@ -75,16 +75,30 @@ document.documentElement.setAttribute('data-theme',
     return label;
   }
 
+  /** 題目標頭：題號徽章＋標籤，讓每一題在卡片版面中有明確的視覺錨點 */
+  function buildHead(no, text, required, forId) {
+    var head = document.createElement('div');
+    head.className = 'q-head';
+    var badge = document.createElement('span');
+    badge.className = 'q-no';
+    badge.textContent = 'Q' + no;
+    head.appendChild(badge);
+    if (text) { head.appendChild(buildLabel(text, required, forId)); }
+    return head;
+  }
+
   // 依欄位類型動態產生輸入元件：
   // select→單選群、multi_select→複選群、long_text→多行文字、
   // short_text/email→單行輸入、rating/number→數字、boolean→單一勾選、date→日期
+  var qNo = 0; // 題號流水，供每張題目卡的 Q 徽章使用
   FIELDS.forEach(function (field) {
+    qNo += 1;
     var wrapper = document.createElement('div');
-    wrapper.className = 'field full';
+    wrapper.className = 'field full q-block';
     var options = field.options || [];
 
     if (field.type === 'select' || field.type === 'multi_select') {
-      wrapper.appendChild(buildLabel(field.label, field.required));
+      wrapper.appendChild(buildHead(qNo, field.label, field.required));
       var group = document.createElement('div');
       group.className = 'choice-group';
       var inputType = field.type === 'select' ? 'radio' : 'checkbox';
@@ -112,7 +126,7 @@ document.documentElement.setAttribute('data-theme',
       });
       wrapper.appendChild(group);
     } else if (field.type === 'long_text') {
-      wrapper.appendChild(buildLabel(field.label, field.required, field.key));
+      wrapper.appendChild(buildHead(qNo, field.label, field.required, field.key));
       var textarea = document.createElement('textarea');
       textarea.name = field.key;
       textarea.id = field.key;
@@ -130,9 +144,11 @@ document.documentElement.setAttribute('data-theme',
       var boolText = document.createElement('span');
       boolText.textContent = field.label + (field.required ? ' ＊' : '');
       boolChoice.appendChild(boolText);
+      // boolean 的標籤文字在選項內，標頭只放題號徽章（buildHead 對空字串不重複輸出標籤）
+      wrapper.appendChild(buildHead(qNo, '', false));
       wrapper.appendChild(boolChoice);
     } else {
-      wrapper.appendChild(buildLabel(field.label, field.required, field.key));
+      wrapper.appendChild(buildHead(qNo, field.label, field.required, field.key));
       var input2 = document.createElement('input');
       input2.name = field.key;
       input2.id = field.key;

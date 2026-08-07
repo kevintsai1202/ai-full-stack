@@ -52,6 +52,11 @@ public class ReaderAuthController {
     private final LoginAbuseGuard loginAbuseGuard;
     /** 首頁問卷列表（A4）所需：查詢後台勾選曝光且已發布的問卷 */
     private final FormSchemaService formSchemaService;
+    /**
+     * 點數規則：首頁問卷區塊的贈點說明必須取自與實際發點同一個來源
+     * （{@link CreditPolicy#surveyReward()}），不得在頁面上寫死數字。
+     */
+    private final CreditPolicy creditPolicy;
 
     /** 注入登入流程所需的服務 */
     public ReaderAuthController(LoginMailService loginMailService,
@@ -61,7 +66,8 @@ public class ReaderAuthController {
                                ReaderContext readerContext,
                                HtmlTemplate htmlTemplate,
                                LoginAbuseGuard loginAbuseGuard,
-                               FormSchemaService formSchemaService) {
+                               FormSchemaService formSchemaService,
+                               CreditPolicy creditPolicy) {
         this.loginMailService = loginMailService;
         this.loginTokenService = loginTokenService;
         this.readerAccountService = readerAccountService;
@@ -70,6 +76,7 @@ public class ReaderAuthController {
         this.htmlTemplate = htmlTemplate;
         this.loginAbuseGuard = loginAbuseGuard;
         this.formSchemaService = formSchemaService;
+        this.creditPolicy = creditPolicy;
     }
 
     /** 登入請求：email 必填且需為合法格式，redirect 選填 */
@@ -201,7 +208,15 @@ public class ReaderAuthController {
         if (forms.isEmpty()) {
             return "";
         }
-        StringBuilder sb = new StringBuilder("<div class=\"card\"><h2 class=\"section-title\">問卷調查</h2><ul class=\"survey-list\">");
+        StringBuilder sb = new StringBuilder("<div class=\"card\"><h2 class=\"section-title\">問卷調查</h2>");
+        // 贈點說明：數字取自 CreditPolicy（與實際發點同源）；獎勵關閉（0 點）時整行不出現，
+        // 不對讀者許下不會兌現的承諾。條件寫「登入填答」——匿名填答不發點，措辭不可省略前提。
+        int reward = creditPolicy == null ? 0 : creditPolicy.surveyReward();
+        if (reward > 0) {
+            sb.append("<p class=\"survey-reward-note\">登入填答完成問卷，即贈 ").append(reward)
+              .append(" 點——可用於解鎖進階文章</p>");
+        }
+        sb.append("<ul class=\"survey-list\">");
         for (FormSchemaService.HomepageForm form : forms) {
             sb.append("<li><a href=\"/r/survey/").append(HtmlTemplate.escapeHtml(form.key()))
               .append("\">").append(HtmlTemplate.escapeHtml(form.title())).append("</a></li>");

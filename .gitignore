@@ -103,3 +103,4 @@ live-slides/verify-output/
 
 # 側欄與投票驗證腳本的截圖輸出（可由 verify-sidebar-and-vote.mjs 重生成）
 survey-backend/scripts/verify-output/
+survey-backend/data/

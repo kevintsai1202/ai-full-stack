@@ -73,6 +73,12 @@ public class ReaderPageController {
      * 舊單元測試相容建構式為 null，此時側邊欄不輸出投票卡。
      */
     private final world.springai.survey.form.FormSchemaService formSchemaService;
+    /**
+     * 點數規則：側欄問卷卡的贈點說明必須取自與實際發點同一個來源
+     * （{@link CreditPolicy#surveyReward()}），不得在頁面上寫死數字。
+     * 舊相容建構式為 null，此時問卷卡不輸出贈點說明。
+     */
+    private final CreditPolicy creditPolicy;
 
     /**
      * 注入內容、授權與渲染所需的服務。
@@ -95,7 +101,8 @@ public class ReaderPageController {
                                SurveyBlockRenderer surveyBlockRenderer,
                                PublicRelatedArticleService relatedArticleService,
                                world.springai.survey.form.SurveyVoteStatsService surveyVoteStatsService,
-                               world.springai.survey.form.FormSchemaService formSchemaService) {
+                               world.springai.survey.form.FormSchemaService formSchemaService,
+                               CreditPolicy creditPolicy) {
         this.campaignRepository = campaignRepository;
         this.markdownRenderer = markdownRenderer;
         this.contentSplitter = contentSplitter;
@@ -110,6 +117,7 @@ public class ReaderPageController {
         this.relatedArticleService = relatedArticleService;
         this.surveyVoteStatsService = surveyVoteStatsService;
         this.formSchemaService = formSchemaService;
+        this.creditPolicy = creditPolicy;
     }
 
     /** 舊單元測試相容建構式；沒有標籤服務時維持原本列表行為。 */
@@ -134,6 +142,7 @@ public class ReaderPageController {
         this.relatedArticleService = null;
         this.surveyVoteStatsService = null;
         this.formSchemaService = null;
+        this.creditPolicy = null;
     }
 
     /** 歷史內容列表：只列已發布者，登入者會看到自己的解鎖狀態 */
@@ -508,7 +517,14 @@ public class ReaderPageController {
             return "";
         }
         StringBuilder html = new StringBuilder(
-            "<section class=\"side-card\"><h2 class=\"side-title\">問卷調查</h2><ul class=\"side-list\">");
+            "<section class=\"side-card\"><h2 class=\"side-title\">問卷調查</h2>");
+        // 贈點說明：數字取自 CreditPolicy（與實際發點同源）；獎勵關閉（0 點）時整行不出現，
+        // 不對讀者許下不會兌現的承諾。條件寫「登入填答」——匿名填答不發點，措辭不可省略前提。
+        int reward = creditPolicy == null ? 0 : creditPolicy.surveyReward();
+        if (reward > 0) {
+            html.append("<p class=\"side-note\">登入填答完成問卷，即贈 ").append(reward).append(" 點</p>");
+        }
+        html.append("<ul class=\"side-list\">");
         for (var form : forms) {
             // 與相關文章卡同一套 side-thumb／side-copy 結構：hover 變色鎖定 strong，
             // 純文字連結會失去 hover 回饋，因此標題一律包 strong
