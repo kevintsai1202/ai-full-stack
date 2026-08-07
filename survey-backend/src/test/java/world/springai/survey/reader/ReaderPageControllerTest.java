@@ -914,4 +914,37 @@ class ReaderPageControllerTest {
 
         assertFalse(body.contains("人參與"), body);
     }
+
+    /** 首頁曝光問卷存在時：文章側邊欄出現「問卷調查」卡，連向 /r/survey/{key}，標題經跳脫 */
+    @Test
+    void sidebarShowsHomepageSurveyCard() throws Exception {
+        when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(gatedArticle(Campaign.TIER_BASIC, 0)));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+        when(formSchemaService.listHomepageForms()).thenReturn(List.of(
+            new world.springai.survey.form.FormSchemaService.HomepageForm(
+                "fullstack-course-interest", "AI 全端課程興趣問卷 <b>", 1)));
+
+        String body = mvc.perform(get("/r/news/test-article"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(body.contains("href=\"/r/survey/fullstack-course-interest\""), body);
+        assertTrue(body.contains("AI 全端課程興趣問卷 &lt;b&gt;"), body); // escapeHtml 生效
+        assertTrue(body.contains("問卷調查"), body);
+    }
+
+    /** 無任何曝光問卷（mock 預設空清單）：側邊欄不出現問卷卡，不留空卡 */
+    @Test
+    void sidebarHidesSurveyCardWhenNoneExposed() throws Exception {
+        when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(gatedArticle(Campaign.TIER_BASIC, 0)));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+
+        String body = mvc.perform(get("/r/news/test-article"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertFalse(body.contains("問卷調查"), body);
+    }
 }

@@ -481,14 +481,42 @@ public class ReaderPageController {
     private static final int SIDEBAR_RELATED_LIMIT = 5;
 
     /**
-     * 渲染文章頁右側欄：投票統計卡、分類選單與相關文章卡。
+     * 渲染文章頁右側欄：投票統計卡、問卷調查卡、分類選單與相關文章卡。
      *
      * <p>各卡皆可獨立缺席——服務未注入（舊相容建構式）或查無資料時
      * 該卡輸出空字串，不留一張空卡在側欄。投票卡排最前：文章專屬資訊
-     * 優先於通用的分類／相關文章。</p>
+     * 優先於通用的問卷入口與分類／相關文章。</p>
      */
     private String renderSidebar(Campaign campaign, List<String> embeddedFormKeys) {
-        return renderVoteStatsCards(embeddedFormKeys) + renderCategoryCard(campaign) + renderRelatedCard(campaign);
+        return renderVoteStatsCards(embeddedFormKeys) + renderHomepageSurveyCard()
+            + renderCategoryCard(campaign) + renderRelatedCard(campaign);
+    }
+
+    /**
+     * 問卷調查卡：列出後台勾選首頁曝光的問卷，與讀者首頁的「問卷調查」區塊同一份
+     * 清單來源（{@code FormSchemaService#listHomepageForms}），連向站內接續填答頁
+     * {@code /r/survey/{formKey}}——登入讀者由該通道填答才會觸發問卷點數，
+     * 因此側欄不放任何外站問卷連結，避免讀者走錯入口拿不到點。
+     */
+    private String renderHomepageSurveyCard() {
+        if (formSchemaService == null) {
+            return "";
+        }
+        List<world.springai.survey.form.FormSchemaService.HomepageForm> forms =
+            formSchemaService.listHomepageForms();
+        if (forms.isEmpty()) {
+            return "";
+        }
+        StringBuilder html = new StringBuilder(
+            "<section class=\"side-card\"><h2 class=\"side-title\">問卷調查</h2><ul class=\"side-list\">");
+        for (var form : forms) {
+            // 與相關文章卡同一套 side-thumb／side-copy 結構：hover 變色鎖定 strong，
+            // 純文字連結會失去 hover 回饋，因此標題一律包 strong
+            html.append("<li><a href=\"/r/survey/").append(HtmlTemplate.escapeHtml(form.key()))
+                .append("\"><span class=\"side-thumb\">📋</span><span class=\"side-copy\"><strong>")
+                .append(HtmlTemplate.escapeHtml(form.title())).append("</strong></span></a></li>");
+        }
+        return html.append("</ul></section>").toString();
     }
 
     /**

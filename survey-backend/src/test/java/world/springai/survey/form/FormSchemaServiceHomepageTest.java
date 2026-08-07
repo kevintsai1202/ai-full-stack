@@ -139,6 +139,19 @@ class FormSchemaServiceHomepageTest {
         assertEquals(List.of("hp-ord-b", "hp-ord-a", "hp-ord-d", "hp-ord-c"), keys);
     }
 
+    /**
+     * V26：課程興趣問卷（fullstack-course-interest）經 migration 預設曝光於首頁。
+     *
+     * <p>這是「方案1」的核心接線——讀者從首頁清單進入 /r/survey/fullstack-course-interest
+     * 走電子報通道填答可獲問卷點數，數據與課程頁匯流於同一 schema key。此測試把該
+     * 產品決定鎖進 migration 鏈：日後重建資料庫或新增 migration 誤把旗標蓋掉時會在此失敗。</p>
+     */
+    @Test
+    void courseInterestFormIsExposedByMigration() {
+        assertTrue(service.listHomepageForms().stream()
+            .anyMatch(f -> f.key().equals("fullstack-course-interest")));
+    }
+
     /** 不存在的 key → 404 */
     @Test
     void updateUnknownKeyThrows404() {
