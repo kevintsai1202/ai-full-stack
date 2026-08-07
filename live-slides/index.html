@@ -113,6 +113,14 @@ td.yes { color: #bbf7d0; font-weight: 600; }
 .badge.quiz  { background: #1e3a8a; color: #bfdbfe; }
 .badge.time  { background: #14532d; color: #bbf7d0; }
 
+/* ── 知識點小卡：嵌在頁面底部的理論補充，講者可 10 秒帶過 ── */
+.kp {
+  margin-top: 24px; padding: 14px 20px;
+  background: #101a36; border: 1px solid var(--border); border-left: 5px solid var(--accent);
+  border-radius: 10px; font-size: 18px; line-height: 1.65; color: var(--dim);
+}
+.kp b { color: var(--accent); }
+
 .center { text-align: center; align-items: center; }
 .big { font-size: 34px; line-height: 1.6; }
 
@@ -162,7 +170,36 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   <p class="lead" style="margin-top:34px">「能不能做」換來一句話——沒得反駁、沒得追蹤、沒得改<br>「可行性評估報告」換來一份文件——可以開會、可以被打槍、可以修</p>
 </section>
 
-<!-- 4 地圖總覽 -->
+<!-- 4 Agentic Coding 流程 -->
+<section class="slide" data-station="開場" data-note="先建立整體觀：agentic coding 不是一問一答，而是 AI 代理自己跑完整個開發迴圈。人的角色從「逐行下指令」變成「審查每一站的產物」。四站就是這個迴圈的四個檢查點。">
+  <h2>先看整個流程：Agentic Coding</h2>
+  <div class="map all">
+    <div class="station"><div class="no">STEP 1</div><div class="name">理解需求</div><div class="what">把模糊想法<br>變成規格</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STEP 2</div><div class="name">規劃</div><div class="what">拆解步驟<br>訂驗收標準</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STEP 3</div><div class="name">生成</div><div class="what">產出程式<br>與文件</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STEP 4</div><div class="name">驗證</div><div class="what">測試、實跑<br>稽核</div></div>
+    <div class="arrow">→</div>
+    <div class="station"><div class="no">STEP 5</div><div class="name">修正</div><div class="what">依據證據<br>迭代到交付</div></div>
+  </div>
+  <p class="lead">AI 不是自動販賣機，是會自己跑完這個迴圈的「代理」（agent）</p>
+  <p class="kp">💡 <b>知識點｜Agentic Coding</b>：讓 AI 代理自主完成「規劃 → 生成 → 驗證 → 修正」的開發迴圈，人的角色從逐行下指令變成<b>審查每一站的產物</b>。今天的四站，就是這個迴圈的四個檢查點。</p>
+</section>
+
+<!-- 5 問法決定除錯次數 -->
+<section class="slide" data-station="開場" data-note="講透因果鏈：模糊提問 → AI 腦補規格 → 生成偏差 → 反覆除錯。每一次除錯來回都是重跑一整圈「生成→驗證→修正」。正確的提示詞把錯誤攔在生成之前——這就是降低除錯次數的原理。">
+  <h2>問法，決定你除錯幾次</h2>
+  <div class="pair">
+    <div class="line no"><span class="tag">❌</span>模糊提問 → AI 自行腦補規格 → 生成偏差 → 除錯來回 5 次</div>
+    <div class="line yes"><span class="tag">✅</span>先評估、先計畫、先寫測試 → 規格先對齊 → 除錯來回 1 次</div>
+  </div>
+  <p class="lead" style="margin-top:22px">每一次除錯來回，都是重跑一整圈「生成 → 驗證 → 修正」。<br>除錯次數不是運氣，是提問品質的函數。</p>
+  <p class="kp">💡 <b>知識點｜錯誤成本放大</b>：錯誤越晚被發現，修正成本越高——需求期修一個誤解只要改一句話，寫完程式才發現要改一天，上線後發現再放大十倍。<b>正確的提示詞，就是把錯誤攔在最便宜的階段。</b></p>
+</section>
+
+<!-- 6 地圖總覽 -->
 <section class="slide" data-station="開場" data-note="攤開地圖。說明規則：每站一句對比、一段原理、一個產物、一題測驗。反例只用講的不 demo。">
   <h2>今天走這四站</h2>
   <div class="map all">
@@ -207,6 +244,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
     <div class="line yes"><span class="tag">✅</span>幫我做這個需求的可行性評估報告</div>
   </div>
   <p class="lead" style="margin-top:26px">yes/no 題只會換來 yes。<br>指定產出格式，它才非攤開不可。</p>
+  <p class="kp">💡 <b>知識點｜Sycophancy（討好傾向）</b>：LLM 經人類回饋訓練（RLHF），傾向給出使用者想聽的答案。面對 yes/no 的可行性問題，它幾乎永遠答「可以」——不是它評估過，是它想讓你滿意。</p>
 </section>
 
 <section class="slide" data-station="站 1 想法期" data-note="重點唸最後一句「最沒把握的三件事」。這通常是整份報告最值錢的一段。">
@@ -279,6 +317,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
 請列出 2-4 個可行的技術選型方案，每個方案說明：
 優點、缺點、適用情境、<span class="hl">在我上述限制下的契合度</span>。
 最後給出你的推薦與理由，並說明<span class="hl">什麼情況下你會改推薦別的方案</span>。</pre>
+  <p class="kp">💡 <b>知識點｜約束前置（Constraint-first）</b>：不先給限制，AI 只會套訓練資料裡出現最多次的組合。先把環境、技能、時程寫進提示詞，等於把驗收條件搬到生成之前。</p>
 </section>
 
 <section class="slide" data-station="站 2 設計期" data-note="這張是站 2 的精華。「什麼情況下我會改推薦」讓你知道這個決定的有效邊界——限制變了，推薦就該變。">
@@ -347,6 +386,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
 測試要涵蓋：正常路徑、邊界值、錯誤分支。
 <span class="hl">在我確認紅燈之前，不要寫實作程式碼。</span></pre>
   <p class="lead" style="margin-top:18px">寫完程式再補的測試，是實作的鏡子，不是規格。</p>
+  <p class="kp">💡 <b>知識點｜TDD 紅綠重構</b>：紅燈證明測試真的在驗證（不是永遠會過），綠燈證明實作滿足規格。先測試後實作，能防止 AI 寫出「證明自己對」的過擬合測試。</p>
 </section>
 
 <section class="slide" data-station="站 3 開發驗收" data-note="紅燈。失敗原因是功能未實作，不是打錯字——這件事要唸出來。">
@@ -438,6 +478,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
     <div class="line yes"><span class="tag">第一層</span>我寫的程式碼 → OWASP Top 10:2025 ＋ CWE Top 25</div>
     <div class="line yes"><span class="tag">第二層</span>我用的第三方元件 → 已知 CVE</div>
   </div>
+  <p class="kp">💡 <b>知識點｜基準式稽核（Baseline audit）</b>：有清單才有覆蓋率——「沒命中也要說明為什麼不適用」把稽核從「挑幾個講」變成「逐項全查」，報告才可以被審查。</p>
 </section>
 
 <section class="slide" data-station="站 4 上線前" data-note="關鍵在最後一句——逼它交出覆蓋率，而不是只挑幾個好講的講。清單版本要講：OWASP 2025 版新增 A03 供應鏈、A10 例外處理，SSRF 併進 A01。用 2021 版問會漏掉兩塊。">
