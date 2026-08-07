@@ -123,6 +123,17 @@ td.yes { color: #bbf7d0; font-weight: 600; }
 .badge.quiz  { background: #1e3a8a; color: #bfdbfe; }
 .badge.time  { background: #14532d; color: #bbf7d0; }
 
+/* ── 職缺頁：文字卡＋原始截圖證物的並排版面 ──
+   截圖是白底、在暗色版面會很亮，刻意壓窄（flex-basis 30%）並降不透明度，
+   讓它「存在即可信」但不搶走左側重排文字卡的閱讀焦點 */
+.job-ad-row { display: flex; gap: 24px; align-items: stretch; }
+.job-ad-row .pair { flex: 1 1 auto; min-width: 0; }
+.job-ad-proof { flex: 0 0 30%; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.job-ad-proof img { width: 100%; height: auto; max-height: 380px; object-fit: contain;
+                    border: 1px solid var(--border); border-radius: 10px;
+                    background: #fff; opacity: .92; }
+.job-ad-proof figcaption { font-size: 14px; color: var(--dim); text-align: center; }
+
 /* ── 知識點小卡：嵌在頁面底部的理論補充，講者可 10 秒帶過 ── */
 .kp {
   margin-top: 24px; padding: 14px 20px;
@@ -162,8 +173,30 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   <p class="by">從可行性評估到資安稽核，一小時走完 AI 開發生命週期</p>
 </section>
 
-<!-- 2 反差 -->
-<section class="slide" data-station="開場" data-note="慢慢講，這是全場的鉤子。講完停兩秒再翻頁。強調：同一天、同一個模型、同一個需求。">
+<!-- 2 市場證據：半導體大廠職缺（open loop 鉤子） -->
+<section class="slide" data-station="開場" data-note="真實職缺（台積電）當開場鉤子。重點唸「資歷需求」那行：熟悉 AI Coding 工具寫在門檻裡、不在加分欄。加分欄的 Harness/Loop Engineering 先不解釋——留懸念：「這兩個詞是什麼？聽完今天你就會。」等 Agentic Coding 流程頁再回收。90 秒內講完。">
+  <h2>開場前，先看一張真的職缺</h2>
+  <div class="job-ad-row">
+    <div class="pair">
+      <div class="line"><span class="tag">職缺</span>半導體大廠 軟體工程師（後端 80%／前端 20%）｜Java Spring Boot / React｜新竹</div>
+      <div class="line"><span class="tag">資歷需求</span>6～10 年全端經驗・快速理解需求・獨立解決問題・<strong>熟悉 AI Coding 工具</strong></div>
+      <div class="line yes"><span class="tag">加分</span>熟悉 Spring Boot 生態系・<strong>AI Coding 能力強（Harness／Loop Engineering）</strong></div>
+    </div>
+    <!-- 原始截圖「證物」：把徵才訊息截圖存成 assets/job-ad-original.png 後，
+         取消下面 figure 的註解即可上線。刻意縮小放側欄——它的功能是「證明是真的」，
+         不是被閱讀（內容由左側三張卡承載）。
+    <figure class="job-ad-proof">
+      <img src="assets/job-ad-original.png" alt="徵才訊息原始截圖">
+      <figcaption>徵才訊息原文截圖</figcaption>
+    </figure>
+    -->
+  </div>
+  <p class="lead">「熟悉 AI Coding 工具」寫在<strong>資歷需求</strong>，不在加分欄——AI 協作已經是門檻，不是亮點<br>加分欄的 <strong>Harness／Loop Engineering</strong> 是什麼？<strong>聽完今天這一小時，你就會了</strong></p>
+  <p class="kp">💡 <b>知識點｜框架 × AI Coding 是相乘、不是相加</b>：框架深度（Spring Boot／React）讓你<b>審查得動</b> AI 交出的產物；AI Coding 讓你的框架經驗<b>規模化</b>。只會框架＝產出慢；只會 AI＝驗收不了它寫的東西——所以企業兩個都要。</p>
+</section>
+
+<!-- 3 反差 -->
+<section class="slide" data-station="開場" data-note="慢慢講，這是內容鉤子（上一頁是切身鉤子）。講完停兩秒再翻頁。強調：同一天、同一個模型、同一個需求。">
   <h2>同一個需求，同一天，同一個模型</h2>
   <div class="pair">
     <div class="line no"><span class="tag">A 問：</span>「這個功能能不能做？」</div>
@@ -181,7 +214,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
 </section>
 
 <!-- 4 Agentic Coding 流程 -->
-<section class="slide" data-station="開場" data-note="先建立整體觀：agentic coding 不是一問一答，而是 AI 代理自己跑完整個開發迴圈。人的角色從「逐行下指令」變成「審查每一站的產物」。四站就是這個迴圈的四個檢查點。">
+<section class="slide" data-station="開場" data-note="先建立整體觀：agentic coding 不是一問一答，而是 AI 代理自己跑完整個開發迴圈。人的角色從「逐行下指令」變成「審查每一站的產物」。四站就是這個迴圈的四個檢查點。★ 回收開場職缺的懸念：「這個迴圈，就是那張職缺加分欄寫的 Loop Engineering——給 AI 跑這個迴圈的執行環境，就是 Harness。」">
   <h2>先看整個流程：Agentic Coding</h2>
   <div class="map all">
     <div class="station"><div class="no">STEP 1</div><div class="name">理解需求</div><div class="what">把模糊想法<br>變成規格</div></div>
@@ -195,7 +228,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
     <div class="station"><div class="no">STEP 5</div><div class="name">修正</div><div class="what">依據證據<br>迭代到交付</div></div>
   </div>
   <p class="lead">AI 不是自動販賣機，是會自己跑完這個迴圈的「代理」（agent）</p>
-  <p class="kp">💡 <b>知識點｜Agentic Coding</b>：讓 AI 代理自主完成「規劃 → 生成 → 驗證 → 修正」的開發迴圈，人的角色從逐行下指令變成<b>審查每一站的產物</b>。今天的四站，就是這個迴圈的四個檢查點。</p>
+  <p class="kp">💡 <b>知識點｜Agentic Coding</b>：讓 AI 代理自主完成「規劃 → 生成 → 驗證 → 修正」的開發迴圈，人的角色從逐行下指令變成<b>審查每一站的產物</b>。今天的四站，就是這個迴圈的四個檢查點——<b>這個迴圈，就是開場那張職缺加分欄的 Loop Engineering</b>。</p>
 </section>
 
 <!-- 5 問法決定除錯次數 -->
@@ -209,19 +242,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   <p class="kp">💡 <b>知識點｜錯誤成本放大</b>：錯誤越晚被發現，修正成本越高——需求期修一個誤解只要改一句話，寫完程式才發現要改一天，上線後發現再放大十倍。<b>正確的提示詞，就是把錯誤攔在最便宜的階段。</b></p>
 </section>
 
-<!-- 6 市場證據：半導體大廠職缺 -->
-<section class="slide" data-station="開場" data-note="真實職缺（台積電）。重點唸「資歷需求」那行：熟悉 AI Coding 工具寫在門檻裡、不在加分欄。加分項的 Harness/Loop Engineering 正是上一頁的迴圈——harness 是給 AI 跑的執行環境與工具鏈，loop engineering 是設計「生成→驗證→修正」迴圈。60 秒帶過，別戀戰。">
-  <h2>這不是未來式：企業已經在徵這種人</h2>
-  <div class="pair">
-    <div class="line"><span class="tag">職缺</span>半導體大廠 軟體工程師（後端 80%／前端 20%）｜Java Spring Boot / React｜新竹</div>
-    <div class="line"><span class="tag">資歷需求</span>6～10 年全端經驗・快速理解需求・獨立解決問題・<strong>熟悉 AI Coding 工具</strong></div>
-    <div class="line yes"><span class="tag">加分</span>熟悉 Spring Boot 生態系・<strong>AI Coding 能力強（Harness／Loop Engineering）</strong></div>
-  </div>
-  <p class="lead">「熟悉 AI Coding 工具」寫在<strong>資歷需求</strong>，不在加分欄——AI 協作已經是門檻，不是亮點<br>加分欄要的 Harness／Loop Engineering，就是上一頁那個「生成 → 驗證 → 修正」迴圈的設計能力</p>
-  <p class="kp">💡 <b>知識點｜框架 × AI Coding 是相乘、不是相加</b>：框架深度（Spring Boot／React）讓你<b>審查得動</b> AI 交出的產物；AI Coding 讓你的框架經驗<b>規模化</b>。只會框架＝產出慢；只會 AI＝驗收不了它寫的東西——所以企業兩個都要。</p>
-</section>
-
-<!-- 7 地圖總覽 -->
+<!-- 6 地圖總覽 -->
 <section class="slide" data-station="開場" data-note="攤開地圖。說明規則：每站一句對比、一段原理、一個產物、一題測驗。反例只用講的不 demo。">
   <h2>今天走這四站</h2>
   <div class="map all">
