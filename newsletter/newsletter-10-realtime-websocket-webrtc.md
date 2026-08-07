@@ -43,7 +43,7 @@
 
 ![四種技術的方向對比：輪詢反覆問答、SSE 單向推送、WebSocket 全雙工、WebRTC 點對點](https://springai-media.zeabur.app/newsletter-media/images/a307751a1efc95f27fbe4ac6f049270bc864257a06cd7baa088646daba8350cf.png)
 
-## WebSocket：真正的雙向對講機
+## WebSocket：真正的雙向通話
 
 WebSocket 從一個普通的 HTTP 請求出發，透過 `Upgrade: websocket` 握手，把這條連線「升級」成**全雙工通道**：之後雙方隨時都能開口，訊息可以是文字或二進位，沒有請求—回應的回合限制。
 
@@ -54,7 +54,7 @@ WebSocket 從一個普通的 HTTP 請求出發，透過 `Upgrade: websocket` 握
 - 網頁遊戲——狀態同步每秒好幾次
 - 交易下單——按下去的那一刻就要送達
 
-一句話對比上期：SSE 是廣播電台，WebSocket 是對講機。**只聽廣播的場景別買對講機**——你會多付「連線管理」這筆隱形成本，下面後段會講它有多真實。
+一句話對比上期：SSE 是廣播電台，WebSocket 是**電話**——不是對講機。對講機要按著才能講、同一時間只有一個人能送，那是**半雙工**；電話兩邊可以同時開口，這才是全雙工，也才是 WebSocket。**而只需要聽廣播的場景，就別去牽一條電話線**——你會多付「連線管理」這筆隱形成本，下面後段會講它有多真實。
 
 ## WebRTC：根本不走你的伺服器
 
@@ -77,7 +77,7 @@ WebRTC 解的是另一個維度的問題：**瀏覽器跟瀏覽器直接連**，
 ## 新世代與家族其他成員
 
 - **Web Push**：唯一能在**使用者沒開你網站時**送通知的技術（配合 Service Worker，走瀏覽器廠商的推播服務）。「離線也要通知」找它，不是 WebSocket。
-- **WebTransport**：跑在 HTTP/3（QUIC）上的新協定，同時支援可靠與**不可靠**傳輸——遊戲、串流這種「舊資料晚到不如丟掉」的場景等它很久了，瀏覽器支援已逐漸到位，是 WebSocket 未來最有力的挑戰者。
+- **WebTransport**：跑在 HTTP/3（QUIC）上的新協定，同時支援可靠與**不可靠**傳輸——遊戲、串流這種「舊資料晚到不如丟掉」的場景等它很久了。它今年三月隨 Safari 26.4 補上最後一塊拼圖，正式成為 Baseline（Chrome、Edge、Firefox、Safari 全數支援），是 WebSocket 眼下最有力的挑戰者。
 - **HTTP/2 Server Push**：曾被寄予厚望，結果沒人用得好，Chrome 已經**移除支援**——留名警世：不是掛著「Push」就適合做即時通訊。
 - **Socket.IO／STOMP／SignalR／MQTT over WebSocket**：注意，這些是**程式庫或訊息協定**，不是傳輸層——底下跑的還是 WebSocket（含降級路徑）。它們解決的是重連、房間、訊息格式這些「WebSocket 沒管的事」。
 
@@ -106,11 +106,11 @@ WebRTC 解的是另一個維度的問題：**瀏覽器跟瀏覽器直接連**，
 
 ## 後段：WebSocket 的生產等級清單
 
-WebSocket 上線後你才會發現，握手成功只是開始。
+WebSocket 上線後你才會發現，握手成功只是開始。照系列慣例，每一項附一句**可以直接丟給 AI 的提示詞**。
 
 ### 1. 心跳與重連——自己來
 
-不像 SSE，WebSocket 的斷線偵測和重連**規格不管**。生產等級的前端至少長這樣：
+不像 SSE，WebSocket 的**重連完全沒有規範**，斷線偵測則是規格有、瀏覽器不給你用——RFC 6455 定義了 Ping／Pong 控制幀，但瀏覽器的 JS API 沒有暴露，前端只能自己做應用層心跳。生產等級的前端至少長這樣：
 
 ```js
 let ws, delay = 1000;
@@ -126,11 +126,15 @@ function connect() {
 connect();
 ```
 
-伺服器端則要定期 ping、逾時未 pong 就主動斷開——否則殭屍連線會慢慢吃光資源。
+伺服器端則相反，可以直接用規格層的 Ping／Pong：定期 ping、逾時未 pong 就主動斷開——否則殭屍連線會慢慢吃光資源。
+
+> 🤖 丟給 AI：「幫我的 WebSocket 加上自動重連與心跳偵測。」
 
 ### 2. 認證的小陷阱
 
 瀏覽器的 `new WebSocket()` **不能自訂 Authorization 標頭**。實務解法：握手時走 cookie；或把一次性 token 放在查詢字串／第一則訊息內驗證。別在 URL 放長效 token——它會進存取日誌。
+
+> 🤖 丟給 AI：「幫我的 WebSocket 設計連線認證，不要把長效 token 放在 URL。」
 
 ### 3. 多實例廣播：單機聊天室的畢業考
 
@@ -142,8 +146,9 @@ redis.convertAndSend("chat", message);
 
 // 每個實例都訂閱同頻道，收到後推給「自己身上」的連線
 @Override
-public void onMessage(String message) {
-  sessions.forEach(s -> send(s, message));
+public void onMessage(Message message, byte[] pattern) {   // Spring Data Redis 的 MessageListener
+  String body = new String(message.getBody(), StandardCharsets.UTF_8);
+  sessions.forEach(s -> send(s, body));
 }
 ```
 
@@ -160,20 +165,37 @@ protected void handleTextMessage(WebSocketSession session, TextMessage msg) {
 }
 ```
 
+**Spring Boot 4.1 起有更短的寫法**：Spring Data Redis 4.1 新增了 `@RedisListener`，讓 Redis pub/sub 終於跟 `@KafkaListener`、`@RabbitListener` 對齊——不必實作介面、不必自己拆 `Message` 的 bytes、也不必手動組 `RedisMessageListenerContainer`：
+
+```java
+@RedisListener(topic = "chat")
+public void onChat(String message) {
+  sessions.forEach(s -> send(s, message));
+}
+```
+
+訊息轉換交給框架處理（依 classpath 上有沒有 Jackson 等函式庫自動挑），也能用 `consumes = "application/json"` 指定。但請認明版本：`org.springframework.data.redis.annotation` 這個套件在 Spring Boot 3.x 上**根本不存在**。這正是 AI 最容易混搭出錯的地方——它會把 4.1 的註解寫進你 3.x 的專案，你只會看到 import 一片紅。
+
+> 🤖 丟給 AI：「用 Redis pub/sub 讓我的 WebSocket 廣播支援多實例部署，我的 Spring Boot 版本是 ____。」
+
 ### 4. WebRTC 最小心智模型：三次握手之外的三步
 
 ```js
 // 1. 造一個 PeerConnection（帶 STUN）
 const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-// 2. 我方開價（offer）→ 經信令伺服器交給對方 → 對方回價（answer）
+// 2. 先掛好 ICE 監聽——候選位址一產生就送出，直到雙方找到能通的路
+pc.onicecandidate = (e) => e.candidate && signaling.send({ type: 'ice', candidate: e.candidate });
+// 3. 我方開價（offer）→ 經信令伺服器交給對方 → 對方回價（answer）
 const offer = await pc.createOffer();
 await pc.setLocalDescription(offer);
-signaling.send({ type: 'offer', sdp: offer });
-// 3. 雙方持續交換 ICE 候選位址，直到找到能通的路
-pc.onicecandidate = (e) => e.candidate && signaling.send({ type: 'ice', candidate: e.candidate });
+signaling.send({ type: 'offer', sdp: offer.sdp });   // 送 offer.sdp 字串，不是整個 offer 物件
 ```
 
+三個容易寫錯的細節：**ICE 監聽要在 `setLocalDescription` 之前掛好**（它一執行就開始蒐集候選）；送出去的 `sdp` 欄位**必須是字串**，塞整個 offer 物件過去，對方 `setRemoteDescription` 會直接拋 `Failed to parse SessionDescription`；還有 `createOffer()` 之前要先 `addTrack()` 或 `createDataChannel()`，否則你開的是一份沒有任何媒體的空價目表。
+
 記住結構就好：**offer/answer 換能力、ICE 換路徑、STUN/TURN 幫穿牆**——細節查文件，結構不對 AI 也救不了你。
+
+> 🤖 丟給 AI：「用 WebRTC 幫我做兩個瀏覽器的點對點連線，信令走 WebSocket。」
 
 ## 完結篇：選型決策表
 
@@ -185,7 +207,7 @@ pc.onicecandidate = (e) => e.candidate && signaling.send({ type: 'ice', candidat
 | 聊天、協作、遊戲、雙向高頻 | WebSocket | 全雙工，但連線管理自己扛 |
 | 視訊、語音、P2P 傳檔 | WebRTC | 點對點；記得信令＋TURN 成本 |
 | 使用者離線也要通知 | Web Push | 唯一能背景送達的選項 |
-| 需要「不可靠傳輸」的低延遲流 | WebTransport | HTTP/3 世代，開始關注 |
+| 需要「不可靠傳輸」的低延遲流 | WebTransport | HTTP/3 世代，2026 年起全瀏覽器可用 |
 | 外部服務要通知「你的後端」 | Webhook | 伺服器對伺服器；再由 SSE/WS 接力到瀏覽器 |
 
 最後回到系列開頭那句話：現在很多即時功能是 AI 寫的。**AI 最常見的兩個錯配**：拿 WebSocket 做單向通知（其實 SSE 就好，還自帶重連）、拿短輪詢做聊天室（上線就被流量教訓）。技術地圖在你腦裡，AI 才是你的工具——反過來就危險了。
@@ -210,7 +232,11 @@ pc.onicecandidate = (e) => e.candidate && signaling.send({ type: 'ice', candidat
 
 - **必須在 008、009 之後寄出**：開頭引用前兩期，且 009 結尾已承諾本期的「選型決策表」。
 - **工商卡片未填優惠碼**：完結篇文案回到課程整體定位；優惠碼寄送前確認。若三期都保留工商卡，考慮只在其中一〜兩期投放以免疲乏（工商提案系統的投放次數配額可直接支援此策略）。
-- 本期表格一張（選型決策表，含 Webhook 列）＋程式碼區塊 5 段（圍欄式）＋示意圖 2 張（媒體庫 PNG）。**測試信確認選型表換行與圖片載入**。**測試信重點確認選型表在手機信箱的換行**——表格是 Email 相容性最差的元素，破版就把表改成條列。
-- 「Chrome 已移除 HTTP/2 Server Push 支援」為事實陳述（Chrome 106 起）；WebTransport 瀏覽器支援描述用「逐漸到位」保留語氣，**請勿改寫成絕對敘述**。
+- 後段 4 個小節各附一句「🤖 丟給 AI」提示詞（blockquote 格式，沿用 008 慣例），**測試信確認引用區塊樣式正常**（不支援就改粗體行內文字）。
+- 本期表格一張（選型決策表，含 Webhook 列）＋程式碼區塊 6 段（圍欄式）＋示意圖 2 張（媒體庫 PNG）。**測試信確認選型表換行與圖片載入**。**測試信重點確認選型表在手機信箱的換行**——表格是 Email 相容性最差的元素，破版就把表改成條列。
+- 「Chrome 已移除 HTTP/2 Server Push 支援」為事實陳述（Chrome 106 起）。WebTransport 已於 2026-03 隨 Safari 26.4 達成 Baseline（Chrome 97+／Edge 98+／Firefox 114+／Safari 26.4+），文中採此事實陳述；**若本期延後至跨年後才寄送，請重新確認上述版本敘述**。
+- **WebSocket 的類比一律用「電話」，不可寫成「對講機」**：對講機是半雙工（PTT 按著才能講、同時只有一方能送），WebSocket 是全雙工（RFC 6455：「each side can, independently from the other, send data at will」）。文中刻意保留「不是對講機」的對照當教學點，改寫時勿一併刪除。
+- 程式碼片段皆經實機驗證，驗證腳本見 `newsletter/scripts/verify-010-code.mjs`（Playwright 跑真實 Chromium）與 `newsletter/scripts/verify-010-java.ps1`（JDK 21 編譯）。**修改任何程式碼片段後請重跑這兩支腳本**。
+- Redis pub/sub 小節同時給了 Spring Boot 3.x 的 `MessageListener` 與 4.1 的 `@RedisListener` 兩種寫法，並明示版本分界（`org.springframework.data.redis.annotation` 在 3.x 不存在）；**改寫時請保留版本標註**，這是本節防止讀者照抄踩坑的關鍵。
 - STUN 範例用 Google 公開伺服器位址，僅為教學示意；正式產品應自建或採用商用 TURN 服務，文中已點出成本考量。
 - 本期**不含** `<!--paywall-->`，全文免費——完結篇以分享轉發優先；系列全部寄畢後，可考慮在讀者頁整理成系列合集入口。

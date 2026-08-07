@@ -6,3 +6,5 @@
 010-b-webrtc-signaling.png -> https://springai-media.zeabur.app/newsletter-media/images/6201aae5f72797dae070cf0f99c632a646b5893e5e547e919768701aa989c1ca.png
 011-a-webhook-chain.png -> https://springai-media.zeabur.app/newsletter-media/images/6522f68ce284c6ba0f6dab02253fcea45f2152d2a6c7953d1f4663c58f20e409.png
 011-b-webhook-gates.png -> https://springai-media.zeabur.app/newsletter-media/images/caa59eec40e71786a8d717078bf7eb5fd2b213b5aaf2dabbce6ba703325e7ef7.png
+011-c-agentic-coding-loop.png -> https://springai-media.zeabur.app/newsletter-media/images/071fed4d242d0b17a5a451a661e5c301730732c8745614fb1db786a3860bf925.png
+011-d-four-stations-map.png -> https://springai-media.zeabur.app/newsletter-media/images/7910dfc40962ff6ae8cf717a81df73b365681af7788d05a93fa2b70e02c6302e.png
