@@ -590,6 +590,55 @@ class ReaderPageControllerTest {
         assertFalse(html.contains(SENTINEL), "受限區絕不可出現在 PARTIAL 回應中");
     }
 
+    /**
+     * PARTIAL 時 gate 卡片須列出受限區的章節標題（讓免費讀者知道隱藏了什麼），
+     * 但**只有標題**——內文、程式碼註解一律不得外洩，標題本身也必須經過 HTML 跳脫。
+     */
+    @Test
+    void gateBlockListsHiddenSectionHeadingsWithoutLeakingBody() throws Exception {
+        String markdown = FREE_MARKER + "\n\n<!--paywall-->\n\n"
+            + "## 關卡一：簽章驗證 <b>粗體</b>\n\n" + SENTINEL + "\n\n"
+            + "```powershell\n## 圍欄內的程式碼註解\n```\n\n"
+            + "### 關卡二：冪等去重\n";
+        Campaign c = new Campaign("測試文章", markdown, null, null, null, "now", null, 1, "sent");
+        c.setTier(Campaign.TIER_PREMIUM);
+        c.setCreditCost(10);
+        c.setSlug("test-article");
+        c.setPublishedAt(OffsetDateTime.parse("2026-07-20T10:00:00+08:00"));
+        when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(c));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        when(accessDecisionService.resolveCost(any())).thenReturn(10);
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+
+        String html = mvc.perform(get("/r/news/test-article"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertTrue(html.contains("class=\"gate-outline\""), "gate 卡片應含隱藏章節清單");
+        // 標題必須以「跳脫後」的形式出現——原樣的 <b> 出現即是 XSS 注入口
+        assertTrue(html.contains("關卡一：簽章驗證 &lt;b&gt;粗體&lt;/b&gt;"), "章節標題應顯示且經 HTML 跳脫");
+        assertFalse(html.contains("關卡一：簽章驗證 <b>粗體</b>"), "未跳脫的標題是 XSS 注入口");
+        assertTrue(html.contains("關卡二：冪等去重"), "H3 章節也應列出");
+        assertFalse(html.contains(SENTINEL), "清單只能有標題，受限區內文不得外洩");
+        assertFalse(html.contains("圍欄內的程式碼註解"), "程式碼圍欄內的 # 行不是標題，不得外洩");
+    }
+
+    /** 受限區沒有任何 H2／H3 標題時，gate 卡片不渲染空清單 */
+    @Test
+    void gateOutlineOmittedWhenGatedContentHasNoHeadings() throws Exception {
+        when(campaignRepository.findBySlug("test-article"))
+            .thenReturn(Optional.of(gatedArticle(Campaign.TIER_PREMIUM, 10)));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        when(accessDecisionService.resolveCost(any())).thenReturn(10);
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+
+        String html = mvc.perform(get("/r/news/test-article"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+
+        assertFalse(html.contains("class=\"gate-outline\""), "沒有章節標題就不該渲染空清單");
+    }
+
     /** NEEDS_CREDITS 時顯示差額與邀請連結，不得有解鎖按鈕，也不得含受限區 */
     @Test
     void needsCreditsRendersShortfallAndInviteLink() throws Exception {

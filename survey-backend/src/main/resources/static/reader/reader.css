@@ -306,6 +306,15 @@ input::placeholder { color:#71817c; }
 .gate p { margin:0 0 18px; color:var(--muted); }
 .gate .fade { height:1px; margin:0 0 24px; background:var(--border); }
 
+/* 隱藏章節預告清單：整體置中的 gate 內唯一靠左的區塊——清單置中會參差不齊難讀。
+   max-width + margin:auto 讓清單在寬螢幕不會貼到卡片左緣。 */
+.gate .gate-outline { max-width:420px; margin:0 auto 18px; text-align:left; }
+.gate .gate-outline p { margin:0 0 8px; font-size:.9rem; }
+.gate .gate-outline ul { margin:0; padding:0; list-style:none; }
+.gate .gate-outline li { margin:4px 0; padding-left:1.4em; text-indent:-1.4em;
+                         color:var(--muted); font-size:.94rem; }
+.gate .gate-outline li::before { content:"🔒"; margin-right:.4em; font-size:.85em; }
+
 .empty { color:var(--muted); text-align:center; padding:40px 0; }
 .foot { margin-top:50px; padding-top:20px; border-top:1px solid var(--border); color:var(--muted-2); font-size:.86rem; }
 

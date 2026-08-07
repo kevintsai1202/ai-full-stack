@@ -247,7 +247,8 @@ public class ReaderPageController {
         vars.put("<!--SUBSCRIBE_CTA-->", renderSharedArticleSubscribeCta(slug, ref, current.isPresent()));
         // 只有「未取得全文且該文章真的有受限區」時才需要 paywall 區塊
         boolean gateRendered = !full && split.hasGate();
-        vars.put("<!--GATE_BLOCK-->", gateRendered ? renderGate(decision, campaign, slug) : "");
+        vars.put("<!--GATE_BLOCK-->",
+            gateRendered ? renderGate(decision, campaign, slug, split.gatedMarkdown()) : "");
         // CAN_UNLOCK 時才需要解鎖腳本，其餘情況輸出空字串——
         // 不讓不需要的頁面帶著一段用不到的 JS。
         // 額外要求 gateRendered：沒有渲染出 #unlock-btn 卻輸出腳本，
@@ -640,18 +641,21 @@ public class ReaderPageController {
      * <p>所有點數數字都取自 {@link AccessDecisionService#resolveCost}，
      * 不在此重算——頁面顯示的代價與實際扣的必須是同一個來源。</p>
      */
-    private String renderGate(AccessDecisionService.Decision decision, Campaign campaign, String slug) {
+    private String renderGate(AccessDecisionService.Decision decision, Campaign campaign, String slug,
+                              String gatedMarkdown) {
         String encodedRedirect = "/r/news/" + slug;
         int cost = accessDecisionService.resolveCost(campaign);
+        // 隱藏章節預告：四種 gate 狀態都顯示——讓免費讀者知道牆後有什麼，是解鎖動機的一部分
+        String outline = renderGateOutline(gatedMarkdown);
         return switch (decision.reason()) {
             case NOT_LOGGED_IN -> gateHtml("接下來是付費內容",
-                "請先用訂閱時的 email 登入；登入後仍需使用點數解鎖，不需要密碼。",
+                "請先用訂閱時的 email 登入；登入後仍需使用點數解鎖，不需要密碼。", outline,
                 "<a class=\"btn\" href=\"/r/login?redirect=" + HtmlTemplate.escapeHtml(encodedRedirect) + "\">登入查看解鎖方式</a>");
             case NOT_SUBSCRIBED -> gateHtml("這個 email 尚未完成訂閱確認",
-                "請先在訂閱頁完成確認；確認後仍需使用點數解鎖付費內容。",
+                "請先在訂閱頁完成確認；確認後仍需使用點數解鎖付費內容。", outline,
                 "<a class=\"btn\" href=\"/r/\">重新訂閱</a>");
             case CAN_UNLOCK -> gateHtml("這是進階內容",
-                "解鎖需要 " + cost + " 點，<strong>一次解鎖永久可讀</strong>。",
+                "解鎖需要 " + cost + " 點，<strong>一次解鎖永久可讀</strong>。", outline,
                 // 只輸出 data-slug：腳本唯一讀取的資料屬性。data-cost 沒有任何
                 // 消費者，留著只會讓後人以為前端會用它做金額計算。
                 "<button class=\"btn\" id=\"unlock-btn\" data-slug=\"" + HtmlTemplate.escapeHtml(slug)
@@ -660,7 +664,7 @@ public class ReaderPageController {
                     + rulesHint());
             case NEEDS_CREDITS -> gateHtml("這是進階內容",
                 "解鎖需要 " + cost + " 點，你還差 " + decision.shortfall() + " 點。"
-                    + "邀請朋友訂閱可以獲得點數。",
+                    + "邀請朋友訂閱可以獲得點數。", outline,
                 "<a class=\"btn\" href=\"/r/me#invite\">看我的邀請連結</a>" + rulesHint());
             // 窮舉列出而非 default -> ""：這個方法只在 !full 時被呼叫（見呼叫端
             // gateRendered 的判斷），這幾個 reason 代表「本來就不需要顯示
@@ -749,16 +753,34 @@ public class ReaderPageController {
         </script>
         """;
 
-    /** 組 paywall 區塊的 HTML（含漸層淡出） */
-    private String gateHtml(String title, String description, String action) {
+    /** 組 paywall 區塊的 HTML（含漸層淡出）；outline 為隱藏章節預告，可為空字串 */
+    private String gateHtml(String title, String description, String outline, String action) {
         return """
             <div class="gate">
               <div class="fade"></div>
               <h3>%s</h3>
               <p>%s</p>
-              %s
+              %s%s
             </div>
-            """.formatted(title, description, action);
+            """.formatted(title, description, outline, action);
+    }
+
+    /**
+     * 渲染「隱藏了什麼」章節預告清單；受限區沒有任何 H2／H3 標題時回空字串。
+     *
+     * <p>只輸出標題文字（逐一經 {@link HtmlTemplate#escapeHtml}），內文絕不經過
+     * 這條路徑——受限內容在 PARTIAL 時不進入回應的鐵律（spec §5.3）不因預告而放寬。</p>
+     */
+    private String renderGateOutline(String gatedMarkdown) {
+        List<String> headings = contentSplitter.headings(gatedMarkdown);
+        if (headings.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder("<div class=\"gate-outline\"><p>解鎖後可閱讀以下章節：</p><ul>");
+        for (String heading : headings) {
+            sb.append("<li>").append(HtmlTemplate.escapeHtml(heading)).append("</li>");
+        }
+        return sb.append("</ul></div>").toString();
     }
 
     /** 從免費區 markdown 取前 120 字作為 meta description（去掉標記符號） */

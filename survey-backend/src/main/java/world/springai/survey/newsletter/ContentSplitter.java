@@ -73,6 +73,39 @@ public class ContentSplitter {
     }
 
     /**
+     * 抽出受限區的 H2／H3 標題文字，供 paywall 卡片向免費讀者預告「隱藏了什麼」。
+     *
+     * <p>只取 H2／H3：H1 是文章／主題層級不算章節，H4 以下太細節；
+     * 程式碼圍欄（```）內的 {@code #} 行是註解不是標題，必須跳過，
+     * 否則 shell 範例的註解會被洩漏成章節預告。</p>
+     *
+     * <p>回傳的是 markdown 原文文字（未做 HTML 跳脫）——這裡是 markdown 層，
+     * 跳脫是渲染層（呼叫端）的責任。</p>
+     */
+    public List<String> headings(String gatedMarkdown) {
+        if (gatedMarkdown == null || gatedMarkdown.isEmpty()) {
+            return List.of();
+        }
+        List<String> found = new ArrayList<>();
+        boolean inFence = false;
+        for (String line : gatedMarkdown.split("\r?\n", -1)) {
+            String stripped = line.strip();
+            if (stripped.startsWith("```")) {
+                inFence = !inFence;
+                continue;
+            }
+            if (inFence) {
+                continue;
+            }
+            // 「## 」或「### 」開頭（含標題文字）才算章節；「####」會被 startsWith("### ") 排除
+            if (stripped.startsWith("## ") || stripped.startsWith("### ")) {
+                found.add(stripped.replaceFirst("^#{2,3}\\s+", "").strip());
+            }
+        }
+        return found;
+    }
+
+    /**
      * 判斷一行是否「去除空白後恰好等於標記」（精確比對，不是 contains）。
      *
      * <p>刻意不用 {@code line.trim()} 或 {@code line.strip()}：{@code trim()} 只移除

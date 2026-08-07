@@ -124,4 +124,51 @@ class ContentSplitterTest {
         assertEquals("", split.freeMarkdown());
         assertEquals("", split.gatedMarkdown());
     }
+
+    /** 受限區標題抽取：取 H2／H3 文字（去掉 # 前綴），供 paywall 卡片預告隱藏了什麼 */
+    @Test
+    void headingsExtractsH2AndH3Text() {
+        String gated = """
+            ## 後段：接收端的四道關卡
+
+            內文段落不該被抽出。
+
+            ### 關卡一：簽章驗證
+
+            # 頂層標題不屬於章節預告
+            #### 四層以下太細也不收
+            """;
+
+        assertEquals(
+            java.util.List.of("後段：接收端的四道關卡", "關卡一：簽章驗證"),
+            splitter.headings(gated));
+    }
+
+    /**
+     * 程式碼圍欄內的 # 行不是標題：受限區常含 shell／PowerShell 範例
+     * （例如 {@code # 註解}），不跳過圍欄會把註解洩漏成章節預告。
+     */
+    @Test
+    void headingsSkipsLinesInsideCodeFences() {
+        String gated = """
+            ## 真標題
+
+            ```powershell
+            ## 這是程式碼註解，不是標題
+            ```
+
+            ### 圍欄後的真標題
+            """;
+
+        assertEquals(
+            java.util.List.of("真標題", "圍欄後的真標題"),
+            splitter.headings(gated));
+    }
+
+    /** null／空字串回空清單，不拋例外（無受限區的文章也會經過這條路徑） */
+    @Test
+    void headingsOfEmptyOrNullIsEmptyList() {
+        assertEquals(java.util.List.of(), splitter.headings(null));
+        assertEquals(java.util.List.of(), splitter.headings(""));
+    }
 }
