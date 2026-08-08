@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import world.springai.survey.AdminKeyGuard;
+import world.springai.survey.audience.AudiencePlatformService;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -67,17 +68,11 @@ public class AdminReferralGrowthController {
             "approved", approved,
             "clickToSubmitRate", rate(submitted, clicks),
             "submitToConfirmRate", rate(confirmed, submitted)));
-        // 真實信箱確認數：只有實際點過確認連結的人會留下 source_key='confirmation-link'。
+        // 真實信箱確認數：只有實際點過確認連結的人會留下 SOURCE_CONFIRMATION_LINK 的列。
         // 這與 funnel 的 confirmed（轉換成立）刻意分開——後者含補發，前者純粹是點擊行為。
-        // channel 明確寫出：目前 EMAIL 是唯一管道，未來新增管道時這個數字不會無聲混入別的管道。
-        result.put("confirmedByLink", count("""
-            select count(distinct p.id)
-              from audience_person p
-              join audience_consent c on c.person_id = p.id
-             where c.channel = 'EMAIL'
-               and c.status = 'CONFIRMED'
-               and c.source_key = 'confirmation-link'
-            """));
+        // SQL 口徑集中在 AudiencePlatformService，與補寄名單共用同一份定義（避免兩處各自漂移）。
+        result.put("confirmedByLink",
+            count(AudiencePlatformService.CONFIRMED_BY_LINK_COUNT_SQL));
         long articleViews = readerEventCount("ARTICLE_VIEW");
         long subscriptionHomeViews = readerEventCount("SUBSCRIPTION_HOME_VIEW");
         long subscribeAttempts = readerEventCount("SUBSCRIBE_ATTEMPT");

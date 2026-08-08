@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+import world.springai.survey.audience.AudiencePlatformService;
 import world.springai.survey.audience.SubscriptionLinkBuilder;
 import world.springai.survey.mail.EmailLog;
 import world.springai.survey.mail.EmailLogRepository;
@@ -53,16 +54,14 @@ public class ReconfirmService {
              select 1 from audience_person p
                join audience_consent c on c.person_id = p.id
               where p.email_normalized = lower(sr.email)
-                and c.channel = 'EMAIL'
-                and c.status = 'CONFIRMED'
-                and c.source_key = 'confirmation-link')
+                and %s)
            and not exists (
              select 1 from email_log el
               where lower(el.recipient) = lower(sr.email)
                 and el.type = 'reconfirm'
                 and el.status = 'sent')
          order by lower(sr.email)
-        """;
+        """.formatted(AudiencePlatformService.CONFIRMED_BY_LINK_CONDITIONS);
 
     /** 已補寄過的人數（供操作者理解名單為何變小） */
     private static final String ALREADY_SENT_SQL = """
@@ -71,15 +70,16 @@ public class ReconfirmService {
          where el.type = 'reconfirm' and el.status = 'sent'
         """;
 
-    /** 已透過確認連結確認過的人數（同上，屬被排除的另一半原因） */
-    private static final String ALREADY_CONFIRMED_SQL = """
-        select count(distinct p.id)
-          from audience_person p
-          join audience_consent c on c.person_id = p.id
-         where c.channel = 'EMAIL'
-           and c.status = 'CONFIRMED'
-           and c.source_key = 'confirmation-link'
-        """;
+    /**
+     * 全站已透過確認連結確認過的人數。
+     *
+     * <p><b>這是全站數字，不是「本次被排除掉的人數」</b>：它不受
+     * {@code survey_response.consent} 與補寄記錄的限制，因此可能包含從未進入
+     * 待補寄母體的人（例如匯入名單）。後台文案必須照這個口徑寫成
+     * 「全站已點過確認連結 N 人」，不可寫成「已排除：確認過 N」。</p>
+     */
+    private static final String ALREADY_CONFIRMED_SQL =
+        AudiencePlatformService.CONFIRMED_BY_LINK_COUNT_SQL;
 
     private final JdbcTemplate jdbc;
     private final MailSender mailSender;
@@ -106,8 +106,9 @@ public class ReconfirmService {
      * @param recipientCount   本次實際嘗試寄送數
      * @param accepted         寄送成功數
      * @param failed           寄送失敗數
-     * @param alreadySent      先前已補寄過而被排除的人數
-     * @param alreadyConfirmed 已點過確認連結而被排除的人數
+     * @param alreadySent      全站先前已補寄成功過的人數（參考值，非本次被排除數）
+     * @param alreadyConfirmed 全站已點過確認連結的人數（參考值，非本次被排除數，
+     *                         口徑見 {@code ALREADY_CONFIRMED_SQL} 的說明）
      * @param remaining        因 limit 未寄的剩餘數
      */
     public record ReconfirmResult(int recipientCount, int accepted, int failed,
@@ -142,17 +143,34 @@ public class ReconfirmService {
                 String html = buildHtml(linkBuilder.unsubscribeLink(email),
                     linkBuilder.confirmLink(email));
                 String id = mailSender.send(email, SUBJECT, html);
-                emailLogRepository.save(new EmailLog(email, SUBJECT, LOG_TYPE, id, "sent", null));
+                saveLog(email, id, "sent", null);
                 accepted++;
             } catch (Exception e) {
                 log.warn("補寄確認信失敗 to={}：{}", email, e.getMessage());
-                emailLogRepository.save(
-                    new EmailLog(email, SUBJECT, LOG_TYPE, null, "failed", e.getMessage()));
+                saveLog(email, null, "failed", e.getMessage());
                 failed++;
             }
         }
         return new ReconfirmResult(targets.size(), accepted, failed,
             countOf(ALREADY_SENT_SQL), countOf(ALREADY_CONFIRMED_SQL), remaining);
+    }
+
+    /**
+     * 寫一筆寄送記錄；連記錄都失敗時僅記 log，不影響整批。
+     *
+     * <p><b>為什麼這一層 try 不可省</b>（作法同 {@code WelcomeMailService.saveLog}）：
+     * 若 email_log 的寫入本身拋例外（DB 連線中斷、欄位長度超限……），例外會直接
+     * 穿出整個迴圈中止整批；而前面已經<b>實際寄出</b>的信全都沒有 {@code sent} 記錄，
+     * 下一次重跑時 PENDING_SQL 的 email_log 排除條件不會命中它們——那批人會收到第二封。
+     * 記錄失敗只該讓「這一封的冪等保護」失效，不該讓整批的冪等保護一起失效。</p>
+     */
+    private void saveLog(String email, String providerId, String status, String error) {
+        try {
+            emailLogRepository.save(
+                new EmailLog(email, SUBJECT, LOG_TYPE, providerId, status, error));
+        } catch (Exception e) {
+            log.warn("寫入 email_log 失敗 to={}：{}", email, e.getMessage());
+        }
     }
 
     /**

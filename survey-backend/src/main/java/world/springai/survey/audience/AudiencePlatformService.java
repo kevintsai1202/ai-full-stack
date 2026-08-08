@@ -39,6 +39,36 @@ public class AudiencePlatformService {
     /** 已退訂狀態；任何匯入都不得覆蓋。 */
     public static final String CONSENT_UNSUBSCRIBED = "UNSUBSCRIBED";
 
+    /**
+     * 「讀者實際點了信裡的確認連結」這個行為證據的 source_key（唯一真相來源）。
+     *
+     * <p>這個字面值同時決定三件事：{@code SubscriptionController} 寫入時的來源標記、
+     * 後台「信箱確認」KPI 的篩選條件，以及補寄確認信名單的排除條件。三處若各自
+     * 寫死字串，其中一處被改到就會讓另外兩處無聲失準，所以集中在這裡。</p>
+     */
+    public static final String SOURCE_CONFIRMATION_LINK = "confirmation-link";
+
+    /**
+     * 「這個人留下過點擊確認連結的紀錄」的共用 SQL 條件片段。
+     *
+     * <p>使用時外層需自備 {@code audience_person p} 與 {@code audience_consent c}
+     * 兩個別名。channel 明確寫出：目前 EMAIL 是唯一管道，未來新增管道時這個
+     * 數字不會無聲混入別的管道。</p>
+     */
+    public static final String CONFIRMED_BY_LINK_CONDITIONS = """
+        c.channel = '%s'
+               and c.status = '%s'
+               and c.source_key = '%s'""".formatted(
+        CHANNEL_EMAIL, CONSENT_CONFIRMED, SOURCE_CONFIRMATION_LINK);
+
+    /** 全站「實際點過確認連結」的人數查詢；後台 KPI 與補寄統計共用同一份口徑。 */
+    public static final String CONFIRMED_BY_LINK_COUNT_SQL = """
+        select count(distinct p.id)
+          from audience_person p
+          join audience_consent c on c.person_id = p.id
+         where %s
+        """.formatted(CONFIRMED_BY_LINK_CONDITIONS);
+
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
 
@@ -113,6 +143,16 @@ public class AudiencePlatformService {
     /**
      * 寫入同意事件。若目前最新狀態已是退訂，匯入或舊表單不得改回待確認／已確認。
      *
+     * <p><b>{@link #SOURCE_CONFIRMATION_LINK} 是「狀態未變即略過」的唯一例外</b>：
+     * 讀者在訂閱首頁勾了同意送出時，{@code SurveySubmissionService} 當下就寫了一列
+     * {@code CONFIRMED}；等他之後真的去信箱點確認連結時，狀態相同而被略過，
+     * 於是「確認連結被點過」這件事在資料庫裡一列都不會留下——後台的「信箱確認」
+     * KPI 與補寄名單的排除條件因此對所有 {@code consent=true} 的訂閱者結構性恆為 0。
+     * 這個 source_key 記錄的是<b>行為證據</b>而非狀態同步，必須照寫。</p>
+     *
+     * <p><b>退訂保護仍優先於這個例外</b>：已退訂者點了舊確認信不得被改回訂閱狀態，
+     * 所以順序上先擋 UNSUBSCRIBED，再處理 confirmation-link 的例外。</p>
+     *
      * @return true 表示新增事件，false 表示因退訂保護或狀態未變而略過
      */
     @Transactional
@@ -134,12 +174,14 @@ public class AudiencePlatformService {
              ORDER BY occurred_at DESC, id DESC
              LIMIT 1
             """, (rs, rowNum) -> rs.getString("status"), personId, CHANNEL_EMAIL);
+        // 確認連結的點擊要留下行為證據，但退訂保護仍然優先（順序不可對調）
+        boolean confirmationLink = SOURCE_CONFIRMATION_LINK.equals(normalizeOptional(sourceKey));
         if (!current.isEmpty()) {
             if (CONSENT_UNSUBSCRIBED.equals(current.getFirst())
                     && !CONSENT_UNSUBSCRIBED.equals(requestedStatus)) {
                 return false;
             }
-            if (current.getFirst().equals(requestedStatus)) {
+            if (current.getFirst().equals(requestedStatus) && !confirmationLink) {
                 return false;
             }
         }

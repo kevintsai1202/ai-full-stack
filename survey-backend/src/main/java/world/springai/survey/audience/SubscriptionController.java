@@ -67,7 +67,7 @@ public class SubscriptionController {
                 audiencePlatformService.appendConsentByEmail(
                     normalized,
                     AudiencePlatformService.CONSENT_CONFIRMED,
-                    "confirmation-link",
+                    AudiencePlatformService.SOURCE_CONFIRMATION_LINK,
                     java.util.Map.of("method", "signed-link"),
                     now);
                 // 確認訂閱是高可靠的參與度訊號（spec §5.10）
