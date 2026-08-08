@@ -71,7 +71,7 @@ class ReconfirmServiceTest {
     @Test
     void limitSplitsBatchAndReportsRemaining() {
         when(jdbc.queryForList(anyString(), eq(String.class)))
-            .thenReturn(List.of("alice@example.com", "bob@example.com", "c@example.com"));
+            .thenReturn(List.of("alice@example.com", "bob@example.com", "carol@example.com"));
 
         ReconfirmService.ReconfirmResult result = service.sendReconfirmations(2);
 

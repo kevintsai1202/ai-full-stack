@@ -32,6 +32,21 @@ public interface SurveyResponseRepository extends JpaRepository<SurveyResponse, 
      */
     Optional<SurveyResponse> findFirstByEmailIgnoreCaseOrderByCreatedAtDesc(String email);
 
+    /**
+     * 依 email 取<b>全部</b>名單資料（不分大小寫），新到舊排序。
+     *
+     * <p><b>為什麼推薦歸因需要全部而不是最新一筆</b>：同一個 email 可能有多筆
+     * （見 {@link #findFirstByEmailIgnoreCaseOrderByCreatedAtDesc}），而
+     * {@code _ref} 只會出現在「當初透過推薦連結填的那一筆」。若歸因只看最新一筆，
+     * 一個人 6 月透過推薦連結填過、8 月自己又填一次沒帶 {@code _ref} 的，
+     * 歸因就會回 NO_REFERRER，推薦人的獎勵被漏發，後台還會顯示成「無推薦人」。
+     * 補發掃描的口徑是「<b>任一筆</b>帶 _ref 就入選」，兩邊必須一致，否則掃描選得到
+     * 但歸因解析不到，形成永遠補不完又查不出原因的落差。</p>
+     *
+     * <p>單一 email 的列數以個位數計，全取回記憶體篩選比在 JPQL 裡碰 jsonb 更直白。</p>
+     */
+    List<SurveyResponse> findByEmailIgnoreCaseOrderByCreatedAtDesc(String email);
+
     /** 指定來源已確認訂閱（同意且未退訂）的人數，邀請成效統計用 */
     long countBySourceAndConsentTrueAndUnsubscribedFalse(String source);
 

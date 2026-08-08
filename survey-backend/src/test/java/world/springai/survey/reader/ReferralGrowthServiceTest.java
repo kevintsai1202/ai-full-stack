@@ -53,8 +53,9 @@ class ReferralGrowthServiceTest {
         referrer = new Reader("owner@example.com", "CODE1234");
         referrer.setId(7L);
 
-        when(surveyResponses.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc("invitee@example.com"))
-            .thenReturn(Optional.of(response));
+        // 歸因改取「最新一筆帶 _ref 的問卷」，故 stub 的是回傳全部列的查詢
+        when(surveyResponses.findByEmailIgnoreCaseOrderByCreatedAtDesc("invitee@example.com"))
+            .thenReturn(List.of(response));
         when(readers.findByReferralCode("CODE1234")).thenReturn(Optional.of(referrer));
         when(readers.findByIdForUpdate(7L)).thenReturn(Optional.of(referrer));
         when(conversions.findForUpdate("invitee@example.com")).thenReturn(Optional.empty());
@@ -156,6 +157,49 @@ class ReferralGrowthServiceTest {
         assertThat(saved.getAllValues())
             .anyMatch(c -> submittedAt.equals(c.getConfirmedAt())
                 && ReferralConversion.STATUS_APPROVED.equals(c.getStatus()));
+    }
+
+    /**
+     * 同一人填過兩次問卷、只有較舊那筆帶 _ref 時仍須歸因成功。
+     *
+     * <p>為什麼不可省：補發掃描的口徑是「任一筆帶 _ref 就入選」，若歸因只看最新一筆，
+     * 這種人（正式資料已實測存在：相隔一個月填了兩次）會被掃描選中卻回 NO_REFERRER，
+     * 推薦人的獎勵被永久漏發，後台還顯示成「無推薦人」，看起來像資料本來就沒推薦碼。
+     * 這裡把「較新但沒帶 _ref」那筆排在前面，正是實際會失敗的順序。</p>
+     */
+    @Test
+    void attributionUsesLatestResponseThatCarriesRefCode() {
+        SurveyResponse newerWithoutRef = new SurveyResponse();
+        newerWithoutRef.setEmail("invitee@example.com");
+        newerWithoutRef.setAnswers(Map.of("role", "engineer"));
+        SurveyResponse olderWithRef = new SurveyResponse();
+        olderWithRef.setEmail("invitee@example.com");
+        olderWithRef.setAnswers(Map.of("_ref", "CODE1234", "_share_article", "ai-agent-guide"));
+        // 新到舊排序：第一筆沒帶 _ref
+        when(surveyResponses.findByEmailIgnoreCaseOrderByCreatedAtDesc("invitee@example.com"))
+            .thenReturn(List.of(newerWithoutRef, olderWithRef));
+
+        ReferralGrowthService.Outcome outcome = service.confirmAndReward("invitee@example.com");
+
+        assertThat(outcome).isEqualTo(ReferralGrowthService.Outcome.REWARDED);
+        ArgumentCaptor<CreditTxn> txn = ArgumentCaptor.forClass(CreditTxn.class);
+        verify(credits).saveAndFlush(txn.capture());
+        assertThat(txn.getValue().getDelta()).isEqualTo(100);
+    }
+
+    /** 全部問卷都沒帶 _ref 時仍必須回 NO_REFERRER，不得因放寬候選而誤發。 */
+    @Test
+    void noResponseWithRefCodeStillYieldsNoReferrer() {
+        SurveyResponse plain = new SurveyResponse();
+        plain.setEmail("invitee@example.com");
+        plain.setAnswers(Map.of("role", "engineer"));
+        when(surveyResponses.findByEmailIgnoreCaseOrderByCreatedAtDesc("invitee@example.com"))
+            .thenReturn(List.of(plain));
+
+        ReferralGrowthService.Outcome outcome = service.confirmAndReward("invitee@example.com");
+
+        assertThat(outcome).isEqualTo(ReferralGrowthService.Outcome.NO_REFERRER);
+        verify(credits, never()).saveAndFlush(any(CreditTxn.class));
     }
 
     /** 已經處理過的轉換重跑補發不得再發點（冪等）。 */

@@ -92,8 +92,13 @@ public class ReferralGrowthService {
      */
     private Outcome settle(String inviteeEmail, OffsetDateTime occurredAt, boolean withRiskCheck) {
         String invitee = normalize(inviteeEmail);
+        // 歸因候選＝「最新一筆帶 _ref 的問卷」，不是「最新一筆問卷」。
+        // 後者會讓「先透過推薦連結填、之後自己又填一次」的人被判成無推薦人，
+        // 而補發掃描的口徑是「任一筆帶 _ref 就入選」——兩者必須由建構上就一致。
         Optional<SurveyResponse> response = surveyResponses
-            .findFirstByEmailIgnoreCaseOrderByCreatedAtDesc(invitee);
+            .findByEmailIgnoreCaseOrderByCreatedAtDesc(invitee).stream()
+            .filter(candidate -> ReferralService.referralCodeOf(candidate).isPresent())
+            .findFirst();
         Optional<String> code = response.flatMap(ReferralService::referralCodeOf);
         if (code.isEmpty()) return Outcome.NO_REFERRER;
         Optional<Reader> found = readers.findByReferralCode(code.get());
