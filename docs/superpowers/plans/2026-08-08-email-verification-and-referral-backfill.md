@@ -21,6 +21,7 @@
 - **`admin.html` 禁用 `innerHTML`**：security hook 會攔。一律用 `document.createElement` + `textContent`，按鈕用 `onclick` 直接綁定（既有 `cell()` helper 可用）。
 - **`confirmAndReward` 的對外行為不得改變**：`ReferralGrowthServiceTest` 與 `ReferralIdempotencyTest` 若變紅，代表抽取動作改壞了公開路徑 —— 修程式，不要改測試。
 - **email 對外顯示一律遮罩**：用既有的 `ReferralGrowthService.maskEmail(String)`（`public static`）。
+- **測試 fixture 的 email 一律用多字元 local part**（`alice@example.com` 而非 `a@example.com`）：`maskEmail` 對單字元 local part 回傳 `***` 而非 `a***@…`，用單字元會讓遮罩格式的斷言驗不到東西。
 - **A 與 D 的信件文案都不得提及推薦獎勵**（spec D7）；D 的文案不得主動說明不點確認的後果，也不得暗示會被取消訂閱（spec D8）。
 
 ---
@@ -392,16 +393,16 @@ class AdminReferralBackfillTest {
             mock(ReferralCampaignRepository.class), growth);
 
         when(jdbc.queryForList(anyString())).thenReturn(List.of(
-            Map.of("email", "a@example.com", "occurred_at", T1),
-            Map.of("email", "b@example.com", "occurred_at", T2)));
+            Map.of("email", "alice@example.com", "occurred_at", T1),
+            Map.of("email", "bob@example.com", "occurred_at", T2)));
     }
 
     /** 正式執行：逐筆帶各自的時點委派，並依 Outcome 彙總計數。 */
     @Test
     void backfillDelegatesPerCandidateAndAggregatesOutcomes() {
-        when(growth.backfillAndApprove("a@example.com", T1))
+        when(growth.backfillAndApprove("alice@example.com", T1))
             .thenReturn(ReferralGrowthService.Outcome.REWARDED);
-        when(growth.backfillAndApprove("b@example.com", T2))
+        when(growth.backfillAndApprove("bob@example.com", T2))
             .thenReturn(ReferralGrowthService.Outcome.ALREADY_PROCESSED);
 
         Map<String, Object> result = controller.backfill("key", false);
@@ -410,16 +411,16 @@ class AdminReferralBackfillTest {
         assertThat(result.get("rewarded")).isEqualTo(1);
         assertThat(result.get("alreadyProcessed")).isEqualTo(1);
         assertThat(result.get("failed")).isEqualTo(0);
-        verify(growth).backfillAndApprove("a@example.com", T1);
-        verify(growth).backfillAndApprove("b@example.com", T2);
+        verify(growth).backfillAndApprove("alice@example.com", T1);
+        verify(growth).backfillAndApprove("bob@example.com", T2);
     }
 
     /** 單筆拋例外不得中斷整批，計入 failed。 */
     @Test
     void backfillCountsFailureAndContinues() {
-        when(growth.backfillAndApprove("a@example.com", T1))
+        when(growth.backfillAndApprove("alice@example.com", T1))
             .thenThrow(new IllegalStateException("boom"));
-        when(growth.backfillAndApprove("b@example.com", T2))
+        when(growth.backfillAndApprove("bob@example.com", T2))
             .thenReturn(ReferralGrowthService.Outcome.REWARDED);
 
         Map<String, Object> result = controller.backfill("key", false);
@@ -428,7 +429,13 @@ class AdminReferralBackfillTest {
         assertThat(result.get("rewarded")).isEqualTo(1);
     }
 
-    /** dryRun 只回名單且 email 必須遮罩，絕不呼叫發獎。 */
+    /**
+     * dryRun 只回名單且 email 必須遮罩，絕不呼叫發獎。
+     *
+     * <p>fixture 刻意用多字元 local part：{@code maskEmail} 遇到單字元 local part
+     * （如 a@example.com）會走 {@code at <= 1} 分支直接回 "***"，
+     * 那樣就驗不到「保留首字、其餘遮蔽」這個真正要鎖住的格式。</p>
+     */
     @Test
     void dryRunListsMaskedCandidatesWithoutGranting() {
         Map<String, Object> result = controller.backfill("key", true);
@@ -638,7 +645,7 @@ git commit -m "feat(reader): 新增推薦獎勵補發端點含 dryRun"
         // dashboard 內多支 count 查詢共用同一個 stub，回 0 即可；本測試只驗新欄位存在與接線
         when(jdbc.queryForObject(anyString(), eq(Long.class))).thenReturn(0L);
         when(jdbc.queryForList(anyString())).thenReturn(List.of(
-            Map.of("email", "a@example.com", "clicks", 42, "submissions", 6,
+            Map.of("email", "alice@example.com", "clicks", 42, "submissions", 6,
                    "conversions", 6, "rewarded", 600, "badges", 1)));
 
         Map<String, Object> result = controller.dashboard("key");
@@ -918,7 +925,7 @@ class ReconfirmServiceTest {
     @Test
     void mailContainsConfirmLinkAndStaysNeutral() {
         when(jdbc.queryForList(anyString(), eq(String.class)))
-            .thenReturn(List.of("a@example.com"));
+            .thenReturn(List.of("alice@example.com"));
 
         ReconfirmService.ReconfirmResult result = service.sendReconfirmations(null);
 
@@ -936,7 +943,7 @@ class ReconfirmServiceTest {
     @Test
     void limitSplitsBatchAndReportsRemaining() {
         when(jdbc.queryForList(anyString(), eq(String.class)))
-            .thenReturn(List.of("a@example.com", "b@example.com", "c@example.com"));
+            .thenReturn(List.of("alice@example.com", "bob@example.com", "c@example.com"));
 
         ReconfirmService.ReconfirmResult result = service.sendReconfirmations(2);
 
@@ -950,8 +957,8 @@ class ReconfirmServiceTest {
     @Test
     void failureIsLoggedAndBatchContinues() {
         when(jdbc.queryForList(anyString(), eq(String.class)))
-            .thenReturn(List.of("a@example.com", "b@example.com"));
-        when(mailSender.send(eq("a@example.com"), anyString(), anyString()))
+            .thenReturn(List.of("alice@example.com", "bob@example.com"));
+        when(mailSender.send(eq("alice@example.com"), anyString(), anyString()))
             .thenThrow(new RuntimeException("boom"));
 
         ReconfirmService.ReconfirmResult result = service.sendReconfirmations(null);
