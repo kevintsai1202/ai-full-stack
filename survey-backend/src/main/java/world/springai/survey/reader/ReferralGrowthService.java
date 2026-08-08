@@ -54,9 +54,43 @@ public class ReferralGrowthService {
         this.policy = policy;
     }
 
-    /** 確認訂閱後計算風險並發獎；同推薦人會鎖列，避免上限與里程碑競態。 */
+    /**
+     * 確認訂閱後計算風險並發獎；同推薦人會鎖列，避免上限與里程碑競態。
+     *
+     * <p>公開端點（讀者點確認信）的唯一入口：一律跑風控、時點一律為現在。</p>
+     */
     @Transactional
     public Outcome confirmAndReward(String inviteeEmail) {
+        return settle(inviteeEmail, OffsetDateTime.now(ZoneOffset.UTC), true);
+    }
+
+    /**
+     * 補發歷史推薦轉換：直接核准、略過風控，轉換時點由呼叫端指定。
+     *
+     * <p><b>這是特權路徑，唯一呼叫點必須在 AdminKeyGuard 之後</b>
+     * （{@code AdminReferralGrowthController.backfill}）。刻意不做成
+     * {@code confirmAndReward(email, skipRisk)} 的多載或參數——那會讓公開端點的
+     * 呼叫鏈有機會傳錯一個布林值就整段繞過風控，而且錯誤在程式碼審查時
+     * 幾乎看不出來。方法名本身標示它是特權入口，是這裡唯一的防線。</p>
+     *
+     * <p><b>為什麼 occurredAt 由呼叫端傳入而非用 now()</b>：
+     * {@link #campaignMultiplier(String, OffsetDateTime)} 以該時間查當時有效的
+     * 活動倍率。補發歷史轉換若傳 now()，會把今天的活動倍率套到過去的轉換上，
+     * 發出的點數與當時的規則不符。呼叫端應傳該人最早一筆問卷的 created_at。</p>
+     */
+    @Transactional
+    public Outcome backfillAndApprove(String inviteeEmail, OffsetDateTime occurredAt) {
+        return settle(inviteeEmail, occurredAt, false);
+    }
+
+    /**
+     * 歸因、建立轉換、計算獎勵與發放的共用主體。
+     *
+     * @param occurredAt    轉換時點；決定 confirmed_at 與活動倍率的查詢基準
+     * @param withRiskCheck true 為公開路徑（跑每日上限與速度規則）；
+     *                      false 為補發路徑（直接核准）
+     */
+    private Outcome settle(String inviteeEmail, OffsetDateTime occurredAt, boolean withRiskCheck) {
         String invitee = normalize(inviteeEmail);
         Optional<SurveyResponse> response = surveyResponses
             .findFirstByEmailIgnoreCaseOrderByCreatedAtDesc(invitee);
@@ -75,16 +109,16 @@ public class ReferralGrowthService {
                 ? Outcome.PENDING_REVIEW : Outcome.ALREADY_PROCESSED;
         }
 
-        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        Risk risk = assessRisk(referrer.getId(), now);
-        int multiplier = campaignMultiplier(conversion.getSourceSlug(), now);
+        // 補發路徑不跑風控：零分、無理由、不需審核（spec D4）
+        Risk risk = withRiskCheck ? assessRisk(referrer.getId(), occurredAt) : new Risk(0, "", false);
+        int multiplier = campaignMultiplier(conversion.getSourceSlug(), occurredAt);
         int baseReward = policy.referralReward();
         int inviteeReward = policy.referralInviteeReward();
         int totalReward = Math.multiplyExact(baseReward, multiplier);
         String status = risk.reviewRequired()
             ? ReferralConversion.STATUS_PENDING_REVIEW : ReferralConversion.STATUS_APPROVED;
         conversion.confirm(status, risk.score(), risk.reasons(), baseReward,
-            multiplier, totalReward, inviteeReward, now);
+            multiplier, totalReward, inviteeReward, occurredAt);
         conversions.saveAndFlush(conversion);
 
         if (risk.reviewRequired()) {
