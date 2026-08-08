@@ -44,6 +44,8 @@ public class AdminCampaignController {
     private final CampaignMetadataService metadataService;
     /** 批次讀取文章既有 hashtag，供後台列表回填編輯畫面 */
     private final PublicCampaignTagService tagService;
+    /** 既有訂閱者補寄確認信服務 */
+    private final ReconfirmService reconfirmService;
 
     /** Spring 正式執行時注入完整依賴。 */
     @Autowired
@@ -53,7 +55,8 @@ public class AdminCampaignController {
                                    InviteService inviteService,
                                    MailQuotaService mailQuotaService,
                                    ObjectProvider<CampaignMetadataService> metadataServiceProvider,
-                                   ObjectProvider<PublicCampaignTagService> tagServiceProvider) {
+                                   ObjectProvider<PublicCampaignTagService> tagServiceProvider,
+                                   ReconfirmService reconfirmService) {
         this.guard = guard;
         this.campaignService = campaignService;
         this.recipientService = recipientService;
@@ -61,6 +64,7 @@ public class AdminCampaignController {
         this.mailQuotaService = mailQuotaService;
         this.metadataService = metadataServiceProvider.getIfAvailable();
         this.tagService = tagServiceProvider.getIfAvailable();
+        this.reconfirmService = reconfirmService;
     }
 
     /** 舊單元測試相容建構式；不處理新文章中繼資料。 */
@@ -68,7 +72,8 @@ public class AdminCampaignController {
                                    CampaignService campaignService,
                                    RecipientService recipientService,
                                    InviteService inviteService,
-                                   MailQuotaService mailQuotaService) {
+                                   MailQuotaService mailQuotaService,
+                                   ReconfirmService reconfirmService) {
         this.guard = guard;
         this.campaignService = campaignService;
         this.recipientService = recipientService;
@@ -76,6 +81,7 @@ public class AdminCampaignController {
         this.mailQuotaService = mailQuotaService;
         this.metadataService = null;
         this.tagService = null;
+        this.reconfirmService = reconfirmService;
     }
 
     /** 預覽用請求：主旨、markdown 與文章封面／hashtag。 */
@@ -425,6 +431,32 @@ public class AdminCampaignController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "source 為必填");
         }
         return inviteService.sendReminders(req.source(), clampLimit(req.limit()));
+    }
+
+    /** 補寄確認信請求：單次寄送上限（配合寄信額度；null 為不限，仍會被收斂到額度內） */
+    public record ReconfirmRequest(Integer limit) {}
+
+    /**
+     * 對「已訂閱但從未點過確認連結」者補寄一次確認信，需提供有效金鑰。
+     *
+     * <p>與邀請信同樣走 {@link #clampLimit(Integer)}：本信屬行銷側，
+     * 讀者不在等它，額度必須讓位給 magic link 登入信。</p>
+     */
+    @PostMapping("/api/admin/campaign/reconfirm")
+    public ReconfirmService.ReconfirmResult reconfirm(
+            @RequestHeader(value = KEY_HEADER, required = false) String key,
+            @RequestBody(required = false) ReconfirmRequest req) {
+        guard.verify(key);
+        return reconfirmService.sendReconfirmations(
+            clampLimit(req == null ? null : req.limit()));
+    }
+
+    /** 待補寄確認信人數，供後台按鈕旁顯示，需提供有效金鑰 */
+    @GetMapping("/api/admin/campaign/reconfirm/pending")
+    public Map<String, Object> reconfirmPending(
+            @RequestHeader(value = KEY_HEADER, required = false) String key) {
+        guard.verify(key);
+        return Map.of("pending", reconfirmService.pendingCount());
     }
 
     /** 取得邀請信範本（主旨與 HTML 內文，內文以 {{confirmLink}} 佔位確認連結），需提供有效金鑰 */

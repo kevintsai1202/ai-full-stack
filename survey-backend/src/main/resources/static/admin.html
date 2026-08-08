@@ -439,6 +439,7 @@
         <div><label for="invite-limit" id="invite-limit-label">單次上限（額度偵測中…）</label><input type="number" id="invite-limit" value="50" min="1" max="100"></div>
         <div style="flex:0"><button class="btn" id="invite-send-btn">寄送邀請信</button></div>
         <div style="flex:0"><button class="btn ghost" id="invite-remind-btn">補送提醒</button></div>
+        <div style="flex:0"><button class="btn ghost" id="reconfirm-btn">補寄確認信<span id="reconfirm-pending"></span></button></div>
       </div>
       <p class="hint" style="margin-top:6px">補送提醒：寄給「已邀請滿 3 天仍未確認」者，每人最多補送一次。</p>
       <div class="msg" id="invite-msg"></div>
@@ -1107,7 +1108,8 @@
     $('#media-upload-btn').onclick=uploadMedia;
     $('#media-refresh-btn').onclick=loadMediaLibrary;
     $('#delivery-close').onclick=closeDelivery;$('#delivery-refresh').onclick=()=>{deliveryPage=0;loadDeliveryRecipients();};$('#delivery-status').onchange=()=>{deliveryPage=0;selectedDeliveryEmails.clear();loadDeliveryRecipients();};$('#delivery-size').onchange=()=>{deliveryPage=0;loadDeliveryRecipients();};$('#delivery-mode').onchange=()=>{$('#delivery-scheduled-at').disabled=$('#delivery-mode').value!=='schedule';};$('#delivery-send').onclick=sendDeliveryBatch;$('#delivery-check-all').onchange=toggleDeliveryPage;$('#delivery-prev').onclick=()=>{if(deliveryPage>0){deliveryPage--;loadDeliveryRecipients();}};$('#delivery-next').onclick=()=>{if((deliveryPage+1)*deliveryResult.size<deliveryResult.total){deliveryPage++;loadDeliveryRecipients();}};$('#delivery-q').addEventListener('keydown',event=>{if(event.key==='Enter'){deliveryPage=0;loadDeliveryRecipients();}});
-    $('#invite-refresh').onclick=()=>{doInviteOverview();doQuota();};$('#invite-source').onchange=doInviteOverview;$('#invite-send-btn').onclick=doSendInvites;$('#invite-remind-btn').onclick=doSendReminders;
+    $('#invite-refresh').onclick=()=>{doInviteOverview();doQuota();loadReconfirmPending();};$('#invite-source').onchange=doInviteOverview;$('#invite-send-btn').onclick=doSendInvites;$('#invite-remind-btn').onclick=doSendReminders;
+    $('#reconfirm-btn').onclick=doReconfirm;
     $('#invite-tpl').addEventListener('toggle',()=>{if($('#invite-tpl').open)loadInviteTemplate();});$('#tpl-preview-btn').onclick=previewInviteTemplate;$('#tpl-save-btn').onclick=saveInviteTemplate;
     document.querySelectorAll('input[name=mode]').forEach(radio=>radio.onchange=()=>{$('#sched').disabled=mode()!=='schedule';});
     // 讀者管理與參數設定
@@ -2571,6 +2573,22 @@
       doInviteOverview();doQuota(); // 寄送後已用額度改變，重新偵測
     }catch(e){if(e.message!=='401'){m.className='msg err';m.textContent='提醒寄送失敗：'+e.message;}}
     finally{$('#invite-remind-btn').disabled=false;}}
+  /** 載入待補寄確認信人數，顯示在按鈕上。 */
+  async function loadReconfirmPending(){
+    try{
+      const data=await api('/api/admin/campaign/reconfirm/pending');
+      $('#reconfirm-pending').textContent=data.pending?`（${data.pending}）`:'';
+    }catch(e){/* 人數只是輔助資訊，失敗不打擾操作者 */}
+  }
+  /** 對既有未確認訂閱者補寄確認信；每人終身只寄一次，重按不會重寄。 */
+  async function doReconfirm(){
+    if(!confirm('確定對「已訂閱但從未確認信箱」者補寄確認信？每人只會收到一次。'))return;
+    try{
+      const data=await api('/api/admin/campaign/reconfirm',{method:'POST',body:JSON.stringify({limit:null})});
+      showMsg('invite-msg',`補寄完成：嘗試 ${data.recipientCount}、成功 ${data.accepted}、失敗 ${data.failed}、剩餘 ${data.remaining}（已排除：確認過 ${data.alreadyConfirmed}、補寄過 ${data.alreadySent}）`,true);
+      await loadReconfirmPending();
+    }catch(e){if(e.message!=='401')showMsg('invite-msg','補寄失敗：'+e.message,false);}
+  }
   /** 首次展開時載入邀請信範本到編輯區。 */
   async function loadInviteTemplate(){if(loadInviteTemplate.done)return;try{const t=await api('/api/admin/templates/invite');$('#tpl-subject').value=t.subject;$('#tpl-body').value=t.bodyHtml;loadInviteTemplate.done=true;}catch(e){if(e.message!=='401'){const m=$('#tpl-msg');m.className='msg err';m.textContent='範本載入失敗：'+e.message;}}}
   /** 以示意連結預覽目前編輯中的範本內容。 */
