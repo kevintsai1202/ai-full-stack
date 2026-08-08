@@ -15,6 +15,7 @@
 - **零 Flyway migration**：現行最高 `V26` 必須保持不動，本計畫不新增 migration 檔。
 - **測試指令必須指定 JDK 21**：`JAVA_HOME=D:/java/jdk-21 mvn test`。系統預設 `java` 是 1.8，會編譯失敗且錯誤訊息會誤導成編碼／檔案損壞問題。
 - **專案沒有 `mvnw`**，一律使用系統 `mvn`。
+- **多個測試類別用逗號分隔**：`-Dtest='A,B,C'`。本機 Surefire 3.5.5 不接受 `+` 分隔，會回報 `No tests matching pattern` 而不是錯誤 —— 看起來像測試不存在，實際是語法問題。
 - **測試風格**：純 JUnit 5，直接 `new` 服務物件搭配 Mockito mock，**不啟動 Spring context**；斷言用 AssertJ `assertThat`（`ReferralGrowthServiceTest` 慣例）或 JUnit `assertEquals`（`WelcomeMailServiceTest` 慣例），沿用該檔案既有風格不要混用。
 - **所有程式碼需中文註解**，函式層級註解為必要，重要變數與物件也要註解。
 - **`admin.html` 禁用 `innerHTML`**：security hook 會攔。一律用 `document.createElement` + `textContent`，按鈕用 `onclick` 直接綁定（既有 `cell()` helper 可用）。
@@ -319,7 +320,7 @@ Expected: 編譯失敗 —— `cannot find symbol: method backfillAndApprove(Str
 
 - [ ] **Step 4: 執行測試確認通過**
 
-Run: `JAVA_HOME=D:/java/jdk-21 mvn test -pl . -Dtest='ReferralGrowthServiceTest+ReferralIdempotencyTest+ReferralRewardListenerTest'`
+Run: `JAVA_HOME=D:/java/jdk-21 mvn test -pl . -Dtest='ReferralGrowthServiceTest,ReferralIdempotencyTest,ReferralRewardListenerTest'`
 
 Expected: PASS。**既有測試全綠是本任務的驗收重點** —— 它們證明抽取動作沒有改變公開路徑行為。任何一個變紅就是抽取出錯，修程式不要改測試。
 
@@ -1377,7 +1378,7 @@ Expected: 編譯失敗 —— `cannot find symbol: method reconfirm(...)`
 
 - [ ] **Step 4: 執行測試確認通過**
 
-Run: `JAVA_HOME=D:/java/jdk-21 mvn test -pl . -Dtest='AdminReconfirmEndpointTest+InviteServiceTest'`
+Run: `JAVA_HOME=D:/java/jdk-21 mvn test -pl . -Dtest='AdminReconfirmEndpointTest,InviteServiceTest'`
 
 Expected: PASS（新增 4 個測試；`InviteServiceTest` 一併跑是因為它與 `clampLimit` 共用同一條額度路徑，要確認沒被改壞）
 
