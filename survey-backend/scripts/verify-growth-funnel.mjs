@@ -87,6 +87,13 @@ const NORMAL_DASHBOARD = {
   },
   readerTopArticles: [],
   topArticles: [],
+  // 真實信箱確認 KPI（confirmedByLink）與訂閱者邀請成效表（referrerStats）——
+  // admin.html 會讀這兩個新鍵；fixture 沒加會讓 KPI 渲染出字面的 undefined。
+  confirmedByLink: 12,
+  referrerStats: [
+    { email: 'a***@example.com', clicks: 42, submissions: 6, conversions: 6, rewarded: 600, badges: 1 },
+    { email: 'b***@example.com', clicks: 31, submissions: 4, conversions: 4, rewarded: 400, badges: 0 },
+  ],
   reviews: [],
   campaigns: [],
   readerFunnelStructured: {
@@ -177,7 +184,7 @@ async function mockDashboardAndLoad(page, dashboardData) {
   // 用「這組資料特有」的四組 label+count 全部比對，避免兩次呼叫剛好有相同 clicks 數值時
   // 誤判成已經渲染完成（實際還是上一輪的舊 DOM）。
   const f = dashboardData.funnel;
-  const expectedShareParts = [`分享點擊${f.clicks}`, `完成填表${f.submitted}`, `信箱確認${f.confirmed}`, `審核通過${f.approved}`];
+  const expectedShareParts = [`分享點擊${f.clicks}`, `完成填表${f.submitted}`, `轉換成立${f.confirmed}`, `審核通過${f.approved}`];
   await page.waitForFunction(
     (parts) => {
       const layers = document.querySelectorAll('#share-funnel-chart .funnel-layer');
@@ -244,6 +251,28 @@ try {
 
   const shareWarnCountNormal = await page.locator('#share-funnel-chart .funnel-warn').count();
   ok(shareWarnCountNormal === 0, `正常遞減資料下不出現 .funnel-warn（實際 ${shareWarnCountNormal} 個）`);
+
+  // ---- 1b. 本輪新增：真實信箱確認 KPI 與訂閱者邀請成效表 ----
+  const kpiLabels = await readTexts(page, '#growth-kpis .kpi-label');
+  ok(kpiLabels.includes('轉換成立'),
+    `KPI 含「轉換成立」（實際：${JSON.stringify(kpiLabels)}）`);
+  ok(kpiLabels.includes('信箱確認'),
+    `KPI 含「信箱確認」——真實點擊數，與「轉換成立」是兩個不同指標（實際：${JSON.stringify(kpiLabels)}）`);
+
+  const kpiText = await page.locator('#growth-kpis').textContent();
+  ok(kpiText.includes('12'), `信箱確認 KPI 顯示 confirmedByLink 的值 12`);
+  ok(!kpiText.includes('undefined'),
+    `KPI 區塊不得出現 undefined（confirmedByLink 未接上時會這樣）`);
+
+  const referrerRows = await page.locator('#referrer-stats tbody tr').count();
+  ok(referrerRows === 2, `訂閱者邀請成效表渲染 2 列（實際 ${referrerRows} 列）`);
+  const referrerText = await page.locator('#referrer-stats tbody').textContent();
+  ok(referrerText.includes('a***@example.com'), `成效表顯示遮罩後的 email`);
+  ok(!referrerText.includes('@example.com') || referrerText.includes('***'),
+    `成效表不得出現未遮罩的完整 email`);
+
+  ok(await page.locator('#growth-backfill-btn').count() === 1, `補發按鈕存在`);
+  ok(await page.locator('#growth-backfill-dry-btn').count() === 1, `補發試算按鈕存在`);
 
   // ---- 2. 倒掛資料（submitted > clicks）----
   await mockDashboardAndLoad(page, INVERTED_DASHBOARD);
