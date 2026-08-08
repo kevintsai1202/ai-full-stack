@@ -132,4 +132,27 @@ class AdminReferralBackfillTest {
 
         verify(jdbc, never()).queryForList(anyString());
     }
+
+    /**
+     * dashboard 必須回傳真實信箱確認數（來自 audience_consent），
+     * 與 referral_conversion 的「轉換成立」是兩個不同的指標（spec D1）。
+     */
+    @Test
+    void dashboardExposesConfirmedByLinkAndReferrerStats() {
+        // dashboard 內多支 count 查詢共用同一個 stub，回 0 即可；本測試只驗新欄位存在與接線
+        when(jdbc.queryForObject(anyString(), eq(Long.class))).thenReturn(0L);
+        when(jdbc.queryForList(anyString())).thenReturn(List.of(
+            Map.of("email", "alice@example.com", "clicks", 42, "submissions", 6,
+                   "conversions", 6, "rewarded", 600, "badges", 1)));
+
+        Map<String, Object> result = controller.dashboard("key");
+
+        assertThat(result).containsKey("confirmedByLink");
+        assertThat(result).containsKey("referrerStats");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> stats =
+            (List<Map<String, Object>>) result.get("referrerStats");
+        assertThat(stats.get(0).get("email")).isEqualTo("a***@example.com");
+        assertThat(stats.get(0).get("clicks")).isEqualTo(42);
+    }
 }

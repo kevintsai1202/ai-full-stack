@@ -67,6 +67,17 @@ public class AdminReferralGrowthController {
             "approved", approved,
             "clickToSubmitRate", rate(submitted, clicks),
             "submitToConfirmRate", rate(confirmed, submitted)));
+        // 真實信箱確認數：只有實際點過確認連結的人會留下 source_key='confirmation-link'。
+        // 這與 funnel 的 confirmed（轉換成立）刻意分開——後者含補發，前者純粹是點擊行為。
+        // channel 明確寫出：目前 EMAIL 是唯一管道，未來新增管道時這個數字不會無聲混入別的管道。
+        result.put("confirmedByLink", count("""
+            select count(distinct p.id)
+              from audience_person p
+              join audience_consent c on c.person_id = p.id
+             where c.channel = 'EMAIL'
+               and c.status = 'CONFIRMED'
+               and c.source_key = 'confirmation-link'
+            """));
         long articleViews = readerEventCount("ARTICLE_VIEW");
         long subscriptionHomeViews = readerEventCount("SUBSCRIPTION_HOME_VIEW");
         long subscribeAttempts = readerEventCount("SUBSCRIBE_ATTEMPT");
@@ -126,6 +137,48 @@ public class AdminReferralGrowthController {
               left join confirmation_stats v on v.source = s.source
              order by coalesce(v.confirmations, 0) desc, coalesce(c.clicks, 0) desc limit 20
             """));
+        // 訂閱者邀請成效：四個來源各自先聚合再 left join，避免多對多放大筆數。
+        // 只列有活動者——多數讀者從未分享，全列出來會讓有意義的資料被淹沒。
+        result.put("referrerStats", jdbc.queryForList("""
+            with click_stats as (
+              select referrer_id, count(*) clicks
+                from referral_click group by referrer_id
+            ), submit_stats as (
+              select r.id referrer_id, count(*) submissions
+                from survey_response sr
+                join reader r on r.referral_code = (sr.answers ->> '_ref')
+               where sr.answers ? '_ref'
+               group by r.id
+            ), conv_stats as (
+              select referrer_id,
+                     count(*) filter (where confirmed_at is not null) conversions,
+                     coalesce(sum(referrer_reward) filter (where status = 'APPROVED'), 0) rewarded
+                from referral_conversion group by referrer_id
+            ), badge_stats as (
+              select reader_id, count(*) badges
+                from referral_badge group by reader_id
+            )
+            select r.email,
+                   coalesce(c.clicks, 0) clicks,
+                   coalesce(s.submissions, 0) submissions,
+                   coalesce(v.conversions, 0) conversions,
+                   coalesce(v.rewarded, 0) rewarded,
+                   coalesce(b.badges, 0) badges
+              from reader r
+              left join click_stats c on c.referrer_id = r.id
+              left join submit_stats s on s.referrer_id = r.id
+              left join conv_stats v on v.referrer_id = r.id
+              left join badge_stats b on b.reader_id = r.id
+             where coalesce(c.clicks, 0) + coalesce(s.submissions, 0)
+                   + coalesce(v.conversions, 0) > 0
+             order by conversions desc, clicks desc
+             limit 50
+            """).stream().map(row -> {
+                Map<String, Object> view = new LinkedHashMap<>(row);
+                // email 對外一律遮罩
+                view.put("email", ReferralGrowthService.maskEmail((String) row.get("email")));
+                return view;
+            }).toList());
         result.put("reviews", conversions.findTop100ByStatusOrderByConfirmedAtAsc(
             ReferralConversion.STATUS_PENDING_REVIEW).stream().map(this::reviewView).toList());
         result.put("campaigns", campaigns.findAllByOrderByStartsAtDesc());
