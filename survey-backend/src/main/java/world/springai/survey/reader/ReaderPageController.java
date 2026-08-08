@@ -168,6 +168,10 @@ public class ReaderPageController {
 
         String html = htmlTemplate.render("templates/reader/archive.html", Map.of(
             "<!--NAV_LINKS-->", ReaderNav.links(current.isPresent()),
+            // canonical 一律指向不帶 ?tag= 的 /r/archive：篩選頁與完整列表對搜尋
+            // 引擎是同一份資源，缺 canonical 會被 GSC 判為「重複網頁」
+            "<!--CANONICAL-->", readerSiteLinks == null ? ""
+                : readerSiteLinks.canonicalTag(readerSiteLinks.archive()),
             "<!--TAG_FILTERS-->", renderTagFilters(tag),
             "<!--ARCHIVE_RESULT-->", renderArchiveResult(tag, articles.size()),
             "<!--ARTICLE_LIST-->", renderArticleList(articles, unlocked)));
@@ -241,6 +245,10 @@ public class ReaderPageController {
         Map<String, String> vars = new HashMap<>();
         vars.put("<!--PAGE_TITLE-->", HtmlTemplate.escapeHtml(campaign.getSubject()) + "｜凱文大叔的電子報");
         vars.put("<!--PAGE_DESCRIPTION-->", HtmlTemplate.escapeHtml(summaryOf(split.freeMarkdown())));
+        // canonical 指向不帶 ?ref= 的標準文章網址：分享連結帶推薦碼會讓同一篇
+        // 文章有多個網址，缺 canonical 會被 GSC 判為「重複網頁」而不編入索引
+        vars.put("<!--CANONICAL-->", readerSiteLinks == null ? ""
+            : readerSiteLinks.canonicalTag(readerSiteLinks.article(slug)));
         vars.put("<!--SOCIAL_META-->", renderSocialMeta(campaign, summaryOf(split.freeMarkdown())));
         vars.put("<!--ARTICLE_TITLE-->", HtmlTemplate.escapeHtml(campaign.getSubject()));
         vars.put("<!--ARTICLE_META-->", renderMeta(campaign));

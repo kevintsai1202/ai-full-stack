@@ -46,10 +46,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 沒被送到瀏覽器。</p>
  */
 @WebMvcTest(ReaderPageController.class)
-@Import({HtmlTemplate.class, ContentSplitter.class, MarkdownRenderer.class})
+@Import({HtmlTemplate.class, ContentSplitter.class, MarkdownRenderer.class,
+    world.springai.survey.ReaderSiteLinks.class})
 @TestPropertySource(properties = {
     "app.cors-allowed-origins=http://localhost",
-    "app.public-base-url=https://news.example.com"
+    "app.public-base-url=https://news.example.com",
+    // application.properties 已定義 app.reader.base-url（本機預設），會蓋過
+    // app.public-base-url 的 fallback；canonical 斷言需要固定的測試網域
+    "app.reader.base-url=https://news.example.com"
 })
 class ReaderPageControllerTest {
 
@@ -157,6 +161,39 @@ class ReaderPageControllerTest {
             .decide(readerCaptor.capture(), subscribedCaptor.capture(), any(), any());
         assertNull(readerCaptor.getValue(), "未登入時傳給 decide() 的 reader 必須是 null");
         assertFalse(subscribedCaptor.getValue(), "未登入時傳給 decide() 的 subscribed 必須是 false");
+    }
+
+    /**
+     * 文章頁必須輸出自我指向的 canonical（不帶 ?ref=）：分享連結帶推薦碼會讓
+     * 同一篇文章有多個網址，缺 canonical 會被 GSC 判為「重複網頁」而不編入索引。
+     */
+    @Test
+    void articleRendersSelfReferencingCanonicalIgnoringRefParam() throws Exception {
+        when(campaignRepository.findBySlug("test-article")).thenReturn(Optional.of(gatedArticle(Campaign.TIER_BASIC, 0)));
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        stubDecision(AccessDecisionService.Access.PARTIAL, AccessDecisionService.Reason.NOT_LOGGED_IN, 0);
+
+        String body = mvc.perform(get("/r/news/test-article").param("ref", "FRIEND01"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        assertTrue(body.contains(
+                "<link rel=\"canonical\" href=\"https://news.example.com/r/news/test-article\">"),
+            "canonical 必須指向不帶 ?ref= 的標準文章網址");
+        assertFalse(body.contains("<!--CANONICAL-->"), "佔位符必須被替換，不能殘留");
+    }
+
+    /** 歷史列表（含 ?tag= 篩選）canonical 一律指向不帶參數的 /r/archive。 */
+    @Test
+    void archiveCanonicalPointsToUnfilteredList() throws Exception {
+        when(readerContext.resolve(any())).thenReturn(Optional.empty());
+        when(campaignRepository.findBySlugIsNotNullAndPublishedAtIsNotNullOrderByPublishedAtDesc())
+            .thenReturn(List.of());
+
+        String body = mvc.perform(get("/r/archive").param("tag", "rag"))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        assertTrue(body.contains("<link rel=\"canonical\" href=\"https://news.example.com/r/archive\">"),
+            "篩選頁 canonical 必須指向不帶 ?tag= 的 /r/archive");
     }
 
     /** 設定 MinIO 封面時，單篇頁輸出圖片且 alt 使用已跳脫文章主旨。 */

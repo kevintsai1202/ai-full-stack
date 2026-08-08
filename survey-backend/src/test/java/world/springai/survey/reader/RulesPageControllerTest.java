@@ -58,7 +58,8 @@ class RulesPageControllerTest {
         // standalone 環境缺少的那一層，不是多餘的樣板。
         mvc = MockMvcBuilders
             .standaloneSetup(new RulesPageController(new HtmlTemplate(), creditPolicy, readerContext,
-                new PremiumCostDisplay(campaignRepository, creditPolicy)))
+                new PremiumCostDisplay(campaignRepository, creditPolicy),
+                new world.springai.survey.ReaderSiteLinks("https://reader.example.com")))
             .setMessageConverters(new StringHttpMessageConverter(StandardCharsets.UTF_8))
             .build();
     }
@@ -79,6 +80,14 @@ class RulesPageControllerTest {
     @Test
     void rulesPageIsPublic() throws Exception {
         mvc.perform(get("/r/rules")).andExpect(status().isOk());
+    }
+
+    /** 規則頁必須輸出自我指向的 canonical 標記 */
+    @Test
+    void rendersSelfReferencingCanonical() throws Exception {
+        mvc.perform(get("/r/rules")).andExpect(content().string(
+            org.hamcrest.Matchers.containsString(
+                "<link rel=\"canonical\" href=\"https://reader.example.com/r/rules\">")));
     }
 
     /** 初始贈點必須來自 CreditPolicy */

@@ -52,16 +52,20 @@ public class RulesPageController {
     private final ReaderContext readerContext;
     /** 「每篇多少點」的片語來源；與 {@code /r/me} 共用同一份三分支判斷 */
     private final PremiumCostDisplay premiumCostDisplay;
+    /** 規則頁 canonical 標記所需的正式讀者網域 */
+    private final world.springai.survey.ReaderSiteLinks readerSiteLinks;
 
     /** 注入頁面渲染、點數參數、讀者身分解析與進階文章點數區間 */
     public RulesPageController(HtmlTemplate htmlTemplate,
                               CreditPolicy creditPolicy,
                               ReaderContext readerContext,
-                              PremiumCostDisplay premiumCostDisplay) {
+                              PremiumCostDisplay premiumCostDisplay,
+                              world.springai.survey.ReaderSiteLinks readerSiteLinks) {
         this.htmlTemplate = htmlTemplate;
         this.creditPolicy = creditPolicy;
         this.readerContext = readerContext;
         this.premiumCostDisplay = premiumCostDisplay;
+        this.readerSiteLinks = readerSiteLinks;
     }
 
     /**
@@ -84,6 +88,8 @@ public class RulesPageController {
 
         Map<String, String> vars = new HashMap<>();
         vars.put("<!--NAV_LINKS-->", ReaderNav.links(loggedIn));
+        // 規則頁 canonical：自我指向標準網址，與其他公開頁一致
+        vars.put("<!--CANONICAL-->", readerSiteLinks.canonicalTag(readerSiteLinks.rules()));
         vars.put("<!--SIGNUP_GRANT_LINE-->", signupGrantLine(signupGrant));
         vars.put("<!--SIGNUP_GRANT_NOTE-->", signupGrantNote(signupGrant));
         vars.put("<!--PREMIUM_COST_PHRASE-->", premiumCostDisplay.perArticlePhrase());

@@ -29,7 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** ReaderAuthController 行為測試：登入請求、magic link 驗證、cookie 設定、登出、redirect 安全 */
 @WebMvcTest(ReaderAuthController.class)
-@Import({HtmlTemplate.class, ReaderSessionService.class})
+@Import({HtmlTemplate.class, ReaderSessionService.class, world.springai.survey.ReaderSiteLinks.class})
 @TestPropertySource(properties = {
     "app.reader.jwt-secret=test-secret-key-at-least-32-bytes-long!!",
     "app.reader.jwt-ttl-days=28",

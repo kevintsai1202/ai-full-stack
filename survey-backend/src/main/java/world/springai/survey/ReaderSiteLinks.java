@@ -28,9 +28,32 @@ public class ReaderSiteLinks {
         this.baseUrl = normalized;
     }
 
+    /** 組出讀者站首頁的公開網址。 */
+    public String home() {
+        return baseUrl + "/r/";
+    }
+
+    /** 組出遊戲規則頁的公開網址。 */
+    public String rules() {
+        return baseUrl + "/r/rules";
+    }
+
     /** 組出指定文章的公開網址。 */
     public String article(String slug) {
         return baseUrl + "/r/news/" + slug;
+    }
+
+    /**
+     * 組出 canonical link 標記，供公開頁面的 {@code <!--CANONICAL-->} 佔位符注入。
+     *
+     * <p><b>為什麼需要 canonical</b>：文章分享連結帶 {@code ?ref=推薦碼}、
+     * 歷史列表帶 {@code ?tag=篩選}，同一份內容因此存在多個網址。Search Console
+     * 會回報「重複網頁；使用者未選取標準網頁」，canonical 統一指向不帶參數的
+     * 標準網址，讓搜尋引擎把索引與權重收斂到單一網址。</p>
+     */
+    public String canonicalTag(String absoluteUrl) {
+        return "<link rel=\"canonical\" href=\""
+            + world.springai.survey.reader.HtmlTemplate.escapeHtml(absoluteUrl) + "\">";
     }
 
     /** 組出文章社群預覽 PNG。 */

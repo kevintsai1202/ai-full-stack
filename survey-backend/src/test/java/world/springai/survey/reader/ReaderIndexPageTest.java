@@ -30,9 +30,14 @@ class ReaderIndexPageTest {
     private final FormSchemaService formSchemaService = mock(FormSchemaService.class);
     private final CreditPolicy creditPolicy = mock(CreditPolicy.class);
 
+    /** 真實實例：canonical 標記需要組出絕對網址，用固定測試網域驗證輸出 */
+    private final world.springai.survey.ReaderSiteLinks readerSiteLinks =
+        new world.springai.survey.ReaderSiteLinks("https://reader.example.com");
+
     private final ReaderAuthController controller = new ReaderAuthController(
         loginMailService, loginTokenService, readerAccountService, sessionService,
-        readerContext, htmlTemplate, loginAbuseGuard, formSchemaService, creditPolicy);
+        readerContext, htmlTemplate, loginAbuseGuard, formSchemaService, creditPolicy,
+        readerSiteLinks);
 
     /** 有曝光問卷時：首頁出現「問卷調查」區塊，每份問卷連向 /r/survey/{key}，標題經跳脫，並說明填答贈點 */
     @Test
@@ -90,5 +95,15 @@ class ReaderIndexPageTest {
         String html = controller.indexPage(null).getBody();
         assertTrue(html.contains("id=\"subscribe-form\""));
         assertFalse(html.contains("已訂閱："));
+    }
+
+    /** 首頁必須輸出自我指向的 canonical：?ref= 訂閱入口與標準網址須收斂為同一索引 */
+    @Test
+    void homepageRendersSelfReferencingCanonical() {
+        when(readerContext.resolve(null)).thenReturn(Optional.empty());
+        String html = controller.indexPage(null).getBody();
+        assertTrue(html.contains("<link rel=\"canonical\" href=\"https://reader.example.com/r/\">"),
+            "首頁 head 必須含指向 /r/ 的 canonical 標記");
+        assertFalse(html.contains("<!--CANONICAL-->"), "佔位符必須被替換，不能殘留");
     }
 }

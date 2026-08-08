@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import world.springai.survey.ReaderSiteLinks;
 import world.springai.survey.form.FormSchemaService;
 
 import java.time.OffsetDateTime;
@@ -57,6 +58,8 @@ public class ReaderAuthController {
      * （{@link CreditPolicy#surveyReward()}），不得在頁面上寫死數字。
      */
     private final CreditPolicy creditPolicy;
+    /** 首頁 canonical 標記所需的正式讀者網域（訂閱入口常帶 ?ref= 推薦碼，需收斂到標準網址） */
+    private final ReaderSiteLinks readerSiteLinks;
 
     /** 注入登入流程所需的服務 */
     public ReaderAuthController(LoginMailService loginMailService,
@@ -67,7 +70,8 @@ public class ReaderAuthController {
                                HtmlTemplate htmlTemplate,
                                LoginAbuseGuard loginAbuseGuard,
                                FormSchemaService formSchemaService,
-                               CreditPolicy creditPolicy) {
+                               CreditPolicy creditPolicy,
+                               ReaderSiteLinks readerSiteLinks) {
         this.loginMailService = loginMailService;
         this.loginTokenService = loginTokenService;
         this.readerAccountService = readerAccountService;
@@ -77,6 +81,7 @@ public class ReaderAuthController {
         this.loginAbuseGuard = loginAbuseGuard;
         this.formSchemaService = formSchemaService;
         this.creditPolicy = creditPolicy;
+        this.readerSiteLinks = readerSiteLinks;
     }
 
     /** 登入請求：email 必填且需為合法格式，redirect 選填 */
@@ -124,6 +129,9 @@ public class ReaderAuthController {
         Optional<ReaderContext.Current> current = readerContext.resolve(sessionCookie);
         Map<String, String> vars = new HashMap<>();
         vars.put("<!--NAV_LINKS-->", ReaderNav.links(current.isPresent()));
+        // canonical 指向不帶 ?ref=/&share= 的首頁標準網址：分享訂閱入口帶推薦碼
+        // 會讓首頁有多個網址，缺 canonical 會被 GSC 判為「重複網頁」
+        vars.put("<!--CANONICAL-->", readerSiteLinks.canonicalTag(readerSiteLinks.home()));
         vars.put("<!--SURVEY_LIST-->", renderSurveyList());
         vars.put("<!--SUBSCRIBE_BLOCK-->", renderSubscribeBlock(current));
         String html = htmlTemplate.render("templates/reader/index.html", vars);
