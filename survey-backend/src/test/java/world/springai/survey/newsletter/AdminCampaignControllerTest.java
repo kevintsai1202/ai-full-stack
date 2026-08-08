@@ -41,6 +41,8 @@ class AdminCampaignControllerTest {
     // AdminKeyGuard 建構子新增依賴（Task 7）：@WebMvcTest slice 需補上這兩個 bean，context 才能建構真實 AdminKeyGuard
     @MockBean AdminSessionAccess sessionAccess;
     @MockBean AdminAllowlist allowlist;
+    // AdminCampaignController 建構子新增依賴（Task 7：補寄確認信端點）：@WebMvcTest slice 需補上此 bean，context 才能建構
+    @MockBean ReconfirmService reconfirmService;
 
     /** 測試用額度：月額度 50000、剩餘 49000、單批上限 500（模擬 Zeabur Pro 偵測結果） */
     private static final MailQuotaService.Quota QUOTA = new MailQuotaService.Quota(
