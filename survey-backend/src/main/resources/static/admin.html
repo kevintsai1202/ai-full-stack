@@ -664,7 +664,7 @@
     </div>
     <div class="card">
       <h2>熱門文章</h2>
-      <div class="table-wrap"><table id="growth-articles"><thead><tr><th>來源</th><th>點擊</th><th>填表</th><th>確認</th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap"><table id="growth-articles"><thead><tr><th>來源</th><th>點擊</th><th>填表</th><th>轉換成立</th></tr></thead><tbody></tbody></table></div>
 
       <h3 style="margin:18px 0 6px">訂閱者邀請成效</h3>
       <p class="hint">只列出有分享活動的讀者；email 已遮罩。依轉換成立數排序，最多 50 筆。</p>
@@ -686,7 +686,7 @@
     <div class="card">
       <h2>待人工審核</h2>
       <p class="hint">超過每日上限或確認速度異常時不先發點；核准後才原子發放雙邊與里程碑獎勵。</p>
-      <div class="table-wrap"><table id="growth-reviews"><thead><tr><th>確認時間</th><th>被邀者</th><th>文章</th><th>風險</th><th>預計獎勵</th><th>操作</th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap"><table id="growth-reviews"><thead><tr><th>轉換成立時間</th><th>被邀者</th><th>文章</th><th>風險</th><th>預計獎勵</th><th>操作</th></tr></thead><tbody></tbody></table></div>
       <div class="msg" id="growth-msg"></div>
     </div>
     <div class="card">
@@ -2580,14 +2580,25 @@
       $('#reconfirm-pending').textContent=data.pending?`（${data.pending}）`:'';
     }catch(e){/* 人數只是輔助資訊，失敗不打擾操作者 */}
   }
-  /** 對既有未確認訂閱者補寄確認信；每人終身只寄一次，重按不會重寄。 */
+  /**
+   * 對既有未確認訂閱者補寄確認信；每人終身只寄一次，重按不會重寄。
+   *
+   * 執行中必須禁用按鈕（同 doSendReminders 的慣例）：整批逐封同步寄送可能跑數十秒到
+   * 數分鐘，操作者以為沒反應再按一次，第二個請求會在第一批的 email_log 寫入前就讀完
+   * 名單——冪等靠的是「讀-判斷-寫」之間沒有鎖的視窗，並發下不成立，同一批人會收到兩封信。
+   *
+   * alreadyConfirmed／alreadySent 是**全站**累計人數（非本次被排除數），文案照此口徑寫；
+   * 後端 ALREADY_CONFIRMED_SQL 的註解有完整說明。
+   */
   async function doReconfirm(){
     if(!confirm('確定對「已訂閱但從未確認信箱」者補寄確認信？每人只會收到一次。'))return;
+    $('#reconfirm-btn').disabled=true;
     try{
       const data=await api('/api/admin/campaign/reconfirm',{method:'POST',body:JSON.stringify({limit:null})});
-      showMsg('invite-msg',`補寄完成：嘗試 ${data.recipientCount}、成功 ${data.accepted}、失敗 ${data.failed}、剩餘 ${data.remaining}（已排除：確認過 ${data.alreadyConfirmed}、補寄過 ${data.alreadySent}）`,true);
+      showMsg('invite-msg',`補寄完成：嘗試 ${data.recipientCount}、成功 ${data.accepted}、失敗 ${data.failed}、剩餘 ${data.remaining}（全站參考：已點過確認連結 ${data.alreadyConfirmed} 人、已補寄過 ${data.alreadySent} 人）`,true);
       await loadReconfirmPending();
     }catch(e){if(e.message!=='401')showMsg('invite-msg','補寄失敗：'+e.message,false);}
+    finally{$('#reconfirm-btn').disabled=false;}
   }
   /** 首次展開時載入邀請信範本到編輯區。 */
   async function loadInviteTemplate(){if(loadInviteTemplate.done)return;try{const t=await api('/api/admin/templates/invite');$('#tpl-subject').value=t.subject;$('#tpl-body').value=t.bodyHtml;loadInviteTemplate.done=true;}catch(e){if(e.message!=='401'){const m=$('#tpl-msg');m.className='msg err';m.textContent='範本載入失敗：'+e.message;}}}
@@ -3129,17 +3140,25 @@
   /**
    * 執行推薦獎勵補發。dryRun 時只顯示掃描結果不發放；
    * 正式執行前要二次確認，因為它會真的寫入點數帳本。
+   *
+   * 執行中禁用兩顆按鈕：雖然唯一鍵擋著不會重複發點，但並行請求會讓後發的那批
+   * 全數撞唯一鍵而被計入 failed，操作者會看到一份假的失敗數字。
+   *
+   * scanned 是「掃描到的候選人數」，**包含先前已補發過的人**，不是「還有幾筆沒發」。
+   * 文案不得寫成「待補發名單」——第二次試算仍會顯示同樣的數字，會被誤讀成補發沒生效。
    */
   async function runGrowthBackfill(dryRun){
     if(!dryRun&&!confirm('確定執行補發？將對掃描到的名單建立轉換並發放點數（可重複執行，已處理過的不會重複發放）。'))return;
     const target=$('#growth-backfill-result');target.textContent='執行中…';
+    $('#growth-backfill-dry-btn').disabled=true;$('#growth-backfill-btn').disabled=true;
     try{
       const data=await api(`/api/admin/referrals/backfill?dryRun=${dryRun}`,{method:'POST'});
       target.textContent=dryRun
-        ?`試算：掃描到 ${data.scanned} 筆待補發名單（${(data.candidates||[]).map(c=>c.email).join('、')||'無'}）`
+        ?`試算：掃描到 ${data.scanned} 筆帶推薦碼的候選訂閱者（含先前已補發過的；實際新發放筆數以正式執行結果為準）（${(data.candidates||[]).map(c=>c.email).join('、')||'無'}）`
         :`完成：掃描 ${data.scanned}、發放 ${data.rewarded}、已處理過 ${data.alreadyProcessed}、無推薦人 ${data.noReferrer}、自我邀請 ${data.selfInvite}、失敗 ${data.failed}`;
       if(!dryRun)await loadGrowth();
     }catch(e){if(e.message!=='401')target.textContent='補發失敗：'+e.message;}
+    finally{$('#growth-backfill-dry-btn').disabled=false;$('#growth-backfill-btn').disabled=false;}
   }
 
   /**
