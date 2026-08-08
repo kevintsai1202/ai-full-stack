@@ -1,5 +1,7 @@
 package world.springai.survey.reader;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.util.StringUtils;
@@ -8,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import world.springai.survey.AdminKeyGuard;
@@ -20,6 +23,8 @@ import java.util.Map;
 /** 病毒成長漏斗、人工審核與限時活動的管理 API。 */
 @RestController
 public class AdminReferralGrowthController {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminReferralGrowthController.class);
 
     private final AdminKeyGuard guard;
     private final JdbcTemplate jdbc;
@@ -171,6 +176,95 @@ public class AdminReferralGrowthController {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "查無活動"));
         campaign.deactivate();
         return campaigns.save(campaign);
+    }
+
+    /** 補發掃描：帶推薦碼、已同意且未退訂者，取最早一筆問卷時間作為轉換時點。 */
+    private static final String BACKFILL_SCAN_SQL = """
+        select lower(sr.email) as email, min(sr.created_at) as occurred_at
+          from survey_response sr
+          join reader r on r.referral_code = (sr.answers ->> '_ref')
+         where sr.answers ? '_ref'
+           and sr.consent = true
+           and sr.unsubscribed = false
+         group by lower(sr.email)
+         order by min(sr.created_at)
+        """;
+
+    /**
+     * 補發歷史推薦獎勵：對「帶推薦碼且訂閱已成立」者建立轉換並直接核准發點。
+     *
+     * <p>為什麼需要這支端點：{@code confirmAndReward} 是唯一發獎入口，而它只由
+     * 讀者點確認信觸發。在歡迎信加上確認 CTA 之前，沒有任何人收到過含確認連結的信，
+     * 因此所有歷史推薦的獎勵都沒發出去（spec §1.3）。
+     *
+     * <p><b>逐筆容錯不中斷整批</b>：一位推薦人的資料異常不該讓其餘十幾筆都補不到。
+     * 失敗計入 {@code failed} 並記 ERROR 供人工處理。
+     *
+     * <p><b>冪等</b>：完全依賴 {@code referral_conversion} 的 invitee 唯一鍵與
+     * {@code uq_credit_txn_referral_note}。重跑會全部回 ALREADY_PROCESSED。
+     *
+     * @param dryRun true 時只回傳掃描名單（email 遮罩）與筆數，不發放任何點數
+     */
+    @PostMapping("/api/admin/referrals/backfill")
+    public Map<String, Object> backfill(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key,
+            @RequestParam(value = "dryRun", defaultValue = "false") boolean dryRun) {
+        guard.verify(key);
+        List<Map<String, Object>> candidates = jdbc.queryForList(BACKFILL_SCAN_SQL);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("dryRun", dryRun);
+        result.put("scanned", candidates.size());
+
+        if (dryRun) {
+            result.put("candidates", candidates.stream().map(row -> {
+                Map<String, Object> view = new LinkedHashMap<>();
+                view.put("email", ReferralGrowthService.maskEmail((String) row.get("email")));
+                view.put("occurredAt", row.get("occurred_at"));
+                return view;
+            }).toList());
+            return result;
+        }
+
+        int rewarded = 0, alreadyProcessed = 0, selfInvite = 0, noReferrer = 0, failed = 0;
+        for (Map<String, Object> row : candidates) {
+            String email = (String) row.get("email");
+            try {
+                OffsetDateTime occurredAt = toOffsetDateTime(row.get("occurred_at"));
+                ReferralGrowthService.Outcome outcome = growth.backfillAndApprove(email, occurredAt);
+                switch (outcome) {
+                    case REWARDED -> rewarded++;
+                    case SELF_INVITE -> selfInvite++;
+                    case NO_REFERRER -> noReferrer++;
+                    // 補發不跑風控，PENDING_REVIEW 只可能來自先前已存在的待審轉換
+                    case ALREADY_PROCESSED, PENDING_REVIEW -> alreadyProcessed++;
+                }
+            } catch (Exception e) {
+                failed++;
+                log.error("推薦獎勵補發失敗（其餘筆數繼續）：{}",
+                    ReferralGrowthService.maskEmail(email), e);
+            }
+        }
+        result.put("rewarded", rewarded);
+        result.put("alreadyProcessed", alreadyProcessed);
+        result.put("selfInvite", selfInvite);
+        result.put("noReferrer", noReferrer);
+        result.put("failed", failed);
+        return result;
+    }
+
+    /**
+     * 把 JDBC 回傳的時間值轉為 OffsetDateTime。
+     *
+     * <p>PostgreSQL 的 timestamptz 經 JdbcTemplate 可能回 OffsetDateTime 或
+     * java.sql.Timestamp（依驅動版本與欄位推導而異），兩者都要能吃。</p>
+     */
+    private static OffsetDateTime toOffsetDateTime(Object value) {
+        if (value instanceof OffsetDateTime odt) return odt;
+        if (value instanceof java.sql.Timestamp ts) {
+            return ts.toInstant().atOffset(java.time.ZoneOffset.UTC);
+        }
+        throw new IllegalStateException("無法解析的時間型別：" + value);
     }
 
     /** 安全取得單一 count。 */
