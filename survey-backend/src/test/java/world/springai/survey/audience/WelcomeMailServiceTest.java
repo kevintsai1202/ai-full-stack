@@ -40,6 +40,7 @@ class WelcomeMailServiceTest {
     void successLogsSent() {
         when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("zsend-id-1");
         when(linkBuilder.unsubscribeLink("user@example.com")).thenReturn("UNSUB_LINK_MARKER");
+        when(linkBuilder.confirmLink("user@example.com")).thenReturn("CONFIRM_LINK_MARKER");
 
         svc.sendWelcome("user@example.com");
 
@@ -53,6 +54,27 @@ class WelcomeMailServiceTest {
         ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
         verify(mailSender).send(anyString(), anyString(), html.capture());
         assertTrue(html.getValue().contains("UNSUB_LINK_MARKER"), "歡迎信頁腳必須含退訂連結");
+    }
+
+    /**
+     * 歡迎信必須含個人化確認連結。
+     *
+     * <p>沒有這個連結，讀者就沒有任何途徑觸發 /subscription/confirm，
+     * 「信箱確認」漏斗與推薦獎勵發放都會恆為 0（spec §1.2 斷點 2）。
+     * 這裡直接 capture 寄出的 HTML，不只驗證 EmailLog——後者發現不了缺連結。</p>
+     */
+    @Test
+    void welcomeMailContainsConfirmLink() {
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("zsend-id-2");
+        when(linkBuilder.unsubscribeLink("user@example.com")).thenReturn("UNSUB_LINK_MARKER");
+        when(linkBuilder.confirmLink("user@example.com")).thenReturn("CONFIRM_LINK_MARKER");
+
+        svc.sendWelcome("user@example.com");
+
+        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+        verify(mailSender).send(anyString(), anyString(), html.capture());
+        assertTrue(html.getValue().contains("CONFIRM_LINK_MARKER"), "歡迎信必須含確認連結");
+        assertTrue(html.getValue().contains("UNSUB_LINK_MARKER"), "退訂連結不可因新增 CTA 而遺失");
     }
 
     /** 寄送丟例外時不應向上拋，且寫入 status=failed */
