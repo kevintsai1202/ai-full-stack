@@ -208,6 +208,13 @@
         <button class="btn ghost" id="dynamic-refresh">載入分析</button>
       </div>
       <p class="hint" id="dynamic-summary">表單清單載入中…</p>
+      <!-- 來源分佈：同一個 record_type 底下混雜著真實填答與只為掛人物身分而建的空殼紀錄，
+           不列出來源就無從分辨「提交數」裡有多少是真的填過問卷 -->
+      <details class="schema-settings" id="source-breakdown-box">
+        <summary>來源分佈</summary>
+        <p class="hint">「有答案」指該筆紀錄含至少一個本表單欄位的作答；其餘是考試、Dify、電子報通道為掛人物身分而建的空紀錄。</p>
+        <div class="table-wrap"><table id="source-breakdown"><thead><tr><th>來源</th><th>紀錄數</th><th>有答案</th></tr></thead><tbody></tbody></table></div>
+      </details>
       <div class="chart-grid" id="dynamic-charts"></div>
       <details class="schema-settings">
         <summary>簡易欄位設定</summary>
@@ -1022,7 +1029,8 @@
       replaceSourceOptions('#raw-source',sources,true);
       replaceSourceOptions('#reader-source',sources,true);
       replaceSourceOptions('#campaign-source',sources,true);
-      replaceSourceOptions('#dynamic-source',sources,true);
+      // #dynamic-source 刻意不在此列：彈性表單分析的來源選單改由
+      // loadSourceBreakdown() 以該表單實際出現過的 source_key 供給（見該函式註解）
       if(selectedImportKey&&[...$('#import-source').options].some(option=>option.value===selectedImportKey)){
         $('#import-source').value=selectedImportKey;
       }
@@ -1291,7 +1299,11 @@
     try{
       dynamicAnalytics=await api(`/api/admin/analytics/forms/${encodeURIComponent(key)}?${query}`);
       const summary=dynamicAnalytics.summary||{};
-      $('#dynamic-summary').textContent=`提交 ${summary.submissions||0} 筆 · 不重複人物 ${summary.uniquePeople||0} 人 · 完成率 ${Math.round(Number(summary.completionRate||0)*100)}%`;
+      // 提交數含大量空殼紀錄（考試／Dify／電子報通道為掛人物身分而建），
+      // 因此並列顯示「有填答內容」筆數；並列而非取代，既有數字語意不變。
+      const answered=await loadSourceBreakdown(key);
+      const answeredNote=answered==null?'':`（其中 ${answered} 筆有填答內容）`;
+      $('#dynamic-summary').textContent=`提交 ${summary.submissions||0} 筆${answeredNote} · 不重複人物 ${summary.uniquePeople||0} 人 · 完成率 ${Math.round(Number(summary.completionRate||0)*100)}%（僅計必填欄位）`;
       const root=$('#dynamic-charts');root.replaceChildren();
       (dynamicAnalytics.dimensions||[]).forEach((dimension,index)=>{
         const card=document.createElement('article');card.className='card';
@@ -1308,6 +1320,71 @@
       });
       if(!(dynamicAnalytics.dimensions||[]).length)root.append(emptyNode('這個版本尚未設定可分析欄位'));
     }catch(error){if(error.message!=='401')$('#dynamic-summary').textContent='分析載入失敗：'+error.message;}
+  }
+
+  /**
+   * 載入來源分佈：更新「來源」下拉選項與分佈表格，回傳本次篩選下的有答案筆數。
+   *
+   * 「來源」選項刻意改由這支端點供給，不再吃 /api/admin/import/sources——
+   * 那是管理員手動登記的匯入來源註冊表，不含 newsletter_survey 這類程式自動寫入的來源，
+   * 導致實際存在的資料在畫面上完全篩不出來。
+   */
+  async function loadSourceBreakdown(key){
+    const query=dynamicQuery();
+    // 本端點的職責就是列出全部來源，再給它一個來源篩選沒有意義
+    query.delete('source');
+    try{
+      const data=await api(`/api/admin/analytics/forms/${encodeURIComponent(key)}/sources?${query}`);
+      const sources=data.sources||[];
+      renderSourceOptions(sources);
+      renderSourceBreakdown(sources);
+      // 有套用來源篩選時，摘要要對齊那個來源的數字，否則畫面會出現「篩過的提交數」
+      // 配上「全部來源的有答案數」這種自相矛盾的組合
+      const selected=$('#dynamic-source').value;
+      if(!selected)return (data.totals||{}).answered||0;
+      const row=sources.find(source=>source.key===selected);
+      return row?row.answered:0;
+    }catch(error){
+      if(error.message!=='401')renderSourceBreakdown([]);
+      return null;
+    }
+  }
+
+  /** 以實際出現過的來源重建「來源」下拉；保留目前選取值，避免重整後篩選被悄悄清掉。 */
+  function renderSourceOptions(sources){
+    const select=$('#dynamic-source');
+    const current=select.value;
+    select.replaceChildren();
+    const all=document.createElement('option');all.value='';all.textContent='全部';select.append(all);
+    sources.forEach(source=>{
+      const option=document.createElement('option');
+      option.value=source.key;option.textContent=`${source.label}（${source.total}）`;
+      select.append(option);
+    });
+    if(current&&![...select.options].some(option=>option.value===current)){
+      // 日期篩選可能讓目前選取的來源這次沒有任何資料；補回選項，讓篩選狀態維持可見
+      const orphan=document.createElement('option');
+      orphan.value=current;orphan.textContent=`${current}（0）`;select.append(orphan);
+    }
+    select.value=current;
+  }
+
+  /** 繪製來源分佈表格；空殼紀錄多的來源會直接顯示「有答案 0」。 */
+  function renderSourceBreakdown(sources){
+    const body=$('#source-breakdown tbody');
+    body.replaceChildren();
+    if(!sources.length){
+      const row=document.createElement('tr');const cell=document.createElement('td');
+      cell.colSpan=3;cell.textContent='這個篩選條件下沒有任何紀錄。';
+      row.append(cell);body.append(row);return;
+    }
+    sources.forEach(source=>{
+      const row=document.createElement('tr');
+      [source.label,String(source.total),String(source.answered)].forEach(text=>{
+        const cell=document.createElement('td');cell.textContent=text;row.append(cell);
+      });
+      body.append(row);
+    });
   }
 
   /** 下載目前表單版本的動態原始資料。 */

@@ -904,8 +904,14 @@ public class FormSchemaService {
         return false;
     }
 
-    /** formKey 與 version 組成活動 schemaKey。 */
-    private String schemaKey(FormDefinition form) {
+    /**
+     * formKey 與 version 組成活動 schemaKey。
+     *
+     * <p>對外開放供 {@link FormSourceBreakdownService} 使用：那支服務要用同一組
+     * schemaKey 查 {@code audience_record}，若各自拼接字串，日後格式一改就會有一邊
+     * 悄悄查不到資料。</p>
+     */
+    public String schemaKey(FormDefinition form) {
         return form.key() + "@" + form.version();
     }
 

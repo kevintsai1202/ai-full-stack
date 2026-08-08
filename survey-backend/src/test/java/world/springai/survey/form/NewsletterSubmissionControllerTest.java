@@ -51,7 +51,8 @@ class NewsletterSubmissionControllerTest {
             adminKeyGuard,
             welcomeMailService,
             submissionService,
-            voteStatsService);
+            voteStatsService,
+            mock(FormSourceBreakdownService.class));
 
         // MockMvc 需要 UTF-8 StringHttpMessageConverter（中文）與 JSON converter，
         // 以及異常處理器將 ResponseStatusException 轉成 JSON 回應

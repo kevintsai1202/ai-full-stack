@@ -46,7 +46,8 @@ class FormSchemaControllerHomepageTest {
         voteStatsService = mock(SurveyVoteStatsService.class);
 
         controller = new FormSchemaController(
-            service, guard, welcomeMailService, newsletterSubmissionService, voteStatsService);
+            service, guard, welcomeMailService, newsletterSubmissionService, voteStatsService,
+            mock(FormSourceBreakdownService.class));
 
         mvc = MockMvcBuilders.standaloneSetup(controller)
             .setControllerAdvice(new ApiExceptionHandler())

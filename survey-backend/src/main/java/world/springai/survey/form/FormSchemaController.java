@@ -34,19 +34,22 @@ public class FormSchemaController {
     private final WelcomeMailService welcomeMailService;
     private final NewsletterSubmissionService newsletterSubmissionService;
     private final SurveyVoteStatsService voteStatsService;
+    private final FormSourceBreakdownService sourceBreakdownService;
 
-    /** 注入 schema 服務、Admin 金鑰守衛、歡迎信服務、電子報通道問卷服務與投票統計服務。 */
+    /** 注入 schema 服務、Admin 金鑰守衛、歡迎信服務、電子報通道問卷服務、投票統計與來源分佈服務。 */
     public FormSchemaController(
             FormSchemaService service,
             AdminKeyGuard guard,
             WelcomeMailService welcomeMailService,
             NewsletterSubmissionService newsletterSubmissionService,
-            SurveyVoteStatsService voteStatsService) {
+            SurveyVoteStatsService voteStatsService,
+            FormSourceBreakdownService sourceBreakdownService) {
         this.service = service;
         this.guard = guard;
         this.welcomeMailService = welcomeMailService;
         this.newsletterSubmissionService = newsletterSubmissionService;
         this.voteStatsService = voteStatsService;
+        this.sourceBreakdownService = sourceBreakdownService;
     }
 
     /** 公開取得目前發布版本 schema，前端不需硬編碼欄位。 */
@@ -217,6 +220,26 @@ public class FormSchemaController {
             @RequestParam(required = false) Long campaignId) {
         guard.verify(key);
         return service.analytics(formKey, version, allVersions, from, to, source, campaignId, false);
+    }
+
+    /**
+     * Admin 來源分佈：這份表單的提交實際來自哪些 {@code source_key}，各有多少筆，
+     * 其中多少筆帶有真實問卷答案。
+     *
+     * <p>刻意不接受 {@code source} 參數——本端點的職責就是列出全部來源，
+     * 再給它一個來源篩選沒有意義；其餘參數與 {@link #analytics} 同語意。</p>
+     */
+    @GetMapping("/api/admin/analytics/forms/{formKey}/sources")
+    public FormSourceBreakdownService.Breakdown sourceBreakdown(
+            @RequestHeader(value = "X-Admin-Key", required = false) String key,
+            @PathVariable String formKey,
+            @RequestParam(required = false) Integer version,
+            @RequestParam(defaultValue = "false") boolean allVersions,
+            @RequestParam(required = false) OffsetDateTime from,
+            @RequestParam(required = false) OffsetDateTime to,
+            @RequestParam(required = false) Long campaignId) {
+        guard.verify(key);
+        return sourceBreakdownService.breakdown(formKey, version, allVersions, from, to, campaignId);
     }
 
     /** Admin 投票統計與 campaign 歸因分析；表單沒有任何票時回零值結構，不回 404。 */
