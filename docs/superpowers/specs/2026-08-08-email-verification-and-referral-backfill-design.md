@@ -21,7 +21,7 @@ select count(*) from referral_conversion where confirmed_at is not null
 `confirmed_at` 只有一條寫入路徑：
 
 ```text
-讀者點 /subscription/confirm?email=&t=
+讀者點 /api/survey/confirm?email=&t=   ← SubscriptionLinkBuilder.CONFIRM_PATH
   → SubscriptionController.confirm
   → 發布 SubscriptionConfirmedEvent
   → ReferralRewardListener.onSubscriptionConfirmed
