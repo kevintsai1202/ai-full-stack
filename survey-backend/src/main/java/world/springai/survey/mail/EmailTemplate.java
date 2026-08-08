@@ -6,14 +6,26 @@ import org.springframework.stereotype.Component;
 @Component
 public class EmailTemplate {
 
-    /** 以固定外框包住內文，並在頁腳放入該收件人的退訂連結 */
+    /**
+     * 以固定外框包住內文，並在頁腳放入該收件人的退訂連結。
+     *
+     * <p><b>頁腳的來源說明必須涵蓋兩種族群</b>：本外框的兩個消費者
+     * （{@code WelcomeMailService} 與 {@code ReconfirmService}）收件人都是混合的——
+     * 既有在課程網站填興趣調查的人，也有直接在電子報首頁訂閱的讀者。
+     * 原本只寫「填寫了興趣調查」，對後者是不實敘述：他們沒填過任何調查，
+     * 讀到這句會合理懷疑是詐騙信，反而拉高檢舉風險——而檢舉會傷寄件網域信譽。
+     * 補寄確認信整封的訴求就是「解釋你為什麼收到這封信」，頁腳更不能給錯理由。</p>
+     *
+     * <p>相關先例：{@code LoginMailService} 刻意不使用本方法，因為登入信是交易信，
+     * 附退訂連結會把兩種同意混為一談。措辭要改時請一併確認那個判斷仍成立。</p>
+     */
     public String wrap(String bodyHtml, String unsubscribeLink) {
         return """
             <div style="font-family:system-ui,'Microsoft JhengHei',sans-serif;line-height:1.7;max-width:560px;margin:0 auto;color:#1a1a2e">
               %s
               <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
               <p style="color:#888;font-size:.85rem">
-                你會收到這封信，是因為你在課程網站填寫了興趣調查並同意接收課程資訊。<br>
+                你會收到這封信，是因為你訂閱了凱文大叔的電子報，或在課程網站填寫過興趣調查並同意接收課程資訊。<br>
                 若不想再收到，<a href="%s" style="color:#4f46e5">點此取消訂閱</a>。
               </p>
             </div>
