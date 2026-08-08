@@ -5,6 +5,7 @@
 
 ## 目錄結構
 
+- `00-course-orientation.md`：全課開場「這門課怎麼上」（影片與教學網站的分工、可重複觀看、指令與下載連結都在網站上）。在章節 1 單元 1 之前播放，**不列入 Hahow 官方 36 單元**。
 - 每個章節一個目錄（`ch01` ~ `ch09`），加上達標解鎖章 `bonus-cloudflare-tunnel`。
 - 每個小節（單元）一個 markdown 檔，含：單元定位、教學素材、示範提示詞、**口語稿**。
 - 各章的作業獨立成 `assignment-1.md`。
@@ -14,6 +15,7 @@
 
 | 目錄 | Hahow 章節 | teaching-site 來源 | 小節數 |
 |---|---|---|---|
+| `00-course-orientation.md` | （開場，非官方單元） | `teaching-site` 網站結構本身 | 1 篇開場 |
 | `ch01-env-and-ai-workflow` | 章節 1｜開發環境、專案骨架與 AI 協作流程 | `_source/u1.md` | 4 單元＋作業 1 |
 | `ch02-spring-mvc-rest-domain` | 章節 2｜Spring MVC、REST API 與 CRM Domain Modeling | `_source/u2.md` | 5 單元＋作業 1 |
 | `ch03-persistence-and-search` | 章節 3｜資料持久化與搜尋 | `_source/u3.md` | 6 單元＋作業 1 |
