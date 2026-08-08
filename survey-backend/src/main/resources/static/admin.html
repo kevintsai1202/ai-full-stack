@@ -647,7 +647,7 @@
 
   <section class="view" id="growth-view" hidden>
     <div class="card section-head">
-      <div><h2 style="margin:0">分享漏斗</h2><p class="hint">分享點擊 → 填表 → 信箱確認；點擊採每日唯一訪客計數。</p></div>
+      <div><h2 style="margin:0">分享漏斗</h2><p class="hint">分享點擊 → 填表 → 轉換成立；點擊採每日唯一訪客計數。「信箱確認」另計，只算實際點過確認信連結的人。</p></div>
       <button class="btn ghost" id="growth-refresh">重新整理</button>
     </div>
     <h3 style="margin:14px 0 6px">分享漏斗</h3>
@@ -664,6 +664,23 @@
     <div class="card">
       <h2>熱門文章</h2>
       <div class="table-wrap"><table id="growth-articles"><thead><tr><th>來源</th><th>點擊</th><th>填表</th><th>確認</th></tr></thead><tbody></tbody></table></div>
+
+      <h3 style="margin:18px 0 6px">訂閱者邀請成效</h3>
+      <p class="hint">只列出有分享活動的讀者；email 已遮罩。依轉換成立數排序，最多 50 筆。</p>
+      <div class="table-wrap">
+        <table id="referrer-stats">
+          <thead><tr><th>推薦人</th><th>分享點擊</th><th>完成填表</th><th>轉換成立</th><th>已發點數</th><th>里程碑</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <h3 style="margin:18px 0 6px">歷史推薦獎勵補發</h3>
+      <p class="hint">對「帶推薦碼且訂閱已成立」者建立轉換並直接核准發點。可重複執行，已處理過的不會重複發放。</p>
+      <div class="form-row">
+        <button class="btn ghost" id="growth-backfill-dry-btn">試算（不發放）</button>
+        <button class="btn" id="growth-backfill-btn">執行補發</button>
+      </div>
+      <p class="hint" id="growth-backfill-result"></p>
     </div>
     <div class="card">
       <h2>待人工審核</h2>
@@ -1102,6 +1119,8 @@
     $('#source-create-name').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();createAudienceSource();}});
     $('#reader-search-btn').onclick=()=>{audiencePage=0;selectedAudienceIds.clear();searchReaders();};$('#vip-grant-btn').onclick=grantVip;$('#grant-btn').onclick=grantCredits;$('#ledger-btn').onclick=loadLedger;$('#settings-save-btn').onclick=saveSettings;
     $('#growth-refresh').onclick=loadGrowth;$('#growth-create').onclick=createGrowthCampaign;
+    $('#growth-backfill-dry-btn').onclick=()=>runGrowthBackfill(true);
+    $('#growth-backfill-btn').onclick=()=>runGrowthBackfill(false);
     // 工商提案：篩選變更即重載清單；重新整理按鈕同時重載清單與統計；編輯器按鈕呼叫插入流程。
     $('#promo-status-filter').onchange=loadPromoProposals;
     $('#promo-refresh').onclick=()=>{loadPromoProposals();loadPromoStats();};
@@ -3039,10 +3058,11 @@
       const data=await api('/api/admin/referrals/dashboard'),f=data.funnel;
       renderFunnelChart($('#share-funnel-chart'),[
         {label:'分享點擊',count:f.clicks},{label:'完成填表',count:f.submitted},
-        {label:'信箱確認',count:f.confirmed},{label:'審核通過',count:f.approved}]);
+        {label:'轉換成立',count:f.confirmed},{label:'審核通過',count:f.approved}]);
       if(data.readerFunnelStructured)renderReaderFunnel(data.readerFunnelStructured);
       const root=$('#growth-kpis');root.replaceChildren();
-      [['分享點擊',f.clicks],['完成填表',f.submitted],['信箱確認',f.confirmed],['點擊→填表',f.clickToSubmitRate+'%'],['填表→確認',f.submitToConfirmRate+'%']]
+      [['分享點擊',f.clicks],['完成填表',f.submitted],['轉換成立',f.confirmed],
+       ['信箱確認',data.confirmedByLink],['點擊→填表',f.clickToSubmitRate+'%'],['填表→成立',f.submitToConfirmRate+'%']]
         .forEach(([label,value])=>{const box=document.createElement('div');box.className='kpi';const strong=document.createElement('strong');strong.className='kpi-value';strong.textContent=value;const span=document.createElement('span');span.className='kpi-label';span.textContent=label;box.append(span,strong);root.append(box);});
       const reader=data.readerFunnel,readerRoot=$('#reader-funnel-kpis');readerRoot.replaceChildren();
       [['看文章',reader.articleViews],['進訂閱首頁',reader.subscriptionHomeViews],['送出訂閱',reader.subscribeAttempts],['訂閱成功',reader.subscribeSuccess],['點選解鎖',reader.unlockClicks],['解鎖成功',reader.unlockSuccess],['首頁→訂閱',reader.homeToSubscribeRate+'%'],['解鎖成功率',reader.unlockSuccessRate+'%']]
@@ -3052,6 +3072,11 @@
       data.readerTopArticles.forEach(row=>{const tr=document.createElement('tr');tr.append(cell(row.article_slug),cell(row.views),cell(row.unlock_clicks),cell(row.unlock_success));readerArticles.append(tr);});
       const articles=$('#growth-articles tbody');articles.replaceChildren();
       data.topArticles.forEach(row=>{const tr=document.createElement('tr');tr.append(cell(row.source),cell(row.clicks),cell(row.submissions),cell(row.confirmations));articles.append(tr);});
+      // 訂閱者邀請成效表：只列有分享活動的讀者，email 已由後端遮罩
+      const referrerBody=$('#referrer-stats tbody');referrerBody.replaceChildren();
+      if(!data.referrerStats||!data.referrerStats.length){const tr=document.createElement('tr'),td=cell('目前沒有分享活動');td.colSpan=6;tr.append(td);referrerBody.append(tr);}
+      (data.referrerStats||[]).forEach(row=>{const tr=document.createElement('tr');
+        tr.append(cell(row.email),cell(row.clicks),cell(row.submissions),cell(row.conversions),cell(row.rewarded),cell(row.badges));referrerBody.append(tr);});
       const reviews=$('#growth-reviews tbody');reviews.replaceChildren();
       if(!data.reviews.length){const tr=document.createElement('tr'),td=cell('目前沒有待審核邀請');td.colSpan=6;tr.append(td);reviews.append(tr);}
       data.reviews.forEach(row=>{const tr=document.createElement('tr'),actions=document.createElement('td');
@@ -3081,6 +3106,22 @@
   async function deactivateGrowthCampaign(id){
     if(!confirm('確定停用此活動？已發出的歷史獎勵不會回收。'))return;
     try{await api(`/api/admin/referrals/campaigns/${id}/deactivate`,{method:'POST'});await loadGrowth();}catch(e){if(e.message!=='401')showMsg('growth-msg','停用失敗：'+e.message,false);}
+  }
+
+  /**
+   * 執行推薦獎勵補發。dryRun 時只顯示掃描結果不發放；
+   * 正式執行前要二次確認，因為它會真的寫入點數帳本。
+   */
+  async function runGrowthBackfill(dryRun){
+    if(!dryRun&&!confirm('確定執行補發？將對掃描到的名單建立轉換並發放點數（可重複執行，已處理過的不會重複發放）。'))return;
+    const target=$('#growth-backfill-result');target.textContent='執行中…';
+    try{
+      const data=await api(`/api/admin/referrals/backfill?dryRun=${dryRun}`,{method:'POST'});
+      target.textContent=dryRun
+        ?`試算：掃描到 ${data.scanned} 筆待補發名單（${(data.candidates||[]).map(c=>c.email).join('、')||'無'}）`
+        :`完成：掃描 ${data.scanned}、發放 ${data.rewarded}、已處理過 ${data.alreadyProcessed}、無推薦人 ${data.noReferrer}、自我邀請 ${data.selfInvite}、失敗 ${data.failed}`;
+      if(!dryRun)await loadGrowth();
+    }catch(e){if(e.message!=='401')target.textContent='補發失敗：'+e.message;}
   }
 
   /**
