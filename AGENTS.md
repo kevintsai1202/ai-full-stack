@@ -1,6 +1,6 @@
 # AI 賦能全端開發專案開發總覽 (AGENTS.md)
 
-本儲存庫包含了「AI 賦能全端開發：從零打造企業級智慧應用」課程的教學網站（`teaching-site`），此網站採用純 HTML + JS + CSS 架構（無框架、無建置步驟）展示整個課程的實戰路徑與任務。
+本儲存庫包含了「AI 賦能全端開發：從零打造企業級智慧應用」課程的教學網站（`teaching-site`），以及可獨立放映的直播投影片（`live-slides`）。兩者均採用靜態 HTML + JS + CSS 架構（無框架、無建置步驟）。
 
 ## 目錄導覽
 - `teaching-site/`：課程官方教學網站，包含靜態網頁（HTML/CSS/JS）與自動化驗證測試。
@@ -34,7 +34,8 @@ node scripts/verify-render.mjs
 
 ## GitHub Pages 部署
 
-本專案配置了自動化 GitHub Actions 部署工作流，當推送至 `main` 分支時，會自動將 `teaching-site` 發布至 GitHub Pages。
+本專案配置了自動化 GitHub Actions 部署工作流，當推送至 `main` 分支時，會自動將 `teaching-site` 發布至 GitHub Pages 根網址，並將 `live-slides` 發布至同一 Pages 網站的 `/live-slides/` 子路徑。
 
 - **官方發布網址**：https://kevintsai1202.github.io/ai-full-stack/
+- **直播投影片網址**：https://kevintsai1202.github.io/ai-full-stack/live-slides/
 - **手動觸發部署**：可於 GitHub 專案的 `Actions` 頁面，手動觸發 `Deploy static content to Pages` 工作流。

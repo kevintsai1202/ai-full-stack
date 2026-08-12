@@ -29,11 +29,19 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      - name: Prepare Pages artifact
+        shell: bash
+        run: |
+          # 將兩個靜態入口組合成同一個 Pages artifact，避免公開整個 repository。
+          mkdir -p ./_site/live-slides/assets
+          cp -R ./teaching-site/. ./_site/
+          cp ./live-slides/index.html ./_site/live-slides/index.html
+          cp -R ./live-slides/assets/. ./_site/live-slides/assets/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # 指定上傳 teaching-site 目錄的內容
-          path: './teaching-site'
+          # 上傳包含 teaching-site 根站與 live-slides 子站的靜態內容。
+          path: './_site'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
