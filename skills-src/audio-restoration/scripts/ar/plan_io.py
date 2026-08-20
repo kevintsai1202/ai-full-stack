@@ -54,10 +54,13 @@ def write_report(work_dir: Path, spec: MediaSpec, classification, diagnoses,
 def write_plan(work_dir: Path, spec: MediaSpec, diagnoses: list[ZoneDiagnosis],
                utterance_gains: list[tuple[float, float, float]],
                zone_gains: list[float], target_lufs: float,
+               noise_floors: list[float],
                nonspeech_events: list[tuple[float, float]] | None = None) -> Path:
     """輸出處理計畫。
 
     utterance_gains 每項為 (start, end, gain_db)。
+    noise_floors 每項為該 zone 的底噪 RMS（dB），供 afftdn 的 nf 使用 ——
+    用 RMS 而非 LUFS，因為 afftdn 的 nf 語意是訊號位準而非感知響度。
     nonspeech_events 每項為 (start, end)，這些區間會被額外壓低。
     """
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -74,6 +77,8 @@ def write_plan(work_dir: Path, spec: MediaSpec, diagnoses: list[ZoneDiagnosis],
                 "index": d.zone_index, "start": d.start, "end": d.end,
                 "gain_db": zone_gains[d.zone_index],
                 "denoise_db": d.denoise_db,
+                # afftdn 的底噪起始估計值，取自該區噪音採樣窗的實測 RMS
+                "noise_floor_db": noise_floors[d.zone_index],
                 "needs_highpass": d.needs_highpass,
                 "needs_deesser": d.needs_deesser,
                 "needs_ai_rescue": d.needs_ai_rescue,

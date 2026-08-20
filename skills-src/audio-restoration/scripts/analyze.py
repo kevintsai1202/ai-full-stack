@@ -60,6 +60,7 @@ def main() -> None:
     utterance_stats = measure_utterances(args.input, classification.utterances)
 
     diagnoses = []
+    zone_noise_floors: list[float] = []  # 各 zone 的底噪 RMS（dB），供 afftdn 使用
     for zone in zones:
         if not zone.noise_window_indices:
             # 不可退回別區的噪音窗：那會讓這一區用錯誤的降噪基準，且錯得無聲無息。
@@ -88,6 +89,10 @@ def main() -> None:
                 "無法判斷人聲響度。請檢查 ASR 時間軸是否涵蓋整支檔案。"
             )
         zone_speech_lufs = median(zone_utterance_lufs)
+        # afftdn 的 nf 語意是訊號位準，用 RMS 而非 LUFS
+        zone_noise_floors.append(
+            median([noise_stats[i].rms_db for i in zone.noise_window_indices])
+        )
         # 落在此 zone 內的語句結束時刻，供殘響量測使用
         zone_ends = [
             seg.end for seg in timeline.segments
@@ -105,6 +110,7 @@ def main() -> None:
     write_report(args.work_dir, spec, classification, diagnoses, utterance_stats)
     plan_path = write_plan(
         args.work_dir, spec, diagnoses, utterance_gains, zone_gains, args.target,
+        noise_floors=zone_noise_floors,
         nonspeech_events=[(e.start, e.end) for e in classification.nonspeech_events],
     )
     _print_summary(diagnoses, classification, plan_path)
