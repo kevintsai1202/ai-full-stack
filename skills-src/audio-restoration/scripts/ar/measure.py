@@ -10,6 +10,11 @@ from .silence import Interval
 _I_RE = re.compile(r"^\s*I:\s*(-?[\d.]+|-inf)\s*LUFS", re.MULTILINE)
 _RMS_RE = re.compile(r"RMS level dB:\s*(-?[\d.]+|-inf)")
 _PEAK_RE = re.compile(r"Peak level dB:\s*(-?[\d.]+|-inf)")
+# ebur128 的真峰值印在 "True peak:" 區塊底下的 "Peak:" 那一行，
+# 與 astats 的 "Peak level dB:" 是兩個不同的量：後者是取樣點的最大值，
+# 前者經過過採樣、含 inter-sample peak。驗證真峰值上限必須用前者，
+# 用樣本峰值會系統性低估 0.3-3dB，可能實際超標卻回報合格。
+_TRUE_PEAK_RE = re.compile(r"True peak:\s*\n\s*Peak:\s*(-?[\d.]+|-inf)\s*dBFS")
 
 SILENT_FLOOR = -120.0  # 量到 -inf 時採用的替代值，避免後續運算出現無限大
 
@@ -31,9 +36,10 @@ class MeasurementParseError(RuntimeError):
 @dataclass
 class LoudnessStats:
     """一段區間的響度量測結果。"""
-    lufs: float     # EBU R128 integrated loudness
-    rms_db: float   # RMS 位準
-    peak_db: float  # 峰值位準
+    lufs: float            # EBU R128 integrated loudness
+    rms_db: float          # RMS 位準
+    peak_db: float         # 樣本峰值（astats，取樣點最大值，不含 inter-sample peak）
+    true_peak_db: float    # 真峰值（ebur128，過採樣後含 inter-sample peak）
 
 
 def _extract(match: re.Match | None, label: str, start: float, end: float) -> float:
@@ -70,10 +76,12 @@ def measure_interval(path: Path, start: float, end: float) -> LoudnessStats:
     i_match = _I_RE.search(stderr)
     rms_match = _RMS_RE.search(stderr)
     peak_match = _PEAK_RE.search(stderr)
+    true_peak_match = _TRUE_PEAK_RE.search(stderr)
     return LoudnessStats(
         lufs=_extract(i_match, "LUFS (I:)", start, end),
         rms_db=_extract(rms_match, "RMS level dB", start, end),
         peak_db=_extract(peak_match, "Peak level dB", start, end),
+        true_peak_db=_extract(true_peak_match, "True peak", start, end),
     )
 
 

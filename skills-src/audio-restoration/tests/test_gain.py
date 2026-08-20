@@ -37,7 +37,8 @@ def _setup(lufs_values: list[float]):
     """建立單一 zone、多句的測試情境。"""
     utterances = [Utterance(index=i, start=i * 2.0, end=(i + 1) * 2.0)
                   for i in range(len(lufs_values))]
-    stats = [LoudnessStats(lufs=v, rms_db=v, peak_db=v + 10) for v in lufs_values]
+    stats = [LoudnessStats(lufs=v, rms_db=v, peak_db=v + 10, true_peak_db=v + 10)
+              for v in lufs_values]
     zones = [Zone(index=0, start=0.0, end=len(lufs_values) * 2.0)]
     return utterances, stats, zones
 

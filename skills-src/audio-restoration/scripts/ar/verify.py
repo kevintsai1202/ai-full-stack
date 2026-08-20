@@ -58,7 +58,12 @@ def _check_loudness(after: dict, target_lufs: float) -> Check:
 
 
 def _check_true_peak(after: dict) -> Check:
-    """真峰值不得超標。"""
+    """真峰值不得超標。
+
+    這裡的值必須來自 ebur128 的 True peak（過採樣、含 inter-sample peak），
+    不能用 astats 的樣本峰值 —— 後者系統性低估 0.3-3dB，會讓實際超標的
+    內容通過檢查。
+    """
     passed = after["true_peak"] <= TRUE_PEAK_LIMIT
     return Check("真峰值", passed,
                  f"實測 {after['true_peak']:.1f} dBTP，上限 {TRUE_PEAK_LIMIT}"
@@ -66,7 +71,14 @@ def _check_true_peak(after: dict) -> Check:
 
 
 def _check_flattening(before: dict, after: dict) -> Check:
-    """句間響度標準差變小是拉平成功的量化證據。"""
+    """句間響度標準差變小是拉平成功的量化證據。
+
+    只有一句時標準差恆為 0.0（沒有句間差異可言），此時這項檢查無意義，
+    視為 N/A 通過 —— 否則 0.0 < 0.0 為 False，會把修復完全正確的單句
+    音檔誤判為拉平失敗。
+    """
+    if before["utterance_lufs_stdev"] == 0.0 and after["utterance_lufs_stdev"] == 0.0:
+        return Check("拉平生效", True, "只有一句（或句間本就無差異），此項不適用")
     passed = after["utterance_lufs_stdev"] < before["utterance_lufs_stdev"]
     return Check("拉平生效", passed,
                  f"句間標準差 {before['utterance_lufs_stdev']:.2f} → "

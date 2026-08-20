@@ -49,6 +49,16 @@ def test_flattening_not_effective_fails():
     assert any("拉平" in c.detail for c in result.checks if not c.passed)
 
 
+def test_single_utterance_flattening_is_not_a_failure():
+    """單句音檔的標準差恆為 0，不得因此判為拉平失敗。"""
+    before = {**_before(), "utterance_lufs_stdev": 0.0}
+    after = _after(utterance_lufs_stdev=0.0)
+    result = verify(before, after, target_lufs=-16.0)
+    flattening = next(c for c in result.checks if c.name == "拉平生效")
+    assert flattening.passed is True
+    assert "不適用" in flattening.detail
+
+
 def test_failed_check_names_the_stage():
     """失敗時必須指出是哪個環節，不得只回傳布林值。"""
     result = verify(_before(), _after(integrated_lufs=-20.0), target_lufs=-16.0)
