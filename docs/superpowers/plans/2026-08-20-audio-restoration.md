@@ -1379,7 +1379,7 @@ git commit -m "feat(audio-restoration): 加入頻譜指紋與錄音條件分區�
   - `diagnose.reverb_slope(tail_samples: np.ndarray, sample_rate: int) -> float`（輸入必須是「從語句結束時刻起算的尾段」，函式不自行切窗）
   - `diagnose.zone_reverb_slope(path: Path, zone: Zone, utterance_ends: list[float], sample_rate: int = 16000, window: float = 0.3) -> float`
   - `diagnose.pick_denoise_level(snr_db: float) -> int`
-  - `diagnose.diagnose_zone(path: Path, zone: Zone, noise_stats: LoudnessStats, speech_stats: LoudnessStats, utterance_ends: list[float], sample_rate: int = 16000) -> ZoneDiagnosis`
+  - `diagnose.diagnose_zone(path: Path, zone: Zone, noise_lufs: float, speech_lufs: float, utterance_ends: list[float], sample_rate: int = 16000) -> ZoneDiagnosis`
 
 **門檻定義（Task 14 以真實素材校準）：**
 
@@ -1664,15 +1664,21 @@ def pick_denoise_level(snr_db: float) -> int:
     return 12
 
 
-def diagnose_zone(path: Path, zone: Zone, noise_stats: LoudnessStats,
-                  speech_stats: LoudnessStats, utterance_ends: list[float],
+def diagnose_zone(path: Path, zone: Zone, noise_lufs: float,
+                  speech_lufs: float, utterance_ends: list[float],
                   sample_rate: int = 16000) -> ZoneDiagnosis:
     """對單一 zone 執行全部診斷並決定處理策略。
 
+    noise_lufs / speech_lufs 收 float 而非 LoudnessStats：本函式只需要響度，
+    收整個 stats 物件會讓呼叫端誤以為 rms_db／peak_db 也會被使用，進而隨便
+    塞一個「只有 lufs 有意義」的物件進來。
+
+    speech_lufs 必須是**語句的**響度彙總，不能是整段區間的響度 —— 整段含靜音，
+    會把人聲位準拉低，使 SNR 被低估、降噪強度被拉高。
     utterance_ends 是落在此 zone 內的各語句結束時刻（秒），用於量測殘響。
     """
     samples = read_samples(path, zone.start, min(zone.end, zone.start + 30.0), sample_rate)
-    snr = speech_stats.lufs - noise_stats.lufs
+    snr = speech_lufs - noise_lufs
     sibilance = band_energy_ratio(samples, sample_rate, 5000.0, 8000.0)
     rumble = band_energy_ratio(samples, sample_rate, 0.0, 80.0)
     clipped = clipped_ratio(samples)
@@ -1697,8 +1703,8 @@ def diagnose_zone(path: Path, zone: Zone, noise_stats: LoudnessStats,
         zone_index=zone.index,
         start=zone.start,
         end=zone.end,
-        noise_lufs=noise_stats.lufs,
-        speech_lufs=speech_stats.lufs,
+        noise_lufs=noise_lufs,
+        speech_lufs=speech_lufs,
         snr_db=snr,
         sibilance_ratio=sibilance,
         rumble_ratio=rumble,
@@ -1824,7 +1830,7 @@ from pathlib import Path
 from .diagnose import ZoneDiagnosis
 from .probe import MediaSpec
 
-PLAN_SCHEMA_VERSION = 1
+PLAN_SCHEMA_VERSION = 1  # plan.json 結構版本，改變欄位語意時必須遞增
 
 
 def write_report(work_dir: Path, spec: MediaSpec, classification, diagnoses,
@@ -1973,6 +1979,7 @@ def test_analyze_produces_report_and_plan(synth_wav: Path, tmp_path: Path):
 import argparse
 import sys
 from pathlib import Path
+from statistics import median
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -2005,7 +2012,17 @@ def main() -> None:
     classification = classify(timeline, silences, spec.duration)
 
     if not classification.noise_windows:
-        raise SystemExit("找不到可用的噪音採樣窗（可能整段都有人聲），無法建立降噪基準")
+        raise SystemExit(
+            "找不到可用的噪音採樣窗，無法建立降噪基準。
+"
+            "可能原因與處置：
+"
+            "  1. 整段幾乎都有人聲（講者沒有停頓）→ 手動指定一段確定無人聲的區間
+"
+            "  2. ASR 斷句過密，詞間 gap 都不足 0.6 秒 → 檢查 timeline.json 的詞級時間戳
+"
+            "  3. 底噪偏高使 silencedetect 判不出靜音 → 調高 detect_silence 的 noise_db 門檻"
+        )
 
     fingerprints = [
         spectral_fingerprint(read_samples(args.input, w.start, w.end), 16000)
@@ -2018,16 +2035,40 @@ def main() -> None:
 
     diagnoses = []
     for zone in zones:
-        indices = zone.noise_window_indices or [0]
-        zone_noise = min((noise_stats[i] for i in indices), key=lambda s: s.lufs)
-        zone_speech = measure_interval(args.input, zone.start, min(zone.end, zone.start + 60.0))
+        if not zone.noise_window_indices:
+            # 不可退回別區的噪音窗：那會讓這一區用錯誤的降噪基準，且錯得無聲無息。
+            # detect_zones 的切點取自相鄰窗的中點，每個 zone 理論上必含至少一個窗，
+            # 走到這裡代表分區結果異常，應該停下來而不是猜一個。
+            raise SystemExit(
+                f"Zone {zone.index}（{zone.start:.1f}s–{zone.end:.1f}s）沒有任何噪音採樣窗，"
+                "無法為此區建立降噪基準。這通常代表分區偵測異常，"
+                "請檢查 report.json 的 zones 與 noise_windows 是否對得上。"
+            )
+        # 底噪取該區各採樣窗的中位數：單一異常安靜的窗（例如空調剛好停機）
+        # 會讓 min 低估底噪、使 SNR 被高估而降噪不足；中位數對離群值穩健。
+        zone_noise_lufs = median(
+            [noise_stats[i].lufs for i in zone.noise_window_indices]
+        )
+        # 人聲響度取該區各語句的中位數，而非整段區間的響度。
+        # 整段含靜音，會把人聲位準拉低，讓 SNR 被低估、降噪被拉得過強。
+        zone_utterance_lufs = [
+            stat.lufs
+            for utterance, stat in zip(classification.utterances, utterance_stats)
+            if zone.start <= (utterance.start + utterance.end) / 2.0 < zone.end
+        ]
+        if not zone_utterance_lufs:
+            raise SystemExit(
+                f"Zone {zone.index}（{zone.start:.1f}s–{zone.end:.1f}s）沒有任何語句，"
+                "無法判斷人聲響度。請檢查 ASR 時間軸是否涵蓋整支檔案。"
+            )
+        zone_speech_lufs = median(zone_utterance_lufs)
         # 落在此 zone 內的語句結束時刻，供殘響量測使用
         zone_ends = [
             seg.end for seg in timeline.segments
             if zone.start <= seg.end < zone.end
         ]
         diagnoses.append(
-            diagnose_zone(args.input, zone, zone_noise, zone_speech, zone_ends)
+            diagnose_zone(args.input, zone, zone_noise_lufs, zone_speech_lufs, zone_ends)
         )
 
     zone_gains = compute_zone_gains(diagnoses, WORKING_LUFS)
