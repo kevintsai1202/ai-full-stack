@@ -2091,23 +2091,29 @@ git commit -m "feat(audio-restoration): 加入 report/plan 讀寫與體檢 CLI"
 - Produces:
   - `gain.compute_zone_gains(diagnoses: list[ZoneDiagnosis], working_lufs: float = -20.0) -> list[float]`
   - `gain.compute_utterance_gains(utterances, stats, zones, zone_gains, working_lufs, max_gain_db=6.0, max_step_db=3.0) -> list[tuple[float, float, float]]`
-  - `gain.build_volume_expression(utterance_gains: list[tuple[float, float, float]], nonspeech_events: list[tuple[float, float]] | None = None, attenuation_db: float = -6.0, ramp_ms: int = 200) -> str`
+  - `gain.build_gain_envelope(total_samples: int, sample_rate: int, utterance_gains: list[tuple[float, float, float]], nonspeech_events: list[tuple[float, float]] | None = None, attenuation_db: float = -6.0, ramp_ms: int = 200, event_ramp_ms: int = 50) -> np.ndarray`（回傳逐樣本的 dB 增益包絡）
+  - `gain.apply_gain_envelope(samples: np.ndarray, envelope_db: np.ndarray) -> np.ndarray`
   - `gain.NONSPEECH_ATTENUATION_DB = -6.0`
 
 **設計要點：** 拉平只能用純增益。壓縮器會連帶頂高底噪，破壞後續降噪賴以判斷的訊噪比前提。
 
-**非語音雜訊的處置：** 咳嗽、翻頁、椅子聲落在語句的增益區間內，會跟著人聲一起被拉高。必須在這些區間額外疊加負增益，讓它們相對於人聲被壓下去。ffmpeg 的 `between` 條件項相加，故雜訊區間的實際增益 = 該句增益 + 衰減值。
+**非語音雜訊的處置：** 咳嗽、翻頁、椅子聲落在語句的增益區間內，會跟著人聲一起被拉高。必須在這些區間額外疊加負增益，讓它們相對於人聲被壓下去。作法是另建一條衰減包絡與增益包絡相加。
+
+**為何不用 ffmpeg 的 volume 表達式：** 早期設計用 `volume=volume='...between(t,a,b)*g...'` 逐句套增益，有兩個致命問題。其一，`between(t,a,b)` 是**閉區間**，而語句邊界外擴到靜音中點後必然相接（前句 end == 後句 start），交界那一瞬間兩個條件同時成立，增益變成兩句**相加** —— 實測 `t=4.499→2.0`、`t=4.5→0.5`、`t=4.501→−1.5`，每個交界都有尖峰。其二，表達式長度隨語句數線性成長：50 分鐘課程約 800 句已達 28.1 KB，逼近 Windows 命令列 32 KB 上限，加上斜坡的版本更達 63.3 KB 直接超標。改由 numpy 產生逐樣本包絡可同時解決兩者，且斜坡精確可控、包絡形狀可直接單元測試。
 
 - [ ] **Step 1: 寫失敗測試**
 
 `tests/test_gain.py`：
 
 ```python
-"""gain 模組測試：增益方向、限幅、平滑、表達式生成。"""
+"""gain 模組測試：增益方向、限幅、平滑、包絡生成與套用。"""
+import numpy as np
+import pytest
+
 from ar.diagnose import ZoneDiagnosis
 from ar.fingerprint import Zone
-from ar.gain import (build_volume_expression, compute_utterance_gains,
-                     compute_zone_gains)
+from ar.gain import (apply_gain_envelope, build_gain_envelope,
+                     compute_utterance_gains, compute_zone_gains)
 from ar.measure import LoudnessStats
 from ar.segments import Utterance
 
@@ -2169,33 +2175,77 @@ def test_quiet_utterance_gets_positive_gain():
     assert result[1][2] > 0.0
 
 
-def test_volume_expression_covers_all_utterances():
-    """volume 表達式須包含每一句的時間條件與增益值。"""
-    expression = build_volume_expression([(0.0, 4.5, 2.0), (4.5, 8.0, -1.5)])
-    assert "between(t,0.000,4.500)" in expression
-    assert "between(t,4.500,8.000)" in expression
-    assert "2.000" in expression
-    assert "-1.500" in expression
+SR = 16000  # 包絡測試用取樣率
 
 
-def test_volume_expression_is_single_line():
-    """表達式必須是單行，換行會讓 ffmpeg 參數解析失敗。"""
-    expression = build_volume_expression([(0.0, 1.0, 1.0), (1.0, 2.0, 2.0)])
-    assert "\n" not in expression
+def _envelope_at(envelope, seconds: float) -> float:
+    """取包絡在指定秒數的值，方便斷言。"""
+    return float(envelope[int(seconds * SR)])
+
+
+def test_envelope_holds_each_utterance_gain():
+    """每句的增益應覆蓋該句的主要時段。"""
+    env = build_gain_envelope(int(8 * SR), SR, [(0.0, 4.5, 2.0), (4.5, 8.0, -1.5)])
+    assert abs(_envelope_at(env, 1.0) - 2.0) < 1e-6
+    assert abs(_envelope_at(env, 7.0) - (-1.5)) < 1e-6
+
+
+def test_envelope_has_no_spike_at_utterance_boundary():
+    """交界不得出現尖峰。
+
+    早期用 ffmpeg between 表達式時，閉區間讓交界那一點的兩個條件同時成立，
+    增益變成兩句相加（實測 t=4.5 得 0.5 而非介於 2.0 與 -1.5 之間）。
+    這個測試就是在防止那個 bug 以任何形式回來。
+    """
+    env = build_gain_envelope(int(8 * SR), SR, [(0.0, 4.5, 2.0), (4.5, 8.0, -1.5)])
+    assert env.max() <= 2.0 + 1e-6
+    assert env.min() >= -1.5 - 1e-6
+
+
+def test_envelope_ramps_linearly_across_boundary():
+    """交界處應線性過渡，中點恰為兩句增益的平均。"""
+    env = build_gain_envelope(int(8 * SR), SR, [(0.0, 4.5, 2.0), (4.5, 8.0, -1.5)],
+                              ramp_ms=200)
+    assert abs(_envelope_at(env, 4.5) - 0.25) < 0.05
+    assert _envelope_at(env, 4.45) > _envelope_at(env, 4.5) > _envelope_at(env, 4.55)
+
+
+def test_envelope_ramp_length_matches_parameter():
+    """斜坡長度應等於 ramp_ms，超出範圍的兩側維持各自的平坦增益。"""
+    env = build_gain_envelope(int(8 * SR), SR, [(0.0, 4.5, 2.0), (4.5, 8.0, -1.5)],
+                              ramp_ms=200)
+    assert abs(_envelope_at(env, 4.39) - 2.0) < 1e-6
+    assert abs(_envelope_at(env, 4.61) - (-1.5)) < 1e-6
 
 
 def test_nonspeech_event_gets_extra_attenuation():
     """咳嗽／翻頁區間須額外疊加負增益，否則會跟著人聲一起被拉高。"""
-    expression = build_volume_expression(
-        [(0.0, 8.0, 3.0)], nonspeech_events=[(5.0, 5.4)], attenuation_db=-6.0
-    )
-    assert "between(t,5.000,5.400)*-6.000" in expression
+    env = build_gain_envelope(int(8 * SR), SR, [(0.0, 8.0, 3.0)],
+                              nonspeech_events=[(5.0, 5.4)], attenuation_db=-6.0)
+    assert abs(_envelope_at(env, 5.2) - (-3.0)) < 1e-6
+    assert abs(_envelope_at(env, 2.0) - 3.0) < 1e-6
 
 
-def test_no_attenuation_terms_when_no_events():
-    """沒有雜訊事件時不得出現多餘的負增益項。"""
-    expression = build_volume_expression([(0.0, 8.0, 3.0)], nonspeech_events=[])
-    assert "-6.000" not in expression
+def test_no_attenuation_when_no_events():
+    """沒有雜訊事件時整條包絡應維持該句增益。"""
+    env = build_gain_envelope(int(8 * SR), SR, [(0.0, 8.0, 3.0)], nonspeech_events=[])
+    assert abs(env.min() - 3.0) < 1e-6
+    assert abs(env.max() - 3.0) < 1e-6
+
+
+def test_apply_envelope_scales_samples_by_db():
+    """+6dB 應讓振幅約變兩倍，-6dB 約變一半。"""
+    samples = np.full(SR, 0.25, dtype=np.float32)
+    louder = apply_gain_envelope(samples, np.full(SR, 6.0))
+    quieter = apply_gain_envelope(samples, np.full(SR, -6.0))
+    assert abs(float(louder[0]) - 0.5) < 0.01
+    assert abs(float(quieter[0]) - 0.125) < 0.01
+
+
+def test_apply_envelope_rejects_length_mismatch():
+    """樣本與包絡長度不符時必須報錯，不得靜默截斷而讓增益錯位。"""
+    with pytest.raises(ValueError):
+        apply_gain_envelope(np.zeros(100, dtype=np.float32), np.zeros(50))
 ```
 
 - [ ] **Step 2: 執行測試確認失敗**
@@ -2209,11 +2259,13 @@ Expected: FAIL — `No module named 'ar.gain'`
 - [ ] **Step 3: 實作 gain.py**
 
 ```python
-"""增益計算：區級補償、句級補償、限幅、平滑、ffmpeg 表達式生成。
+"""增益計算：區級補償、句級補償、限幅、平滑、逐樣本包絡生成與套用。
 
 只使用純增益，不使用壓縮器。壓縮會連帶把底噪頂高，破壞後續降噪賴以判斷的
 訊噪比前提；純增益只搬動位準，噪音與人聲的比例不變。
 """
+import numpy as np
+
 from .diagnose import ZoneDiagnosis
 from .fingerprint import Zone
 from .measure import LoudnessStats
@@ -2221,7 +2273,8 @@ from .segments import Utterance
 
 MAX_GAIN_DB = 6.0   # 單句增益上限，避免把咳嗽、翻頁聲拉到人聲音量
 MAX_STEP_DB = 3.0   # 相鄰句增益差上限，避免可聽的音量跳動
-RAMP_MS = 200       # 增益交界的線性斜坡長度（毫秒）
+RAMP_MS = 200       # 語句增益交界的線性斜坡長度（毫秒）
+EVENT_RAMP_MS = 50  # 雜訊衰減進出的斜坡長度（毫秒），比語句短以免衰減被稀釋
 NONSPEECH_ATTENUATION_DB = -6.0  # 非語音雜訊區間的額外衰減
 
 
@@ -2281,29 +2334,77 @@ def _limit_steps(gains: list[float], max_step_db: float) -> list[float]:
     return forward
 
 
-def build_volume_expression(utterance_gains: list[tuple[float, float, float]],
-                            nonspeech_events: list[tuple[float, float]] | None = None,
-                            attenuation_db: float = NONSPEECH_ATTENUATION_DB,
-                            ramp_ms: int = RAMP_MS) -> str:
-    """把逐句增益組成 ffmpeg volume 濾鏡的時間條件表達式。
+def _box_smooth(envelope: np.ndarray, window_samples: int) -> np.ndarray:
+    """對包絡做移動平均，把階梯轉成線性斜坡。
 
-    ffmpeg 的 volume 濾鏡以 dB 為單位需搭配 eval=frame。每句一個 between 條件，
-    未涵蓋的時間點增益為 0dB（原樣通過）。ramp_ms 目前用於文件記錄；實際
-    平滑已由 _limit_steps 在增益值層面完成，且切換點落在靜音中點，不需要
-    額外的時間域斜坡。
-
-    非語音雜訊區間額外疊加負增益：between 條件項相加，故該區間的實際增益
-    等於「所在語句的增益 + attenuation_db」，達成相對於人聲被壓低的效果。
+    box filter 作用在階梯上的結果恰好是長度等於窗長、以原邊界為中心的線性
+    斜坡，正是我們要的交叉淡化。兩端以邊界值填補，避免頭尾被拉向 0。
     """
-    if not utterance_gains:
-        return "0"
-    terms = [
-        f"between(t,{start:.3f},{end:.3f})*{gain:.3f}"
-        for start, end, gain in utterance_gains
-    ]
-    for start, end in (nonspeech_events or []):
-        terms.append(f"between(t,{start:.3f},{end:.3f})*{attenuation_db:.3f}")
-    return "+".join(terms)
+    if window_samples < 2:
+        return envelope
+    kernel = np.ones(window_samples) / window_samples
+    left_pad = window_samples // 2
+    right_pad = window_samples - 1 - left_pad
+    padded = np.concatenate([
+        np.full(left_pad, envelope[0]),
+        envelope,
+        np.full(right_pad, envelope[-1]),
+    ])
+    return np.convolve(padded, kernel, mode="valid")
+
+
+def build_gain_envelope(total_samples: int, sample_rate: int,
+                        utterance_gains: list[tuple[float, float, float]],
+                        nonspeech_events: list[tuple[float, float]] | None = None,
+                        attenuation_db: float = NONSPEECH_ATTENUATION_DB,
+                        ramp_ms: int = RAMP_MS,
+                        event_ramp_ms: int = EVENT_RAMP_MS) -> np.ndarray:
+    """產生逐樣本的 dB 增益包絡。
+
+    先鋪成階梯（每句一段常數增益），再以 box filter 把每個交界轉成長度
+    ramp_ms 的線性斜坡。非語音雜訊另建一條衰減階梯、以較短的 event_ramp_ms
+    平滑後相加 —— 雜訊事件常只有一兩百毫秒，用語句的 200ms 斜坡會把衰減
+    稀釋掉。
+
+    為何不用 ffmpeg 的 volume 表達式：`between(t,a,b)` 是閉區間，而語句邊界
+    外擴到靜音中點後必然相接，交界那一點兩個條件同時成立會讓增益相加，每個
+    交界都產生尖峰；且表達式長度隨語句數線性成長，50 分鐘課程就會逼近
+    Windows 命令列 32KB 上限。改用逐樣本包絡兩者皆解，且斜坡精確可控。
+    """
+    envelope = np.zeros(total_samples, dtype=np.float64)
+    for start, end, gain in utterance_gains:
+        begin = max(0, int(start * sample_rate))
+        finish = min(total_samples, int(end * sample_rate))
+        if finish > begin:
+            envelope[begin:finish] = gain
+    envelope = _box_smooth(envelope, int(ramp_ms / 1000.0 * sample_rate))
+
+    events = nonspeech_events or []
+    if events:
+        attenuation = np.zeros(total_samples, dtype=np.float64)
+        for start, end in events:
+            begin = max(0, int(start * sample_rate))
+            finish = min(total_samples, int(end * sample_rate))
+            if finish > begin:
+                attenuation[begin:finish] = attenuation_db
+        envelope = envelope + _box_smooth(
+            attenuation, int(event_ramp_ms / 1000.0 * sample_rate)
+        )
+    return envelope
+
+
+def apply_gain_envelope(samples: np.ndarray, envelope_db: np.ndarray) -> np.ndarray:
+    """把 dB 包絡套用到樣本上，回傳 float32 陣列。
+
+    長度不符時報錯而非截斷：截斷會讓增益與音訊錯位，而錯位的結果聽起來
+    仍然「像是一段正常的音訊」，是最難被發現的失敗模式。
+    """
+    if samples.size != envelope_db.size:
+        raise ValueError(
+            f"樣本數 {samples.size} 與包絡長度 {envelope_db.size} 不符，"
+            "無法套用增益（長度不符代表上游切窗有誤，不可截斷處理）"
+        )
+    return (samples.astype(np.float64) * (10.0 ** (envelope_db / 20.0))).astype(np.float32)
 ```
 
 - [ ] **Step 4: 執行測試確認通過**
@@ -2334,13 +2435,15 @@ git commit -m "feat(audio-restoration): 加入增益計算、限幅與平滑"
 - Test: `skills-src/audio-restoration/tests/test_chain.py`
 
 **Interfaces:**
-- Consumes: `gain.build_volume_expression`
+- Consumes: 無（純字串組裝，不依賴其他模組）
 - Produces:
-  - `chain.build_zone_chain(zone_plan: dict, volume_expression: str) -> str`
+  - `chain.build_zone_chain(zone_plan: dict) -> str`
   - `chain.build_loudnorm_measure_chain(target_lufs: float) -> str`
   - `chain.build_loudnorm_apply_chain(target_lufs: float, measured: dict) -> str`
 
-**濾鏡順序（不可調換）：** `volume`（拉平）→ `afftdn`（降噪）→ `highpass` → `deesser` → 後續由 loudnorm/alimiter 於全檔階段處理。
+**濾鏡順序（不可調換）：** `afftdn`（降噪）→ `highpass` → `deesser` → 後續由 loudnorm/alimiter 於全檔階段處理。
+
+**拉平不在這條鏈裡。** 拉平已由 `gain.build_gain_envelope` 在樣本層完成（見 Task 8），送進這條濾鏡鏈的音訊已經是拉平後的結果。這正是「先拉平、再降噪」順序的實現：`afftdn` 是門檻式運算，位準未統一時門檻沒有單一意義。
 
 - [ ] **Step 1: 寫失敗測試**
 
@@ -2361,40 +2464,40 @@ def _zone_plan(**overrides) -> dict:
 
 
 def test_zone_chain_orders_filters_correctly():
-    """順序必須是 volume → afftdn → highpass → deesser。"""
-    chain = build_zone_chain(_zone_plan(), "between(t,0.000,4.000)*2.000")
-    positions = [chain.index(name) for name in ("volume", "afftdn", "highpass", "deesser")]
+    """順序必須是 afftdn → highpass → deesser。"""
+    chain = build_zone_chain(_zone_plan())
+    positions = [chain.index(name) for name in ("afftdn", "highpass", "deesser")]
     assert positions == sorted(positions)
 
 
-def test_zone_chain_includes_zone_and_utterance_gain():
-    """區級增益與句級表達式都要出現在 volume 濾鏡中。"""
-    chain = build_zone_chain(_zone_plan(gain_db=3.0), "between(t,0.000,4.000)*2.000")
-    assert "3.000" in chain
-    assert "between(t,0.000,4.000)*2.000" in chain
-    assert "eval=frame" in chain
+def test_zone_chain_has_no_volume_filter():
+    """拉平已在樣本層完成，濾鏡鏈不得再動音量。
+
+    若這裡出現 volume，代表增益被套用了兩次。
+    """
+    assert "volume" not in build_zone_chain(_zone_plan())
 
 
 def test_zone_chain_omits_highpass_when_not_needed():
     """不需要時不得掛 highpass —— 無差別套用會削掉男聲低頻。"""
-    chain = build_zone_chain(_zone_plan(needs_highpass=False), "0")
+    chain = build_zone_chain(_zone_plan(needs_highpass=False))
     assert "highpass" not in chain
 
 
 def test_zone_chain_omits_deesser_when_not_needed():
     """不需要時不得掛 deesser。"""
-    chain = build_zone_chain(_zone_plan(needs_deesser=False), "0")
+    chain = build_zone_chain(_zone_plan(needs_deesser=False))
     assert "deesser" not in chain
 
 
 def test_zone_chain_uses_planned_denoise_strength():
     """降噪強度必須取自計畫值，不得寫死。"""
-    assert "nr=24" in build_zone_chain(_zone_plan(denoise_db=24), "0")
+    assert "nr=24" in build_zone_chain(_zone_plan(denoise_db=24))
 
 
 def test_no_compressor_in_chain():
     """禁止出現壓縮器 —— 壓縮會頂高底噪，破壞降噪前提。"""
-    chain = build_zone_chain(_zone_plan(), "0")
+    chain = build_zone_chain(_zone_plan())
     assert "acompressor" not in chain
     assert "dynaudnorm" not in chain
     assert "speechnorm" not in chain
@@ -2433,7 +2536,9 @@ Expected: FAIL — `No module named 'ar.chain'`
 ```python
 """ffmpeg 濾鏡鏈組裝。
 
-順序固定：volume（拉平）→ afftdn（降噪）→ highpass → deesser。
+順序固定：afftdn（降噪）→ highpass → deesser。
+拉平不在這條鏈裡 —— 它已在樣本層由 gain 模組完成（見 Task 8），因為 ffmpeg
+的 volume 表達式在語句交界會產生增益尖峰，且長度會超過命令列上限。
 不可調換：afftdn 是門檻式運算，訊號位準決定何者被判為噪音，故必須先拉平。
 highpass 與 deesser 只在該區診斷確有需要時才掛，無差別套用會削掉男聲低頻
 或讓咬字變鈍。
@@ -2442,12 +2547,14 @@ TRUE_PEAK = -1.5  # 目標真峰值（dBTP）
 LRA = 11          # 目標響度範圍
 
 
-def build_zone_chain(zone_plan: dict, volume_expression: str) -> str:
-    """組出單一 zone 的濾鏡鏈（不含最終響度處理）。"""
-    zone_gain = float(zone_plan["gain_db"])
-    # 區級增益為常數，句級增益為時間條件表達式，兩者相加
-    filters = [f"volume=volume='{zone_gain:.3f}+({volume_expression})':eval=frame"]
-    filters.append(f"afftdn=nr={int(zone_plan['denoise_db'])}:nf=-40:tn=1")
+def build_zone_chain(zone_plan: dict) -> str:
+    """組出單一 zone 的濾鏡鏈（不含拉平與最終響度處理）。
+
+    拉平已由 gain.build_gain_envelope 在樣本層完成，送進這條鏈的音訊位準
+    已經統一 —— 這正是 afftdn 的門檻能有單一意義的前提。此處再掛 volume
+    會讓增益被套用兩次。
+    """
+    filters = [f"afftdn=nr={int(zone_plan['denoise_db'])}:nf=-40:tn=1"]
     if zone_plan.get("needs_highpass"):
         filters.append("highpass=f=80")
     if zone_plan.get("needs_deesser"):
@@ -2552,6 +2659,36 @@ def test_render_zones_produces_one_file_per_zone(synth_wav: Path, tmp_path: Path
     assert all(p.exists() for p in parts)
 
 
+def test_render_keeps_float_precision_until_loudnorm(synth_wav: Path, tmp_path: Path):
+    """中繼檔須為 32-bit float。
+
+    拉平後、限幅前的峰值可能超過 0 dBFS，中繼若用 16-bit PCM 會被截頂，
+    後面的 loudnorm 無法還原已經削掉的波形。
+    """
+    parts = render_zones(synth_wav, _plan(synth_wav), tmp_path)
+    assert probe(parts[0]).audio_codec == "pcm_f32le"
+
+
+def test_no_gain_spike_at_zone_internal_boundary(synth_wav: Path, tmp_path: Path):
+    """語句交界不得出現增益尖峰。
+
+    zone 1 內含 4.5→8.0 的語句邊界；若拉平回到 ffmpeg between 表達式的
+    閉區間寫法，交界會出現兩句增益相加的瞬間尖峰。這裡以「交界前後的
+    響度落在兩側之間」作為守門。
+    """
+    plan = _plan(synth_wav)
+    plan["utterances"] = [
+        {"start": 0.0, "end": 4.5, "gain_db": 0.0},
+        {"start": 4.5, "end": 8.0, "gain_db": 6.0},
+    ]
+    parts = render_zones(synth_wav, plan, tmp_path)
+    merged = concat_zones(parts, tmp_path / "merged.wav")
+    before = measure_interval(merged, 4.2, 4.4).lufs
+    across = measure_interval(merged, 4.45, 4.55).lufs
+    after = measure_interval(merged, 4.6, 4.8).lufs
+    assert min(before, after) - 1.0 <= across <= max(before, after) + 1.0
+
+
 def test_concat_preserves_total_duration(synth_wav: Path, tmp_path: Path):
     """串接後總時長應與原檔一致（誤差 0.1 秒內）。"""
     parts = render_zones(synth_wav, _plan(synth_wav), tmp_path)
@@ -2613,19 +2750,25 @@ from pathlib import Path
 from .chain import (build_loudnorm_apply_chain, build_loudnorm_measure_chain,
                     build_zone_chain)
 from .ffmpeg_io import FFmpegError, run_ffmpeg
-from .gain import build_volume_expression
+from .fingerprint import read_samples
+from .gain import apply_gain_envelope, build_gain_envelope
+from .probe import probe
 
 _JSON_RE = re.compile(r"\{[^{}]*\"input_i\"[^{}]*\}", re.DOTALL)
 
 
 def render_zones(input_path: Path, plan: dict, work_dir: Path) -> list[Path]:
-    """逐 zone 套用濾鏡鏈，各自輸出成中繼 WAV。
+    """逐 zone 拉平並套用濾鏡鏈，各自輸出成中繼 WAV。
+
+    分兩步：先在樣本層用 numpy 包絡拉平（含交界斜坡與雜訊衰減），再交給
+    ffmpeg 做降噪與 EQ。這個順序就是「先拉平、再優化」的實現。
 
     分區處理而非單一濾鏡鏈的原因：每個 zone 的降噪基準與濾鏡組合不同，
     ffmpeg 無法在單一濾鏡鏈中對不同時間段套用不同的 afftdn 參數。
-    中繼一律用 WAV（無損），避免多次有損編碼累積失真。
+    中繼一律用 32-bit float WAV，避免多次量化與拉平後的峰值被截頂。
     """
     work_dir.mkdir(parents=True, exist_ok=True)
+    sample_rate = probe(input_path).sample_rate
     parts: list[Path] = []
     for zone in plan["zones"]:
         # 只保留與此 zone 重疊的句級增益，並把時間平移到該段的相對時間軸
@@ -2643,14 +2786,27 @@ def render_zones(input_path: Path, plan: dict, work_dir: Path) -> list[Path]:
             for e in plan.get("nonspeech_events", [])
             if e["start"] < zone["end"] and e["end"] > zone["start"]
         ]
-        expression = build_volume_expression(local_gains, local_events)
+
+        # 第一步：在樣本層拉平。用原始取樣率解碼，避免為了修音而降規格。
+        samples = read_samples(input_path, zone["start"], zone["end"], sample_rate)
+        envelope = build_gain_envelope(
+            samples.size, sample_rate, local_gains, local_events
+        )
+        # 區級增益是整段常數，直接加到包絡上；句級增益已在包絡內
+        leveled = apply_gain_envelope(samples, envelope + float(zone["gain_db"]))
+
+        # 以 32-bit float raw 交棒給 ffmpeg：拉平後的峰值可能超過 1.0，
+        # 若此時就寫 16-bit PCM 會被截頂，後面的 loudnorm 也救不回來。
+        raw_path = work_dir / f"zone-{zone['index']:03d}.f32"
+        leveled.tofile(raw_path)
+
+        # 第二步：交給 ffmpeg 做降噪與 EQ
         out_path = work_dir / f"zone-{zone['index']:03d}.wav"
         run_ffmpeg([
-            "-y", "-ss", f"{zone['start']:.3f}",
-            "-t", f"{zone['end'] - zone['start']:.3f}",
-            "-i", str(input_path),
-            "-af", build_zone_chain(zone, expression),
-            "-ac", "1", "-c:a", "pcm_s16le", str(out_path),
+            "-y", "-f", "f32le", "-ar", str(sample_rate), "-ac", "1",
+            "-i", str(raw_path),
+            "-af", build_zone_chain(zone),
+            "-c:a", "pcm_f32le", str(out_path),
         ])
         parts.append(out_path)
     return parts
@@ -2689,6 +2845,9 @@ def apply_loudnorm(input_path: Path, out_path: Path, target_lufs: float) -> Path
         "-c:a", "pcm_s16le", str(out_path),
     ])
     return out_path
+
+# 註：loudnorm 之後才降回 16-bit。此前一律保持 32-bit float，
+# 因為拉平後、限幅前的訊號峰值可能超過 0 dBFS，提早量化會截頂。
 
 
 def mux_video(video_path: Path, audio_path: Path, out_path: Path) -> Path:
