@@ -75,6 +75,20 @@ def test_no_compressor_in_chain():
     assert "speechnorm" not in chain
 
 
+def test_linear_gain_chain_accepts_custom_limit():
+    """限幅天花板可依路徑客製 —— mastering 需要比修復更深的餘裕。
+
+    高頻增強（treble shelf、aexciter）會放大 inter-sample peak：樣本層
+    -2.0 dBFS 的天花板在美化後的真實素材上交付出 -1.10 dBTP（超標）。
+    master 路徑因此要能傳入更深的 limit_db（-3.0），預設值維持修復路徑
+    的 -2.0 不變。
+    """
+    chain = build_linear_gain_chain(4.0, limit_db=-3.0)
+    assert "alimiter=limit=0.7079" in chain  # 10**(-3/20)
+    default_chain = build_linear_gain_chain(4.0)
+    assert "alimiter=limit=0.7943" in default_chain  # 預設仍為 -2.0
+
+
 def test_linear_gain_chain_applies_exact_gain():
     """正規化輪是純 volume 增益，數值直接可讀、可驗證。
 

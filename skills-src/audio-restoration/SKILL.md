@@ -55,6 +55,28 @@ python -m venv "$HOME\.audio-restoration\.venv"
 
 **修復後必須請使用者聽 `preview-ab.wav`**（修復前 30 秒 → 修復後 30 秒）。四項自動驗證只能證明數值達標，聽感仍須人耳確認。
 
+### 第三階段（可選）：美化 mastering
+
+修復完成後，若想再加一層 podcast 質感（胸腔感、臨場感、能量密度），對**修復後的檔案**執行：
+
+```powershell
+& "$HOME\.audio-restoration\.venv\Scripts\python" `
+  "$HOME\.claude\skills\audio-restoration\scripts\master.py" `
+  --input "D:\path\to\lecture-restored.mp4" `
+  --out "D:\path\to\lecture-mastered.mp4" `
+  --preset podcast
+```
+
+三個 preset（2026-08-21 以真實素材 AB 試聽校準）：
+
+- `conservative`：僅 EQ 塑形 + 輕度壓縮，音色改變最小。
+- `podcast`（預設）：EQ + 中度壓縮 + 高頻激勵，貼耳的 podcast 質感。
+- `rich`：最重的 EQ／壓縮／激勵，廣播式厚實音色。
+
+**必須先做 AB 試聽再全檔套用**：跑完後請使用者聽 `work/master-preview-ab.wav`（美化前 30 秒 → 美化後 30 秒），確認質感符合預期才算完成。美化是主觀美學選擇，數值驗證（響度、峰值）過關不代表使用者喜歡這個音色。
+
+壓縮器在此合法的一句話理由：mastering 作用在已完成降噪與正規化的乾淨訊號上，壓縮不再有「頂高底噪」的副作用，而是刻意的美學選擇（能量密度＝貼耳感）—— 與修復鏈的禁令並不矛盾。
+
 ### 批次體檢
 
 ```powershell
@@ -80,6 +102,7 @@ python -m venv "$HOME\.audio-restoration\.venv"
 - **切句依據是 ASR 詞級時間軸**，不是 silencedetect（音量門檻會讓小聲句整句消失），也不是 SRT 字幕（時間戳為閱讀調整過）。
 - **噪音採樣窗需雙重確認**：詞間 gap ≥ 0.6 秒且 silencedetect 亦判定靜音。採樣窗混入人聲會讓降噪把人聲當噪音消掉。
 - **量測走單次全檔解碼的批次路徑**（`ar/bulk.py`）：逐句／逐窗 RMS 用 numpy 切片計算，不逐區間 spawn ffmpeg（舊路徑全流程約 2,800 次行程，1273 秒素材的 analyze 要跑近 30 分鐘；改造後 36 秒）。感知響度（LUFS）與真峰值只在整檔層級量測（`measure_overall` 單次 ebur128），句級一律用 RMS —— 句級是相對補償，RMS 與 LUFS 等價。
+- **修復鏈禁壓縮，mastering 允許壓縮，兩者不矛盾**：修復鏈禁壓縮是因為壓縮會頂高底噪、破壞 afftdn 門檻的單一意義；mastering（`master.py`）作用在已降噪且正規化完成的乾淨訊號上，壓縮是刻意的美學選擇。但 mastering 的壓縮器只允許出現在 `ar/master.py` 的 preset 裡，不得回流進修復鏈。
 - **`restore.py` 沒有 plan.json 不執行**，不得為了省事繞過閘門。且驗證的 before 端直接讀 `report.json`（schema v2）—— report.json 缺席或屬舊版會明確報錯要求重跑 analyze，不得退回對原始檔重量測。`plan.json` 不可增刪 utterances 筆數（修復後驗證須與 report.json 逐句配對，restore 有長度防護）。
 
 ## 常見失敗與處置

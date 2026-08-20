@@ -94,7 +94,8 @@ LOUDNESS_CONVERGE_TOLERANCE = 0.25
 MAX_NORMALIZE_PASSES = 3
 
 
-def apply_loudnorm(input_path: Path, out_path: Path, target_lufs: float) -> Path:
+def apply_loudnorm(input_path: Path, out_path: Path, target_lufs: float,
+                   limit_db: float | None = None) -> Path:
     """最終響度正規化：量測後套純線性增益 + 限幅，殘差超容差時迭代補償。
 
     為什麼不用 loudnorm 套用：拉平後素材的 LRA 只剩約 2，而線性增益可能
@@ -111,8 +112,14 @@ def apply_loudnorm(input_path: Path, out_path: Path, target_lufs: float) -> Path
 
     量測用 bulk.measure_overall（全檔單次 ebur128），與驗證階段同一條
     量測路徑；中繼輪保持 32-bit float 避免多次量化，最後才降 16-bit。
+
+    limit_db（None＝修復路徑預設 -2.0）：alimiter 壓樣本峰值不管
+    inter-sample peak，mastering 的高頻增強會放大 ISP，該路徑須傳
+    更深的天花板（理由見 chain.build_linear_gain_chain）。
     """
     source_rate = probe(input_path).sample_rate
+    # None 時沿用 chain 的預設天花板；顯式傳遞讓兩處預設值只定義在一處
+    limit_kwargs = {} if limit_db is None else {"limit_db": limit_db}
     current = input_path
     intermediates: list[Path] = []  # 各輪的 f32 中繼檔，成功後一併清除
     for pass_index in range(MAX_NORMALIZE_PASSES):
@@ -125,7 +132,7 @@ def apply_loudnorm(input_path: Path, out_path: Path, target_lufs: float) -> Path
         stage_path = out_path.parent / f"{out_path.stem}-pass{pass_index}.wav"
         run_ffmpeg([
             "-y", "-i", str(current),
-            "-af", build_linear_gain_chain(gain_db),
+            "-af", build_linear_gain_chain(gain_db, **limit_kwargs),
             "-ar", str(source_rate),
             "-c:a", "pcm_f32le", str(stage_path),
         ])

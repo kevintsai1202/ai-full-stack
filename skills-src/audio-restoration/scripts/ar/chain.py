@@ -53,7 +53,7 @@ def build_zone_chain(zone_plan: dict) -> str:
     return ",".join(filters)
 
 
-def build_linear_gain_chain(gain_db: float) -> str:
+def build_linear_gain_chain(gain_db: float, limit_db: float = TRUE_PEAK_TARGET) -> str:
     """最終正規化的第二段：純線性增益 + 限幅。**刻意不用 loudnorm 套用。**
 
     真實素材實測揭露：拉平後 LRA 只剩約 2，但線性增益（+4.2dB）會讓真峰值
@@ -67,8 +67,14 @@ def build_linear_gain_chain(gain_db: float) -> str:
 
     level=false 是必要的：alimiter 的 level 預設 true 會做自動電平補償，
     把剛做完的正規化推歪（實測偏差 1.5-2.0 LUFS）。
+
+    limit_db 可依路徑客製：alimiter 壓的是**樣本峰值**，不管 inter-sample
+    peak；修復路徑的 -2.0 dBFS 天花板留 0.5dB 給 ISP 與 AAC 重編已足夠，
+    但 mastering 的高頻增強（treble shelf、aexciter）會放大 ISP —— 真實
+    素材實測樣本層 -2.0 交付後 -1.10 dBTP 直接超標，master 路徑需傳更深
+    的天花板（-3.0）。
     """
     return (
         f"volume={gain_db:.2f}dB,"
-        f"alimiter=limit={10 ** (TRUE_PEAK_TARGET / 20):.4f}:level=false"
+        f"alimiter=limit={10 ** (limit_db / 20):.4f}:level=false"
     )
