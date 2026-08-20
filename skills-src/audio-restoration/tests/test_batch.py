@@ -90,3 +90,24 @@ def test_batch_restore_skips_files_without_plan(synth_wav: Path, tmp_path: Path)
     )
     assert summary["files"][0]["skipped"] is True
     assert "plan" in summary["files"][0]["reason"]
+
+
+def test_restore_summary_tolerates_none_metrics(capsys):
+    """總表遇到 None 指標（噪音採樣窗為空時不可量測）須印 N/A，不得 TypeError。
+
+    直接對 None 做 :.1f 會拋 TypeError，讓整批修復在最後印總表時中斷——
+    所有檔案其實都已處理完，卻以失敗收場，是最冤枉的失敗模式。
+    """
+    sys.path.insert(0, str(SCRIPTS))
+    from batch import _print_restore_summary
+    entry = {
+        "file": "a.wav", "skipped": False, "ok": True, "failed_checks": [],
+        "before": {"snr_db": None, "noise_rms_db": None,
+                   "integrated_lufs": -20.0, "utterance_rms_stdev": 6.0},
+        "after": {"snr_db": None, "noise_rms_db": None,
+                  "integrated_lufs": -16.0, "utterance_rms_stdev": 1.5},
+    }
+    _print_restore_summary([entry])  # 不得拋例外
+    output = capsys.readouterr().out
+    assert "N/A" in output
+    assert "a.wav" in output

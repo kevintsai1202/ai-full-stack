@@ -1,7 +1,7 @@
 # audio-restoration 技能設計
 
 - 日期：2026-08-20
-- 狀態：設計已與使用者確認，待實作
+- 狀態：已實作；2026-08-21 效能改造後更新（量測改單次全檔解碼批次路徑、句級位準改 RMS、report/plan schema v2，見 `plans/2026-08-20-audio-restoration-perf.md`）
 - 技能安裝位置：`~/.claude/skills/audio-restoration/`（全域）
 - 本專案產出位置：`d:\GitHub\hahow-ai-full-stack\audio-restore\<檔名>\`（進版控）
 
@@ -75,12 +75,15 @@ restore.py  ──►  修復後檔案 + AB 試聽片段 + 前後指標對照
 | 規格盤點 | `ffprobe` | 取樣率、聲道、時長、編碼、是否為影片 |
 | 取得語句時間軸 | timeline.json（見 §3） | segments / words |
 | 靜音交叉驗證 | `ffmpeg silencedetect` | 靜音區間清單 |
-| 逐句量測 | `ebur128` + `astats` | 每句 LUFS、RMS、true peak |
+| 逐句／逐窗量測 | 單次全檔解碼（`ar/bulk.py`）+ numpy 切片 | 每句 RMS 與峰值、每個噪音窗 RMS（句級不量 LUFS——句級是相對補償，RMS 等價且免逐句 spawn ffmpeg） |
+| 整檔量測 | `ebur128` 全檔單次（`measure_overall`） | integrated LUFS、true peak（寫入 report 頂層 `overall`） |
 | 噪音指紋 | 噪音採樣窗 → numpy FFT | 每個採樣窗的頻譜特徵向量 |
 | 分區偵測 | 相鄰指紋距離超過門檻 = 錄音條件變化點 | zone 邊界清單 |
-| 逐區診斷 | 底噪 LUFS、SNR、削峰樣本數、5–8kHz 齒音能量佔比、<80Hz 隆隆能量 | 每區問題清單與建議強度 |
+| 逐區診斷 | 底噪 RMS、SNR、削峰樣本數、5–8kHz 齒音能量佔比、<80Hz 隆隆能量 | 每區問題清單與建議強度 |
 
 分區偵測依據**底噪頻譜形狀**而非音量：換麥克風時音量可能不變，但噪音頻譜必變。
+
+量測採**雙 buffer**（2026-08-21 效能改造）：原生取樣率 buffer 供 RMS／峰值（`afftdn` 的 `nf` 是絕對位準語意，16k 重採樣會截掉高頻噪音能量）；16kHz buffer 供指紋、診斷頻帶與殘響（`ZONE_THRESHOLD` 在 16k 下校準）。全部逐句／逐窗量測皆為 numpy 切片，analyze 全程的 ffmpeg 行程數為個位數（舊路徑約 2,800 次行程，1273 秒素材要跑 29.5 分鐘；改造後 36.2 秒）。
 
 指紋距離定義：將每個採樣窗的 FFT 功率譜依 1/3 八度頻帶聚合並正規化為機率分布，取相鄰兩窗的餘弦距離。門檻初值 `0.15`，須在實作時以本專案實際素材校準；校準過程與最終值記入 `references/filter-cookbook.md`。
 
@@ -101,10 +104,10 @@ restore.py  ──►  修復後檔案 + AB 試聽片段 + 前後指標對照
      - 相鄰句增益差限幅 + 交界 200ms 線性斜坡，避免可聽的「呼吸感」
    - 使用純增益而非壓縮：壓縮會連帶頂高底噪，破壞後續降噪的訊噪比前提
 2. **降噪** — 每 zone 使用自身噪音指紋，`afftdn` 強度依該區 SNR 選 12／18／24dB 三級
-3. **低頻整理** — `highpass=f=80`，去冷氣聲、桌面震動、風切（男聲基頻約 85Hz 以上）
+3. **低頻整理** — `highpass=f=60`，去冷氣聲、桌面震動、風切（男聲基頻約 85Hz 起，實作時取 60Hz 保留安全邊際，避免 2 階高通的 −3dB 點削掉低音域男聲，見 filter-cookbook）
 4. **去齒音** — 僅在齒音能量佔比超標的 zone 掛 `deesser`，不無差別套用
-5. **最終響度** — 兩段式 `loudnorm`，`I=<target> TP=-1.5 LRA=11`，全檔統一且跨檔案共用同一目標
-6. **限幅** — `alimiter` 收尾，確保 true peak 不超標
+5. **最終響度** — `loudnorm` 只用來**量測**，套用改純線性 `volume` 增益（實測發現：拉平後素材 LRA 過低時，loudnorm 的線性套用會靜默退回動態模式，把底噪連同人聲一起往上推），全檔統一且跨檔案共用同一目標
+6. **限幅** — `alimiter` 收尾（處理目標 −2.0 dBTP，比驗收上限 −1.5 低 0.5dB 留 AAC 重編餘裕），確保 true peak 不超標
 
 ### 響度目標
 
@@ -126,14 +129,14 @@ restore.py  ──►  修復後檔案 + AB 試聽片段 + 前後指標對照
 
 ## 7. 驗證機制
 
-修復完成後自動對輸出檔重跑一次 analyze，比對四項硬指標：
+修復完成後對輸出檔實測 after 指標（批次路徑：整檔一次解碼 + numpy 切片）；before 指標**直接讀 analyze 產出的 `report.json`（schema v2）**，不對原始檔重量測——兩端出自同一量測定義，配對比對才有意義。report.json 缺席或屬舊版時明確報錯要求重跑 analyze。四項硬指標（`ar/verify.py`）：
 
 | 指標 | 合格條件 | 不合格代表 |
 |---|---|---|
-| 底噪 LUFS | 應下降，且降幅 **不超過 25dB** | 降幅過大 = 降噪過頭，人聲被一併削除 |
-| Integrated LUFS | 落在 `target ± 0.5` | loudnorm 未收斂 |
-| True peak | ≤ −1.5 dBTP | 限幅失效 |
-| 句間 LUFS 標準差 | 顯著小於修復前 | 拉平未生效（此為拉平成功的量化證據） |
+| 降噪淨效果 | 配對式淨壓制中位（每個噪音窗對其所屬句相減，消去共同增益）為負，且 **不超過 25dB**；before SNR ≥ 35dB 的乾淨素材回報「不適用」通過 | 為正 = 降噪未生效；壓制過大 = 降噪過頭，人聲被一併削除 |
+| 響度收斂（Integrated LUFS） | 落在 `target ± 0.5` | 最終增益未收斂 |
+| 真峰值（True peak） | ≤ −1.5 dBTP | 限幅失效 |
+| 拉平生效（句間 RMS 標準差 `utterance_rms_stdev`） | 顯著小於修復前 | 拉平未生效（此為拉平成功的量化證據） |
 
 任一項不合格即報告失敗並指出失效環節，不得靜默通過。
 
@@ -205,3 +208,6 @@ d:\GitHub\hahow-ai-full-stack\audio-restore\<檔名>\
 | 響度目標 | `--target` 參數，預設 −16 LUFS | |
 | 單句增益上限 | ±6dB（可調） | |
 | 分區切點 | 自動偵測為建議值，可手動覆蓋 | |
+| 量測架構（2026-08-21） | 單次全檔解碼 + numpy 切片（`ar/bulk.py`），雙 buffer（原生率／16k） | analyze 29.5 分 → 36.2 秒 |
+| 句級位準（2026-08-21） | 一律 RMS，LUFS 只在整檔層級 | 欄位改 `utterance_rms_stdev`，schema v2 |
+| 驗證 before 端（2026-08-21） | 直接讀 report.json v2，不重量原始檔 | 缺席／舊版報錯要求重跑 analyze |

@@ -7,7 +7,6 @@ import numpy as np
 
 from .diagnose import ZoneDiagnosis
 from .fingerprint import Zone
-from .measure import LoudnessStats
 from .segments import Utterance
 
 MAX_GAIN_DB = 6.0   # 單句增益上限，避免把咳嗽、翻頁聲拉到人聲音量
@@ -31,7 +30,7 @@ def _zone_index_for(time: float, zones: list[Zone]) -> int:
     return zones[-1].index if zones else 0
 
 
-def compute_utterance_gains(utterances: list[Utterance], stats: list[LoudnessStats],
+def compute_utterance_gains(utterances: list[Utterance], utterance_rms: list[float],
                             zones: list[Zone], zone_gains: list[float],
                             working_lufs: float = -20.0,
                             max_gain_db: float = MAX_GAIN_DB,
@@ -39,15 +38,20 @@ def compute_utterance_gains(utterances: list[Utterance], stats: list[LoudnessSta
                             ) -> list[tuple[float, float, float]]:
     """算出逐句增益，並套用上限與相鄰差限幅。
 
+    utterance_rms 為每句的 RMS 位準（dBFS）。句級用 RMS 而非 LUFS：
+    句級增益是相對補償，只在乎句與句之間的相對位準，RMS 與 LUFS 在此
+    等價；且區級（compute_zone_gains）本來就以 RMS 為基準，句級同用 RMS
+    才讓整個位準體系一致——真正的感知響度只在最終 loudnorm 階段處理。
+
     回傳每項為 (start, end, gain_db)，此 gain 為**句級增益**，
     實際套用時會與該句所屬 zone 的區級增益相加。
     """
     raw: list[float] = []
-    for utterance, stat in zip(utterances, stats):
+    for utterance, rms in zip(utterances, utterance_rms):
         zone_index = _zone_index_for((utterance.start + utterance.end) / 2.0, zones)
         applied = zone_gains[zone_index] if zone_index < len(zone_gains) else 0.0
         # 區級增益已補償一部分，句級只需補剩下的差額
-        residual = working_lufs - (stat.lufs + applied)
+        residual = working_lufs - (rms + applied)
         raw.append(max(-max_gain_db, min(max_gain_db, residual)))
 
     smoothed = _limit_steps(raw, max_step_db)

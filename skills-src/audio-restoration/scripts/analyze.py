@@ -13,10 +13,10 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
+from ar.bulk import load_audio, measure_overall, peak_db, rms_db, slice_samples
 from ar.diagnose import diagnose_zone
-from ar.fingerprint import detect_zones, read_samples, spectral_fingerprint
+from ar.fingerprint import detect_zones, spectral_fingerprint
 from ar.gain import compute_utterance_gains, compute_zone_gains
-from ar.measure import measure_intervals, measure_utterances
 from ar.plan_io import write_plan, write_report
 from ar.probe import probe
 from ar.segments import classify
@@ -50,14 +50,39 @@ def main() -> None:
             "  3. 底噪偏高使 silencedetect 判不出靜音 → 調高 detect_silence 的 noise_db 門檻"
         )
 
+    # 雙 buffer 各載入一次，之後所有區間量測都在 numpy 上切片完成，
+    # 不再逐句／逐窗 spawn ffmpeg（舊路徑約 2,800 次行程，佔 90% 時間）。
+    # - buf_native（原生率）：RMS／峰值量測。afftdn 的 nf 是絕對位準，
+    #   16k 重採樣會截掉高頻噪音能量、讓嘶聲型底噪 RMS 偏低，必須原生率。
+    # - buf_16k：指紋／診斷頻帶／殘響。分區門檻 ZONE_THRESHOLD 是在 16k
+    #   頻帶分布下校準的，不可換率。
+    # 註：舊的 measure_interval 對區間長度有 max(0.05, end-start) 下限，
+    # bulk 切片採「照實切片」語意。真實句／窗都遠大於 0.05 秒，無實際影響。
+    # 取樣率直接沿用開頭 probe 的結果，避免 load_audio 內部再 ffprobe 一次
+    buf_native = load_audio(args.input, sample_rate=spec.sample_rate)
+    buf_16k = load_audio(args.input, sample_rate=16000)
+
     fingerprints = [
-        spectral_fingerprint(read_samples(args.input, w.start, w.end), 16000)
+        spectral_fingerprint(slice_samples(buf_16k, w.start, w.end), 16000)
         for w in classification.noise_windows
     ]
     zones = detect_zones(fingerprints, classification.noise_windows, spec.duration)
 
-    noise_stats = measure_intervals(args.input, classification.noise_windows)
-    utterance_stats = measure_utterances(args.input, classification.utterances)
+    # 逐窗／逐句 RMS 與峰值：全部由記憶體切片聚合。逐句 LUFS 不再量測
+    # （句級增益改用 RMS，見 compute_utterance_gains），感知響度只在
+    # 整檔層級量一次（measure_overall）。
+    noise_window_rms = [
+        rms_db(slice_samples(buf_native, w.start, w.end))
+        for w in classification.noise_windows
+    ]
+    utterance_rms = [
+        rms_db(slice_samples(buf_native, u.start, u.end))
+        for u in classification.utterances
+    ]
+    utterance_peaks = [
+        peak_db(slice_samples(buf_native, u.start, u.end))
+        for u in classification.utterances
+    ]
 
     diagnoses = []
     zone_noise_floors: list[float] = []  # 各 zone 的底噪 RMS（dB），供 afftdn 使用
@@ -80,13 +105,13 @@ def main() -> None:
         # 底噪取該區各採樣窗的中位數：單一異常安靜的窗（例如空調剛好停機）
         # 會讓 min 低估底噪、使 SNR 被高估而降噪不足；中位數對離群值穩健。
         zone_noise_rms = median(
-            [noise_stats[i].rms_db for i in zone.noise_window_indices]
+            [noise_window_rms[i] for i in zone.noise_window_indices]
         )
         # 人聲響度取該區各語句的中位數，而非整段區間的響度。
         # 整段含靜音，會把人聲位準拉低，讓 SNR 被低估、降噪被拉得過強。
         zone_utterance_rms = [
-            stat.rms_db
-            for utterance, stat in zip(classification.utterances, utterance_stats)
+            rms
+            for utterance, rms in zip(classification.utterances, utterance_rms)
             if zone.start <= (utterance.start + utterance.end) / 2.0 < zone.end
         ]
         if not zone_utterance_rms:
@@ -104,15 +129,19 @@ def main() -> None:
             if zone.start <= seg.end < zone.end
         ]
         diagnoses.append(
-            diagnose_zone(args.input, zone, zone_noise_rms, zone_speech_rms, zone_ends)
+            diagnose_zone(buf_16k, zone, zone_noise_rms, zone_speech_rms, zone_ends)
         )
 
     zone_gains = compute_zone_gains(diagnoses, WORKING_LUFS)
     utterance_gains = compute_utterance_gains(
-        classification.utterances, utterance_stats, zones, zone_gains, WORKING_LUFS
+        classification.utterances, utterance_rms, zones, zone_gains, WORKING_LUFS
     )
 
-    write_report(args.work_dir, spec, classification, diagnoses, utterance_stats)
+    # 全檔感知響度與真峰值：唯一保留的 ffmpeg 量測（演算法不宜自行重刻）
+    overall = measure_overall(args.input)
+
+    write_report(args.work_dir, spec, classification, diagnoses,
+                 utterance_rms, utterance_peaks, noise_window_rms, overall)
     plan_path = write_plan(
         args.work_dir, spec, diagnoses, utterance_gains, zone_gains, args.target,
         noise_floors=zone_noise_floors,

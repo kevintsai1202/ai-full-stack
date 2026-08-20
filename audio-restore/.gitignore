@@ -1,0 +1,6 @@
+# 修復產出目錄：只進版控可追溯的診斷／計畫／驗證檔與 AB 試聽，
+# 大型音視訊成品與中繼檔（修復後影片、逐 zone WAV、合併檔）不進 git
+**/*.mp4
+**/work/*
+!**/work/verify.json
+!**/work/preview-ab.wav

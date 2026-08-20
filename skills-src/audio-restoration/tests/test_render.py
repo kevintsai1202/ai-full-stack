@@ -9,7 +9,7 @@ from ar.render import apply_loudnorm, concat_zones, export_asr_wav, render_zones
 def _plan(input_path: Path) -> dict:
     """建立涵蓋整支合成音檔的兩區計畫。"""
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "input": str(input_path),
         "is_video": False,
         "target_lufs": -16.0,

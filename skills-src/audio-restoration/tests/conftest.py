@@ -1,10 +1,16 @@
 """測試共用 fixture：以純 Python 合成可預測的測試音檔。"""
 import math
+import sys
 import wave
 from pathlib import Path
 
 import numpy as np
 import pytest
+
+# 把 scripts/ 加進匯入路徑：ar 套件位於 scripts/ 之下，不是安裝進環境的
+# 套件。沒有這行時，乾淨環境（未設 PYTHONPATH）跑 pytest 會在收集階段
+# 就 ModuleNotFoundError: ar，讓人誤以為是程式壞了而不是環境問題。
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 SAMPLE_RATE = 48000  # 取樣率，與實際講課素材一致
 

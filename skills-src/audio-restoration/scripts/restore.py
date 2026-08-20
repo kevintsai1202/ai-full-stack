@@ -13,7 +13,7 @@ sys.stderr.reconfigure(encoding="utf-8")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ar.metrics import collect_metrics
+from ar.metrics import collect_metrics, metrics_from_report
 from ar.plan_io import load_plan
 from ar.preview import build_ab_preview, pick_preview_start
 from ar.probe import probe
@@ -55,10 +55,26 @@ def main() -> None:
     input_path = Path(plan["input"])
     spec = probe(input_path)
 
-    # report.json 與 plan.json 同目錄，內含經雙重確認的噪音採樣窗
+    # report.json 與 plan.json 同目錄，內含經雙重確認的噪音採樣窗與
+    # analyze 當下的實測 before 指標（逐句/逐窗 RMS、全檔 overall）。
+    # 硬性要求 report 存在：before 直接讀 analyze 的量測值，不再對原始檔
+    # 重量測——若退回重算，before/after 會走不同量測路徑，配對比對失真；
+    # 且缺 report 也代表噪音採樣窗不明，降噪驗證根本無從進行。
     report_path = args.plan.parent / "report.json"
-    # 修復前的四項指標基準值
-    before = collect_metrics(input_path, plan, report_path=report_path)
+    if not report_path.exists():
+        raise SystemExit(
+            f"找不到 report.json：{report_path}\n"
+            "修復後驗證的 before 基準直接取自 analyze 的量測結果，"
+            "請重新執行 analyze.py 產出 report.json 後再跑 restore.py。"
+        )
+    try:
+        # 修復前的指標基準值：直接讀 report，不重量原始檔
+        before = metrics_from_report(
+            json.loads(report_path.read_text(encoding="utf-8"))
+        )
+    except ValueError as error:
+        # 舊版 report（v1）缺批次量測欄位，給一句可照做的話而非 traceback
+        raise SystemExit(str(error))
 
     # 依計畫逐區間渲染（降噪、增益、去齒音等），再合併、響度正規化
     parts = render_zones(input_path, plan, work_dir)
@@ -88,6 +104,18 @@ def main() -> None:
     # 驗證了一個使用者拿不到的東西。
     after_source = args.out if spec.is_video else normalized
     after = collect_metrics(after_source, plan, report_path=report_path)
+    # 配對長度防護：before 來自 report.json（analyze 當下的邊界），after 來自
+    # plan.json 的 utterances。plan 鼓勵手動編輯增益與邊界，但**增刪筆數**會讓
+    # verify 的配對迴圈直接 IndexError（筆數變少）或靜默錯位（筆數相同但對應
+    # 關係已亂）——兩者都必須在進 verify 前擋下，給出可照做的訊息而非 traceback。
+    if (len(before["utterance_rms"]) != len(after["utterance_rms"])
+            or len(before["noise_window_rms"]) != len(after["noise_window_rms"])):
+        raise SystemExit(
+            "plan.json 的 utterances 與 report.json 記錄的筆數不一致，"
+            "修復前後指標無法配對比對。\n"
+            "plan.json 可手動調整增益與邊界，但不可增刪 utterances 筆數；"
+            "如需重新切分語句，請重跑 analyze.py 產生新的 plan.json 與 report.json。"
+        )
     result = verify(before, after, plan["target_lufs"])
     (work_dir / "verify.json").write_text(
         json.dumps({"before": before, "after": after, "result": asdict(result)},
@@ -107,9 +135,9 @@ def _print_result(before: dict, after: dict, result, out_path: Path, work_dir: P
     print("修復前後指標：")
     for key, label in (("noise_rms_db", "底噪 RMS dB"), ("snr_db", "SNR dB"),
                        ("integrated_lufs", "整體 LUFS"),
-                       ("true_peak", "真峰值 dBTP"), ("utterance_lufs_stdev", "句間標準差")):
-        # noise_rms_db／snr_db 缺 report.json 時為 None（不可驗證），格式化前需個別判斷，
-        # 否則 f"{None:.2f}" 會拋 TypeError 讓整支 CLI 崩潰
+                       ("true_peak", "真峰值 dBTP"), ("utterance_rms_stdev", "句間標準差")):
+        # noise_rms_db／snr_db 在噪音採樣窗清單為空時為 None（不可驗證），
+        # 格式化前需個別判斷，否則 f"{None:.2f}" 會拋 TypeError 讓整支 CLI 崩潰
         before_str = f"{before[key]:.2f}" if before[key] is not None else "N/A"
         after_str = f"{after[key]:.2f}" if after[key] is not None else "N/A"
         print(f"  {label}: {before_str} → {after_str}")

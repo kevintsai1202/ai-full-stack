@@ -10,12 +10,24 @@ from pathlib import Path
 from .diagnose import ZoneDiagnosis
 from .probe import MediaSpec
 
-PLAN_SCHEMA_VERSION = 1  # plan.json 結構版本，改變欄位語意時必須遞增
+# plan.json／report.json 結構版本，改變欄位語意時必須遞增。
+# v2：utterances 移除 lufs（批次量測路徑不再逐句量 LUFS，留著會是假資料）、
+# noise_windows 逐窗記錄 rms_db（供修復後驗證直接比對）、新增頂層 overall。
+PLAN_SCHEMA_VERSION = 2
 
 
 def write_report(work_dir: Path, spec: MediaSpec, classification, diagnoses,
-                 utterance_stats) -> Path:
-    """輸出完整診斷結果（供人工檢閱與修復後比對）。"""
+                 utterance_rms: list[float], utterance_peaks: list[float],
+                 noise_window_rms: list[float],
+                 overall: tuple[float, float]) -> Path:
+    """輸出完整診斷結果（供人工檢閱與修復後比對）。
+
+    utterance_rms／utterance_peaks 與 classification.utterances 逐項對應；
+    noise_window_rms 與 classification.noise_windows 逐項對應——量測值在
+    analyze 已算出，寫進報告讓修復後驗證直接讀取，不必重量 before 端。
+    overall 為 (integrated_lufs, true_peak_db)：全檔感知響度與真峰值只在
+    整檔層級量測（逐句 LUFS 已不再量測）。
+    """
     work_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema_version": PLAN_SCHEMA_VERSION,
@@ -32,18 +44,24 @@ def write_report(work_dir: Path, spec: MediaSpec, classification, diagnoses,
             "zones": len(diagnoses),
         },
         "zones": [asdict(d) for d in diagnoses],
+        # 全檔感知響度與真峰值：整檔單次 ebur128 量測，供最終 loudnorm
+        # 目標比對與修復後驗證使用
+        "overall": {"integrated_lufs": overall[0], "true_peak_db": overall[1]},
         "utterances": [
             {"index": u.index, "start": u.start, "end": u.end,
-             "lufs": s.lufs, "rms_db": s.rms_db, "peak_db": s.peak_db}
-            for u, s in zip(classification.utterances, utterance_stats)
+             "rms_db": rms, "peak_db": peak}
+            for u, rms, peak in zip(classification.utterances,
+                                    utterance_rms, utterance_peaks)
         ],
         "nonspeech_events": [
             {"start": e.start, "end": e.end} for e in classification.nonspeech_events
         ],
         # 噪音採樣窗須寫入報告：修復後驗證底噪降幅時，只有這些區間是
-        # 經雙重確認、確定不含人聲的量測位置
+        # 經雙重確認、確定不含人聲的量測位置。rms_db 為 analyze 當下的
+        # 實測底噪，修復後驗證的 before 端直接讀此值，不必重量。
         "noise_windows": [
-            {"start": w.start, "end": w.end} for w in classification.noise_windows
+            {"start": w.start, "end": w.end, "rms_db": rms}
+            for w, rms in zip(classification.noise_windows, noise_window_rms)
         ],
     }
     path = work_dir / "report.json"
@@ -68,7 +86,9 @@ def write_plan(work_dir: Path, spec: MediaSpec, diagnoses: list[ZoneDiagnosis],
         "schema_version": PLAN_SCHEMA_VERSION,
         "說明": "此檔為處理計畫，可手動編輯後再交給 restore.py。"
                 "zones[].gain_db 為區級增益、utterances[].gain_db 為句級增益，"
-                "兩者相加即該句實際增益。修改 zone 邊界請同步調整 start/end。",
+                "兩者相加即該句實際增益。修改 zone 邊界請同步調整 start/end。"
+                "不可增刪 utterances 筆數（修復後驗證須與 report.json 逐句配對），"
+                "如需重新切分語句請重跑 analyze.py。",
         "input": str(spec.path),
         "is_video": spec.is_video,
         "target_lufs": target_lufs,

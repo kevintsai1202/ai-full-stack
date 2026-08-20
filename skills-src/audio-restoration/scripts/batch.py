@@ -153,11 +153,20 @@ def _print_restore_summary(entries: list[dict]) -> None:
             print(f"  {entry['file']}: 未通過（{failed}）")
             continue
         before, after = entry["before"], entry["after"]
-        print(f"  {entry['file']}: SNR {before['snr_db']:.1f} → "
-              f"{after['snr_db']:.1f} dB／底噪 {before['noise_rms_db']:.1f} → "
-              f"{after['noise_rms_db']:.1f} dB RMS／整體 {before['integrated_lufs']:.1f} → "
-              f"{after['integrated_lufs']:.1f}／句間標準差 "
-              f"{before['utterance_lufs_stdev']:.2f} → {after['utterance_lufs_stdev']:.2f}")
+
+        def _fmt(value, precision: int = 1) -> str:
+            """格式化單一指標值；None（噪音採樣窗為空時不可量測）印 N/A。
+
+            與 restore.py _print_result 的 None 判斷同一防護：直接對 None
+            做 :.1f 會拋 TypeError，讓整支批次流程在印總表時中斷。
+            """
+            return f"{value:.{precision}f}" if value is not None else "N/A"
+
+        print(f"  {entry['file']}: SNR {_fmt(before['snr_db'])} → "
+              f"{_fmt(after['snr_db'])} dB／底噪 {_fmt(before['noise_rms_db'])} → "
+              f"{_fmt(after['noise_rms_db'])} dB RMS／整體 {_fmt(before['integrated_lufs'])} → "
+              f"{_fmt(after['integrated_lufs'])}／句間標準差 "
+              f"{_fmt(before['utterance_rms_stdev'], 2)} → {_fmt(after['utterance_rms_stdev'], 2)}")
 
 
 def _print_summary(entries: list[dict]) -> None:

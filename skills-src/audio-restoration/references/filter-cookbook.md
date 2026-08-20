@@ -160,21 +160,87 @@ zone 4: -200.0 dB/s（RT60 ≈ 0.30s）
 
 ## 端到端驗收實測值（四項指標）
 
-```
-底噪 RMS dB:  -66.98 → -58.81
-SNR dB:        47.36 → 43.39
-整體 LUFS:    -17.10 → -16.10
-真峰值 dBTP:   -2.80 → -1.90
-句間標準差:     1.45 →  0.56
+批次量測改造（見下方「效能：單次解碼批次量測」）後重跑的最終驗收：
 
+```
 驗證結果：
-  [通過] 降噪淨效果：素材本已乾淨（SNR 47.4 dB ≥ 35.0），降噪僅象徵性，此項不適用
-  [通過] 響度收斂：實測 -16.1 LUFS，目標 -16.0，誤差 0.10
-  [通過] 真峰值：實測 -1.9 dBTP，上限 -1.5
-  [通過] 拉平生效：句間標準差 1.45 → 0.56
+  [通過] 降噪淨效果：素材本已乾淨（SNR 47.6 dB ≥ 35.0），降噪僅象徵性，此項不適用
+  [通過] 響度收斂：實測 -16.30 LUFS，目標 -16.0（容差 ±0.5）
+  [通過] 真峰值：實測 -1.90 dBTP，上限 -1.5
+  [通過] 拉平生效：句間標準差 2.48 → 1.54
 
 整體：通過（4/4）
 ```
+
+句間標準差已改以逐句 **RMS** 計算（欄位 `utterance_rms_stdev`）。改造前的
+LUFS 版標準差為 1.45 → 0.56，改 RMS 後數值不同屬預期（兩者統計量不同），
+但趨勢一致（after < before），拉平生效的結論不變。
+
+## 效能：單次解碼批次量測（`ar/bulk.py`）校準紀錄
+
+### 問題：全流程 55–60 分鐘，其中量測佔了絕大多數
+
+`幻燈片8.mp4`（1273 秒）的完整流程實測近一小時，但 21 分鐘音訊**全檔解碼一遍
+只要數十秒** —— 時間不是花在運算，是花在行程啟動。舊路徑逐句、逐窗、逐量測點
+各 spawn 一次 ffmpeg，全流程約 **2,800 次**獨立行程，每次含 Windows 行程啟動
+（實測 0.2–0.5 秒）＋ `-ss` 定位＋短窗解碼：
+
+| 呼叫點 | 行程數 |
+|---|---|
+| analyze：逐句／逐窗 ebur128+astats | 344 + 79 |
+| analyze：殘響斜率（每個語句尾 0.3s 各一次） | ~340 |
+| analyze：噪音指紋（每窗一次） | 79 |
+| restore 驗證：before + after 各量一輪 | ~1,190 × 2 |
+
+### 三個方案（皆已實施）
+
+1. **verify 的 before 直接讀 `report.json`**（`metrics.metrics_from_report`）：
+   analyze 當下已量過原始檔，重量一次不只浪費時間，兩次量測若路徑不同反而讓
+   配對比對失真。report.json 缺席或屬舊版（schema < 2）直接報錯要求重跑
+   analyze，不退回重算。
+2. **量測改單次全檔解碼 + numpy 切片聚合**（新模組 `ar/bulk.py`：
+   `AudioBuffer`／`load_audio`／`slice_samples`／`rms_db`／`peak_db`／
+   `measure_overall`）：整檔一次 ffmpeg 解碼進記憶體，逐句／逐窗 RMS 全用
+   numpy 計算；只有 integrated LUFS 與真峰值仍交給 ffmpeg（ebur128 的
+   K-weighting、閘門、過採樣不宜自行重刻），但全檔只跑一次。
+3. **診斷／指紋／殘響合併讀取**：三者共用同一個 16kHz buffer，不再各自
+   `read_samples`。
+
+### 等價性驗證
+
+numpy 的 `rms_db` 對 astats `RMS level dB` 在合成 WAV 上實測差 **< 0.00001 dB**
+（兩者是同一個數學定義，差異只剩浮點誤差），量測路徑替換不改變任何門檻
+常數的語意。
+
+### 雙 buffer 決策
+
+- **原生取樣率 buffer**：RMS／峰值量測用。`afftdn` 的 `nf` 是**絕對位準**語意，
+  16k 重採樣會截掉高頻噪音能量，讓嘶聲型底噪的 RMS 系統性偏低，餵給 `nf`
+  會失真。
+- **16kHz buffer**：指紋／診斷頻帶／殘響用。`ZONE_THRESHOLD` 等門檻是在 16k
+  取樣率下校準的（見上方 `ZONE_THRESHOLD` 章節），不可換率。
+
+### 句級位準全面改 RMS 決策
+
+句級增益與句間標準差都只在乎**句與句的相對位準**，RMS 與 LUFS 在相對比較上
+等價，且 RMS 可純 numpy 計算、LUFS 得每句跑一次 ffmpeg —— 這正是舊路徑
+2,800 次行程的最大來源之一。感知響度只在整檔層級處理（`measure_overall`
+與最終 loudnorm 量測）。隨之而來的欄位變更（report/plan schema v2）：
+`utterance_lufs_stdev` → `utterance_rms_stdev`；report 的 utterances 改
+`{index, start, end, rms_db, peak_db}`（移除 lufs，留著會是假資料）；
+noise_windows 逐窗記錄 `rms_db`；新增頂層 `overall {integrated_lufs,
+true_peak_db}`。
+
+### 實測前後數字（幻燈片8.mp4，1273 秒，344 句／79 窗／5 zone）
+
+| 階段 | 改造前 | 改造後 |
+|---|---|---|
+| analyze | 29.5 分 | **36.2 秒** |
+| restore（含驗證） | 28 分 | **173.5 秒** |
+| 全流程 | 55–60 分 | **約 3.5 分鐘（約 16 倍）** |
+
+analyze 全程的 ffmpeg 行程數從約 2,800 次降到**個位數**。四項驗證全過，
+zone 切點、denoise 分級、noise_floor 與舊路徑一致（RMS 等價性保證）。
 
 ## 這一路的實測教訓（按發現順序）
 

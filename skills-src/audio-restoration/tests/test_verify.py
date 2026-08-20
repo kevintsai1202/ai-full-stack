@@ -7,7 +7,7 @@ def _before(**overrides) -> dict:
     分支，讓其餘三項測試不需要額外構造 noise_window_rms／utterance_rms。
     """
     base = {"snr_db": 40.0, "integrated_lufs": -24.0,
-            "true_peak": -3.0, "utterance_lufs_stdev": 6.0}
+            "true_peak": -3.0, "utterance_rms_stdev": 6.0}
     base.update(overrides)
     return base
 
@@ -15,7 +15,7 @@ def _before(**overrides) -> dict:
 def _after(**overrides) -> dict:
     """修復後的指標（可覆寫單項以測試失敗情境）。"""
     base = {"snr_db": 40.0, "integrated_lufs": -16.1,
-            "true_peak": -1.6, "utterance_lufs_stdev": 1.8}
+            "true_peak": -1.6, "utterance_rms_stdev": 1.8}
     base.update(overrides)
     return base
 
@@ -28,11 +28,11 @@ def _paired(before_windows, after_windows, before_utterances, after_utterances,
     而非「素材本已乾淨」的捷徑。
     """
     before = {"snr_db": 15.0, "integrated_lufs": -24.0, "true_peak": -3.0,
-              "utterance_lufs_stdev": 6.0,
+              "utterance_rms_stdev": 6.0,
               "noise_window_rms": before_windows, "utterance_rms": before_utterances,
               "window_owner": owners}
     after = {"snr_db": 20.0, "integrated_lufs": -16.1, "true_peak": -1.6,
-             "utterance_lufs_stdev": 1.8,
+             "utterance_rms_stdev": 1.8,
              "noise_window_rms": after_windows, "utterance_rms": after_utterances,
              "window_owner": owners}
     return before, after
@@ -115,7 +115,7 @@ def test_true_peak_over_limit_fails():
 
 def test_flattening_not_effective_fails():
     """句間標準差沒有變小代表拉平未生效。"""
-    result = verify(_before(), _after(utterance_lufs_stdev=6.5), target_lufs=-16.0)
+    result = verify(_before(), _after(utterance_rms_stdev=6.5), target_lufs=-16.0)
     assert result.passed is False
     assert any("拉平" in c.detail for c in result.checks if not c.passed)
 
@@ -132,8 +132,8 @@ def test_denoise_check_reports_unverifiable_when_missing():
 
 def test_single_utterance_flattening_is_not_a_failure():
     """單句音檔的標準差恆為 0，不得因此判為拉平失敗。"""
-    before = {**_before(), "utterance_lufs_stdev": 0.0}
-    after = _after(utterance_lufs_stdev=0.0)
+    before = {**_before(), "utterance_rms_stdev": 0.0}
+    after = _after(utterance_rms_stdev=0.0)
     result = verify(before, after, target_lufs=-16.0)
     flattening = next(c for c in result.checks if c.name == "拉平生效")
     assert flattening.passed is True

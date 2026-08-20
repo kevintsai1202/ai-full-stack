@@ -1,8 +1,10 @@
 """diagnose 模組測試：各項診斷指標的數值行為。"""
 import numpy as np
 
-from ar.diagnose import (band_energy_ratio, clipped_ratio, pick_denoise_level,
-                         reverb_slope)
+from ar.bulk import AudioBuffer
+from ar.diagnose import (band_energy_ratio, clipped_ratio, diagnose_zone,
+                         pick_denoise_level, reverb_slope, zone_reverb_slope)
+from ar.fingerprint import Zone
 
 SR = 16000
 
@@ -94,3 +96,53 @@ def test_pick_denoise_level_maps_snr_to_strength():
     assert pick_denoise_level(35.0) == 12
     assert pick_denoise_level(25.0) == 18
     assert pick_denoise_level(15.0) == 24
+
+
+def _make_buffer(samples: np.ndarray) -> AudioBuffer:
+    """把合成樣本包成 16kHz 的 AudioBuffer（診斷路徑的契約輸入）。"""
+    samples = samples.astype(np.float32)
+    return AudioBuffer(samples=samples, sample_rate=SR,
+                       duration=samples.size / SR)
+
+
+def _speech_then_silence_buffer() -> AudioBuffer:
+    """2 秒素材：前 1 秒 220Hz 人聲、於 1.0s 乾淨結束，其後僅底噪。"""
+    rng = np.random.default_rng(11)
+    voice = _tone(220.0, 1.0, amplitude=0.5)
+    floor = 0.002 * rng.standard_normal(SR)
+    return _make_buffer(np.concatenate([voice, floor]))
+
+
+# 殘響量測的語句結束時刻：取 0.98 而非 1.0——尾窗必須從「還有人聲」的
+# 時刻起算才量得到衰減；恰從 1.0 起算的窗只剩底噪平台，量不到下降段。
+# 真實流程中 ASR 的詞級結束時間戳本來就落在聲音實際消失之前。
+UTTERANCE_END = 0.98
+
+
+def test_diagnose_zone_reads_from_buffer():
+    """diagnose_zone 收 AudioBuffer：不碰檔案系統即可完成整個 zone 的診斷。
+
+    220Hz 純音不在齒音／隆隆頻帶，SNR 34dB 對應降噪 12dB。
+    """
+    buf = _speech_then_silence_buffer()
+    zone = Zone(index=0, start=0.0, end=2.0)
+    diagnosis = diagnose_zone(buf, zone, noise_rms_db=-54.0,
+                              speech_rms_db=-20.0, utterance_ends=[UTTERANCE_END])
+    assert abs(diagnosis.snr_db - 34.0) < 1e-6
+    assert diagnosis.denoise_db == 12
+    assert not diagnosis.needs_deesser
+    assert not diagnosis.needs_highpass
+    assert not diagnosis.needs_ai_rescue
+    # 乾淨結束的衰減極陡，不得被判為殘響重
+    assert diagnosis.reverb_slope is not None
+    assert diagnosis.reverb_slope < -500.0
+
+
+def test_zone_reverb_slope_skips_windows_beyond_zone_end():
+    """尾窗超出 zone 邊界的結束點必須跳過，避免量到下一區的聲學條件。
+
+    唯一的結束點在 zone 邊界外 → 無可用量測，回傳 0.0（無法判斷）。
+    """
+    buf = _speech_then_silence_buffer()
+    zone = Zone(index=0, start=0.0, end=1.1)  # 0.98 + 0.3 秒窗超出 1.1
+    assert zone_reverb_slope(buf, zone, utterance_ends=[UTTERANCE_END]) == 0.0

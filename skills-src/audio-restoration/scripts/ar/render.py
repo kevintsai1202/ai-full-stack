@@ -80,8 +80,10 @@ def concat_zones(parts: list[Path], out_path: Path) -> Path:
     """把各 zone 的中繼檔按序串接。"""
     # concat demuxer 需要的清單檔，逐行列出各段檔案路徑
     list_file = out_path.parent / "concat-list.txt"
+    # 必須寫絕對路徑：concat demuxer 把相對路徑解析成「相對於清單檔所在
+    # 目錄」，呼叫端若以相對路徑指定 work_dir，路徑會被重複拼接而開檔失敗
     list_file.write_text(
-        "\n".join(f"file '{part.as_posix()}'" for part in parts), encoding="utf-8"
+        "\n".join(f"file '{part.resolve().as_posix()}'" for part in parts), encoding="utf-8"
     )
     run_ffmpeg([
         "-y", "-f", "concat", "-safe", "0", "-i", str(list_file),

@@ -1,10 +1,10 @@
 """逐區診斷：算出各項指標並決定該區要掛哪些濾鏡。"""
 from dataclasses import dataclass, field
-from pathlib import Path
 
 import numpy as np
 
-from .fingerprint import Zone, read_samples
+from .bulk import AudioBuffer, slice_samples
+from .fingerprint import Zone
 
 AI_RESCUE_SNR = 10.0        # SNR 低於此值，ffmpeg 濾鏡鏈救不回
 SIBILANCE_THRESHOLD = 0.18  # 5-8kHz 能量佔比上限
@@ -124,9 +124,13 @@ def reverb_slope(tail_samples: np.ndarray, sample_rate: int) -> float:
     return -total_drop / elapsed
 
 
-def zone_reverb_slope(path: Path, zone: Zone, utterance_ends: list[float],
-                      sample_rate: int = 16000, window: float = 0.3) -> float:
+def zone_reverb_slope(buf: AudioBuffer, zone: Zone, utterance_ends: list[float],
+                      window: float = 0.3) -> float:
     """對 zone 內各語句結束點量測衰減斜率，取中位數代表該區。
+
+    收 AudioBuffer 而非路徑：尾窗切片從駐留記憶體的全檔緩衝取出，
+    不再逐窗 spawn ffmpeg——這正是 analyze 逐窗解碼瓶頸的來源之一。
+    buf 必須是 16kHz 緩衝（門檻在 16k 頻帶分布下校準，不可換率）。
 
     取中位數而非平均：個別語句可能被下一句搶拍、被雜訊蓋掉或落在檔尾被截斷，
     這些離群值會嚴重拉偏平均。無可用語句結束點時回傳 0.0（無法判斷）。
@@ -135,8 +139,8 @@ def zone_reverb_slope(path: Path, zone: Zone, utterance_ends: list[float],
     for end_time in utterance_ends:
         if end_time + window > zone.end:
             continue  # 窗超出 zone 範圍，跳過以免量到下一區的聲學條件
-        tail = read_samples(path, end_time, end_time + window, sample_rate)
-        slope = reverb_slope(tail, sample_rate)
+        tail = slice_samples(buf, end_time, end_time + window)
+        slope = reverb_slope(tail, buf.sample_rate)
         if slope != 0.0:  # 0.0 是「無法判斷」的哨兵，不納入統計
             slopes.append(slope)
     if not slopes:
@@ -153,10 +157,14 @@ def pick_denoise_level(snr_db: float) -> int:
     return 12
 
 
-def diagnose_zone(path: Path, zone: Zone, noise_rms_db: float,
-                  speech_rms_db: float, utterance_ends: list[float],
-                  sample_rate: int = 16000) -> ZoneDiagnosis:
+def diagnose_zone(buf: AudioBuffer, zone: Zone, noise_rms_db: float,
+                  speech_rms_db: float, utterance_ends: list[float]) -> ZoneDiagnosis:
     """對單一 zone 執行全部診斷並決定處理策略。
+
+    收 AudioBuffer 而非路徑：頻帶分析與殘響量測的樣本一律從全檔緩衝
+    切片，本函式不再自行 spawn ffmpeg。buf 必須是 16kHz 緩衝——齒音／
+    隆隆的頻帶佔比門檻與分區門檻同樣是在 16k 頻帶分布下校準的，換率
+    會讓總能量的分母改變、佔比整體偏移。
 
     **SNR 兩端都用 RMS，不用 LUFS。** ebur128 的 integrated loudness 有
     -70 LUFS 絕對閘門，比它更安靜的底噪一律被截斷成 -70。用 LUFS 算 SNR
@@ -170,12 +178,13 @@ def diagnose_zone(path: Path, zone: Zone, noise_rms_db: float,
     靜音，會把人聲位準拉低，使 SNR 被低估、降噪強度被拉高。
     utterance_ends 是落在此 zone 內的各語句結束時刻（秒），用於量測殘響。
     """
-    samples = read_samples(path, zone.start, min(zone.end, zone.start + 30.0), sample_rate)
+    sample_rate = buf.sample_rate
+    samples = slice_samples(buf, zone.start, min(zone.end, zone.start + 30.0))
     snr = speech_rms_db - noise_rms_db
     sibilance = band_energy_ratio(samples, sample_rate, 5000.0, 8000.0)
     rumble = band_energy_ratio(samples, sample_rate, 0.0, 80.0)
     clipped = clipped_ratio(samples)
-    raw_slope = zone_reverb_slope(path, zone, utterance_ends, sample_rate)
+    raw_slope = zone_reverb_slope(buf, zone, utterance_ends)
     # 在此把內部的 0.0 哨兵轉成 None，讓「量不到」的語意能安全地跨出本模組
     slope = None if raw_slope == 0.0 else raw_slope
 

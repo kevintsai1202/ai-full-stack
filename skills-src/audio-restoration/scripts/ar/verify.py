@@ -102,14 +102,19 @@ def _check_true_peak(after: dict) -> Check:
 def _check_flattening(before: dict, after: dict) -> Check:
     """句間響度標準差變小是拉平成功的量化證據。
 
+    標準差改以逐句 RMS 計算（utterance_rms_stdev）而非逐句 LUFS：這項
+    檢查只需要「句與句的相對離散度是否縮小」，RMS 與 LUFS 在相對比較上
+    等價；且批次量測路徑（analyze 與修復後驗證兩端）都已不再逐句量
+    LUFS，兩端同用 RMS 才是同一種統計量、前後才可比。
+
     只有一句時標準差恆為 0.0（沒有句間差異可言），此時這項檢查無意義，
     視為 N/A 通過 —— 否則 0.0 < 0.0 為 False，會把修復完全正確的單句
     音檔誤判為拉平失敗。
     """
-    if before["utterance_lufs_stdev"] == 0.0 and after["utterance_lufs_stdev"] == 0.0:
+    if before["utterance_rms_stdev"] == 0.0 and after["utterance_rms_stdev"] == 0.0:
         return Check("拉平生效", True, "只有一句（或句間本就無差異），此項不適用")
-    passed = after["utterance_lufs_stdev"] < before["utterance_lufs_stdev"]
+    passed = after["utterance_rms_stdev"] < before["utterance_rms_stdev"]
     return Check("拉平生效", passed,
-                 f"句間標準差 {before['utterance_lufs_stdev']:.2f} → "
-                 f"{after['utterance_lufs_stdev']:.2f}"
+                 f"句間標準差 {before['utterance_rms_stdev']:.2f} → "
+                 f"{after['utterance_rms_stdev']:.2f}"
                  + ("" if passed else "，拉平未生效"))

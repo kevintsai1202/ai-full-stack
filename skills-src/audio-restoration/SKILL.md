@@ -38,7 +38,7 @@ python -m venv "$HOME\.audio-restoration\.venv"
   --work-dir "D:\GitHub\hahow-ai-full-stack\audio-restore\lecture"
 ```
 
-產出 `report.json`（完整診斷）與 `plan.json`（處理計畫）。
+產出 `report.json`（完整診斷，同時是修復後驗證的 before 基準，請勿刪除）與 `plan.json`（處理計畫）。
 
 **必須把體檢摘要呈現給使用者**，特別是標記 `needs_ai_rescue` 的區段與 `issues` 清單。使用者可直接編輯 `plan.json` 調整任何參數，包括 zone 邊界。
 
@@ -79,7 +79,8 @@ python -m venv "$HOME\.audio-restoration\.venv"
 - **拉平只能用純增益**，禁用 `acompressor` / `dynaudnorm` / `speechnorm`。壓縮會頂高底噪，破壞降噪前提。
 - **切句依據是 ASR 詞級時間軸**，不是 silencedetect（音量門檻會讓小聲句整句消失），也不是 SRT 字幕（時間戳為閱讀調整過）。
 - **噪音採樣窗需雙重確認**：詞間 gap ≥ 0.6 秒且 silencedetect 亦判定靜音。採樣窗混入人聲會讓降噪把人聲當噪音消掉。
-- **`restore.py` 沒有 plan.json 不執行**，不得為了省事繞過閘門。
+- **量測走單次全檔解碼的批次路徑**（`ar/bulk.py`）：逐句／逐窗 RMS 用 numpy 切片計算，不逐區間 spawn ffmpeg（舊路徑全流程約 2,800 次行程，1273 秒素材的 analyze 要跑近 30 分鐘；改造後 36 秒）。感知響度（LUFS）與真峰值只在整檔層級量測（`measure_overall` 單次 ebur128），句級一律用 RMS —— 句級是相對補償，RMS 與 LUFS 等價。
+- **`restore.py` 沒有 plan.json 不執行**，不得為了省事繞過閘門。且驗證的 before 端直接讀 `report.json`（schema v2）—— report.json 缺席或屬舊版會明確報錯要求重跑 analyze，不得退回對原始檔重量測。`plan.json` 不可增刪 utterances 筆數（修復後驗證須與 report.json 逐句配對，restore 有長度防護）。
 
 ## 常見失敗與處置
 
@@ -90,7 +91,7 @@ python -m venv "$HOME\.audio-restoration\.venv"
 | 降噪淨效果未過 | 配對淨壓制 ≥0（未改善）或 >25dB（降噪過頭） | 檢查 `plan.json` 的 `denoise_db` 是否需調整；SNR≥35 的乾淨素材會自動回報「不適用」，不會被誤判為失敗 |
 | 響度未收斂 | 目標響度未收斂到 ±0.5 LUFS | 檢查 restore 輸出的增益值與 alimiter 是否大量觸發（通常代表素材峰值過高，限幅吃掉了大半增益） |
 | 真峰值超標 | 最終輸出真峰值 > −1.5 dBTP | 通常是輸出經 AAC 等有損重編所致，確認處理目標 −2.0 dBTP 的 0.5dB 餘裕是否被吃掉（例如編碼位元率過低） |
-| 拉平未生效 | 句間響度標準差未下降 | 檢查 `timeline.json` 是否涵蓋全檔（時長是否與媒體相符）、句數是否過少而無法反映拉平效果 |
+| 拉平未生效 | 句間 RMS 標準差（`utterance_rms_stdev`）未下降 | 檢查 `timeline.json` 是否涵蓋全檔（時長是否與媒體相符）、句數是否過少而無法反映拉平效果 |
 | 找不到噪音採樣窗 | 整段都有人聲或 ASR 斷句過密 | 手動指定一段確定無人聲的區間 |
 
 ## AI 救援層
