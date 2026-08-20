@@ -1372,9 +1372,10 @@ git commit -m "feat(audio-restoration): 加入頻譜指紋與錄音條件分區�
   - `diagnose.ZoneDiagnosis`（dataclass：`zone_index: int`、`start: float`、`end: float`、`noise_lufs: float`、`speech_lufs: float`、`snr_db: float`、`sibilance_ratio: float`、`rumble_ratio: float`、`clipped_ratio: float`、`reverb_slope: float`、`denoise_db: int`、`needs_deesser: bool`、`needs_highpass: bool`、`needs_ai_rescue: bool`、`issues: list[str]`）
   - `diagnose.band_energy_ratio(samples: np.ndarray, sample_rate: int, low_hz: float, high_hz: float) -> float`
   - `diagnose.clipped_ratio(samples: np.ndarray) -> float`
-  - `diagnose.reverb_slope(samples: np.ndarray, sample_rate: int) -> float`
+  - `diagnose.reverb_slope(tail_samples: np.ndarray, sample_rate: int) -> float`（輸入必須是「從語句結束時刻起算的尾段」，函式不自行切窗）
+  - `diagnose.zone_reverb_slope(path: Path, zone: Zone, utterance_ends: list[float], sample_rate: int = 16000, window: float = 0.3) -> float`
   - `diagnose.pick_denoise_level(snr_db: float) -> int`
-  - `diagnose.diagnose_zone(...) -> ZoneDiagnosis`
+  - `diagnose.diagnose_zone(path: Path, zone: Zone, noise_stats: LoudnessStats, speech_stats: LoudnessStats, utterance_ends: list[float], sample_rate: int = 16000) -> ZoneDiagnosis`
 
 **門檻定義（Task 14 以真實素材校準）：**
 
@@ -1387,7 +1388,7 @@ git commit -m "feat(audio-restoration): 加入頻譜指紋與錄音條件分區�
 | 5–8kHz 能量佔比 > 0.18 | 齒音過重 | `needs_deesser = True` |
 | < 80Hz 能量佔比 > 0.10 | 低頻隆隆 | `needs_highpass = True` |
 | 削峰樣本比例 > 0.001 | 削峰 | 記入 `issues` |
-| 衰減斜率 > −20 dB/s | 殘響重 | 記入 `issues`，且 SNR 低時併發 AI 救援 |
+| 衰減斜率 > −60 dB/s | 殘響重 | 記入 `issues`，且 SNR 低時併發 AI 救援 |
 
 - [ ] **Step 1: 寫失敗測試**
 
@@ -1435,17 +1436,47 @@ def test_clipped_ratio_zero_for_clean_signal():
     assert clipped_ratio(_tone(220.0, amplitude=0.5)) == 0.0
 
 
-def test_reverb_slope_steep_for_abrupt_stop():
-    """訊號戛然而止時衰減斜率應很陡（數值遠低於 -20 dB/s）。"""
-    samples = np.concatenate([_tone(220.0, 0.3), np.zeros(int(0.3 * SR))])
-    assert reverb_slope(samples, SR) < -50.0
+def _clean_stop_tail() -> np.ndarray:
+    """乾淨環境的語句尾段：人聲在 20ms 內結束，其餘只剩底噪。
+
+    這個窗代表「語句結束時刻起算的 300ms」，是 reverb_slope 的契約輸入。
+    """
+    rng = np.random.default_rng(7)
+    voice = _tone(220.0, 0.02, amplitude=0.5)
+    floor = 0.002 * rng.standard_normal(int(0.28 * SR))
+    return np.concatenate([voice, floor])
 
 
-def test_reverb_slope_shallow_for_long_tail():
-    """人為造出緩慢衰減的尾巴，斜率應平緩（高於 -20 dB/s）。"""
-    tail = _tone(220.0, 0.3) * np.exp(-np.linspace(0, 1.0, int(0.3 * SR)))
-    samples = np.concatenate([_tone(220.0, 0.3), tail])
-    assert reverb_slope(samples, SR) > -20.0
+def _reverberant_tail() -> np.ndarray:
+    """殘響重的語句尾段：300ms 內能量僅衰減約 15dB，拖著長尾。"""
+    decay = np.exp(np.linspace(0.0, -15.0 / 20.0 * np.log(10.0), int(0.3 * SR)))
+    return _tone(220.0, 0.3, amplitude=0.5) * decay
+
+
+def test_reverb_slope_steep_for_clean_stop():
+    """人聲戛然而止、只剩底噪時，斜率應非常陡（遠低於門檻）。"""
+    assert reverb_slope(_clean_stop_tail(), SR) < -100.0
+
+
+def test_reverb_slope_shallow_for_reverberant_tail():
+    """殘響尾段 300ms 衰減 15dB，斜率應約 -50 dB/s。"""
+    slope = reverb_slope(_reverberant_tail(), SR)
+    assert -60.0 < slope < -40.0
+
+
+def test_reverberant_tail_is_flatter_than_clean_stop():
+    """殘響尾段的衰減必須明顯比乾淨結束平緩 —— 這是本指標的鑑別力所在。"""
+    assert reverb_slope(_reverberant_tail(), SR) > reverb_slope(_clean_stop_tail(), SR) + 40.0
+
+
+def test_reverb_slope_returns_zero_for_digital_silence():
+    """整段數位靜音時回傳 0.0 表示無法判斷，不得偽裝成「衰減極慢」。"""
+    assert reverb_slope(np.zeros(int(0.3 * SR)), SR) == 0.0
+
+
+def test_reverb_slope_returns_zero_when_too_few_frames():
+    """樣本不足三幀時回傳 0.0，不做無意義的迴歸。"""
+    assert reverb_slope(np.ones(int(0.02 * SR)) * 0.1, SR) == 0.0
 
 
 def test_pick_denoise_level_maps_snr_to_strength():
@@ -1479,7 +1510,11 @@ AI_RESCUE_SNR = 10.0        # SNR 低於此值，ffmpeg 濾鏡鏈救不回
 SIBILANCE_THRESHOLD = 0.18  # 5-8kHz 能量佔比上限
 RUMBLE_THRESHOLD = 0.10     # <80Hz 能量佔比上限
 CLIP_THRESHOLD = 0.001      # 削峰樣本比例上限
-REVERB_SLOPE_THRESHOLD = -20.0  # 衰減斜率門檻（dB/秒），高於此值代表殘響重
+# 衰減斜率門檻（dB/秒），高於此值（更接近 0，衰減更慢）代表殘響重。
+# 物理依據：RT60 是能量衰減 60dB 所需秒數，斜率 = -60/RT60。
+# 講課教室典型 RT60 約 0.5-1.0 秒，對應 -120 至 -60 dB/s；
+# RT60 達 2 秒（明顯回音）對應 -30 dB/s。取 -60 為初值，Task 14 以真實素材校準。
+REVERB_SLOPE_THRESHOLD = -60.0
 
 
 @dataclass
@@ -1524,25 +1559,55 @@ def clipped_ratio(samples: np.ndarray) -> float:
     return float(np.count_nonzero(np.abs(samples) >= 0.99) / samples.size)
 
 
-def reverb_slope(samples: np.ndarray, sample_rate: int,
-                 tail_seconds: float = 0.3) -> float:
-    """量測訊號尾段的能量衰減斜率（dB/秒）。
+SILENCE_RMS_FLOOR = 1e-6  # 低於此 RMS 視為數位靜音，無法據以判斷衰減
+
+
+def reverb_slope(tail_samples: np.ndarray, sample_rate: int) -> float:
+    """量測一段「語句結束後尾段」的能量衰減斜率（dB/秒）。
 
     人聲在乾淨環境應急遽衰減（斜率很負）；衰減緩慢代表空間殘響重。
-    作法：取尾段切成 10ms 幀算 RMS，對時間做線性迴歸取斜率。
+    作法：切成 10ms 幀算 RMS，對時間做線性迴歸取斜率。
+
+    重要契約：傳入的樣本**必須**是從語句結束時刻起算的尾段，本函式不自行
+    切窗。早期版本自行取 `samples[-tail_seconds:]`，在呼叫端傳入整段 zone
+    時會量到「該段最後 0.3 秒」——那可能正在講話中間，量到的根本不是衰減。
+    切窗職責交給知道語句邊界的呼叫端（見 zone_reverb_slope）。
+
+    回傳 0.0 代表「無法判斷」：整段都在數位靜音地板，或幀數不足以迴歸。
+    呼叫端不得把 0.0 當成「衰減極慢、殘響很重」。
     """
-    tail_samples = int(tail_seconds * sample_rate)
-    tail = samples[-tail_samples:] if samples.size > tail_samples else samples
     frame = max(1, int(0.01 * sample_rate))
-    frame_count = tail.size // frame
+    frame_count = tail_samples.size // frame
     if frame_count < 3:
         return 0.0
-    frames = tail[: frame_count * frame].reshape(frame_count, frame)
+    frames = tail_samples[: frame_count * frame].reshape(frame_count, frame)
     rms = np.sqrt(np.maximum((frames ** 2).mean(axis=1), 1e-12))
+    if float(rms.max()) < SILENCE_RMS_FLOOR:
+        return 0.0
     db = 20.0 * np.log10(rms)
     times = np.arange(frame_count) * (frame / sample_rate)
     slope, _ = np.polyfit(times, db, 1)
     return float(slope)
+
+
+def zone_reverb_slope(path: Path, zone: Zone, utterance_ends: list[float],
+                      sample_rate: int = 16000, window: float = 0.3) -> float:
+    """對 zone 內各語句結束點量測衰減斜率，取中位數代表該區。
+
+    取中位數而非平均：個別語句可能被下一句搶拍、被雜訊蓋掉或落在檔尾被截斷，
+    這些離群值會嚴重拉偏平均。無可用語句結束點時回傳 0.0（無法判斷）。
+    """
+    slopes: list[float] = []
+    for end_time in utterance_ends:
+        if end_time + window > zone.end:
+            continue  # 窗超出 zone 範圍，跳過以免量到下一區的聲學條件
+        tail = read_samples(path, end_time, end_time + window, sample_rate)
+        slope = reverb_slope(tail, sample_rate)
+        if slope != 0.0:  # 0.0 是「無法判斷」的哨兵，不納入統計
+            slopes.append(slope)
+    if not slopes:
+        return 0.0
+    return float(np.median(slopes))
 
 
 def pick_denoise_level(snr_db: float) -> int:
@@ -1555,19 +1620,24 @@ def pick_denoise_level(snr_db: float) -> int:
 
 
 def diagnose_zone(path: Path, zone: Zone, noise_stats: LoudnessStats,
-                  speech_stats: LoudnessStats, sample_rate: int = 16000) -> ZoneDiagnosis:
-    """對單一 zone 執行全部診斷並決定處理策略。"""
+                  speech_stats: LoudnessStats, utterance_ends: list[float],
+                  sample_rate: int = 16000) -> ZoneDiagnosis:
+    """對單一 zone 執行全部診斷並決定處理策略。
+
+    utterance_ends 是落在此 zone 內的各語句結束時刻（秒），用於量測殘響。
+    """
     samples = read_samples(path, zone.start, min(zone.end, zone.start + 30.0), sample_rate)
     snr = speech_stats.lufs - noise_stats.lufs
     sibilance = band_energy_ratio(samples, sample_rate, 5000.0, 8000.0)
     rumble = band_energy_ratio(samples, sample_rate, 0.0, 80.0)
     clipped = clipped_ratio(samples)
-    slope = reverb_slope(samples, sample_rate)
+    slope = zone_reverb_slope(path, zone, utterance_ends, sample_rate)
 
     issues: list[str] = []
     if clipped > CLIP_THRESHOLD:
         issues.append(f"削峰樣本比例 {clipped:.4f} 超標（修復無法還原已削掉的波形）")
-    if slope > REVERB_SLOPE_THRESHOLD:
+    # slope == 0.0 是「無法判斷」的哨兵，不得當成衰減極慢而誤報殘響
+    if slope != 0.0 and slope > REVERB_SLOPE_THRESHOLD:
         issues.append(f"衰減斜率 {slope:.1f} dB/s 過於平緩，空間殘響重")
     if sibilance > SIBILANCE_THRESHOLD:
         issues.append(f"5-8kHz 能量佔比 {sibilance:.3f}，齒音過重")
@@ -1905,7 +1975,14 @@ def main() -> None:
         indices = zone.noise_window_indices or [0]
         zone_noise = min((noise_stats[i] for i in indices), key=lambda s: s.lufs)
         zone_speech = measure_interval(args.input, zone.start, min(zone.end, zone.start + 60.0))
-        diagnoses.append(diagnose_zone(args.input, zone, zone_noise, zone_speech))
+        # 落在此 zone 內的語句結束時刻，供殘響量測使用
+        zone_ends = [
+            seg.end for seg in timeline.segments
+            if zone.start <= seg.end < zone.end
+        ]
+        diagnoses.append(
+            diagnose_zone(args.input, zone, zone_noise, zone_speech, zone_ends)
+        )
 
     zone_gains = compute_zone_gains(diagnoses, WORKING_LUFS)
     utterance_gains = compute_utterance_gains(
@@ -3719,7 +3796,11 @@ print("前十大：", [f"{d:.4f}" for d in dists_sorted[-10:]])
 
 - [ ] **Step 3: 校準 REVERB_SLOPE_THRESHOLD**
 
-從同一份 `report.json` 讀出各 zone 的 `reverb_slope` 實測值。若該素材聽起來殘響正常卻被標記為「殘響重」，代表 `-20.0` 這個門檻過於寬鬆，須往下調（更負）。反之若明顯有回音卻沒被標記，則往上調。
+從同一份 `report.json` 讀出各 zone 的 `reverb_slope` 實測值（該值是 zone 內各語句結束點的斜率中位數）。若該素材聽起來殘響正常卻被標記為「殘響重」，代表 `-60.0` 這個門檻過於寬鬆，須往下調（更負）。反之若明顯有回音卻沒被標記，則往上調。
+
+換算參考：斜率 = -60 / RT60。−120 dB/s ≈ RT60 0.5 秒（吸音良好）、−60 dB/s ≈ RT60 1 秒、−30 dB/s ≈ RT60 2 秒（明顯回音）。
+
+注意 `reverb_slope` 為 `0.0` 代表「無法判斷」而非「衰減極慢」，統計時須排除。
 
 - [ ] **Step 4: 重跑測試確認校準未破壞既有行為**
 
@@ -3736,7 +3817,8 @@ Expected: PASS（全部通過）。若 `test_detect_zones_splits_at_noise_change
 
 ```powershell
 & "$HOME\.audio-restoration\.venv\Scripts\python" `
-  "skills-srcudio-restoration\scriptsestore.py" `
+  "skills-srcudio-restoration\scripts
+estore.py" `
   --plan "D:\GitHub\hahow-ai-full-stackudio-restore\幻燈片8\plan.json" `
   --out "D:\GitHub\hahow-ai-full-stackudio-restore\幻燈片8\幻燈片8-restored.mp4"
 ```
