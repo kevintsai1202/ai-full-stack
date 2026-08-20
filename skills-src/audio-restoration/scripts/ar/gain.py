@@ -1,8 +1,10 @@
-"""增益計算：區級補償、句級補償、限幅、平滑、ffmpeg 表達式生成。
+"""增益計算：區級補償、句級補償、限幅、平滑、逐樣本包絡生成與套用。
 
 只使用純增益，不使用壓縮器。壓縮會連帶把底噪頂高，破壞後續降噪賴以判斷的
 訊噪比前提；純增益只搬動位準，噪音與人聲的比例不變。
 """
+import numpy as np
+
 from .diagnose import ZoneDiagnosis
 from .fingerprint import Zone
 from .measure import LoudnessStats
@@ -10,7 +12,8 @@ from .segments import Utterance
 
 MAX_GAIN_DB = 6.0   # 單句增益上限，避免把咳嗽、翻頁聲拉到人聲音量
 MAX_STEP_DB = 3.0   # 相鄰句增益差上限，避免可聽的音量跳動
-RAMP_MS = 200       # 增益交界的線性斜坡長度（毫秒）
+RAMP_MS = 200       # 語句增益交界的線性斜坡長度（毫秒）
+EVENT_RAMP_MS = 50  # 雜訊衰減進出的斜坡長度（毫秒），比語句短以免衰減被稀釋
 NONSPEECH_ATTENUATION_DB = -6.0  # 非語音雜訊區間的額外衰減
 
 
@@ -70,26 +73,74 @@ def _limit_steps(gains: list[float], max_step_db: float) -> list[float]:
     return forward
 
 
-def build_volume_expression(utterance_gains: list[tuple[float, float, float]],
-                            nonspeech_events: list[tuple[float, float]] | None = None,
-                            attenuation_db: float = NONSPEECH_ATTENUATION_DB,
-                            ramp_ms: int = RAMP_MS) -> str:
-    """把逐句增益組成 ffmpeg volume 濾鏡的時間條件表達式。
+def _box_smooth(envelope: np.ndarray, window_samples: int) -> np.ndarray:
+    """對包絡做移動平均，把階梯轉成線性斜坡。
 
-    ffmpeg 的 volume 濾鏡以 dB 為單位需搭配 eval=frame。每句一個 between 條件，
-    未涵蓋的時間點增益為 0dB（原樣通過）。ramp_ms 目前用於文件記錄；實際
-    平滑已由 _limit_steps 在增益值層面完成，且切換點落在靜音中點，不需要
-    額外的時間域斜坡。
-
-    非語音雜訊區間額外疊加負增益：between 條件項相加，故該區間的實際增益
-    等於「所在語句的增益 + attenuation_db」，達成相對於人聲被壓低的效果。
+    box filter 作用在階梯上的結果恰好是長度等於窗長、以原邊界為中心的線性
+    斜坡，正是我們要的交叉淡化。兩端以邊界值填補，避免頭尾被拉向 0。
     """
-    if not utterance_gains:
-        return "0"
-    terms = [
-        f"between(t,{start:.3f},{end:.3f})*{gain:.3f}"
-        for start, end, gain in utterance_gains
-    ]
-    for start, end in (nonspeech_events or []):
-        terms.append(f"between(t,{start:.3f},{end:.3f})*{attenuation_db:.3f}")
-    return "+".join(terms)
+    if window_samples < 2:
+        return envelope
+    kernel = np.ones(window_samples) / window_samples
+    left_pad = window_samples // 2
+    right_pad = window_samples - 1 - left_pad
+    padded = np.concatenate([
+        np.full(left_pad, envelope[0]),
+        envelope,
+        np.full(right_pad, envelope[-1]),
+    ])
+    return np.convolve(padded, kernel, mode="valid")
+
+
+def build_gain_envelope(total_samples: int, sample_rate: int,
+                        utterance_gains: list[tuple[float, float, float]],
+                        nonspeech_events: list[tuple[float, float]] | None = None,
+                        attenuation_db: float = NONSPEECH_ATTENUATION_DB,
+                        ramp_ms: int = RAMP_MS,
+                        event_ramp_ms: int = EVENT_RAMP_MS) -> np.ndarray:
+    """產生逐樣本的 dB 增益包絡。
+
+    先鋪成階梯（每句一段常數增益），再以 box filter 把每個交界轉成長度
+    ramp_ms 的線性斜坡。非語音雜訊另建一條衰減階梯、以較短的 event_ramp_ms
+    平滑後相加 —— 雜訊事件常只有一兩百毫秒，用語句的 200ms 斜坡會把衰減
+    稀釋掉。
+
+    為何不用 ffmpeg 的 volume 表達式：`between(t,a,b)` 是閉區間，而語句邊界
+    外擴到靜音中點後必然相接，交界那一點兩個條件同時成立會讓增益相加，每個
+    交界都產生尖峰；且表達式長度隨語句數線性成長，50 分鐘課程就會逼近
+    Windows 命令列 32KB 上限。改用逐樣本包絡兩者皆解，且斜坡精確可控。
+    """
+    envelope = np.zeros(total_samples, dtype=np.float64)
+    for start, end, gain in utterance_gains:
+        begin = max(0, int(start * sample_rate))
+        finish = min(total_samples, int(end * sample_rate))
+        if finish > begin:
+            envelope[begin:finish] = gain
+    envelope = _box_smooth(envelope, int(ramp_ms / 1000.0 * sample_rate))
+
+    events = nonspeech_events or []
+    if events:
+        attenuation = np.zeros(total_samples, dtype=np.float64)
+        for start, end in events:
+            begin = max(0, int(start * sample_rate))
+            finish = min(total_samples, int(end * sample_rate))
+            if finish > begin:
+                attenuation[begin:finish] = attenuation_db
+        envelope = envelope + _box_smooth(
+            attenuation, int(event_ramp_ms / 1000.0 * sample_rate)
+        )
+    return envelope
+
+
+def apply_gain_envelope(samples: np.ndarray, envelope_db: np.ndarray) -> np.ndarray:
+    """把 dB 包絡套用到樣本上，回傳 float32 陣列。
+
+    長度不符時報錯而非截斷：截斷會讓增益與音訊錯位，而錯位的結果聽起來
+    仍然「像是一段正常的音訊」，是最難被發現的失敗模式。
+    """
+    if samples.size != envelope_db.size:
+        raise ValueError(
+            f"樣本數 {samples.size} 與包絡長度 {envelope_db.size} 不符，"
+            "無法套用增益（長度不符代表上游切窗有誤，不可截斷處理）"
+        )
+    return (samples.astype(np.float64) * (10.0 ** (envelope_db / 20.0))).astype(np.float32)

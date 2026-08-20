@@ -1,8 +1,11 @@
-"""gain 模組測試：增益方向、限幅、平滑、表達式生成。"""
+"""gain 模組測試：增益方向、限幅、平滑、包絡生成與套用。"""
+import numpy as np
+import pytest
+
 from ar.diagnose import ZoneDiagnosis
 from ar.fingerprint import Zone
-from ar.gain import (build_volume_expression, compute_utterance_gains,
-                     compute_zone_gains)
+from ar.gain import (apply_gain_envelope, build_gain_envelope,
+                     compute_utterance_gains, compute_zone_gains)
 from ar.measure import LoudnessStats
 from ar.segments import Utterance
 
@@ -64,30 +67,74 @@ def test_quiet_utterance_gets_positive_gain():
     assert result[1][2] > 0.0
 
 
-def test_volume_expression_covers_all_utterances():
-    """volume 表達式須包含每一句的時間條件與增益值。"""
-    expression = build_volume_expression([(0.0, 4.5, 2.0), (4.5, 8.0, -1.5)])
-    assert "between(t,0.000,4.500)" in expression
-    assert "between(t,4.500,8.000)" in expression
-    assert "2.000" in expression
-    assert "-1.500" in expression
+SR = 16000  # 包絡測試用取樣率
 
 
-def test_volume_expression_is_single_line():
-    """表達式必須是單行，換行會讓 ffmpeg 參數解析失敗。"""
-    expression = build_volume_expression([(0.0, 1.0, 1.0), (1.0, 2.0, 2.0)])
-    assert "\n" not in expression
+def _envelope_at(envelope, seconds: float) -> float:
+    """取包絡在指定秒數的值，方便斷言。"""
+    return float(envelope[int(seconds * SR)])
+
+
+def test_envelope_holds_each_utterance_gain():
+    """每句的增益應覆蓋該句的主要時段。"""
+    env = build_gain_envelope(int(8 * SR), SR, [(0.0, 4.5, 2.0), (4.5, 8.0, -1.5)])
+    assert abs(_envelope_at(env, 1.0) - 2.0) < 1e-6
+    assert abs(_envelope_at(env, 7.0) - (-1.5)) < 1e-6
+
+
+def test_envelope_has_no_spike_at_utterance_boundary():
+    """交界不得出現尖峰。
+
+    早期用 ffmpeg between 表達式時，閉區間讓交界那一點的兩個條件同時成立，
+    增益變成兩句相加（實測 t=4.5 得 0.5 而非介於 2.0 與 -1.5 之間）。
+    這個測試就是在防止那個 bug 以任何形式回來。
+    """
+    env = build_gain_envelope(int(8 * SR), SR, [(0.0, 4.5, 2.0), (4.5, 8.0, -1.5)])
+    assert env.max() <= 2.0 + 1e-6
+    assert env.min() >= -1.5 - 1e-6
+
+
+def test_envelope_ramps_linearly_across_boundary():
+    """交界處應線性過渡，中點恰為兩句增益的平均。"""
+    env = build_gain_envelope(int(8 * SR), SR, [(0.0, 4.5, 2.0), (4.5, 8.0, -1.5)],
+                              ramp_ms=200)
+    assert abs(_envelope_at(env, 4.5) - 0.25) < 0.05
+    assert _envelope_at(env, 4.45) > _envelope_at(env, 4.5) > _envelope_at(env, 4.55)
+
+
+def test_envelope_ramp_length_matches_parameter():
+    """斜坡長度應等於 ramp_ms，超出範圍的兩側維持各自的平坦增益。"""
+    env = build_gain_envelope(int(8 * SR), SR, [(0.0, 4.5, 2.0), (4.5, 8.0, -1.5)],
+                              ramp_ms=200)
+    assert abs(_envelope_at(env, 4.39) - 2.0) < 1e-6
+    assert abs(_envelope_at(env, 4.61) - (-1.5)) < 1e-6
 
 
 def test_nonspeech_event_gets_extra_attenuation():
     """咳嗽／翻頁區間須額外疊加負增益，否則會跟著人聲一起被拉高。"""
-    expression = build_volume_expression(
-        [(0.0, 8.0, 3.0)], nonspeech_events=[(5.0, 5.4)], attenuation_db=-6.0
-    )
-    assert "between(t,5.000,5.400)*-6.000" in expression
+    env = build_gain_envelope(int(8 * SR), SR, [(0.0, 8.0, 3.0)],
+                              nonspeech_events=[(5.0, 5.4)], attenuation_db=-6.0)
+    assert abs(_envelope_at(env, 5.2) - (-3.0)) < 1e-6
+    assert abs(_envelope_at(env, 2.0) - 3.0) < 1e-6
 
 
-def test_no_attenuation_terms_when_no_events():
-    """沒有雜訊事件時不得出現多餘的負增益項。"""
-    expression = build_volume_expression([(0.0, 8.0, 3.0)], nonspeech_events=[])
-    assert "-6.000" not in expression
+def test_no_attenuation_when_no_events():
+    """沒有雜訊事件時整條包絡應維持該句增益。"""
+    env = build_gain_envelope(int(8 * SR), SR, [(0.0, 8.0, 3.0)], nonspeech_events=[])
+    assert abs(env.min() - 3.0) < 1e-6
+    assert abs(env.max() - 3.0) < 1e-6
+
+
+def test_apply_envelope_scales_samples_by_db():
+    """+6dB 應讓振幅約變兩倍，-6dB 約變一半。"""
+    samples = np.full(SR, 0.25, dtype=np.float32)
+    louder = apply_gain_envelope(samples, np.full(SR, 6.0))
+    quieter = apply_gain_envelope(samples, np.full(SR, -6.0))
+    assert abs(float(louder[0]) - 0.5) < 0.01
+    assert abs(float(quieter[0]) - 0.125) < 0.01
+
+
+def test_apply_envelope_rejects_length_mismatch():
+    """樣本與包絡長度不符時必須報錯，不得靜默截斷而讓增益錯位。"""
+    with pytest.raises(ValueError):
+        apply_gain_envelope(np.zeros(100, dtype=np.float32), np.zeros(50))
