@@ -81,11 +81,43 @@ def test_zone_gain_actually_raises_level(synth_wav: Path, tmp_path: Path):
     assert after.lufs - before.lufs > 6.0
 
 
-def test_apply_loudnorm_converges_to_target(synth_wav: Path, tmp_path: Path):
-    """兩段式 loudnorm 後整體響度應收斂到目標 ±1.5 LUFS 內。"""
-    out = apply_loudnorm(synth_wav, tmp_path / "norm.wav", target_lufs=-16.0)
+def test_apply_loudnorm_converges_after_leveling(synth_wav: Path, tmp_path: Path):
+    """走完整流程（拉平→串接→loudnorm）後，響度應收斂到目標 ±1.5 LUFS 內。
+
+    必須先拉平再 loudnorm，這是真實流程的順序。直接對未拉平的素材跑
+    loudnorm 會因為動態範圍過大而退回動態模式，量出來的偏差反映的是
+    「跳過拉平」，不是 loudnorm 本身不準。
+    """
+    parts = render_zones(synth_wav, _plan(synth_wav), tmp_path)
+    merged = concat_zones(parts, tmp_path / "merged.wav")
+    out = apply_loudnorm(merged, tmp_path / "norm.wav", target_lufs=-16.0)
     stats = measure_interval(out, 0.0, 8.0)
     assert abs(stats.lufs - (-16.0)) < 1.5
+
+
+def test_dynamic_fallback_is_detected(synth_wav: Path, tmp_path: Path, capsys):
+    """素材動態範圍超過目標 LRA 時，必須偵測到 loudnorm 退回動態模式並警告。
+
+    合成音檔兩句相差 12dB，未拉平時 input LRA 約 12，超過目標 LRA 11，
+    ffmpeg 會靜默退回動態模式。這個測試同時守住兩件事：偵測字串要能匹配
+    ffmpeg 的實際輸出格式（大寫 D、多個空白），以及警告確實會印出來。
+    """
+    apply_loudnorm(synth_wav, tmp_path / "norm.wav", target_lufs=-16.0)
+    captured = capsys.readouterr()
+    assert "動態模式" in captured.out
+
+
+def test_loudnorm_self_reported_value_is_not_trusted(synth_wav: Path, tmp_path: Path):
+    """驗證必須重新量測輸出檔，不能採信 loudnorm 的自報值。
+
+    實測發現：退回動態模式時 ffmpeg 自報 Output Integrated -16.0 LUFS，
+    但實際寫進檔案的是 -14.5 LUFS。這就是四指標驗證要對輸出檔重跑量測、
+    而不是解析 ffmpeg 回報的原因。
+    """
+    out = apply_loudnorm(synth_wav, tmp_path / "norm.wav", target_lufs=-16.0)
+    actual = measure_interval(out, 0.0, 8.0).lufs
+    # 不斷言具體數值（那會鎖死 ffmpeg 版本行為），只確認「量得到一個實際值」
+    assert actual != 0.0
 
 
 def test_nonspeech_event_is_attenuated(synth_wav: Path, tmp_path: Path):

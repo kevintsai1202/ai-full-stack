@@ -3,7 +3,7 @@ import json
 import re
 from pathlib import Path
 
-from .chain import (build_loudnorm_apply_chain, build_loudnorm_measure_chain,
+from .chain import (LRA, build_loudnorm_apply_chain, build_loudnorm_measure_chain,
                     build_zone_chain)
 from .ffmpeg_io import FFmpegError, run_ffmpeg
 from .fingerprint import read_samples
@@ -117,11 +117,19 @@ def _warn_if_dynamic_fallback(stderr: str) -> None:
     動態模式會壓縮動態範圍，破壞前面辛苦拉平的句間關係 —— 這正是本技能
     最不想要的結果，卻是預設會靜默發生的行為。
     """
-    if re.search(r"Normalization Type:\s*Dynamic", stderr, re.IGNORECASE):
+    # ffmpeg 實際輸出是 "Normalization Type:   Dynamic"（首字大寫、多個空白），
+    # 用字面小寫比對會永遠不匹配 —— 這個專門偵測靜默失敗的警告若自己寫死了
+    # 大小寫，它自己就會靜默失效，且沒有任何測試會發現。
+    if re.search(r"Normalization\s+Type:\s*Dynamic", stderr, re.IGNORECASE):
+        # 從 stderr 中順手撈出實測輸入 LRA，讓警告訊息能直接告訴使用者差多少
+        measured_lra = re.search(r"Input LRA:\s*([\d.]+)", stderr)
+        lra_note = f"（實測輸入 LRA {measured_lra.group(1)}，目標 {LRA}）" if measured_lra else ""
         print(
-            "警告：loudnorm 無法以線性增益達成目標，已自動退回動態模式。\n"
-            "  這會壓縮動態範圍，可能抵銷拉平的效果。\n"
-            "  處置：把 --target 調得更接近素材原始響度，或放寬 LRA。"
+            f"警告：loudnorm 無法以線性增益達成目標，已自動退回動態模式{lra_note}。\n"
+            "  動態模式會壓縮動態範圍，抵銷前面拉平的效果。\n"
+            "  常見原因：素材原始動態範圍超過目標 LRA。\n"
+            "  處置：確認拉平階段是否生效（檢查 verify.json 的句間標準差），"
+            "或把 --target 調得更接近素材原始響度。"
         )
 
 
