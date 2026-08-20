@@ -112,3 +112,17 @@ def test_alimiter_limit_is_linear_not_db():
         "input_i": "-23.1", "input_tp": "-5.2", "input_lra": "8.3",
         "input_thresh": "-33.4", "target_offset": "0.4"})
     assert "alimiter=limit=0.8414" in chain
+
+
+def test_alimiter_disables_auto_level():
+    """alimiter 必須關閉自動電平補償。
+
+    ffmpeg 的 alimiter 預設 level=true，會在限幅後自動調整輸出電平，
+    把 loudnorm 剛做完的正規化結果推高。實測不加 level=false 時輸出
+    偏離目標 1.5-2.0 LUFS。我們用 alimiter 只為防止真峰值超標，
+    不要它動響度。
+    """
+    chain = build_loudnorm_apply_chain(-16.0, {
+        "input_i": "-23.1", "input_tp": "-5.2", "input_lra": "8.3",
+        "input_thresh": "-33.4", "target_offset": "0.4"})
+    assert "level=false" in chain

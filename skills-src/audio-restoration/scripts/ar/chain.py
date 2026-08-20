@@ -69,5 +69,9 @@ def build_loudnorm_apply_chain(target_lufs: float, measured: dict) -> str:
         f":measured_thresh={measured['input_thresh']}"
         f":offset={measured['target_offset']}"
         f":linear=true:print_format=summary,"
-        f"alimiter=limit={10 ** (TRUE_PEAK / 20):.4f}"
+        # level=false 是必要的：alimiter 的 level 預設 true，會對限幅後的訊號
+        # 做「自動電平補償」，把 loudnorm 剛做完的線性正規化結果重新推高。
+        # 實測：不加時輸出偏離目標 1.5-2.0 LUFS，加了之後誤差降到 0.0-0.5。
+        # 我們用 alimiter 只為了防止真峰值超標，不要它動響度。
+        f"alimiter=limit={10 ** (TRUE_PEAK / 20):.4f}:level=false"
     )
