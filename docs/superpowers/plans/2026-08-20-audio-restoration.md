@@ -1454,19 +1454,26 @@ def _reverberant_tail() -> np.ndarray:
 
 
 def test_reverb_slope_steep_for_clean_stop():
-    """人聲戛然而止、只剩底噪時，斜率應非常陡（遠低於門檻）。"""
-    assert reverb_slope(_clean_stop_tail(), SR) < -100.0
+    """人聲在 20ms 內跌到底噪，T20 應算出極陡的斜率。
+
+    預期約 -1000 dB/s：20dB 降幅在第 2 幀（0.02 秒）內達成。
+    """
+    assert reverb_slope(_clean_stop_tail(), SR) < -500.0
 
 
 def test_reverb_slope_shallow_for_reverberant_tail():
-    """殘響尾段 300ms 衰減 15dB，斜率應約 -50 dB/s。"""
+    """殘響尾段 300ms 僅衰減 15dB，未達 20dB 目標，改用總降幅外推約 -50 dB/s。"""
     slope = reverb_slope(_reverberant_tail(), SR)
     assert -60.0 < slope < -40.0
 
 
 def test_reverberant_tail_is_flatter_than_clean_stop():
-    """殘響尾段的衰減必須明顯比乾淨結束平緩 —— 這是本指標的鑑別力所在。"""
-    assert reverb_slope(_reverberant_tail(), SR) > reverb_slope(_clean_stop_tail(), SR) + 40.0
+    """殘響尾段必須明顯比乾淨結束平緩 —— 這是本指標的鑑別力所在。
+
+    用整段線性迴歸時兩者只差 5.6 dB/s（指標形同失效），T20 法下差距達
+    數百 dB/s。這個測試就是在防止有人把 T20 改回迴歸法。
+    """
+    assert reverb_slope(_reverberant_tail(), SR) > reverb_slope(_clean_stop_tail(), SR) + 400.0
 
 
 def test_reverb_slope_returns_zero_for_digital_silence():
@@ -1559,35 +1566,58 @@ def clipped_ratio(samples: np.ndarray) -> float:
     return float(np.count_nonzero(np.abs(samples) >= 0.99) / samples.size)
 
 
-SILENCE_RMS_FLOOR = 1e-6  # 低於此 RMS 視為數位靜音，無法據以判斷衰減
+SILENCE_RMS_FLOOR = 1e-6   # 低於此 RMS 視為數位靜音，無法據以判斷衰減
+RMS_CLAMP = 1e-20          # log10 的數值保護下限，必須遠低於 SILENCE_RMS_FLOOR
+DECAY_TARGET_DB = 20.0     # T20 量測的目標降幅（dB）
+FRAME_SECONDS = 0.01       # RMS 分析幀長（秒）
 
 
 def reverb_slope(tail_samples: np.ndarray, sample_rate: int) -> float:
-    """量測一段「語句結束後尾段」的能量衰減斜率（dB/秒）。
+    """量測一段「語句結束後尾段」的能量衰減速率（dB/秒）。
 
-    人聲在乾淨環境應急遽衰減（斜率很負）；衰減緩慢代表空間殘響重。
-    作法：切成 10ms 幀算 RMS，對時間做線性迴歸取斜率。
+    採聲學的 T20 概念：找出能量自起始位準下降 DECAY_TARGET_DB 所需的時間 t，
+    斜率 = -DECAY_TARGET_DB / t。這讓數值有精確的物理對應 —— 斜率恰好等於
+    -60 / RT60，因此門檻可直接以 RT60 推導。
+
+    為何不用整段線性迴歸：語句結束後的尾段是「陡降 + 底噪平台」的階梯形狀，
+    對整段做單一迴歸會被後面的長平台稀釋。實測顯示「20ms 內跌 45dB 後平坦」
+    與「300ms 內線性衰減 15dB」用迴歸法算出 -55.6 與 -50.0 —— 幾乎相同，
+    指標完全失去鑑別力。改用 T20 後兩者為 -1000 與 -49.9。
 
     重要契約：傳入的樣本**必須**是從語句結束時刻起算的尾段，本函式不自行
     切窗。早期版本自行取 `samples[-tail_seconds:]`，在呼叫端傳入整段 zone
     時會量到「該段最後 0.3 秒」——那可能正在講話中間，量到的根本不是衰減。
     切窗職責交給知道語句邊界的呼叫端（見 zone_reverb_slope）。
 
-    回傳 0.0 代表「無法判斷」：整段都在數位靜音地板，或幀數不足以迴歸。
+    回傳 0.0 代表「無法判斷」：整段都在數位靜音地板、幀數不足、或窗內根本
+    沒有衰減（能量持平甚至上升，通常代表語句其實還沒結束）。
     呼叫端不得把 0.0 當成「衰減極慢、殘響很重」。
     """
-    frame = max(1, int(0.01 * sample_rate))
+    frame = max(1, int(FRAME_SECONDS * sample_rate))
     frame_count = tail_samples.size // frame
     if frame_count < 3:
         return 0.0
     frames = tail_samples[: frame_count * frame].reshape(frame_count, frame)
-    rms = np.sqrt(np.maximum((frames ** 2).mean(axis=1), 1e-12))
+    # clamp 值須遠低於靜音門檻，否則全零訊號算出的 RMS 會恰好等於門檻而漏判
+    rms = np.sqrt(np.maximum((frames ** 2).mean(axis=1), RMS_CLAMP))
     if float(rms.max()) < SILENCE_RMS_FLOOR:
         return 0.0
+
     db = 20.0 * np.log10(rms)
-    times = np.arange(frame_count) * (frame / sample_rate)
-    slope, _ = np.polyfit(times, db, 1)
-    return float(slope)
+    # 起始位準取前三幀最大值，避免單一幀落在過零點而低估起點
+    start_db = float(db[:3].max())
+    step = frame / sample_rate
+
+    for index in range(1, frame_count):
+        if db[index] <= start_db - DECAY_TARGET_DB:
+            return -DECAY_TARGET_DB / (index * step)
+
+    # 整個窗內都沒降滿 DECAY_TARGET_DB：用實際總降幅外推
+    total_drop = start_db - float(db[-1])
+    elapsed = (frame_count - 1) * step
+    if total_drop <= 0.0:
+        return 0.0
+    return -total_drop / elapsed
 
 
 def zone_reverb_slope(path: Path, zone: Zone, utterance_ends: list[float],
@@ -3798,7 +3828,7 @@ print("前十大：", [f"{d:.4f}" for d in dists_sorted[-10:]])
 
 從同一份 `report.json` 讀出各 zone 的 `reverb_slope` 實測值（該值是 zone 內各語句結束點的斜率中位數）。若該素材聽起來殘響正常卻被標記為「殘響重」，代表 `-60.0` 這個門檻過於寬鬆，須往下調（更負）。反之若明顯有回音卻沒被標記，則往上調。
 
-換算參考：斜率 = -60 / RT60。−120 dB/s ≈ RT60 0.5 秒（吸音良好）、−60 dB/s ≈ RT60 1 秒、−30 dB/s ≈ RT60 2 秒（明顯回音）。
+換算參考：本指標採 T20 量測，斜率精確等於 -60 / RT60。−120 dB/s ≈ RT60 0.5 秒（吸音良好）、−60 dB/s ≈ RT60 1 秒、−30 dB/s ≈ RT60 2 秒（明顯回音）。語句結束後 20dB 內就跌到底噪的乾淨錄音會算出數百至上千 dB/s。
 
 注意 `reverb_slope` 為 `0.0` 代表「無法判斷」而非「衰減極慢」，統計時須排除。
 
