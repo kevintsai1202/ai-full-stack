@@ -7,8 +7,25 @@
 highpass 與 deesser 只在該區診斷確有需要時才掛，無差別套用會削掉男聲低頻
 或讓咬字變鈍。
 """
-TRUE_PEAK = -1.5  # 目標真峰值（dBTP）
-LRA = 11          # 目標響度範圍
+TRUE_PEAK = -1.5          # 目標真峰值（dBTP）
+LRA = 11                  # 目標響度範圍
+DEFAULT_NOISE_FLOOR = -40.0  # 沒有實測底噪時的退路值
+NOISE_FLOOR_MIN = -80.0   # afftdn 的 nf 合法下限
+NOISE_FLOOR_MAX = -20.0   # afftdn 的 nf 合法上限
+# 高通截止頻率。低頻隆隆（冷氣、桌面震動、風切）主要落在 20-60Hz，
+# 60Hz 已能濾掉大部分；男聲基頻約 85Hz 起，用 ffmpeg 預設的 2 階
+# （-3dB 點就在截止頻率）時，80Hz 截止會讓 85Hz 衰減約 2.5dB，
+# 對低音域男聲與 vocal fry 削得太多。取 60 保留安全邊際。
+HIGHPASS_HZ = 60
+
+
+def _clamp_noise_floor(value: float) -> float:
+    """把底噪估計值夾到 afftdn 的合法範圍。
+
+    量測值可能落在合法範圍外（例如極安靜的錄音低於 -80dB），
+    超出範圍會讓 ffmpeg 直接報參數錯誤。
+    """
+    return max(NOISE_FLOOR_MIN, min(NOISE_FLOOR_MAX, float(value)))
 
 
 def build_zone_chain(zone_plan: dict) -> str:
@@ -18,9 +35,16 @@ def build_zone_chain(zone_plan: dict) -> str:
     已經統一 —— 這正是 afftdn 的門檻能有單一意義的前提。此處再掛 volume
     會讓增益被套用兩次。
     """
-    filters = [f"afftdn=nr={int(zone_plan['denoise_db'])}:nf=-40:tn=1"]
+    # 用 round 而非 int：plan.json 是使用者可手動編輯的，寫成 18.9 時
+    # 截斷會變 18，且偏差方向永遠偏弱，不會被任何驗證抓到
+    denoise = round(float(zone_plan["denoise_db"]))
+    # 底噪基準用該區實際量到的值。afftdn 的 nf 是噪音位準的起始估計，
+    # 雖然 tn=1 會動態追蹤，但起始值仍影響收斂速度與前幾幀的判斷。
+    # 前面已逐區量出底噪，這裡寫死一個固定值等於把那份資訊丟掉。
+    noise_floor = _clamp_noise_floor(zone_plan.get("noise_floor_db", DEFAULT_NOISE_FLOOR))
+    filters = [f"afftdn=nr={denoise}:nf={noise_floor:.0f}:tn=1"]
     if zone_plan.get("needs_highpass"):
-        filters.append("highpass=f=80")
+        filters.append(f"highpass=f={HIGHPASS_HZ}")
     if zone_plan.get("needs_deesser"):
         filters.append("deesser=i=0.4:m=0.5:f=0.5")
     return ",".join(filters)
