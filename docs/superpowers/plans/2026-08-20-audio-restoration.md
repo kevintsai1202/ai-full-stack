@@ -1747,7 +1747,7 @@ git commit -m "feat(audio-restoration): 加入逐區診斷指標"
 - Consumes: 前六個任務的全部模組
 - Produces:
   - `plan_io.write_report(work_dir: Path, spec, classification, diagnoses, utterance_stats) -> Path`
-  - `plan_io.write_plan(work_dir: Path, spec, diagnoses, utterance_gains, zone_gains, target_lufs) -> Path`
+  - `plan_io.write_plan(work_dir: Path, spec, diagnoses, utterance_gains, zone_gains, target_lufs, noise_floors: list[float], nonspeech_events=None) -> Path`
   - `plan_io.load_plan(path: Path) -> dict`
   - `plan_io.PLAN_SCHEMA_VERSION = 1`
   - `analyze.py` CLI：`--input`（必要）、`--work-dir`、`--target`（預設 −16.0）
@@ -1787,12 +1787,13 @@ def test_plan_roundtrip_preserves_values(tmp_path: Path):
     """寫出再讀回的 plan 應保留 zone 決策與逐句增益。"""
     path = write_plan(tmp_path, _spec(tmp_path), [_diagnosis()],
                       utterance_gains=[(0.0, 4.5, 2.0), (4.5, 8.0, -1.5)],
-                      zone_gains=[3.0], target_lufs=-16.0)
+                      zone_gains=[3.0], target_lufs=-16.0, noise_floors=[-48.0])
     plan = load_plan(path)
     assert plan["schema_version"] == PLAN_SCHEMA_VERSION
     assert plan["target_lufs"] == -16.0
     assert plan["zones"][0]["denoise_db"] == 12
     assert plan["zones"][0]["gain_db"] == 3.0
+    assert plan["zones"][0]["noise_floor_db"] == -48.0
     assert len(plan["utterances"]) == 2
     assert plan["utterances"][1]["gain_db"] == -1.5
 
@@ -1801,7 +1802,7 @@ def test_plan_is_human_editable_json(tmp_path: Path):
     """plan.json 須為縮排 JSON 且含中文說明欄位，使用者要能手動改。"""
     path = write_plan(tmp_path, _spec(tmp_path), [_diagnosis()],
                       utterance_gains=[(0.0, 8.0, 0.0)], zone_gains=[0.0],
-                      target_lufs=-16.0)
+                      target_lufs=-16.0, noise_floors=[-48.0])
     text = path.read_text(encoding="utf-8")
     assert "\n  " in text
     assert "說明" in text
@@ -1874,10 +1875,13 @@ def write_report(work_dir: Path, spec: MediaSpec, classification, diagnoses,
 def write_plan(work_dir: Path, spec: MediaSpec, diagnoses: list[ZoneDiagnosis],
                utterance_gains: list[tuple[float, float, float]],
                zone_gains: list[float], target_lufs: float,
+               noise_floors: list[float],
                nonspeech_events: list[tuple[float, float]] | None = None) -> Path:
     """輸出處理計畫。
 
     utterance_gains 每項為 (start, end, gain_db)。
+    noise_floors 每項為該 zone 的底噪 RMS（dB），供 afftdn 的 nf 使用 ——
+    用 RMS 而非 LUFS，因為 afftdn 的 nf 語意是訊號位準而非感知響度。
     nonspeech_events 每項為 (start, end)，這些區間會被額外壓低。
     """
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -1894,6 +1898,8 @@ def write_plan(work_dir: Path, spec: MediaSpec, diagnoses: list[ZoneDiagnosis],
                 "index": d.zone_index, "start": d.start, "end": d.end,
                 "gain_db": zone_gains[d.zone_index],
                 "denoise_db": d.denoise_db,
+                # afftdn 的底噪起始估計值，取自該區噪音採樣窗的實測 RMS
+                "noise_floor_db": noise_floors[d.zone_index],
                 "needs_highpass": d.needs_highpass,
                 "needs_deesser": d.needs_deesser,
                 "needs_ai_rescue": d.needs_ai_rescue,
@@ -2034,6 +2040,7 @@ def main() -> None:
     utterance_stats = measure_utterances(args.input, classification.utterances)
 
     diagnoses = []
+    zone_noise_floors: list[float] = []  # 各 zone 的底噪 RMS（dB），供 afftdn 使用
     for zone in zones:
         if not zone.noise_window_indices:
             # 不可退回別區的噪音窗：那會讓這一區用錯誤的降噪基準，且錯得無聲無息。
@@ -2062,6 +2069,10 @@ def main() -> None:
                 "無法判斷人聲響度。請檢查 ASR 時間軸是否涵蓋整支檔案。"
             )
         zone_speech_lufs = median(zone_utterance_lufs)
+        # afftdn 的 nf 語意是訊號位準，用 RMS 而非 LUFS
+        zone_noise_floors.append(
+            median([noise_stats[i].rms_db for i in zone.noise_window_indices])
+        )
         # 落在此 zone 內的語句結束時刻，供殘響量測使用
         zone_ends = [
             seg.end for seg in timeline.segments
@@ -2079,6 +2090,7 @@ def main() -> None:
     write_report(args.work_dir, spec, classification, diagnoses, utterance_stats)
     plan_path = write_plan(
         args.work_dir, spec, diagnoses, utterance_gains, zone_gains, args.target,
+        noise_floors=zone_noise_floors,
         nonspeech_events=[(e.start, e.end) for e in classification.nonspeech_events],
     )
     _print_summary(diagnoses, classification, plan_path)
@@ -2502,8 +2514,8 @@ from ar.chain import (build_loudnorm_apply_chain, build_loudnorm_measure_chain,
 
 def _zone_plan(**overrides) -> dict:
     """建立測試用 zone 計畫。"""
-    base = {"gain_db": 3.0, "denoise_db": 18, "needs_highpass": True,
-            "needs_deesser": True}
+    base = {"gain_db": 3.0, "denoise_db": 18, "noise_floor_db": -45.0,
+            "needs_highpass": True, "needs_deesser": True}
     base.update(overrides)
     return base
 
@@ -2540,6 +2552,31 @@ def test_zone_chain_uses_planned_denoise_strength():
     assert "nr=24" in build_zone_chain(_zone_plan(denoise_db=24))
 
 
+def test_denoise_strength_rounds_not_truncates():
+    """使用者手改成 18.9 時應四捨五入為 19，不得截斷成 18。
+
+    截斷的偏差方向永遠偏弱，且不會被任何驗證抓到。
+    """
+    assert "nr=19" in build_zone_chain(_zone_plan(denoise_db=18.9))
+
+
+def test_zone_chain_uses_measured_noise_floor():
+    """底噪基準須取自該區實測值，不得寫死。"""
+    assert "nf=-52" in build_zone_chain(_zone_plan(noise_floor_db=-52.0))
+
+
+def test_noise_floor_clamped_to_valid_range():
+    """實測底噪超出 afftdn 合法範圍時須夾住，否則 ffmpeg 會直接報參數錯誤。"""
+    assert "nf=-80" in build_zone_chain(_zone_plan(noise_floor_db=-120.0))
+    assert "nf=-20" in build_zone_chain(_zone_plan(noise_floor_db=-5.0))
+
+
+def test_highpass_preserves_male_fundamental():
+    """高通截止不得高到削掉男聲基頻（約 85Hz 起）。"""
+    chain = build_zone_chain(_zone_plan(needs_highpass=True))
+    assert "highpass=f=60" in chain
+
+
 def test_no_compressor_in_chain():
     """禁止出現壓縮器 —— 壓縮會頂高底噪，破壞降噪前提。"""
     chain = build_zone_chain(_zone_plan())
@@ -2557,15 +2594,33 @@ def test_loudnorm_measure_chain_requests_json():
 
 
 def test_loudnorm_apply_chain_uses_measured_values():
-    """第二段必須帶入第一段量到的四個 measured 值並開啟 linear。"""
+    """第二段必須帶入第一段量到的值，且鍵名要對得上。
+
+    斷言完整的鍵值對而非只檢查數值出現：若 measured_I 與 measured_TP
+    的值被寫反，只檢查數值的斷言照樣會通過。
+    """
     measured = {"input_i": "-23.1", "input_tp": "-5.2",
                 "input_lra": "8.3", "input_thresh": "-33.4",
                 "target_offset": "0.4"}
     chain = build_loudnorm_apply_chain(-16.0, measured)
-    for value in ("-23.1", "-5.2", "8.3", "-33.4", "0.4"):
-        assert value in chain
+    assert "measured_I=-23.1" in chain
+    assert "measured_TP=-5.2" in chain
+    assert "measured_LRA=8.3" in chain
+    assert "measured_thresh=-33.4" in chain
+    assert "offset=0.4" in chain
     assert "linear=true" in chain
-    assert "alimiter" in chain
+
+
+def test_alimiter_limit_is_linear_not_db():
+    """alimiter 的 limit 吃線性值，須由 dBTP 換算。
+
+    -1.5 dBTP → 10^(-1.5/20) ≈ 0.8414。若誤把 -1.5 直接填進去，
+    ffmpeg 不會報錯，但限幅門檻會完全失效。
+    """
+    chain = build_loudnorm_apply_chain(-16.0, {
+        "input_i": "-23.1", "input_tp": "-5.2", "input_lra": "8.3",
+        "input_thresh": "-33.4", "target_offset": "0.4"})
+    assert "alimiter=limit=0.8414" in chain
 ```
 
 - [ ] **Step 2: 執行測試確認失敗**
@@ -2588,8 +2643,25 @@ Expected: FAIL — `No module named 'ar.chain'`
 highpass 與 deesser 只在該區診斷確有需要時才掛，無差別套用會削掉男聲低頻
 或讓咬字變鈍。
 """
-TRUE_PEAK = -1.5  # 目標真峰值（dBTP）
-LRA = 11          # 目標響度範圍
+TRUE_PEAK = -1.5          # 目標真峰值（dBTP）
+LRA = 11                  # 目標響度範圍
+DEFAULT_NOISE_FLOOR = -40.0  # 沒有實測底噪時的退路值
+NOISE_FLOOR_MIN = -80.0   # afftdn 的 nf 合法下限
+NOISE_FLOOR_MAX = -20.0   # afftdn 的 nf 合法上限
+# 高通截止頻率。低頻隆隆（冷氣、桌面震動、風切）主要落在 20-60Hz，
+# 60Hz 已能濾掉大部分；男聲基頻約 85Hz 起，用 ffmpeg 預設的 2 階
+# （-3dB 點就在截止頻率）時，80Hz 截止會讓 85Hz 衰減約 2.5dB，
+# 對低音域男聲與 vocal fry 削得太多。取 60 保留安全邊際。
+HIGHPASS_HZ = 60
+
+
+def _clamp_noise_floor(value: float) -> float:
+    """把底噪估計值夾到 afftdn 的合法範圍。
+
+    量測值可能落在合法範圍外（例如極安靜的錄音低於 -80dB），
+    超出範圍會讓 ffmpeg 直接報參數錯誤。
+    """
+    return max(NOISE_FLOOR_MIN, min(NOISE_FLOOR_MAX, float(value)))
 
 
 def build_zone_chain(zone_plan: dict) -> str:
@@ -2599,9 +2671,16 @@ def build_zone_chain(zone_plan: dict) -> str:
     已經統一 —— 這正是 afftdn 的門檻能有單一意義的前提。此處再掛 volume
     會讓增益被套用兩次。
     """
-    filters = [f"afftdn=nr={int(zone_plan['denoise_db'])}:nf=-40:tn=1"]
+    # 用 round 而非 int：plan.json 是使用者可手動編輯的，寫成 18.9 時
+    # 截斷會變 18，且偏差方向永遠偏弱，不會被任何驗證抓到
+    denoise = round(float(zone_plan["denoise_db"]))
+    # 底噪基準用該區實際量到的值。afftdn 的 nf 是噪音位準的起始估計，
+    # 雖然 tn=1 會動態追蹤，但起始值仍影響收斂速度與前幾幀的判斷。
+    # 前面已逐區量出底噪，這裡寫死一個固定值等於把那份資訊丟掉。
+    noise_floor = _clamp_noise_floor(zone_plan.get("noise_floor_db", DEFAULT_NOISE_FLOOR))
+    filters = [f"afftdn=nr={denoise}:nf={noise_floor:.0f}:tn=1"]
     if zone_plan.get("needs_highpass"):
-        filters.append("highpass=f=80")
+        filters.append(f"highpass=f={HIGHPASS_HZ}")
     if zone_plan.get("needs_deesser"):
         filters.append("deesser=i=0.4:m=0.5:f=0.5")
     return ",".join(filters)
@@ -2684,10 +2763,10 @@ def _plan(input_path: Path) -> dict:
         "target_lufs": -16.0,
         "zones": [
             {"index": 0, "start": 0.0, "end": 4.5, "gain_db": 0.0, "denoise_db": 12,
-             "needs_highpass": False, "needs_deesser": False,
+             "noise_floor_db": -48.0, "needs_highpass": False, "needs_deesser": False,
              "needs_ai_rescue": False, "issues": []},
             {"index": 1, "start": 4.5, "end": 8.0, "gain_db": 6.0, "denoise_db": 12,
-             "needs_highpass": False, "needs_deesser": False,
+             "noise_floor_db": -48.0, "needs_highpass": False, "needs_deesser": False,
              "needs_ai_rescue": False, "issues": []},
         ],
         "utterances": [
@@ -2884,12 +2963,31 @@ def apply_loudnorm(input_path: Path, out_path: Path, target_lufs: float) -> Path
     if not match:
         raise FFmpegError("loudnorm 量測失敗：找不到 JSON 輸出")
     measured = json.loads(match.group(0))
-    run_ffmpeg([
+    apply_stderr = run_ffmpeg([
         "-y", "-i", str(input_path),
         "-af", build_loudnorm_apply_chain(target_lufs, measured),
         "-c:a", "pcm_s16le", str(out_path),
     ])
+    _warn_if_dynamic_fallback(apply_stderr)
     return out_path
+
+
+def _warn_if_dynamic_fallback(stderr: str) -> None:
+    """檢查 loudnorm 是否從 linear 退回動態模式並提出警告。
+
+    ffmpeg 的 loudnorm 指定 linear=true 後，若目標無法以單一線性增益達成
+    （例如原始素材的 LRA 已超過目標），會**自動退回動態模式**且不報錯。
+    動態模式會壓縮動態範圍，破壞前面辛苦拉平的句間關係 —— 這正是本技能
+    最不想要的結果，卻是預設會靜默發生的行為。
+    """
+    if "Normalization Type: dynamic" in stderr:
+        print(
+            "警告：loudnorm 無法以線性增益達成目標，已自動退回動態模式。
+"
+            "  這會壓縮動態範圍，可能抵銷拉平的效果。
+"
+            "  處置：把 --target 調得更接近素材原始響度，或放寬 LRA。"
+        )
 
 # 註：loudnorm 之後才降回 16-bit。此前一律保持 32-bit float，
 # 因為拉平後、限幅前的訊號峰值可能超過 0 dBFS，提早量化會截頂。
@@ -3231,7 +3329,7 @@ def _metrics_plan() -> dict:
     return {
         "schema_version": 1, "is_video": False, "target_lufs": -16.0,
         "zones": [{"index": 0, "start": 0.0, "end": 8.0, "gain_db": 0.0,
-                   "denoise_db": 12, "needs_highpass": False,
+                   "denoise_db": 12, "noise_floor_db": -48.0, "needs_highpass": False,
                    "needs_deesser": False, "needs_ai_rescue": False, "issues": []}],
         "utterances": [{"start": 0.0, "end": 4.5, "gain_db": 0.0},
                        {"start": 4.5, "end": 8.0, "gain_db": 0.0}],
@@ -3294,10 +3392,10 @@ def _write_plan(path: Path, input_path: Path) -> Path:
         "target_lufs": -16.0,
         "zones": [
             {"index": 0, "start": 0.0, "end": 4.5, "gain_db": 0.0, "denoise_db": 12,
-             "needs_highpass": False, "needs_deesser": False,
+             "noise_floor_db": -48.0, "needs_highpass": False, "needs_deesser": False,
              "needs_ai_rescue": False, "issues": []},
             {"index": 1, "start": 4.5, "end": 8.0, "gain_db": 6.0, "denoise_db": 12,
-             "needs_highpass": False, "needs_deesser": False,
+             "noise_floor_db": -48.0, "needs_highpass": False, "needs_deesser": False,
              "needs_ai_rescue": False, "issues": []},
         ],
         "utterances": [
