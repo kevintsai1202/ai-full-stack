@@ -3229,6 +3229,16 @@ def test_flattening_not_effective_fails():
     assert any("拉平" in c.detail for c in result.checks if not c.passed)
 
 
+def test_noise_check_reports_unverifiable_when_missing():
+    """底噪為 None 時應回報不可驗證，而不是假裝通過或直接失敗。"""
+    before = {**_before(), "noise_lufs": None}
+    after = _after(noise_lufs=None)
+    result = verify(before, after, target_lufs=-16.0)
+    noise_check = next(c for c in result.checks if c.name == "底噪下降")
+    assert noise_check.passed is True
+    assert "不可驗證" in noise_check.detail
+
+
 def test_single_utterance_flattening_is_not_a_failure():
     """單句音檔的標準差恆為 0，不得因此判為拉平失敗。"""
     before = {**_before(), "utterance_lufs_stdev": 0.0}
@@ -3296,7 +3306,15 @@ def verify(before: dict, after: dict, target_lufs: float) -> VerifyResult:
 
 
 def _check_noise(before: dict, after: dict) -> Check:
-    """底噪應下降，但降幅過大代表降噪過頭。"""
+    """底噪應下降，但降幅過大代表降噪過頭。
+
+    底噪為 None 代表沒有噪音採樣窗可量（通常是缺 report.json）。
+    此時明確回報「不可驗證」而不是拿別的數字頂替 —— 一個假裝通過的
+    檢查比沒有檢查更危險。
+    """
+    if before["noise_lufs"] is None or after["noise_lufs"] is None:
+        return Check("底噪下降", True,
+                     "無噪音採樣窗可量測，此項不可驗證（請確認 report.json 存在）")
     drop = before["noise_lufs"] - after["noise_lufs"]
     if drop <= 0:
         return Check("底噪下降", False, f"底噪未下降（變化 {drop:.1f} dB），降噪未生效")
@@ -3508,11 +3526,16 @@ def test_utterance_stdev_reflects_level_difference(synth_wav: Path, tmp_path: Pa
     assert metrics["utterance_lufs_stdev"] > 3.0
 
 
-def test_noise_falls_back_when_report_missing(synth_wav: Path, tmp_path: Path):
-    """沒有 report.json 時退回整體響度，不得拋例外中斷修復流程。"""
+def test_noise_is_none_when_report_missing(synth_wav: Path, tmp_path: Path):
+    """沒有 report.json 時底噪回 None（代表未量測），不得用整體響度頂替。
+
+    拿整體響度冒充底噪會讓「底噪下降」檢查幾乎恆真——loudnorm 本來就會
+    把整體響度收斂到目標——卻在報告上印成看似真實的底噪降幅。
+    """
     metrics = collect_metrics(synth_wav, _metrics_plan(),
                               report_path=tmp_path / "nonexistent.json")
-    assert metrics["noise_lufs"] == metrics["integrated_lufs"]
+    assert metrics["noise_lufs"] is None
+    assert metrics["integrated_lufs"] is not None
 ```
 
 `tests/test_restore_cli.py`：
@@ -3624,11 +3647,15 @@ def collect_metrics(path: Path, plan: dict, report_path: Path | None = None) -> 
         measure_interval(path, u["start"], u["end"]).lufs for u in plan["utterances"]
     ]
     windows = _noise_windows(report_path)
-    if windows:
-        noise_lufs = min(measure_interval(path, start, end).lufs
-                         for start, end in windows)
-    else:
-        noise_lufs = overall.lufs
+    # 沒有噪音採樣窗時回 None 代表「底噪未量測」，不可拿整體響度頂替。
+    # loudnorm 幾乎必然把整體響度收斂到目標，用它冒充底噪會讓「底噪下降」
+    # 這項檢查幾乎恆真，卻在報告上印成「底噪下降 2.4 dB」誤導使用者以為
+    # 降噪確實生效。實測已證實：無 report.json 時 noise 與 integrated
+    # 會是完全相同的數字。
+    noise_lufs = (
+        min(measure_interval(path, start, end).lufs for start, end in windows)
+        if windows else None
+    )
     return {
         "noise_lufs": noise_lufs,
         "integrated_lufs": overall.lufs,
@@ -3669,6 +3696,7 @@ from ar.metrics import collect_metrics
 from ar.plan_io import load_plan
 from ar.preview import build_ab_preview, pick_preview_start
 from ar.probe import probe
+from ar.ffmpeg_io import run_ffmpeg
 from ar.render import (apply_loudnorm, concat_zones, export_asr_wav, mux_video,
                        render_zones)
 from ar.verify import verify
@@ -3689,7 +3717,12 @@ def main() -> None:
             f"找不到 plan：{args.plan}\n"
             "restore.py 不會自行推測參數，請先執行 analyze.py 產出處理計畫。"
         )
-    plan = load_plan(args.plan)
+    try:
+        plan = load_plan(args.plan)
+    except ValueError as error:
+        # schema 版本不符時不要吐 traceback，給一句能照做的話
+        raise SystemExit(f"{error}
+請重新執行 analyze.py 產生新版 plan.json。")
     work_dir = args.work_dir or args.out.parent / "work"
     work_dir.mkdir(parents=True, exist_ok=True)
 
@@ -3705,15 +3738,24 @@ def main() -> None:
 
     if spec.is_video:
         mux_video(input_path, normalized, args.out)
-    else:
+    elif args.out.suffix.lower() == ".wav":
+        # 中繼本來就是 WAV，直接搬位元組，不多做一次無謂的編解碼
         args.out.write_bytes(normalized.read_bytes())
+    else:
+        # 使用者指定了別的容器（如 .mp3／.m4a）。位元組複製會產出
+        # 「副檔名說是 mp3、內容其實是 WAV」的檔案，下游可能誤判或播不出來。
+        run_ffmpeg(["-y", "-i", str(normalized), str(args.out)])
 
     export_asr_wav(normalized, work_dir / "restored-16k.wav")
 
     build_ab_preview(input_path, normalized, pick_preview_start(plan),
                      work_dir / "preview-ab.wav", PREVIEW_SECONDS)
 
-    after = collect_metrics(normalized, plan, report_path=report_path)
+    # 影片情境要量**實際交付的檔案**：mux 會把音軌重編成 AAC，
+    # 有損編碼可能讓真峰值上升或響度偏移，量 pre-mux 的 WAV 等於
+    # 驗證了一個使用者拿不到的東西。
+    after_source = args.out if spec.is_video else normalized
+    after = collect_metrics(after_source, plan, report_path=report_path)
     result = verify(before, after, plan["target_lufs"])
     (work_dir / "verify.json").write_text(
         json.dumps({"before": before, "after": after, "result": asdict(result)},
