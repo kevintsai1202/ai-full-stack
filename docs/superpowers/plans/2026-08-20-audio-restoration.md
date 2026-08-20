@@ -3775,7 +3775,11 @@ def _print_result(before: dict, after: dict, result, out_path: Path, work_dir: P
     print("修復前後指標：")
     for key, label in (("noise_lufs", "底噪 LUFS"), ("integrated_lufs", "整體 LUFS"),
                        ("true_peak", "真峰值 dBTP"), ("utterance_lufs_stdev", "句間標準差")):
-        print(f"  {label}: {before[key]:.2f} → {after[key]:.2f}")
+        # noise_lufs 缺 report.json 時為 None（不可驗證），格式化前需個別判斷，
+        # 否則 f"{None:.2f}" 會拋 TypeError 讓整支 CLI 崩潰
+        before_str = f"{before[key]:.2f}" if before[key] is not None else "N/A"
+        after_str = f"{after[key]:.2f}" if after[key] is not None else "N/A"
+        print(f"  {label}: {before_str} → {after_str}")
     print("\n驗證結果：")
     for check in result.checks:
         print(f"  [{'通過' if check.passed else '失敗'}] {check.name}：{check.detail}")
