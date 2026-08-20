@@ -1143,7 +1143,8 @@ git commit -m "feat(audio-restoration): 加入逐區間響度量測"
   - `fingerprint.read_samples(path: Path, start: float, end: float, sample_rate: int = 16000) -> np.ndarray`
   - `fingerprint.spectral_fingerprint(samples: np.ndarray, sample_rate: int) -> np.ndarray`
   - `fingerprint.cosine_distance(a: np.ndarray, b: np.ndarray) -> float`
-  - `fingerprint.detect_zones(fingerprints: list[np.ndarray], windows: list[Interval], total_duration: float, threshold: float = 0.15) -> list[Zone]`
+  - `fingerprint.detect_zones(fingerprints, windows, total_duration, threshold=0.40, trend_windows=5, min_zone_seconds=120.0) -> list[Zone]`
+  - `fingerprint._group_fingerprint(fingerprints, indices) -> np.ndarray`
 
 **設計要點：** 分區依據是**底噪的頻譜形狀**而非音量。換麥克風時音量可能不變，但噪音頻譜必變。指紋作法：FFT 功率譜 → 依 1/3 八度頻帶聚合 → 正規化為機率分布 → 取相鄰餘弦距離。
 
@@ -1205,20 +1206,29 @@ def test_fingerprint_ignores_volume_difference():
     assert cosine_distance(a, b) < 1e-6
 
 
-def test_detect_zones_splits_at_noise_change():
-    """前兩窗白雜訊、後兩窗低頻雜訊，應切成兩個 zone。"""
-    fps = [
-        spectral_fingerprint(_white_noise(1), SR),
-        spectral_fingerprint(_white_noise(2), SR),
-        spectral_fingerprint(_low_passed_noise(3), SR),
-        spectral_fingerprint(_low_passed_noise(4), SR),
-    ]
-    windows = [Interval(0, 1), Interval(10, 11), Interval(20, 21), Interval(30, 31)]
-    zones = detect_zones(fps, windows, total_duration=40.0, threshold=0.15)
+def _windows(count: int, spacing: float = 10.0) -> list[Interval]:
+    """產生等距的噪音採樣窗，每個長 1 秒。"""
+    return [Interval(i * spacing, i * spacing + 1.0) for i in range(count)]
+
+
+def _fps(seeds_white: int, seeds_low: int) -> list[np.ndarray]:
+    """前段白雜訊、後段低頻雜訊，模擬中途換了錄音條件。"""
+    white = [spectral_fingerprint(_white_noise(s), SR) for s in range(1, seeds_white + 1)]
+    low = [spectral_fingerprint(_low_passed_noise(s), SR)
+           for s in range(100, 100 + seeds_low)]
+    return white + low
+
+
+def test_detect_zones_splits_at_sustained_change():
+    """前段白雜訊、後段低頻雜訊持續不同，應切成兩個 zone。"""
+    fps = _fps(4, 4)
+    windows = _windows(8)
+    zones = detect_zones(fps, windows, total_duration=90.0,
+                         trend_windows=2, min_zone_seconds=5.0)
     assert len(zones) == 2
     assert zones[0].start == 0.0
     assert abs(zones[0].end - zones[1].start) < 1e-6
-    assert abs(zones[1].end - 40.0) < 1e-6
+    assert abs(zones[1].end - 90.0) < 1e-6
 
 
 def test_zone_cut_lands_inside_a_noise_window():
@@ -1227,26 +1237,56 @@ def test_zone_cut_lands_inside_a_noise_window():
     兩窗之間全是人聲；zone 交界的區級增益是硬切，切在語音中段會產生
     可聽的喀聲。切在噪音窗內則跳變發生在無人聲處。
     """
-    fps = [
-        spectral_fingerprint(_white_noise(1), SR),
-        spectral_fingerprint(_white_noise(2), SR),
-        spectral_fingerprint(_low_passed_noise(3), SR),
-        spectral_fingerprint(_low_passed_noise(4), SR),
-    ]
-    windows = [Interval(0, 1), Interval(10, 11), Interval(20, 21), Interval(30, 31)]
-    zones = detect_zones(fps, windows, total_duration=40.0, threshold=0.15)
+    zones = detect_zones(_fps(4, 4), _windows(8), total_duration=90.0,
+                         trend_windows=2, min_zone_seconds=5.0)
     cut = zones[0].end
-    assert any(w.start <= cut <= w.end for w in windows), f"切點 {cut} 落在語音區"
+    assert any(w.start <= cut <= w.end for w in _windows(8)), f"切點 {cut} 落在語音區"
 
 
 def test_detect_zones_returns_single_zone_when_uniform():
     """底噪一致時只應有一個 zone，不得無故切割。"""
-    fps = [spectral_fingerprint(_white_noise(s), SR) for s in (1, 2, 3)]
-    windows = [Interval(0, 1), Interval(10, 11), Interval(20, 21)]
-    zones = detect_zones(fps, windows, total_duration=30.0, threshold=0.15)
+    fps = [spectral_fingerprint(_white_noise(s), SR) for s in range(1, 9)]
+    zones = detect_zones(fps, _windows(8), total_duration=90.0,
+                         trend_windows=2, min_zone_seconds=5.0)
     assert len(zones) == 1
     assert zones[0].start == 0.0
-    assert abs(zones[0].end - 30.0) < 1e-6
+    assert abs(zones[0].end - 90.0) < 1e-6
+
+
+def test_isolated_outlier_window_does_not_split():
+    """單一異常窗不得造成切點 —— 這是相鄰比較最致命的假陽性來源。
+
+    真實素材上，底噪頻譜隨時間漂移（冷氣起停、風扇轉速、螢幕錄影裡
+    播放的內容）會讓相鄰距離劇烈震盪。1273 秒的單一場地錄音因此被切成
+    46 個 zone。趨勢比較要求變化在前後各數個窗都持續存在，單點異常
+    不足以構成證據。
+    """
+    fps = [spectral_fingerprint(_white_noise(s), SR) for s in range(1, 9)]
+    fps[4] = spectral_fingerprint(_low_passed_noise(7), SR)  # 只有一個窗不同
+    zones = detect_zones(fps, _windows(8), total_duration=90.0,
+                         trend_windows=2, min_zone_seconds=5.0)
+    assert len(zones) == 1, f"單一異常窗不該切出 {len(zones)} 個 zone"
+
+
+def test_min_zone_seconds_suppresses_dense_cuts():
+    """最小 zone 長度應濾掉密集切點 —— 換麥克風不會在幾分鐘內來回發生。"""
+    fps = ([spectral_fingerprint(_white_noise(s), SR) for s in range(1, 5)]
+           + [spectral_fingerprint(_low_passed_noise(s), SR) for s in range(100, 104)]
+           + [spectral_fingerprint(_white_noise(s), SR) for s in range(20, 24)])
+    windows = _windows(12)
+    loose = detect_zones(fps, windows, total_duration=130.0,
+                         trend_windows=2, min_zone_seconds=5.0)
+    tight = detect_zones(fps, windows, total_duration=130.0,
+                         trend_windows=2, min_zone_seconds=100.0)
+    assert len(tight) < len(loose)
+
+
+def test_too_few_windows_returns_single_zone():
+    """窗數不足以做前後比較時不分區 —— 硬切一刀的風險大於少分一區。"""
+    fps = [spectral_fingerprint(_white_noise(s), SR) for s in (1, 2, 3)]
+    zones = detect_zones(fps, _windows(3), total_duration=30.0, trend_windows=5)
+    assert len(zones) == 1
+    assert zones[0].noise_window_indices == [0, 1, 2]
 ```
 
 - [ ] **Step 2: 執行測試確認失敗**
@@ -1274,7 +1314,11 @@ import numpy as np
 from .ffmpeg_io import FFmpegError, _require
 from .silence import Interval
 
-ZONE_THRESHOLD = 0.15  # 指紋餘弦距離門檻，超過視為錄音條件改變
+# 趨勢比較的餘弦距離門檻。真實素材實測：門檻在 0.30-0.70 之間給出幾乎
+# 相同的切點，代表這個設計對門檻不敏感——穩健的訊號。取中間值 0.40。
+ZONE_THRESHOLD = 0.40
+ZONE_TREND_WINDOWS = 5      # 變化點前後各取幾個噪音窗做趨勢比較
+MIN_ZONE_SECONDS = 120.0    # 最小 zone 長度（秒）
 BAND_RATIO = 2.0 ** (1.0 / 3.0)  # 1/3 八度頻帶的頻率比
 BAND_START_HZ = 40.0  # 最低頻帶起點
 
@@ -1341,27 +1385,62 @@ def cosine_distance(a: np.ndarray, b: np.ndarray) -> float:
     return float(1.0 - np.dot(a, b) / denominator)
 
 
-def detect_zones(fingerprints: list[np.ndarray], windows: list[Interval],
-                 total_duration: float, threshold: float = ZONE_THRESHOLD) -> list[Zone]:
-    """依相鄰指紋距離切分 zone。
+def _group_fingerprint(fingerprints: list[np.ndarray], indices) -> np.ndarray:
+    """一組噪音窗的代表指紋：各頻帶取中位數後重新正規化。
 
-    錄音條件的實際改變點必然落在距離超標的兩次採樣之間，但切點不取兩窗
-    中點 —— 那之間全是語音。切點取後一個窗（第一個呈現新特徵者）的中點，
-    讓 zone 邊界必定落在確定無人聲的區間內，區級增益的跳變才聽不見。
+    取中位數而非平均：停頓裡常混有呼吸、鍵盤、翻頁、殘響尾音等瞬態事件，
+    平均會被它們拉走，中位數取的是「這段時間最常出現的頻譜形狀」。
     """
-    if not fingerprints:
-        return [Zone(index=0, start=0.0, end=total_duration, noise_window_indices=[])]
+    stacked = np.array([fingerprints[i] for i in indices])
+    median = np.median(stacked, axis=0)
+    total = median.sum()
+    return median / total if total > 0 else median
 
+
+def detect_zones(fingerprints: list[np.ndarray], windows: list[Interval],
+                 total_duration: float, threshold: float = ZONE_THRESHOLD,
+                 trend_windows: int = ZONE_TREND_WINDOWS,
+                 min_zone_seconds: float = MIN_ZONE_SECONDS) -> list[Zone]:
+    """偵測錄音條件變化點並切分 zone。
+
+    **不比較相鄰的兩個噪音窗**。真實素材實測揭露：底噪的頻譜形狀本來就
+    會隨時間漂移（冷氣起停、風扇轉速、室外聲、螢幕錄影裡播放的內容），
+    那不代表錄音條件改變。一支單一講者、單一場地的 1273 秒錄音，用相鄰
+    比較切出了 46 個 zone，相鄰距離在 0.001 與 0.95 之間劇烈鋸齒震盪，
+    找不到任何能分開「同條件」與「換條件」的門檻。
+
+    改為看**趨勢的持續性**：對每個候選位置，比較前 trend_windows 個窗與
+    後 trend_windows 個窗的中位指紋。真正的設備／場地變更會讓兩側持續
+    不同；隨機漂移不會。再加上最小 zone 長度約束 —— 換麥克風不會在兩
+    分鐘內來回發生。同一支素材用這個方法收斂到 5 個 zone，且門檻在
+    0.30-0.70 之間給出幾乎相同的切點。
+
+    切點取噪音窗的中點，讓 zone 邊界必定落在確定無人聲的區間內 ——
+    區級增益在 zone 交界是硬切（斜坡只作用在 zone 內的語句交界），
+    切在語音中段會是一聲清楚可聽的喀聲。
+    """
+    # 窗數不足以做前後比較時不分區。硬切一刀的風險遠大於少分一區。
+    if len(fingerprints) < 2 * trend_windows + 1:
+        return [Zone(index=0, start=0.0, end=total_duration,
+                     noise_window_indices=list(range(len(windows))))]
+
+    # 每個候選位置的「前後兩組中位指紋」距離
+    candidates: list[tuple[float, float]] = []
+    for center in range(trend_windows, len(fingerprints) - trend_windows):
+        before = _group_fingerprint(fingerprints, range(center - trend_windows, center))
+        after = _group_fingerprint(fingerprints, range(center, center + trend_windows))
+        distance = cosine_distance(before, after)
+        if distance > threshold:
+            cut = (windows[center].start + windows[center].end) / 2.0
+            candidates.append((cut, distance))
+
+    # 依距離由大到小貪婪選點，強制彼此間隔至少 min_zone_seconds。
+    # 距離最大者優先，確保保留的是證據最強的變化點。
     cut_points: list[float] = []
-    for index in range(len(fingerprints) - 1):
-        if cosine_distance(fingerprints[index], fingerprints[index + 1]) > threshold:
-            # 切點取「第一個呈現新特徵的噪音窗」的中點，而不是兩窗之間的中點。
-            # 兩窗之間全是語音，切在那裡會讓 zone 邊界落在講話中段 —— 而區級
-            # 增益在 zone 交界是硬切（斜坡只作用在 zone 內的語句交界），
-            # 相鄰 zone 增益差幾 dB 就是一聲清楚可聽的喀聲。
-            # 切在噪音窗中點則邊界必定落在無人聲處，跳變聽不見。
-            cut = (windows[index + 1].start + windows[index + 1].end) / 2.0
+    for cut, _ in sorted(candidates, key=lambda item: -item[1]):
+        if all(abs(cut - chosen) >= min_zone_seconds for chosen in cut_points):
             cut_points.append(cut)
+    cut_points.sort()
 
     bounds = [0.0, *cut_points, total_duration]
     zones: list[Zone] = []
