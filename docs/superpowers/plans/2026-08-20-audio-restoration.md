@@ -2611,7 +2611,7 @@ git commit -m "feat(audio-restoration): 加入增益計算、限幅與平滑"
 - Produces:
   - `chain.build_zone_chain(zone_plan: dict) -> str`
   - `chain.build_loudnorm_measure_chain(target_lufs: float) -> str`
-  - `chain.build_loudnorm_apply_chain(target_lufs: float, measured: dict) -> str`
+  - `chain.build_linear_gain_chain(gain_db: float) -> str`（純線性增益＋限幅，刻意不用 loudnorm 套用）
 
 **濾鏡順序（不可調換）：** `afftdn`（降噪）→ `highpass` → `deesser` → 後續由 loudnorm/alimiter 於全檔階段處理。
 
@@ -2623,7 +2623,7 @@ git commit -m "feat(audio-restoration): 加入增益計算、限幅與平滑"
 
 ```python
 """chain 模組測試：濾鏡順序與條件掛載。"""
-from ar.chain import (build_loudnorm_apply_chain, build_loudnorm_measure_chain,
+from ar.chain import (build_linear_gain_chain, build_loudnorm_measure_chain,
                       build_zone_chain)
 
 
@@ -2708,22 +2708,23 @@ def test_loudnorm_measure_chain_requests_json():
     assert "TP=-2.0" in chain
 
 
-def test_loudnorm_apply_chain_uses_measured_values():
-    """第二段必須帶入第一段量到的值，且鍵名要對得上。
+def test_linear_gain_chain_applies_exact_gain():
+    """第二段是純 volume 增益，數值直接可讀、可驗證。"""
+    chain = build_linear_gain_chain(4.2)
+    assert "volume=4.20dB" in chain
+    chain_negative = build_linear_gain_chain(-3.55)
+    assert "volume=-3.55dB" in chain_negative
 
-    斷言完整的鍵值對而非只檢查數值出現：若 measured_I 與 measured_TP
-    的值被寫反，只檢查數值的斷言照樣會通過。
+
+def test_linear_gain_chain_never_uses_loudnorm():
+    """最終套用不得出現 loudnorm。
+
+    loudnorm 在「線性增益會讓 TP 暫時超標」時會靜默退回動態模式，
+    為了湊 LRA 目標把底噪抬高 —— 真實素材實測底噪因此不降反升 11.6dB。
+    這個測試防止有人把 loudnorm 套用加回來。
     """
-    measured = {"input_i": "-23.1", "input_tp": "-5.2",
-                "input_lra": "8.3", "input_thresh": "-33.4",
-                "target_offset": "0.4"}
-    chain = build_loudnorm_apply_chain(-16.0, measured)
-    assert "measured_I=-23.1" in chain
-    assert "measured_TP=-5.2" in chain
-    assert "measured_LRA=8.3" in chain
-    assert "measured_thresh=-33.4" in chain
-    assert "offset=0.4" in chain
-    assert "linear=true" in chain
+    chain = build_linear_gain_chain(4.2)
+    assert "loudnorm" not in chain
 
 
 def test_alimiter_limit_is_linear_not_db():
@@ -2735,9 +2736,7 @@ def test_alimiter_limit_is_linear_not_db():
     注意處理目標（-2.0）比驗收標準（-1.5）低 0.5 dB，那是留給有損編碼的
     餘裕 —— 實測 AAC 192k 重編會讓真峰值上升約 0.1 dB。
     """
-    chain = build_loudnorm_apply_chain(-16.0, {
-        "input_i": "-23.1", "input_tp": "-5.2", "input_lra": "8.3",
-        "input_thresh": "-33.4", "target_offset": "0.4"})
+    chain = build_linear_gain_chain(4.2)
     assert "alimiter=limit=0.7943" in chain
 
 
@@ -2749,9 +2748,7 @@ def test_alimiter_disables_auto_level():
     偏離目標 1.5-2.0 LUFS。我們用 alimiter 只為防止真峰值超標，
     不要它動響度。
     """
-    chain = build_loudnorm_apply_chain(-16.0, {
-        "input_i": "-23.1", "input_tp": "-5.2", "input_lra": "8.3",
-        "input_thresh": "-33.4", "target_offset": "0.4"})
+    chain = build_linear_gain_chain(4.2)
     assert "level=false" in chain
 ```
 
@@ -2828,23 +2825,23 @@ def build_loudnorm_measure_chain(target_lufs: float) -> str:
             f":print_format=json")
 
 
-def build_loudnorm_apply_chain(target_lufs: float, measured: dict) -> str:
-    """兩段式 loudnorm 的第二段：帶入量測值套用，並以 alimiter 收尾。
+def build_linear_gain_chain(gain_db: float) -> str:
+    """最終正規化的第二段：純線性增益 + 限幅。**刻意不用 loudnorm 套用。**
 
-    linear=true 讓 loudnorm 走線性增益而非動態壓縮，避免破壞已拉平的動態。
+    真實素材實測揭露：拉平後 LRA 只剩約 2，但線性增益（+4.2dB）會讓真峰值
+    從 -1.63 推到 +2.57 超過 TP 目標，loudnorm 判定線性模式無法達成，
+    **靜默退回動態模式** —— 動態模式為了湊 LRA=11 會把安靜段（含底噪）
+    往上推，實測底噪因此不降反升 11.6dB，正好抵銷降噪的成果。
+
+    拉平已在樣本層完成，最後一步需要的只有「搬到目標響度 + 保護峰值」，
+    loudnorm 的動態機制在這條流程裡沒有任何正當用途。volume 是純線性，
+    永遠不會有 fallback；峰值保護交給 alimiter。
+
+    level=false 是必要的：alimiter 的 level 預設 true 會做自動電平補償，
+    把剛做完的正規化推歪（實測偏差 1.5-2.0 LUFS）。
     """
     return (
-        f"loudnorm=I={target_lufs}:TP={TRUE_PEAK_TARGET}:LRA={LRA}"
-        f":measured_I={measured['input_i']}"
-        f":measured_TP={measured['input_tp']}"
-        f":measured_LRA={measured['input_lra']}"
-        f":measured_thresh={measured['input_thresh']}"
-        f":offset={measured['target_offset']}"
-        f":linear=true:print_format=summary,"
-        # level=false 是必要的：alimiter 的 level 預設 true，會對限幅後的訊號
-        # 做「自動電平補償」，把 loudnorm 剛做完的線性正規化結果重新推高。
-        # 實測：不加時輸出偏離目標 1.5-2.0 LUFS，加了之後誤差降到 0.0-0.5。
-        # 我們用 alimiter 只為了防止真峰值超標，不要它動響度。
+        f"volume={gain_db:.2f}dB,"
         f"alimiter=limit={10 ** (TRUE_PEAK_TARGET / 20):.4f}:level=false"
     )
 ```
@@ -2983,16 +2980,19 @@ def test_apply_loudnorm_converges_after_leveling(synth_wav: Path, tmp_path: Path
     assert abs(stats.lufs - (-16.0)) < 1.5
 
 
-def test_dynamic_fallback_is_detected(synth_wav: Path, tmp_path: Path, capsys):
-    """素材動態範圍超過目標 LRA 時，必須偵測到 loudnorm 退回動態模式並警告。
+def test_normalize_is_purely_linear(synth_wav: Path, tmp_path: Path):
+    """最終正規化不得改變句間響度差 —— 純線性的量化證據。
 
-    合成音檔兩句相差 12dB，未拉平時 input LRA 約 12，超過目標 LRA 11，
-    ffmpeg 會靜默退回動態模式。這個測試同時守住兩件事：偵測字串要能匹配
-    ffmpeg 的實際輸出格式（大寫 D、多個空白），以及警告確實會印出來。
+    未拉平的合成音檔兩句相差約 12dB。若正規化是純線性增益，兩句的差距
+    在正規化後應原封不動；若混入任何動態處理（loudnorm 動態模式、
+    壓縮器），差距會被縮小。這個測試守住「動態機制絕不介入最終正規化」。
     """
-    apply_loudnorm(synth_wav, tmp_path / "norm.wav", target_lufs=-16.0)
-    captured = capsys.readouterr()
-    assert "動態模式" in captured.out
+    out = apply_loudnorm(synth_wav, tmp_path / "norm.wav", target_lufs=-16.0)
+    before_gap = (measure_interval(synth_wav, 2.2, 3.8).rms_db
+                  - measure_interval(synth_wav, 5.2, 6.8).rms_db)
+    after_gap = (measure_interval(out, 2.2, 3.8).rms_db
+                 - measure_interval(out, 5.2, 6.8).rms_db)
+    assert abs(after_gap - before_gap) < 0.5
 
 
 def test_loudnorm_self_reported_value_is_not_trusted(synth_wav: Path, tmp_path: Path):
@@ -3044,7 +3044,7 @@ import re
 from pathlib import Path
 
 
-from .chain import (LRA, build_loudnorm_apply_chain, build_loudnorm_measure_chain,
+from .chain import (build_linear_gain_chain, build_loudnorm_measure_chain,
                     build_zone_chain)
 from .ffmpeg_io import FFmpegError, run_ffmpeg
 from .fingerprint import read_samples  # noqa: F401  解碼樣本用
@@ -3125,14 +3125,16 @@ def concat_zones(parts: list[Path], out_path: Path) -> Path:
 
 
 def apply_loudnorm(input_path: Path, out_path: Path, target_lufs: float) -> Path:
-    """兩段式 loudnorm：先量測再套用，最後以 alimiter 收尾。
+    """最終響度正規化：loudnorm 只用來量測，套用改為純線性增益 + 限幅。
 
-    單段式 loudnorm 走的是動態壓縮路徑，會破壞前面辛苦拉平的動態關係；
-    兩段式帶入 measured 值後可走 linear 模式，只做線性增益搬移。
+    為什麼不用 loudnorm 套用：拉平後素材的 LRA 只剩約 2，而線性增益可能
+    讓真峰值暫時超過 TP 目標，loudnorm 遇到這種情況會**靜默退回動態模式**，
+    為了湊 LRA 目標把安靜段（含底噪）往上推 —— 真實素材實測底噪因此
+    不降反升 11.6dB，抵銷了降噪成果。volume 純線性永無 fallback，
+    峰值保護交給 alimiter（level=false）。
 
-    輸出必須明確指定取樣率：loudnorm 為了偵測 true peak 會內部過採樣到
-    192kHz，且**輸出會維持在 192kHz** —— 若不鎖定，換揉回影片或交給下游
-    時取樣率已經悄悄變了。
+    輸出必須明確指定取樣率：量測階段的 loudnorm 會內部過採樣，鎖回
+    原取樣率以免下游拿到 192kHz 的檔案。
     """
     source_rate = probe(input_path).sample_rate
     measure_stderr = run_ffmpeg([
@@ -3143,46 +3145,15 @@ def apply_loudnorm(input_path: Path, out_path: Path, target_lufs: float) -> Path
     if not match:
         raise FFmpegError("loudnorm 量測失敗：找不到 JSON 輸出")
     measured = json.loads(match.group(0))
-    apply_stderr = run_ffmpeg([
+    # 需要的增益 = 目標響度 − 實測響度。純加法，不碰動態。
+    gain_db = target_lufs - float(measured["input_i"])
+    run_ffmpeg([
         "-y", "-i", str(input_path),
-        "-af", build_loudnorm_apply_chain(target_lufs, measured),
-        "-ar", str(source_rate),  # 鎖回原取樣率，抵銷 loudnorm 的內部過採樣
+        "-af", build_linear_gain_chain(gain_db),
+        "-ar", str(source_rate),
         "-c:a", "pcm_s16le", str(out_path),
     ])
-    _warn_if_dynamic_fallback(apply_stderr)
     return out_path
-
-
-def _warn_if_dynamic_fallback(stderr: str) -> None:
-    """檢查 loudnorm 是否從 linear 退回動態模式並提出警告。
-
-    ffmpeg 的 loudnorm 指定 linear=true 後，若目標無法以單一線性增益達成
-    （例如原始素材的 LRA 已超過目標），會**自動退回動態模式**且不報錯。
-    動態模式會壓縮動態範圍，破壞前面辛苦拉平的句間關係 —— 這正是本技能
-    最不想要的結果，卻是預設會靜默發生的行為。
-    """
-    # ffmpeg 實際輸出是 "Normalization Type:   Dynamic"（首字大寫、多個空白），
-    # 用字面小寫比對會永遠不匹配 —— 這個專門偵測靜默失敗的警告若自己寫死了
-    # 大小寫，它自己就會靜默失效，且沒有任何測試會發現。
-    if re.search(r"Normalization\s+Type:\s*Dynamic", stderr, re.IGNORECASE):
-        measured_lra = re.search(r"Input LRA:\s*([\d.]+)", stderr)
-        lra_note = f"（實測輸入 LRA {measured_lra.group(1)}，目標 {LRA}）" if measured_lra else ""
-        print(
-            f"警告：loudnorm 無法以線性增益達成目標，已自動退回動態模式{lra_note}。
-"
-            "  動態模式會壓縮動態範圍，抵銷前面拉平的效果。
-"
-            "  常見原因：素材原始動態範圍超過目標 LRA。
-"
-            "  處置：確認拉平階段是否生效（檢查 verify.json 的句間標準差），"
-            "或把 --target 調得更接近素材原始響度。"
-        )
-
-# 註：loudnorm 之後才降回 16-bit。此前一律保持 32-bit float，
-# 因為拉平後、限幅前的訊號峰值可能超過 0 dBFS，提早量化會截頂。
-
-
-MAX_DURATION_DRIFT = 0.1  # 音訊與影像時長容許誤差（秒）
 
 
 def mux_video(video_path: Path, audio_path: Path, out_path: Path) -> Path:
@@ -3260,7 +3231,7 @@ git commit -m "feat(audio-restoration): 加入分區渲染、串接與輸出"
 
 | 指標 | 合格條件 |
 |---|---|
-| 底噪下降 | `after.noise_rms_db < before.noise_rms_db` 且降幅 ≤ 25dB |
+| SNR 改善 | `after.snr_db > before.snr_db` 且改善 ≤ 25dB（SNR = 人聲中位 RMS − 底噪中位 RMS，共同增益相消） |
 | 響度收斂 | `abs(after.integrated_lufs - target) <= 0.5` |
 | 真峰值 | `after.true_peak <= -1.5` |
 | 拉平生效 | `after.utterance_lufs_stdev < before.utterance_lufs_stdev` |
@@ -3366,7 +3337,7 @@ Expected: FAIL — `No module named 'ar.verify'`
 """
 from dataclasses import dataclass, field
 
-MAX_NOISE_DROP_DB = 25.0   # 底噪降幅上限，超過代表降噪把人聲也削了
+MAX_SNR_GAIN_DB = 25.0   # SNR 改善上限，超過代表降噪過頭把人聲也削了
 LOUDNESS_TOLERANCE = 0.5   # 響度收斂容差（LUFS）
 TRUE_PEAK_LIMIT = -1.5     # 真峰值上限（dBTP）
 
@@ -3389,7 +3360,7 @@ class VerifyResult:
 def verify(before: dict, after: dict, target_lufs: float) -> VerifyResult:
     """比對修復前後指標，輸出四項檢查結果。"""
     checks = [
-        _check_noise(before, after),
+        _check_snr(before, after),
         _check_loudness(after, target_lufs),
         _check_true_peak(after),
         _check_flattening(before, after),
@@ -3397,27 +3368,35 @@ def verify(before: dict, after: dict, target_lufs: float) -> VerifyResult:
     return VerifyResult(passed=all(c.passed for c in checks), checks=checks)
 
 
-def _check_noise(before: dict, after: dict) -> Check:
-    """底噪應下降，但降幅過大代表降噪過頭。
+def _check_snr(before: dict, after: dict) -> Check:
+    """SNR 應改善，但改善過大代表降噪過頭。
 
-    量的是 RMS 不是 LUFS：ebur128 的 integrated loudness 有 -70 LUFS 絕對
-    閘門，安靜的底噪會被截斷成 -70，前後都是 -70、降幅永遠 0。
+    驗 SNR 而非底噪絕對值：拉平與最終增益把底噪連同人聲一起搬移是設計
+    行為，底噪絕對值可升可降（真實素材實測 -67→-55，升了 11.6dB，但那
+    來自合法的增益）。SNR 把共同增益消掉，剩下的才是降噪的淨效果。
 
-    底噪為 None 代表沒有噪音採樣窗可量（通常是缺 report.json）。
-    此時明確回報「不可驗證」而不是拿別的數字頂替 —— 一個假裝通過的
-    檢查比沒有檢查更危險。
+    量的是 RMS 不是 LUFS：ebur128 的 integrated loudness 有 -70 LUFS
+    絕對閘門，安靜的底噪會被截斷。
+
+    SNR 為 None 代表沒有噪音採樣窗可量（通常是缺 report.json）。此時
+    明確回報「不可驗證」而不是拿別的數字頂替 —— 一個假裝通過的檢查
+    比沒有檢查更危險。
     """
-    if before["noise_rms_db"] is None or after["noise_rms_db"] is None:
-        return Check("底噪下降", True,
+    if before["snr_db"] is None or after["snr_db"] is None:
+        return Check("SNR 改善", True,
                      "無噪音採樣窗可量測，此項不可驗證（請確認 report.json 存在）")
-    drop = before["noise_rms_db"] - after["noise_rms_db"]
-    if drop <= 0:
-        return Check("底噪下降", False, f"底噪未下降（變化 {drop:.1f} dB），降噪未生效")
-    if drop > MAX_NOISE_DROP_DB:
-        return Check("底噪下降", False,
-                     f"底噪下降 {drop:.1f} dB 超過 {MAX_NOISE_DROP_DB} dB 上限，"
+    gain = after["snr_db"] - before["snr_db"]
+    if gain <= 0:
+        return Check("SNR 改善", False,
+                     f"SNR 未改善（{before['snr_db']:.1f} → {after['snr_db']:.1f} dB），"
+                     f"降噪未生效")
+    if gain > MAX_SNR_GAIN_DB:
+        return Check("SNR 改善", False,
+                     f"SNR 改善 {gain:.1f} dB 超過 {MAX_SNR_GAIN_DB} dB 上限，"
                      f"降噪過頭，人聲可能一併被削除，請調低 denoise_db 重跑")
-    return Check("底噪下降", True, f"底噪下降 {drop:.1f} dB")
+    return Check("SNR 改善", True,
+                 f"SNR {before['snr_db']:.1f} → {after['snr_db']:.1f} dB"
+                 f"（改善 {gain:.1f} dB）")
 
 
 def _check_loudness(after: dict, target_lufs: float) -> Check:
@@ -3760,8 +3739,21 @@ def collect_metrics(path: Path, plan: dict, report_path: Path | None = None) -> 
         median([measure_interval(path, start, end).rms_db for start, end in windows])
         if windows else None
     )
+    # SNR = 人聲中位 RMS − 底噪中位 RMS。
+    # 驗證用 SNR 而非底噪絕對值：拉平與最終增益會把底噪連同人聲一起搬移
+    # （那是設計行為），底噪絕對值因此可升可降；SNR 把共同的增益消掉，
+    # 剩下的正是降噪的淨效果。
+    utterance_rms = [
+        measure_interval(path, u["start"], u["end"]).rms_db
+        for u in plan["utterances"]
+    ]
+    snr_db = (
+        median(utterance_rms) - noise_rms_db
+        if noise_rms_db is not None and utterance_rms else None
+    )
     return {
         "noise_rms_db": noise_rms_db,
+        "snr_db": snr_db,
         "integrated_lufs": overall.lufs,
         # 用 ebur128 的真峰值，不是 astats 的樣本峰值
         "true_peak": overall.true_peak_db,
