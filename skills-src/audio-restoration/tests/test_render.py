@@ -95,6 +95,64 @@ def test_apply_loudnorm_converges_after_leveling(synth_wav: Path, tmp_path: Path
     assert abs(stats.lufs - (-16.0)) < 1.5
 
 
+def test_apply_loudnorm_single_pass_when_converged(synth_wav: Path, tmp_path: Path,
+                                                   monkeypatch):
+    """殘差已在容差內時不得多跑補償輪 —— 迭代不能變成無謂的重複處理。
+
+    以注入的量測序列模擬「第一輪套完增益後已收斂」：只應有一次增益輪
+    加最後一次位深轉換，不應出現第二次增益輪。
+    """
+    import ar.render as render_module
+    calls: list[float] = []  # 每輪實際套用的增益值
+    measured = iter([-22.0, -16.1])  # 首次量測 → 首輪後量測（殘差 0.1，收斂）
+
+    monkeypatch.setattr(render_module, "measure_overall",
+                        lambda path: (next(measured), -3.0))
+
+    real_run = render_module.run_ffmpeg
+
+    def spy_run(args):
+        # 只攔增益輪（帶 volume 濾鏡的呼叫），記錄增益值後照常執行
+        af = args[args.index("-af") + 1] if "-af" in args else ""
+        if af.startswith("volume="):
+            calls.append(float(af.split("dB", 1)[0].split("=", 1)[1]))
+        return real_run(args)
+
+    monkeypatch.setattr(render_module, "run_ffmpeg", spy_run)
+    apply_loudnorm(synth_wav, tmp_path / "norm.wav", target_lufs=-16.0)
+    assert calls == [-16.0 - (-22.0)]  # 只有首輪 +6dB，沒有補償輪
+
+
+def test_apply_loudnorm_compensates_limiter_loss(synth_wav: Path, tmp_path: Path,
+                                                 monkeypatch):
+    """alimiter 吃掉增益能量時必須補殘差輪 —— 真實素材（02.mp4）的教訓。
+
+    高峰值素材套 +6.3dB 增益時大量樣本被限幅壓掉，積分響度只到 -16.6，
+    誤差 0.6 超出驗收容差 ±0.5。以注入的量測序列重現：-22.3 →（首輪後）
+    -16.6 →（補償輪後）-16.2。應恰好跑兩輪：首輪 +6.3、補償輪 +0.6。
+    """
+    import ar.render as render_module
+    calls: list[float] = []
+    measured = iter([-22.3, -16.6, -16.2])
+
+    monkeypatch.setattr(render_module, "measure_overall",
+                        lambda path: (next(measured), -3.0))
+
+    real_run = render_module.run_ffmpeg
+
+    def spy_run(args):
+        af = args[args.index("-af") + 1] if "-af" in args else ""
+        if af.startswith("volume="):
+            calls.append(float(af.split("dB", 1)[0].split("=", 1)[1]))
+        return real_run(args)
+
+    monkeypatch.setattr(render_module, "run_ffmpeg", spy_run)
+    apply_loudnorm(synth_wav, tmp_path / "norm.wav", target_lufs=-16.0)
+    assert len(calls) == 2, "限幅吃掉 0.6dB 時應補一輪殘差"
+    assert abs(calls[0] - 6.3) < 0.01
+    assert abs(calls[1] - 0.6) < 0.01
+
+
 def test_normalize_is_purely_linear(synth_wav: Path, tmp_path: Path):
     """最終正規化不得改變句間響度差 —— 純線性的量化證據。
 

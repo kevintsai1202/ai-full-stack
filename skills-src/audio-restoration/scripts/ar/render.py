@@ -1,17 +1,12 @@
 """實際執行 ffmpeg：分區渲染、串接、響度收斂、影片換揉、ASR WAV 匯出。"""
-import json
-import re
 from pathlib import Path
 
-from .chain import (build_linear_gain_chain, build_loudnorm_measure_chain,
-                    build_zone_chain)
+from .bulk import measure_overall
+from .chain import build_linear_gain_chain, build_zone_chain
 from .ffmpeg_io import FFmpegError, run_ffmpeg
 from .fingerprint import read_samples
 from .gain import apply_gain_envelope, build_gain_envelope
 from .probe import probe
-
-# 用來從 ffmpeg loudnorm 量測階段的 stderr 中擷取 JSON 摘要區塊
-_JSON_RE = re.compile(r"\{[^{}]*\"input_i\"[^{}]*\}", re.DOTALL)
 
 
 def render_zones(input_path: Path, plan: dict, work_dir: Path) -> list[Path]:
@@ -92,8 +87,15 @@ def concat_zones(parts: list[Path], out_path: Path) -> Path:
     return out_path
 
 
+# 補償輪的觸發容差（dB）。取驗收容差 ±0.5 的一半，留餘裕給 AAC 重編偏移。
+LOUDNESS_CONVERGE_TOLERANCE = 0.25
+# 首輪 + 至多兩輪殘差補償。每輪限幅損耗遞減，實務上兩輪內必然收斂；
+# 上限存在是為了防呆（量測異常時不無限迭代），不是預期會用滿。
+MAX_NORMALIZE_PASSES = 3
+
+
 def apply_loudnorm(input_path: Path, out_path: Path, target_lufs: float) -> Path:
-    """最終響度正規化：loudnorm 只用來量測，套用改為純線性增益 + 限幅。
+    """最終響度正規化：量測後套純線性增益 + 限幅，殘差超容差時迭代補償。
 
     為什麼不用 loudnorm 套用：拉平後素材的 LRA 只剩約 2，而線性增益可能
     讓真峰值暫時超過 TP 目標，loudnorm 遇到這種情況會**靜默退回動態模式**，
@@ -101,28 +103,42 @@ def apply_loudnorm(input_path: Path, out_path: Path, target_lufs: float) -> Path
     不降反升 11.6dB，抵銷了降噪成果。volume 純線性永無 fallback，
     峰值保護交給 alimiter（level=false）。
 
-    輸出必須明確指定取樣率：量測階段的 loudnorm 會內部過採樣，鎖回
-    原取樣率以免下游拿到 192kHz 的檔案。
+    為什麼要迭代：純線性增益在數學上精確平移 LUFS，但 alimiter 會把超過
+    峰值目標的樣本壓掉，吃掉一部分增益能量 —— 高峰值素材（真峰值 -0.8、
+    需 +6.3dB）實測單遍只收斂到 -16.6，誤差 0.6 超出驗收容差 ±0.5。
+    每輪套完後重新量測，殘差超過容差就再補一輪；補償輪的增量小，
+    限幅損耗逐輪遞減，漸近收斂。
+
+    量測用 bulk.measure_overall（全檔單次 ebur128），與驗證階段同一條
+    量測路徑；中繼輪保持 32-bit float 避免多次量化，最後才降 16-bit。
     """
-    # 拉平/降噪階段用的取樣率，loudnorm 過採樣後要鎖回這個值
     source_rate = probe(input_path).sample_rate
-    # 量測整段素材的響度統計，結果印在 stderr 的 JSON 摘要中
-    measure_stderr = run_ffmpeg([
-        "-i", str(input_path), "-af", build_loudnorm_measure_chain(target_lufs),
-        "-f", "null", "-",
-    ])
-    match = _JSON_RE.search(measure_stderr)
-    if not match:
-        raise FFmpegError("loudnorm 量測失敗：找不到 JSON 輸出")
-    measured = json.loads(match.group(0))
-    # 需要的增益 = 目標響度 − 實測響度。純加法，不碰動態。
-    gain_db = target_lufs - float(measured["input_i"])
+    current = input_path
+    intermediates: list[Path] = []  # 各輪的 f32 中繼檔，成功後一併清除
+    for pass_index in range(MAX_NORMALIZE_PASSES):
+        measured_lufs, _ = measure_overall(current)
+        gain_db = target_lufs - measured_lufs
+        # 首輪無條件執行（既要搬位準也要過 limiter 保證峰值）；
+        # 之後只有殘差超容差才補償
+        if pass_index > 0 and abs(gain_db) <= LOUDNESS_CONVERGE_TOLERANCE:
+            break
+        stage_path = out_path.parent / f"{out_path.stem}-pass{pass_index}.wav"
+        run_ffmpeg([
+            "-y", "-i", str(current),
+            "-af", build_linear_gain_chain(gain_db),
+            "-ar", str(source_rate),
+            "-c:a", "pcm_f32le", str(stage_path),
+        ])
+        intermediates.append(stage_path)
+        current = stage_path
+    # 最後一步才降 16-bit：純轉碼，不改響度與峰值
     run_ffmpeg([
-        "-y", "-i", str(input_path),
-        "-af", build_linear_gain_chain(gain_db),
-        "-ar", str(source_rate),  # 鎖回原取樣率，抵銷 loudnorm 量測階段的內部過採樣
+        "-y", "-i", str(current),
+        "-ar", str(source_rate),
         "-c:a", "pcm_s16le", str(out_path),
     ])
+    for stage in intermediates:
+        stage.unlink()
     return out_path
 
 

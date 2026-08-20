@@ -1,6 +1,5 @@
 """chain 模組測試：濾鏡順序與條件掛載。"""
-from ar.chain import (build_linear_gain_chain, build_loudnorm_measure_chain,
-                      build_zone_chain)
+from ar.chain import build_linear_gain_chain, build_zone_chain
 
 
 def _zone_plan(**overrides) -> dict:
@@ -76,16 +75,12 @@ def test_no_compressor_in_chain():
     assert "speechnorm" not in chain
 
 
-def test_loudnorm_measure_chain_requests_json():
-    """第一段量測必須輸出 JSON 才能餵給第二段。"""
-    chain = build_loudnorm_measure_chain(-16.0)
-    assert "print_format=json" in chain
-    assert "I=-16.0" in chain
-    assert "TP=-2.0" in chain
-
-
 def test_linear_gain_chain_applies_exact_gain():
-    """第二段是純 volume 增益，數值直接可讀、可驗證。"""
+    """正規化輪是純 volume 增益，數值直接可讀、可驗證。
+
+    響度量測已統一走 bulk.measure_overall（與驗證同一條路徑），
+    loudnorm 量測鏈（build_loudnorm_measure_chain）已隨之移除。
+    """
     chain = build_linear_gain_chain(4.2)
     assert "volume=4.20dB" in chain
     chain_negative = build_linear_gain_chain(-3.55)

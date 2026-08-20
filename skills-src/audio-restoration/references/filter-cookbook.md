@@ -68,15 +68,31 @@ ffmpeg 的 `loudnorm` 支援 `linear=true`，理論上可以用第一段的量�
 「動態退回」的行為解釋，且與同批「拉平已生效（句間標準差確實下降）」的事實
 並不矛盾 —— 兩者是同一個 loudnorm 呼叫裡分別作用在句間關係與底噪位準上的效果。
 
-修法：`loudnorm` 只用來**量測**（`build_loudnorm_measure_chain`，輸出 JSON 摘要），
-套用階段改用 `build_linear_gain_chain(gain_db)`：
+修法：量測用 `bulk.measure_overall`（全檔單次 ebur128，與驗證階段同一條量測
+路徑；早期版本用 loudnorm 的 JSON 量測，效能改造後統一），套用階段用
+`build_linear_gain_chain(gain_db)`：
 
 ```
 volume=<gain_db>dB,alimiter=limit=<10**(TP/20)>:level=false
 ```
 
-`gain_db = target_lufs - measured["input_i"]`，純加法，不碰任何動態機制，永遠不會
-有 fallback。
+`gain_db = target_lufs - 實測 integrated LUFS`，純加法，不碰任何動態機制，
+永遠不會有 fallback。
+
+### 為何要迭代補償：alimiter 會吃掉增益能量（2026-08-21，02.mp4 實測）
+
+純線性增益在數學上精確平移 LUFS，鏈上唯一的非線性環節是 `alimiter`。
+高峰值素材（02.mp4：原始真峰值 −0.8 dBTP、整體 −22.3 LUFS 需 +6.3dB）套增益
+時大量樣本撞上 −2 dBTP 天花板被壓掉，積分響度實測只到 **−16.6**，誤差 0.6
+超出驗收容差 ±0.5，「響度收斂」驗證失敗。
+
+修法（`apply_loudnorm` 的迭代收斂）：每輪套完增益 + 限幅後以 `measure_overall`
+重新量測，殘差超過 `LOUDNESS_CONVERGE_TOLERANCE`（0.25，取驗收容差的一半留
+餘裕給 AAC 重編偏移）就再補一輪。補償輪的增量小、限幅損耗逐輪遞減，漸近收斂；
+`MAX_NORMALIZE_PASSES=3` 只是防呆上限。中繼輪保持 32-bit float，最後才降 16-bit。
+
+教訓：前饋式「量測一次、套用一次」的正規化只在訊號不觸發限幅時精確；
+限幅一旦參與，就必須閉環（量測輸出、補殘差）才能保證收斂。
 
 ### `alimiter` 的 `limit` 換算
 

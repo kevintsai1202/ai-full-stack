@@ -75,7 +75,7 @@ python -m venv "$HOME\.audio-restoration\.venv"
 
 ## 設計約束（修改程式碼前必讀）
 
-- **處理順序不可調換**：拉平 → 降噪 → highpass → deesser → 純線性正規化 → alimiter。afftdn 是門檻式運算，位準未拉平時門檻沒有單一意義。最終正規化刻意不用 loudnorm 套用（改為量測後直接算增益、套純線性 `volume`）——loudnorm 在低 LRA 素材上會靜默退回動態模式，把底噪連同人聲一起往上推，真實素材實測底噪因此不降反升 11.6dB。
+- **處理順序不可調換**：拉平 → 降噪 → highpass → deesser → 純線性正規化 → alimiter。afftdn 是門檻式運算，位準未拉平時門檻沒有單一意義。最終正規化刻意不用 loudnorm 套用（改為量測後直接算增益、套純線性 `volume`）——loudnorm 在低 LRA 素材上會靜默退回動態模式，把底噪連同人聲一起往上推，真實素材實測底噪因此不降反升 11.6dB。正規化採**迭代收斂**：alimiter 會吃掉高峰值素材的部分增益能量（02.mp4 實測單遍只到 −16.6，誤差 0.6 超容差），每輪套完重新量測、殘差 >0.25 就補一輪（上限 3 輪，見 `apply_loudnorm`）。
 - **拉平只能用純增益**，禁用 `acompressor` / `dynaudnorm` / `speechnorm`。壓縮會頂高底噪，破壞降噪前提。
 - **切句依據是 ASR 詞級時間軸**，不是 silencedetect（音量門檻會讓小聲句整句消失），也不是 SRT 字幕（時間戳為閱讀調整過）。
 - **噪音採樣窗需雙重確認**：詞間 gap ≥ 0.6 秒且 silencedetect 亦判定靜音。採樣窗混入人聲會讓降噪把人聲當噪音消掉。

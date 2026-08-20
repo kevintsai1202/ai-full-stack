@@ -12,7 +12,6 @@ highpass 與 deesser 只在該區診斷確有需要時才掛，無差別套用�
 # 精確落在 -1.5，但 AAC 192k 重編後上升到 -1.4，直接超標。限幅器把訊號
 # 壓到剛好卡在驗收線上，等於沒有任何容錯空間。
 TRUE_PEAK_TARGET = -2.0
-LRA = 11                  # 目標響度範圍
 DEFAULT_NOISE_FLOOR = -40.0  # 沒有實測底噪時的退路值
 NOISE_FLOOR_MIN = -80.0   # afftdn 的 nf 合法下限
 NOISE_FLOOR_MAX = -20.0   # afftdn 的 nf 合法上限
@@ -52,12 +51,6 @@ def build_zone_chain(zone_plan: dict) -> str:
     if zone_plan.get("needs_deesser"):
         filters.append("deesser=i=0.4:m=0.5:f=0.5")
     return ",".join(filters)
-
-
-def build_loudnorm_measure_chain(target_lufs: float) -> str:
-    """兩段式 loudnorm 的第一段：量測，輸出 JSON。"""
-    return (f"loudnorm=I={target_lufs}:TP={TRUE_PEAK_TARGET}:LRA={LRA}"
-            f":print_format=json")
 
 
 def build_linear_gain_chain(gain_db: float) -> str:
