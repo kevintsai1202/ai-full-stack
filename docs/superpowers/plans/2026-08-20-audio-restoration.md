@@ -1209,6 +1209,24 @@ def test_detect_zones_splits_at_noise_change():
     assert abs(zones[1].end - 40.0) < 1e-6
 
 
+def test_zone_cut_lands_inside_a_noise_window():
+    """切點必須落在某個噪音窗內部，不得落在兩窗之間的語音區。
+
+    兩窗之間全是人聲；zone 交界的區級增益是硬切，切在語音中段會產生
+    可聽的喀聲。切在噪音窗內則跳變發生在無人聲處。
+    """
+    fps = [
+        spectral_fingerprint(_white_noise(1), SR),
+        spectral_fingerprint(_white_noise(2), SR),
+        spectral_fingerprint(_low_passed_noise(3), SR),
+        spectral_fingerprint(_low_passed_noise(4), SR),
+    ]
+    windows = [Interval(0, 1), Interval(10, 11), Interval(20, 21), Interval(30, 31)]
+    zones = detect_zones(fps, windows, total_duration=40.0, threshold=0.15)
+    cut = zones[0].end
+    assert any(w.start <= cut <= w.end for w in windows), f"切點 {cut} 落在語音區"
+
+
 def test_detect_zones_returns_single_zone_when_uniform():
     """底噪一致時只應有一個 zone，不得無故切割。"""
     fps = [spectral_fingerprint(_white_noise(s), SR) for s in (1, 2, 3)]
@@ -1315,19 +1333,23 @@ def detect_zones(fingerprints: list[np.ndarray], windows: list[Interval],
                  total_duration: float, threshold: float = ZONE_THRESHOLD) -> list[Zone]:
     """依相鄰指紋距離切分 zone。
 
-    切點取在「距離超標的兩個噪音窗」之間的中點，因為錄音條件的實際改變點
-    必然落在這兩次採樣之間。
+    錄音條件的實際改變點必然落在距離超標的兩次採樣之間，但切點不取兩窗
+    中點 —— 那之間全是語音。切點取後一個窗（第一個呈現新特徵者）的中點，
+    讓 zone 邊界必定落在確定無人聲的區間內，區級增益的跳變才聽不見。
     """
     if not fingerprints:
         return [Zone(index=0, start=0.0, end=total_duration, noise_window_indices=[])]
 
     cut_points: list[float] = []
-    cut_after: list[int] = []
     for index in range(len(fingerprints) - 1):
         if cosine_distance(fingerprints[index], fingerprints[index + 1]) > threshold:
-            midpoint = (windows[index].end + windows[index + 1].start) / 2.0
-            cut_points.append(midpoint)
-            cut_after.append(index)
+            # 切點取「第一個呈現新特徵的噪音窗」的中點，而不是兩窗之間的中點。
+            # 兩窗之間全是語音，切在那裡會讓 zone 邊界落在講話中段 —— 而區級
+            # 增益在 zone 交界是硬切（斜坡只作用在 zone 內的語句交界），
+            # 相鄰 zone 增益差幾 dB 就是一聲清楚可聽的喀聲。
+            # 切在噪音窗中點則邊界必定落在無人聲處，跳變聽不見。
+            cut = (windows[index + 1].start + windows[index + 1].end) / 2.0
+            cut_points.append(cut)
 
     bounds = [0.0, *cut_points, total_duration]
     zones: list[Zone] = []
@@ -2925,7 +2947,7 @@ from pathlib import Path
 from .chain import (LRA, build_loudnorm_apply_chain, build_loudnorm_measure_chain,
                     build_zone_chain)
 from .ffmpeg_io import FFmpegError, run_ffmpeg
-from .fingerprint import read_samples
+from .fingerprint import read_samples  # noqa: F401  解碼樣本用
 from .gain import apply_gain_envelope, build_gain_envelope
 from .probe import probe
 
@@ -2973,7 +2995,9 @@ def render_zones(input_path: Path, plan: dict, work_dir: Path) -> list[Path]:
         # 以 32-bit float raw 交棒給 ffmpeg：拉平後的峰值可能超過 1.0，
         # 若此時就寫 16-bit PCM 會被截頂，後面的 loudnorm 也救不回來。
         raw_path = work_dir / f"zone-{zone['index']:03d}.f32"
-        leveled.tofile(raw_path)
+        # 明確指定 little-endian（"<f4"）而非依賴主機位元組序：讀取端寫死
+        # 了 -f f32le，在 x86 上剛好相符是巧合，不該是隱含假設
+        leveled.astype("<f4").tofile(raw_path)
 
         # 第二步：交給 ffmpeg 做降噪與 EQ
         out_path = work_dir / f"zone-{zone['index']:03d}.wav"
@@ -3005,7 +3029,12 @@ def apply_loudnorm(input_path: Path, out_path: Path, target_lufs: float) -> Path
 
     單段式 loudnorm 走的是動態壓縮路徑，會破壞前面辛苦拉平的動態關係；
     兩段式帶入 measured 值後可走 linear 模式，只做線性增益搬移。
+
+    輸出必須明確指定取樣率：loudnorm 為了偵測 true peak 會內部過採樣到
+    192kHz，且**輸出會維持在 192kHz** —— 若不鎖定，換揉回影片或交給下游
+    時取樣率已經悄悄變了。
     """
+    source_rate = probe(input_path).sample_rate
     measure_stderr = run_ffmpeg([
         "-i", str(input_path), "-af", build_loudnorm_measure_chain(target_lufs),
         "-f", "null", "-",
@@ -3017,6 +3046,7 @@ def apply_loudnorm(input_path: Path, out_path: Path, target_lufs: float) -> Path
     apply_stderr = run_ffmpeg([
         "-y", "-i", str(input_path),
         "-af", build_loudnorm_apply_chain(target_lufs, measured),
+        "-ar", str(source_rate),  # 鎖回原取樣率，抵銷 loudnorm 的內部過採樣
         "-c:a", "pcm_s16le", str(out_path),
     ])
     _warn_if_dynamic_fallback(apply_stderr)
@@ -3052,8 +3082,28 @@ def _warn_if_dynamic_fallback(stderr: str) -> None:
 # 因為拉平後、限幅前的訊號峰值可能超過 0 dBFS，提早量化會截頂。
 
 
+MAX_DURATION_DRIFT = 0.1  # 音訊與影像時長容許誤差（秒）
+
+
 def mux_video(video_path: Path, audio_path: Path, out_path: Path) -> Path:
-    """把修復後的音軌換揉回原影片，影像軌直接複製不重編。"""
+    """把修復後的音軌換揉回原影片，影像軌直接複製不重編。
+
+    換揉前先比對音訊與影像時長：`-shortest` 會在音軌較短時**靜默截掉影像
+    尾巴**，不報錯也不警告。逐 zone 解碼與串接會累積次樣本級的裁切誤差，
+    zone 多時可能累積到可察覺的程度，因此這裡明確擋下而非讓它悄悄發生。
+    """
+    video_duration = probe(video_path).duration
+    audio_duration = probe(audio_path).duration
+    drift = abs(video_duration - audio_duration)
+    if drift > MAX_DURATION_DRIFT:
+        raise FFmpegError(
+            f"修復後音訊時長 {audio_duration:.3f}s 與影像 {video_duration:.3f}s "
+            f"相差 {drift:.3f}s，超過容許的 {MAX_DURATION_DRIFT}s。
+"
+            "換揉會靜默截掉較長的一軌，故在此停下。
+"
+            "可能原因：分區串接累積裁切誤差，或 plan.json 的 zone 邊界未涵蓋整支檔案。"
+        )
     run_ffmpeg([
         "-y", "-i", str(video_path), "-i", str(audio_path),
         "-map", "0:v:0", "-map", "1:a:0",
