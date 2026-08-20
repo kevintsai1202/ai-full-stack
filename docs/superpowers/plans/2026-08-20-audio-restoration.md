@@ -1051,6 +1051,12 @@ from .silence import Interval
 _I_RE = re.compile(r"^\s*I:\s*(-?[\d.]+|-inf)\s*LUFS", re.MULTILINE)
 _RMS_RE = re.compile(r"RMS level dB:\s*(-?[\d.]+|-inf)")
 _PEAK_RE = re.compile(r"Peak level dB:\s*(-?[\d.]+|-inf)")
+# ebur128 的真峰值印在 "True peak:" 區塊底下的 "Peak:" 那一行，
+# 與 astats 的 "Peak level dB:" 是兩個不同的量：後者是取樣點的最大值，
+# 前者經過過採樣、含 inter-sample peak。驗證真峰值上限必須用前者，
+# 用樣本峰值會系統性低估 0.3-3dB，可能實際超標卻回報合格。
+_TRUE_PEAK_RE = re.compile(r"True peak:\s*
+\s*Peak:\s*(-?[\d.]+|-inf)\s*dBFS")
 
 SILENT_FLOOR = -120.0  # 量到 -inf 時採用的替代值，避免後續運算出現無限大
 
@@ -1058,9 +1064,10 @@ SILENT_FLOOR = -120.0  # 量到 -inf 時採用的替代值，避免後續運算�
 @dataclass
 class LoudnessStats:
     """一段區間的響度量測結果。"""
-    lufs: float     # EBU R128 integrated loudness
-    rms_db: float   # RMS 位準
-    peak_db: float  # 峰值位準
+    lufs: float           # EBU R128 integrated loudness
+    rms_db: float         # RMS 位準
+    peak_db: float        # 樣本峰值（astats，取樣點最大值）
+    true_peak_db: float   # 真峰值（ebur128，過採樣後含 inter-sample peak）
 
 
 def _to_float(value: str | None) -> float:
@@ -1084,10 +1091,12 @@ def measure_interval(path: Path, start: float, end: float) -> LoudnessStats:
     i_match = _I_RE.search(stderr)
     rms_match = _RMS_RE.search(stderr)
     peak_match = _PEAK_RE.search(stderr)
+    true_peak_match = _TRUE_PEAK_RE.search(stderr)
     return LoudnessStats(
-        lufs=_to_float(i_match.group(1) if i_match else None),
-        rms_db=_to_float(rms_match.group(1) if rms_match else None),
-        peak_db=_to_float(peak_match.group(1) if peak_match else None),
+        lufs=_extract(i_match, "LUFS (I:)", start, end),
+        rms_db=_extract(rms_match, "RMS level dB", start, end),
+        peak_db=_extract(peak_match, "Peak level dB", start, end),
+        true_peak_db=_extract(true_peak_match, "True peak", start, end),
     )
 
 
@@ -3221,6 +3230,16 @@ def test_flattening_not_effective_fails():
     assert any("拉平" in c.detail for c in result.checks if not c.passed)
 
 
+def test_single_utterance_flattening_is_not_a_failure():
+    """單句音檔的標準差恆為 0，不得因此判為拉平失敗。"""
+    before = {**_before(), "utterance_lufs_stdev": 0.0}
+    after = _after(utterance_lufs_stdev=0.0)
+    result = verify(before, after, target_lufs=-16.0)
+    flattening = next(c for c in result.checks if c.name == "拉平生效")
+    assert flattening.passed is True
+    assert "不適用" in flattening.detail
+
+
 def test_failed_check_names_the_stage():
     """失敗時必須指出是哪個環節，不得只回傳布林值。"""
     result = verify(_before(), _after(integrated_lufs=-20.0), target_lufs=-16.0)
@@ -3300,7 +3319,12 @@ def _check_loudness(after: dict, target_lufs: float) -> Check:
 
 
 def _check_true_peak(after: dict) -> Check:
-    """真峰值不得超標。"""
+    """真峰值不得超標。
+
+    這裡的值必須來自 ebur128 的 True peak（過採樣、含 inter-sample peak），
+    不能用 astats 的樣本峰值 —— 後者系統性低估 0.3-3dB，會讓實際超標的
+    內容通過檢查。
+    """
     passed = after["true_peak"] <= TRUE_PEAK_LIMIT
     return Check("真峰值", passed,
                  f"實測 {after['true_peak']:.1f} dBTP，上限 {TRUE_PEAK_LIMIT}"
@@ -3308,7 +3332,14 @@ def _check_true_peak(after: dict) -> Check:
 
 
 def _check_flattening(before: dict, after: dict) -> Check:
-    """句間響度標準差變小是拉平成功的量化證據。"""
+    """句間響度標準差變小是拉平成功的量化證據。
+
+    只有一句時標準差恆為 0.0（沒有句間差異可言），此時這項檢查無意義，
+    視為 N/A 通過 —— 否則 0.0 < 0.0 為 False，會把修復完全正確的單句
+    音檔誤判為拉平失敗。
+    """
+    if before["utterance_lufs_stdev"] == 0.0 and after["utterance_lufs_stdev"] == 0.0:
+        return Check("拉平生效", True, "只有一句（或句間本就無差異），此項不適用")
     passed = after["utterance_lufs_stdev"] < before["utterance_lufs_stdev"]
     return Check("拉平生效", passed,
                  f"句間標準差 {before['utterance_lufs_stdev']:.2f} → "
@@ -3378,11 +3409,16 @@ def pick_preview_start(plan: dict) -> float:
 def build_ab_preview(before_path: Path, after_path: Path, start: float,
                      out_path: Path, duration: float = 30.0) -> Path:
     """輸出「修復前 → 修復後」串接的試聽片段。"""
+    # 兩路先各自轉成單聲道同取樣率再串接：before 是原始檔（可能是立體聲），
+    # after 是修復輸出（恆為單聲道），聲道佈局不同時 concat 的行為不可靠
     run_ffmpeg([
         "-y",
         "-ss", f"{start:.3f}", "-t", f"{duration:.3f}", "-i", str(before_path),
         "-ss", f"{start:.3f}", "-t", f"{duration:.3f}", "-i", str(after_path),
-        "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1[out]",
+        "-filter_complex",
+        "[0:a]aformat=channel_layouts=mono:sample_rates=48000[a0];"
+        "[1:a]aformat=channel_layouts=mono:sample_rates=48000[a1];"
+        "[a0][a1]concat=n=2:v=0:a=1[out]",
         "-map", "[out]", "-ac", "1", "-c:a", "pcm_s16le", str(out_path),
     ])
     return out_path
@@ -3597,7 +3633,8 @@ def collect_metrics(path: Path, plan: dict, report_path: Path | None = None) -> 
     return {
         "noise_lufs": noise_lufs,
         "integrated_lufs": overall.lufs,
-        "true_peak": overall.peak_db,
+        # 用 ebur128 的真峰值，不是 astats 的樣本峰值
+        "true_peak": overall.true_peak_db,
         "utterance_lufs_stdev": (
             statistics.pstdev(utterance_lufs) if len(utterance_lufs) > 1 else 0.0
         ),
