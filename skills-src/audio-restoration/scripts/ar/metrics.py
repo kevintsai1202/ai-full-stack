@@ -47,12 +47,28 @@ def collect_metrics(path: Path, plan: dict, report_path: Path | None = None) -> 
         measure_interval(path, u["start"], u["end"]).rms_db
         for u in plan["utterances"]
     ]
+    # 逐窗與逐句的原始清單，供 verify 做**配對式**淨壓制計算。
+    # 為什麼要配對：拉平的句級增益逐句不同，噪音窗多落在安靜句的增益
+    # 範圍內，被抬得比人聲中位更多 —— 「全域中位對全域中位」的 SNR
+    # 因此失真（實測假性劣化 4dB）。配對讓每個窗與**包含它的那一句**
+    # 相減，共同增益完全相消，剩下的才是降噪淨效果。
+    noise_window_rms = [
+        measure_interval(path, start, end).rms_db for start, end in windows
+    ]
+    # 每個噪音窗所屬的句索引（utterances 邊界外擴後覆蓋整條時間軸）
+    window_owner = [
+        _owner_index(plan["utterances"], (start + end) / 2.0)
+        for start, end in windows
+    ]
     snr_db = (
         median(utterance_rms) - noise_rms_db
         if noise_rms_db is not None and utterance_rms else None
     )
     return {
         "noise_rms_db": noise_rms_db,
+        "noise_window_rms": noise_window_rms,
+        "utterance_rms": utterance_rms,
+        "window_owner": window_owner,
         "snr_db": snr_db,
         "integrated_lufs": overall.lufs,
         # 用 ebur128 的真峰值，不是 astats 的樣本峰值
@@ -61,6 +77,14 @@ def collect_metrics(path: Path, plan: dict, report_path: Path | None = None) -> 
             statistics.pstdev(utterance_lufs) if len(utterance_lufs) > 1 else 0.0
         ),
     }
+
+
+def _owner_index(utterances: list[dict], time_point: float) -> int:
+    """回傳覆蓋指定時間點的句索引；utterances 邊界相接、覆蓋全軸。"""
+    for index, utterance in enumerate(utterances):
+        if utterance["start"] <= time_point < utterance["end"]:
+            return index
+    return len(utterances) - 1
 
 
 def _total_duration(plan: dict) -> float:
