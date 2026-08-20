@@ -2621,6 +2621,20 @@ def test_alimiter_limit_is_linear_not_db():
         "input_i": "-23.1", "input_tp": "-5.2", "input_lra": "8.3",
         "input_thresh": "-33.4", "target_offset": "0.4"})
     assert "alimiter=limit=0.8414" in chain
+
+
+def test_alimiter_disables_auto_level():
+    """alimiter 必須關閉自動電平補償。
+
+    ffmpeg 的 alimiter 預設 level=true，會在限幅後自動調整輸出電平，
+    把 loudnorm 剛做完的正規化結果推高。實測不加 level=false 時輸出
+    偏離目標 1.5-2.0 LUFS。我們用 alimiter 只為防止真峰值超標，
+    不要它動響度。
+    """
+    chain = build_loudnorm_apply_chain(-16.0, {
+        "input_i": "-23.1", "input_tp": "-5.2", "input_lra": "8.3",
+        "input_thresh": "-33.4", "target_offset": "0.4"})
+    assert "level=false" in chain
 ```
 
 - [ ] **Step 2: 執行測試確認失敗**
@@ -2705,7 +2719,11 @@ def build_loudnorm_apply_chain(target_lufs: float, measured: dict) -> str:
         f":measured_thresh={measured['input_thresh']}"
         f":offset={measured['target_offset']}"
         f":linear=true:print_format=summary,"
-        f"alimiter=limit={10 ** (TRUE_PEAK / 20):.4f}"
+        # level=false 是必要的：alimiter 的 level 預設 true，會對限幅後的訊號
+        # 做「自動電平補償」，把 loudnorm 剛做完的線性正規化結果重新推高。
+        # 實測：不加時輸出偏離目標 1.5-2.0 LUFS，加了之後誤差降到 0.0-0.5。
+        # 我們用 alimiter 只為了防止真峰值超標，不要它動響度。
+        f"alimiter=limit={10 ** (TRUE_PEAK / 20):.4f}:level=false"
     )
 ```
 
