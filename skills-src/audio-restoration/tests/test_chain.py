@@ -1,5 +1,5 @@
 """chain 模組測試：濾鏡順序與條件掛載。"""
-from ar.chain import (build_loudnorm_apply_chain, build_loudnorm_measure_chain,
+from ar.chain import (build_linear_gain_chain, build_loudnorm_measure_chain,
                       build_zone_chain)
 
 
@@ -84,22 +84,23 @@ def test_loudnorm_measure_chain_requests_json():
     assert "TP=-2.0" in chain
 
 
-def test_loudnorm_apply_chain_uses_measured_values():
-    """第二段必須帶入第一段量到的值，且鍵名要對得上。
+def test_linear_gain_chain_applies_exact_gain():
+    """第二段是純 volume 增益，數值直接可讀、可驗證。"""
+    chain = build_linear_gain_chain(4.2)
+    assert "volume=4.20dB" in chain
+    chain_negative = build_linear_gain_chain(-3.55)
+    assert "volume=-3.55dB" in chain_negative
 
-    斷言完整的鍵值對而非只檢查數值出現：若 measured_I 與 measured_TP
-    的值被寫反，只檢查數值的斷言照樣會通過。
+
+def test_linear_gain_chain_never_uses_loudnorm():
+    """最終套用不得出現 loudnorm。
+
+    loudnorm 在「線性增益會讓 TP 暫時超標」時會靜默退回動態模式，
+    為了湊 LRA 目標把底噪抬高 —— 真實素材實測底噪因此不降反升 11.6dB。
+    這個測試防止有人把 loudnorm 套用加回來。
     """
-    measured = {"input_i": "-23.1", "input_tp": "-5.2",
-                "input_lra": "8.3", "input_thresh": "-33.4",
-                "target_offset": "0.4"}
-    chain = build_loudnorm_apply_chain(-16.0, measured)
-    assert "measured_I=-23.1" in chain
-    assert "measured_TP=-5.2" in chain
-    assert "measured_LRA=8.3" in chain
-    assert "measured_thresh=-33.4" in chain
-    assert "offset=0.4" in chain
-    assert "linear=true" in chain
+    chain = build_linear_gain_chain(4.2)
+    assert "loudnorm" not in chain
 
 
 def test_alimiter_limit_is_linear_not_db():
@@ -111,9 +112,7 @@ def test_alimiter_limit_is_linear_not_db():
     注意處理目標（-2.0）比驗收標準（-1.5）低 0.5 dB，那是留給有損編碼的
     餘裕 —— 實測 AAC 192k 重編會讓真峰值上升約 0.1 dB。
     """
-    chain = build_loudnorm_apply_chain(-16.0, {
-        "input_i": "-23.1", "input_tp": "-5.2", "input_lra": "8.3",
-        "input_thresh": "-33.4", "target_offset": "0.4"})
+    chain = build_linear_gain_chain(4.2)
     assert "alimiter=limit=0.7943" in chain
 
 
@@ -125,7 +124,5 @@ def test_alimiter_disables_auto_level():
     偏離目標 1.5-2.0 LUFS。我們用 alimiter 只為防止真峰值超標，
     不要它動響度。
     """
-    chain = build_loudnorm_apply_chain(-16.0, {
-        "input_i": "-23.1", "input_tp": "-5.2", "input_lra": "8.3",
-        "input_thresh": "-33.4", "target_offset": "0.4"})
+    chain = build_linear_gain_chain(4.2)
     assert "level=false" in chain

@@ -39,8 +39,21 @@ def collect_metrics(path: Path, plan: dict, report_path: Path | None = None) -> 
         median([measure_interval(path, start, end).rms_db for start, end in windows])
         if windows else None
     )
+    # SNR = 人聲中位 RMS − 底噪中位 RMS。
+    # 驗證用 SNR 而非底噪絕對值：拉平與最終增益會把底噪連同人聲一起搬移
+    # （那是設計行為），底噪絕對值因此可升可降；SNR 把共同的增益消掉，
+    # 剩下的正是降噪的淨效果。
+    utterance_rms = [
+        measure_interval(path, u["start"], u["end"]).rms_db
+        for u in plan["utterances"]
+    ]
+    snr_db = (
+        median(utterance_rms) - noise_rms_db
+        if noise_rms_db is not None and utterance_rms else None
+    )
     return {
         "noise_rms_db": noise_rms_db,
+        "snr_db": snr_db,
         "integrated_lufs": overall.lufs,
         # 用 ebur128 的真峰值，不是 astats 的樣本峰值
         "true_peak": overall.true_peak_db,

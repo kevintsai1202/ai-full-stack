@@ -4,7 +4,7 @@
 """
 from dataclasses import dataclass, field
 
-MAX_NOISE_DROP_DB = 25.0   # 底噪降幅上限，超過代表降噪把人聲也削了
+MAX_SNR_GAIN_DB = 25.0     # SNR 改善上限，超過代表降噪過頭把人聲也削了
 LOUDNESS_TOLERANCE = 0.5   # 響度收斂容差（LUFS）
 TRUE_PEAK_LIMIT = -1.5     # 真峰值上限（dBTP）
 
@@ -27,7 +27,7 @@ class VerifyResult:
 def verify(before: dict, after: dict, target_lufs: float) -> VerifyResult:
     """比對修復前後指標，輸出四項檢查結果。"""
     checks = [
-        _check_noise(before, after),
+        _check_snr(before, after),
         _check_loudness(after, target_lufs),
         _check_true_peak(after),
         _check_flattening(before, after),
@@ -35,27 +35,35 @@ def verify(before: dict, after: dict, target_lufs: float) -> VerifyResult:
     return VerifyResult(passed=all(c.passed for c in checks), checks=checks)
 
 
-def _check_noise(before: dict, after: dict) -> Check:
-    """底噪應下降，但降幅過大代表降噪過頭。
+def _check_snr(before: dict, after: dict) -> Check:
+    """SNR 應改善，但改善過大代表降噪過頭。
 
-    量的是 RMS 不是 LUFS：ebur128 的 integrated loudness 有 -70 LUFS 絕對
-    閘門，安靜的底噪會被截斷成 -70，前後都是 -70、降幅永遠 0。
+    驗 SNR 而非底噪絕對值：拉平與最終增益把底噪連同人聲一起搬移是設計
+    行為，底噪絕對值可升可降（真實素材實測 -67→-55，升了 11.6dB，但那
+    來自合法的增益）。SNR 把共同增益消掉，剩下的才是降噪的淨效果。
 
-    底噪為 None 代表沒有噪音採樣窗可量（通常是缺 report.json）。
-    此時明確回報「不可驗證」而不是拿別的數字頂替 —— 一個假裝通過的
-    檢查比沒有檢查更危險。
+    量的是 RMS 不是 LUFS：ebur128 的 integrated loudness 有 -70 LUFS
+    絕對閘門，安靜的底噪會被截斷。
+
+    SNR 為 None 代表沒有噪音採樣窗可量（通常是缺 report.json）。此時
+    明確回報「不可驗證」而不是拿別的數字頂替 —— 一個假裝通過的檢查
+    比沒有檢查更危險。
     """
-    if before["noise_rms_db"] is None or after["noise_rms_db"] is None:
-        return Check("底噪下降", True,
+    if before["snr_db"] is None or after["snr_db"] is None:
+        return Check("SNR 改善", True,
                      "無噪音採樣窗可量測，此項不可驗證（請確認 report.json 存在）")
-    drop = before["noise_rms_db"] - after["noise_rms_db"]
-    if drop <= 0:
-        return Check("底噪下降", False, f"底噪未下降（變化 {drop:.1f} dB），降噪未生效")
-    if drop > MAX_NOISE_DROP_DB:
-        return Check("底噪下降", False,
-                     f"底噪下降 {drop:.1f} dB 超過 {MAX_NOISE_DROP_DB} dB 上限，"
+    gain = after["snr_db"] - before["snr_db"]
+    if gain <= 0:
+        return Check("SNR 改善", False,
+                     f"SNR 未改善（{before['snr_db']:.1f} → {after['snr_db']:.1f} dB），"
+                     f"降噪未生效")
+    if gain > MAX_SNR_GAIN_DB:
+        return Check("SNR 改善", False,
+                     f"SNR 改善 {gain:.1f} dB 超過 {MAX_SNR_GAIN_DB} dB 上限，"
                      f"降噪過頭，人聲可能一併被削除，請調低 denoise_db 重跑")
-    return Check("底噪下降", True, f"底噪下降 {drop:.1f} dB")
+    return Check("SNR 改善", True,
+                 f"SNR {before['snr_db']:.1f} → {after['snr_db']:.1f} dB"
+                 f"（改善 {gain:.1f} dB）")
 
 
 def _check_loudness(after: dict, target_lufs: float) -> Check:

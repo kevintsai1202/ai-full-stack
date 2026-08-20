@@ -153,7 +153,8 @@ def _print_restore_summary(entries: list[dict]) -> None:
             print(f"  {entry['file']}: 未通過（{failed}）")
             continue
         before, after = entry["before"], entry["after"]
-        print(f"  {entry['file']}: 底噪 {before['noise_rms_db']:.1f} → "
+        print(f"  {entry['file']}: SNR {before['snr_db']:.1f} → "
+              f"{after['snr_db']:.1f} dB／底噪 {before['noise_rms_db']:.1f} → "
               f"{after['noise_rms_db']:.1f} dB RMS／整體 {before['integrated_lufs']:.1f} → "
               f"{after['integrated_lufs']:.1f}／句間標準差 "
               f"{before['utterance_lufs_stdev']:.2f} → {after['utterance_lufs_stdev']:.2f}")

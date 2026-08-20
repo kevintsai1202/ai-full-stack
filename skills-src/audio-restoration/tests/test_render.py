@@ -95,16 +95,19 @@ def test_apply_loudnorm_converges_after_leveling(synth_wav: Path, tmp_path: Path
     assert abs(stats.lufs - (-16.0)) < 1.5
 
 
-def test_dynamic_fallback_is_detected(synth_wav: Path, tmp_path: Path, capsys):
-    """素材動態範圍超過目標 LRA 時，必須偵測到 loudnorm 退回動態模式並警告。
+def test_normalize_is_purely_linear(synth_wav: Path, tmp_path: Path):
+    """最終正規化不得改變句間響度差 —— 純線性的量化證據。
 
-    合成音檔兩句相差 12dB，未拉平時 input LRA 約 12，超過目標 LRA 11，
-    ffmpeg 會靜默退回動態模式。這個測試同時守住兩件事：偵測字串要能匹配
-    ffmpeg 的實際輸出格式（大寫 D、多個空白），以及警告確實會印出來。
+    未拉平的合成音檔兩句相差約 12dB。若正規化是純線性增益，兩句的差距
+    在正規化後應原封不動；若混入任何動態處理（loudnorm 動態模式、
+    壓縮器），差距會被縮小。這個測試守住「動態機制絕不介入最終正規化」。
     """
-    apply_loudnorm(synth_wav, tmp_path / "norm.wav", target_lufs=-16.0)
-    captured = capsys.readouterr()
-    assert "動態模式" in captured.out
+    out = apply_loudnorm(synth_wav, tmp_path / "norm.wav", target_lufs=-16.0)
+    before_gap = (measure_interval(synth_wav, 2.2, 3.8).rms_db
+                  - measure_interval(synth_wav, 5.2, 6.8).rms_db)
+    after_gap = (measure_interval(out, 2.2, 3.8).rms_db
+                 - measure_interval(out, 5.2, 6.8).rms_db)
+    assert abs(after_gap - before_gap) < 0.5
 
 
 def test_loudnorm_self_reported_value_is_not_trusted(synth_wav: Path, tmp_path: Path):

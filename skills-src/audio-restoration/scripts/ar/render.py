@@ -3,7 +3,7 @@ import json
 import re
 from pathlib import Path
 
-from .chain import (LRA, build_loudnorm_apply_chain, build_loudnorm_measure_chain,
+from .chain import (build_linear_gain_chain, build_loudnorm_measure_chain,
                     build_zone_chain)
 from .ffmpeg_io import FFmpegError, run_ffmpeg
 from .fingerprint import read_samples
@@ -87,18 +87,20 @@ def concat_zones(parts: list[Path], out_path: Path) -> Path:
 
 
 def apply_loudnorm(input_path: Path, out_path: Path, target_lufs: float) -> Path:
-    """兩段式 loudnorm：先量測再套用，最後以 alimiter 收尾。
+    """最終響度正規化：loudnorm 只用來量測，套用改為純線性增益 + 限幅。
 
-    單段式 loudnorm 走的是動態壓縮路徑，會破壞前面辛苦拉平的動態關係；
-    兩段式帶入 measured 值後可走 linear 模式，只做線性增益搬移。
+    為什麼不用 loudnorm 套用：拉平後素材的 LRA 只剩約 2，而線性增益可能
+    讓真峰值暫時超過 TP 目標，loudnorm 遇到這種情況會**靜默退回動態模式**，
+    為了湊 LRA 目標把安靜段（含底噪）往上推 —— 真實素材實測底噪因此
+    不降反升 11.6dB，抵銷了降噪成果。volume 純線性永無 fallback，
+    峰值保護交給 alimiter（level=false）。
 
-    輸出必須明確指定取樣率：loudnorm 為了偵測 true peak 會內部過採樣到
-    192kHz，且輸出會維持在 192kHz —— 若不鎖定，換揉回影片或交給下游時
-    取樣率已經悄悄變了。
+    輸出必須明確指定取樣率：量測階段的 loudnorm 會內部過採樣，鎖回
+    原取樣率以免下游拿到 192kHz 的檔案。
     """
     # 拉平/降噪階段用的取樣率，loudnorm 過採樣後要鎖回這個值
     source_rate = probe(input_path).sample_rate
-    # 第一段：量測整段素材的響度統計，結果印在 stderr 的 JSON 摘要中
+    # 量測整段素材的響度統計，結果印在 stderr 的 JSON 摘要中
     measure_stderr = run_ffmpeg([
         "-i", str(input_path), "-af", build_loudnorm_measure_chain(target_lufs),
         "-f", "null", "-",
@@ -107,39 +109,15 @@ def apply_loudnorm(input_path: Path, out_path: Path, target_lufs: float) -> Path
     if not match:
         raise FFmpegError("loudnorm 量測失敗：找不到 JSON 輸出")
     measured = json.loads(match.group(0))
-    # 第二段：帶入量測值套用線性增益，收斂到目標響度
-    apply_stderr = run_ffmpeg([
+    # 需要的增益 = 目標響度 − 實測響度。純加法，不碰動態。
+    gain_db = target_lufs - float(measured["input_i"])
+    run_ffmpeg([
         "-y", "-i", str(input_path),
-        "-af", build_loudnorm_apply_chain(target_lufs, measured),
-        "-ar", str(source_rate),  # 鎖回原取樣率，抵銷 loudnorm 的內部過採樣
+        "-af", build_linear_gain_chain(gain_db),
+        "-ar", str(source_rate),  # 鎖回原取樣率，抵銷 loudnorm 量測階段的內部過採樣
         "-c:a", "pcm_s16le", str(out_path),
     ])
-    _warn_if_dynamic_fallback(apply_stderr)
     return out_path
-
-
-def _warn_if_dynamic_fallback(stderr: str) -> None:
-    """檢查 loudnorm 是否從 linear 退回動態模式並提出警告。
-
-    ffmpeg 的 loudnorm 指定 linear=true 後，若目標無法以單一線性增益達成
-    （例如原始素材的 LRA 已超過目標），會**自動退回動態模式**且不報錯。
-    動態模式會壓縮動態範圍，破壞前面辛苦拉平的句間關係 —— 這正是本技能
-    最不想要的結果，卻是預設會靜默發生的行為。
-    """
-    # ffmpeg 實際輸出是 "Normalization Type:   Dynamic"（首字大寫、多個空白），
-    # 用字面小寫比對會永遠不匹配 —— 這個專門偵測靜默失敗的警告若自己寫死了
-    # 大小寫，它自己就會靜默失效，且沒有任何測試會發現。
-    if re.search(r"Normalization\s+Type:\s*Dynamic", stderr, re.IGNORECASE):
-        # 從 stderr 中順手撈出實測輸入 LRA，讓警告訊息能直接告訴使用者差多少
-        measured_lra = re.search(r"Input LRA:\s*([\d.]+)", stderr)
-        lra_note = f"（實測輸入 LRA {measured_lra.group(1)}，目標 {LRA}）" if measured_lra else ""
-        print(
-            f"警告：loudnorm 無法以線性增益達成目標，已自動退回動態模式{lra_note}。\n"
-            "  動態模式會壓縮動態範圍，抵銷前面拉平的效果。\n"
-            "  常見原因：素材原始動態範圍超過目標 LRA。\n"
-            "  處置：確認拉平階段是否生效（檢查 verify.json 的句間標準差），"
-            "或把 --target 調得更接近素材原始響度。"
-        )
 
 
 # 註：loudnorm 之後才降回 16-bit。此前一律保持 32-bit float，

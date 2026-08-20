@@ -60,22 +60,22 @@ def build_loudnorm_measure_chain(target_lufs: float) -> str:
             f":print_format=json")
 
 
-def build_loudnorm_apply_chain(target_lufs: float, measured: dict) -> str:
-    """兩段式 loudnorm 的第二段：帶入量測值套用，並以 alimiter 收尾。
+def build_linear_gain_chain(gain_db: float) -> str:
+    """最終正規化的第二段：純線性增益 + 限幅。**刻意不用 loudnorm 套用。**
 
-    linear=true 讓 loudnorm 走線性增益而非動態壓縮，避免破壞已拉平的動態。
+    真實素材實測揭露：拉平後 LRA 只剩約 2，但線性增益（+4.2dB）會讓真峰值
+    從 -1.63 推到 +2.57 超過 TP 目標，loudnorm 判定線性模式無法達成，
+    **靜默退回動態模式** —— 動態模式為了湊 LRA=11 會把安靜段（含底噪）
+    往上推，實測底噪因此不降反升 11.6dB，正好抵銷降噪的成果。
+
+    拉平已在樣本層完成，最後一步需要的只有「搬到目標響度 + 保護峰值」，
+    loudnorm 的動態機制在這條流程裡沒有任何正當用途。volume 是純線性，
+    永遠不會有 fallback；峰值保護交給 alimiter。
+
+    level=false 是必要的：alimiter 的 level 預設 true 會做自動電平補償，
+    把剛做完的正規化推歪（實測偏差 1.5-2.0 LUFS）。
     """
     return (
-        f"loudnorm=I={target_lufs}:TP={TRUE_PEAK_TARGET}:LRA={LRA}"
-        f":measured_I={measured['input_i']}"
-        f":measured_TP={measured['input_tp']}"
-        f":measured_LRA={measured['input_lra']}"
-        f":measured_thresh={measured['input_thresh']}"
-        f":offset={measured['target_offset']}"
-        f":linear=true:print_format=summary,"
-        # level=false 是必要的：alimiter 的 level 預設 true，會對限幅後的訊號
-        # 做「自動電平補償」，把 loudnorm 剛做完的線性正規化結果重新推高。
-        # 實測：不加時輸出偏離目標 1.5-2.0 LUFS，加了之後誤差降到 0.0-0.5。
-        # 我們用 alimiter 只為了防止真峰值超標，不要它動響度。
+        f"volume={gain_db:.2f}dB,"
         f"alimiter=limit={10 ** (TRUE_PEAK_TARGET / 20):.4f}:level=false"
     )
