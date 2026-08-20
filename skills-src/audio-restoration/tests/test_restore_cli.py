@@ -68,6 +68,6 @@ def test_restore_output_hits_target_loudness(synth_wav: Path, tmp_path: Path):
         [sys.executable, str(SCRIPTS / "restore.py"),
          "--plan", str(plan_path), "--out", str(out_path),
          "--work-dir", str(tmp_path / "work")],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, check=True, encoding="utf-8",
     )
     assert abs(measure_interval(out_path, 0.0, 8.0).lufs - (-16.0)) < 1.0
