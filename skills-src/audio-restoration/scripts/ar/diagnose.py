@@ -28,8 +28,8 @@ class ZoneDiagnosis:
     zone_index: int          # 該區在整支檔案中的序號（從 0 起）
     start: float             # 該區起始時間（秒）
     end: float                # 該區結束時間（秒）
-    noise_lufs: float        # 該區底噪響度
-    speech_lufs: float       # 該區人聲響度
+    noise_rms_db: float      # 該區底噪 RMS（不用 LUFS：有 -70 絕對閘門）
+    speech_rms_db: float     # 該區人聲 RMS
     snr_db: float            # 訊噪比
     sibilance_ratio: float   # 5-8kHz 能量佔比
     rumble_ratio: float      # <80Hz 能量佔比
@@ -154,21 +154,25 @@ def pick_denoise_level(snr_db: float) -> int:
     return 12
 
 
-def diagnose_zone(path: Path, zone: Zone, noise_lufs: float,
-                  speech_lufs: float, utterance_ends: list[float],
+def diagnose_zone(path: Path, zone: Zone, noise_rms_db: float,
+                  speech_rms_db: float, utterance_ends: list[float],
                   sample_rate: int = 16000) -> ZoneDiagnosis:
     """對單一 zone 執行全部診斷並決定處理策略。
 
-    noise_lufs / speech_lufs 收 float 而非 LoudnessStats：本函式只需要響度，
-    收整個 stats 物件會讓呼叫端誤以為 rms_db／peak_db 也會被使用，進而隨便
-    塞一個「只有 lufs 有意義」的物件進來。
+    **SNR 兩端都用 RMS，不用 LUFS。** ebur128 的 integrated loudness 有
+    -70 LUFS 絕對閘門，比它更安靜的底噪一律被截斷成 -70。用 LUFS 算 SNR
+    會在安靜錄音上系統性低估訊噪比，讓降噪強度被選得過強。SNR 在聲學上
+    本來就是功率比，用 RMS 才是正確定義。
 
-    speech_lufs 必須是**語句的**響度彙總，不能是整段區間的響度 —— 整段含靜音，
-    會把人聲位準拉低，使 SNR 被低估、降噪強度被拉高。
+    收 float 而非 LoudnessStats：本函式只需要這兩個數字，收整個 stats
+    物件會讓呼叫端誤以為其他欄位也會被使用。
+
+    speech_rms_db 必須是**語句的**響度彙總，不能是整段區間的響度 —— 整段含
+    靜音，會把人聲位準拉低，使 SNR 被低估、降噪強度被拉高。
     utterance_ends 是落在此 zone 內的各語句結束時刻（秒），用於量測殘響。
     """
     samples = read_samples(path, zone.start, min(zone.end, zone.start + 30.0), sample_rate)
-    snr = speech_lufs - noise_lufs
+    snr = speech_rms_db - noise_rms_db
     sibilance = band_energy_ratio(samples, sample_rate, 5000.0, 8000.0)
     rumble = band_energy_ratio(samples, sample_rate, 0.0, 80.0)
     clipped = clipped_ratio(samples)
@@ -193,8 +197,8 @@ def diagnose_zone(path: Path, zone: Zone, noise_lufs: float,
         zone_index=zone.index,
         start=zone.start,
         end=zone.end,
-        noise_lufs=noise_lufs,
-        speech_lufs=speech_lufs,
+        noise_rms_db=noise_rms_db,
+        speech_rms_db=speech_rms_db,
         snr_db=snr,
         sibilance_ratio=sibilance,
         rumble_ratio=rumble,

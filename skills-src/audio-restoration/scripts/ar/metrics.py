@@ -26,12 +26,16 @@ def collect_metrics(path: Path, plan: dict, report_path: Path | None = None) -> 
     # 這項檢查幾乎恆真，卻在報告上印成「底噪下降 2.4 dB」誤導使用者以為
     # 降噪確實生效。實測已證實：無 report.json 時 noise 與 integrated
     # 會是完全相同的數字。
-    noise_lufs = (
-        min(measure_interval(path, start, end).lufs for start, end in windows)
+    # 底噪用 RMS 而非 LUFS：ebur128 的 integrated loudness 有 **-70 LUFS 絕對
+    # 閘門**，安靜的底噪一律被截斷成 -70，修復前後都量到 -70，降幅永遠是 0。
+    # 真實素材實測證實了這點（前 -70.00 → 後 -70.00，「底噪下降」判定失敗）。
+    # RMS 沒有閘門，能真實反映底噪位準。
+    noise_rms_db = (
+        min(measure_interval(path, start, end).rms_db for start, end in windows)
         if windows else None
     )
     return {
-        "noise_lufs": noise_lufs,
+        "noise_rms_db": noise_rms_db,
         "integrated_lufs": overall.lufs,
         # 用 ebur128 的真峰值，不是 astats 的樣本峰值
         "true_peak": overall.true_peak_db,

@@ -4,13 +4,13 @@ from ar.verify import verify
 
 def _before() -> dict:
     """修復前的指標。"""
-    return {"noise_lufs": -45.0, "integrated_lufs": -24.0,
+    return {"noise_rms_db": -45.0, "integrated_lufs": -24.0,
             "true_peak": -3.0, "utterance_lufs_stdev": 6.0}
 
 
 def _after(**overrides) -> dict:
     """修復後的指標（可覆寫單項以測試失敗情境）。"""
-    base = {"noise_lufs": -58.0, "integrated_lufs": -16.1,
+    base = {"noise_rms_db": -58.0, "integrated_lufs": -16.1,
             "true_peak": -1.6, "utterance_lufs_stdev": 1.8}
     base.update(overrides)
     return base
@@ -25,7 +25,7 @@ def test_all_checks_pass_for_good_result():
 
 def test_excessive_noise_reduction_fails():
     """底噪降幅超過 25dB 視為降噪過頭，把人聲一併削掉了。"""
-    result = verify(_before(), _after(noise_lufs=-75.0), target_lufs=-16.0)
+    result = verify(_before(), _after(noise_rms_db=-75.0), target_lufs=-16.0)
     assert result.passed is False
     assert any("降噪過頭" in c.detail for c in result.checks if not c.passed)
 
@@ -51,8 +51,8 @@ def test_flattening_not_effective_fails():
 
 def test_noise_check_reports_unverifiable_when_missing():
     """底噪為 None 時應回報不可驗證，而不是假裝通過或直接失敗。"""
-    before = {**_before(), "noise_lufs": None}
-    after = _after(noise_lufs=None)
+    before = {**_before(), "noise_rms_db": None}
+    after = _after(noise_rms_db=None)
     result = verify(before, after, target_lufs=-16.0)
     noise_check = next(c for c in result.checks if c.name == "底噪下降")
     assert noise_check.passed is True

@@ -81,7 +81,7 @@ def test_loudnorm_measure_chain_requests_json():
     chain = build_loudnorm_measure_chain(-16.0)
     assert "print_format=json" in chain
     assert "I=-16.0" in chain
-    assert "TP=-1.5" in chain
+    assert "TP=-2.0" in chain
 
 
 def test_loudnorm_apply_chain_uses_measured_values():
@@ -105,13 +105,16 @@ def test_loudnorm_apply_chain_uses_measured_values():
 def test_alimiter_limit_is_linear_not_db():
     """alimiter 的 limit 吃線性值，須由 dBTP 換算。
 
-    -1.5 dBTP → 10^(-1.5/20) ≈ 0.8414。若誤把 -1.5 直接填進去，
+    處理目標 -2.0 dBTP → 10^(-2.0/20) ≈ 0.7943。若誤把 -2.0 直接填進去，
     ffmpeg 不會報錯，但限幅門檻會完全失效。
+
+    注意處理目標（-2.0）比驗收標準（-1.5）低 0.5 dB，那是留給有損編碼的
+    餘裕 —— 實測 AAC 192k 重編會讓真峰值上升約 0.1 dB。
     """
     chain = build_loudnorm_apply_chain(-16.0, {
         "input_i": "-23.1", "input_tp": "-5.2", "input_lra": "8.3",
         "input_thresh": "-33.4", "target_offset": "0.4"})
-    assert "alimiter=limit=0.8414" in chain
+    assert "alimiter=limit=0.7943" in chain
 
 
 def test_alimiter_disables_auto_level():

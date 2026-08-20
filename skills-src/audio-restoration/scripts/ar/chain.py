@@ -7,7 +7,11 @@
 highpass 與 deesser 只在該區診斷確有需要時才掛，無差別套用會削掉男聲低頻
 或讓咬字變鈍。
 """
-TRUE_PEAK = -1.5          # 目標真峰值（dBTP）
+# 處理階段的真峰值目標，比驗收標準（-1.5 dBTP）低 0.5 dB。
+# 這 0.5 dB 是留給有損編碼的餘裕：真實素材實測顯示 pre-mux 的 WAV 真峰值
+# 精確落在 -1.5，但 AAC 192k 重編後上升到 -1.4，直接超標。限幅器把訊號
+# 壓到剛好卡在驗收線上，等於沒有任何容錯空間。
+TRUE_PEAK_TARGET = -2.0
 LRA = 11                  # 目標響度範圍
 DEFAULT_NOISE_FLOOR = -40.0  # 沒有實測底噪時的退路值
 NOISE_FLOOR_MIN = -80.0   # afftdn 的 nf 合法下限
@@ -52,7 +56,7 @@ def build_zone_chain(zone_plan: dict) -> str:
 
 def build_loudnorm_measure_chain(target_lufs: float) -> str:
     """兩段式 loudnorm 的第一段：量測，輸出 JSON。"""
-    return (f"loudnorm=I={target_lufs}:TP={TRUE_PEAK}:LRA={LRA}"
+    return (f"loudnorm=I={target_lufs}:TP={TRUE_PEAK_TARGET}:LRA={LRA}"
             f":print_format=json")
 
 
@@ -62,7 +66,7 @@ def build_loudnorm_apply_chain(target_lufs: float, measured: dict) -> str:
     linear=true 讓 loudnorm 走線性增益而非動態壓縮，避免破壞已拉平的動態。
     """
     return (
-        f"loudnorm=I={target_lufs}:TP={TRUE_PEAK}:LRA={LRA}"
+        f"loudnorm=I={target_lufs}:TP={TRUE_PEAK_TARGET}:LRA={LRA}"
         f":measured_I={measured['input_i']}"
         f":measured_TP={measured['input_tp']}"
         f":measured_LRA={measured['input_lra']}"
@@ -73,5 +77,5 @@ def build_loudnorm_apply_chain(target_lufs: float, measured: dict) -> str:
         # 做「自動電平補償」，把 loudnorm 剛做完的線性正規化結果重新推高。
         # 實測：不加時輸出偏離目標 1.5-2.0 LUFS，加了之後誤差降到 0.0-0.5。
         # 我們用 alimiter 只為了防止真峰值超標，不要它動響度。
-        f"alimiter=limit={10 ** (TRUE_PEAK / 20):.4f}:level=false"
+        f"alimiter=limit={10 ** (TRUE_PEAK_TARGET / 20):.4f}:level=false"
     )

@@ -38,14 +38,17 @@ def verify(before: dict, after: dict, target_lufs: float) -> VerifyResult:
 def _check_noise(before: dict, after: dict) -> Check:
     """底噪應下降，但降幅過大代表降噪過頭。
 
+    量的是 RMS 不是 LUFS：ebur128 的 integrated loudness 有 -70 LUFS 絕對
+    閘門，安靜的底噪會被截斷成 -70，前後都是 -70、降幅永遠 0。
+
     底噪為 None 代表沒有噪音採樣窗可量（通常是缺 report.json）。
     此時明確回報「不可驗證」而不是拿別的數字頂替 —— 一個假裝通過的
     檢查比沒有檢查更危險。
     """
-    if before["noise_lufs"] is None or after["noise_lufs"] is None:
+    if before["noise_rms_db"] is None or after["noise_rms_db"] is None:
         return Check("底噪下降", True,
                      "無噪音採樣窗可量測，此項不可驗證（請確認 report.json 存在）")
-    drop = before["noise_lufs"] - after["noise_lufs"]
+    drop = before["noise_rms_db"] - after["noise_rms_db"]
     if drop <= 0:
         return Check("底噪下降", False, f"底噪未下降（變化 {drop:.1f} dB），降噪未生效")
     if drop > MAX_NOISE_DROP_DB:

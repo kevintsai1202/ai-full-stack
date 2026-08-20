@@ -15,7 +15,7 @@ def _spec(tmp_path: Path) -> MediaSpec:
 def _diagnosis() -> ZoneDiagnosis:
     """測試用診斷結果。"""
     return ZoneDiagnosis(
-        zone_index=0, start=0.0, end=8.0, noise_lufs=-55.0, speech_lufs=-20.0,
+        zone_index=0, start=0.0, end=8.0, noise_rms_db=-55.0, speech_rms_db=-20.0,
         snr_db=35.0, sibilance_ratio=0.05, rumble_ratio=0.02, clipped_ratio=0.0,
         reverb_slope=-60.0, denoise_db=12, needs_deesser=False,
         needs_highpass=False, needs_ai_rescue=False, issues=[],

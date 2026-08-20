@@ -34,8 +34,8 @@ def test_noise_measured_from_report_windows(synth_wav: Path, tmp_path: Path):
     """
     metrics = collect_metrics(synth_wav, _metrics_plan(),
                               report_path=_metrics_report(tmp_path / "report.json"))
-    assert metrics["noise_lufs"] < -40.0
-    assert metrics["noise_lufs"] < metrics["integrated_lufs"] - 20.0
+    assert metrics["noise_rms_db"] < -40.0
+    assert metrics["noise_rms_db"] < metrics["integrated_lufs"] - 20.0
 
 
 def test_utterance_stdev_reflects_level_difference(synth_wav: Path, tmp_path: Path):
@@ -53,5 +53,5 @@ def test_noise_is_none_when_report_missing(synth_wav: Path, tmp_path: Path):
     """
     metrics = collect_metrics(synth_wav, _metrics_plan(),
                               report_path=tmp_path / "nonexistent.json")
-    assert metrics["noise_lufs"] is None
+    assert metrics["noise_rms_db"] is None
     assert metrics["integrated_lufs"] is not None

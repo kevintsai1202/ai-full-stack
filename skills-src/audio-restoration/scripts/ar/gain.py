@@ -20,7 +20,7 @@ NONSPEECH_ATTENUATION_DB = -6.0  # 非語音雜訊區間的額外衰減
 def compute_zone_gains(diagnoses: list[ZoneDiagnosis],
                        working_lufs: float = -20.0) -> list[float]:
     """算出每個 zone 補到共同工作位準所需的純增益。"""
-    return [working_lufs - d.speech_lufs for d in diagnoses]
+    return [working_lufs - d.speech_rms_db for d in diagnoses]
 
 
 def _zone_index_for(time: float, zones: list[Zone]) -> int:

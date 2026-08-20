@@ -71,35 +71,38 @@ def main() -> None:
                 "無法為此區建立降噪基準。這通常代表分區偵測異常，"
                 "請檢查 report.json 的 zones 與 noise_windows 是否對得上。"
             )
+        # 底噪與 SNR 兩端一律用 RMS，不用 LUFS：ebur128 的 integrated loudness
+        # 有 -70 LUFS 絕對閘門，比它更安靜的底噪會被截斷成 -70，用 LUFS 算 SNR
+        # 會系統性低估訊噪比、讓降噪強度被選得過強。RMS 沒有閘門，且 SNR 在
+        # 聲學上本來就是功率比（RMS 比），這才是正確定義。
         # 底噪取該區各採樣窗的中位數：單一異常安靜的窗（例如空調剛好停機）
         # 會讓 min 低估底噪、使 SNR 被高估而降噪不足；中位數對離群值穩健。
-        zone_noise_lufs = median(
-            [noise_stats[i].lufs for i in zone.noise_window_indices]
+        zone_noise_rms = median(
+            [noise_stats[i].rms_db for i in zone.noise_window_indices]
         )
         # 人聲響度取該區各語句的中位數，而非整段區間的響度。
         # 整段含靜音，會把人聲位準拉低，讓 SNR 被低估、降噪被拉得過強。
-        zone_utterance_lufs = [
-            stat.lufs
+        zone_utterance_rms = [
+            stat.rms_db
             for utterance, stat in zip(classification.utterances, utterance_stats)
             if zone.start <= (utterance.start + utterance.end) / 2.0 < zone.end
         ]
-        if not zone_utterance_lufs:
+        if not zone_utterance_rms:
             raise SystemExit(
                 f"Zone {zone.index}（{zone.start:.1f}s–{zone.end:.1f}s）沒有任何語句，"
                 "無法判斷人聲響度。請檢查 ASR 時間軸是否涵蓋整支檔案。"
             )
-        zone_speech_lufs = median(zone_utterance_lufs)
-        # afftdn 的 nf 語意是訊號位準，用 RMS 而非 LUFS
-        zone_noise_floors.append(
-            median([noise_stats[i].rms_db for i in zone.noise_window_indices])
-        )
+        zone_speech_rms = median(zone_utterance_rms)
+        # afftdn 的 nf 語意就是訊號位準，與 SNR 用的是同一個量，
+        # 直接沿用 zone_noise_rms，不必再重量一次
+        zone_noise_floors.append(zone_noise_rms)
         # 落在此 zone 內的語句結束時刻，供殘響量測使用
         zone_ends = [
             seg.end for seg in timeline.segments
             if zone.start <= seg.end < zone.end
         ]
         diagnoses.append(
-            diagnose_zone(args.input, zone, zone_noise_lufs, zone_speech_lufs, zone_ends)
+            diagnose_zone(args.input, zone, zone_noise_rms, zone_speech_rms, zone_ends)
         )
 
     zone_gains = compute_zone_gains(diagnoses, WORKING_LUFS)

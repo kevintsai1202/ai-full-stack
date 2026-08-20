@@ -10,11 +10,11 @@ from ar.measure import LoudnessStats
 from ar.segments import Utterance
 
 
-def _diagnosis(index: int, speech_lufs: float) -> ZoneDiagnosis:
+def _diagnosis(index: int, speech_rms_db: float) -> ZoneDiagnosis:
     """建立指定人聲響度的診斷結果。"""
     return ZoneDiagnosis(
         zone_index=index, start=index * 10.0, end=(index + 1) * 10.0,
-        noise_lufs=-55.0, speech_lufs=speech_lufs, snr_db=35.0,
+        noise_rms_db=-55.0, speech_rms_db=speech_rms_db, snr_db=35.0,
         sibilance_ratio=0.05, rumble_ratio=0.02, clipped_ratio=0.0,
         reverb_slope=-60.0, denoise_db=12, needs_deesser=False,
         needs_highpass=False, needs_ai_rescue=False, issues=[],
