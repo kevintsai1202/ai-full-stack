@@ -75,3 +75,27 @@ def test_detect_zones_returns_single_zone_when_uniform():
     assert len(zones) == 1
     assert zones[0].start == 0.0
     assert abs(zones[0].end - 30.0) < 1e-6
+
+
+def test_spectral_fingerprint_accepts_minimum_required_samples():
+    """樣本數剛好等於守門門檻時應成功計算（不誤殺剛好足夠的樣本）。"""
+    from ar.fingerprint import _min_samples_for_lowest_band
+
+    min_samples = _min_samples_for_lowest_band(SR)
+    samples = _white_noise(1)[:min_samples]
+    fp = spectral_fingerprint(samples, SR)
+    assert fp.ndim == 1
+    assert abs(float(fp.sum()) - 1.0) < 1e-6
+
+
+def test_spectral_fingerprint_rejects_samples_below_minimum():
+    """樣本數低於守門門檻時應明確報錯，且錯誤訊息需包含所需的樣本數。"""
+    from ar.fingerprint import _min_samples_for_lowest_band
+
+    min_samples = _min_samples_for_lowest_band(SR)
+    samples = _white_noise(1)[: min_samples - 1]
+    try:
+        spectral_fingerprint(samples, SR)
+        assert False, "應拋出 ValueError"
+    except ValueError as error:
+        assert str(min_samples) in str(error)
