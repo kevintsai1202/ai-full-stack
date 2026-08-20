@@ -17,6 +17,7 @@ from ar.metrics import collect_metrics
 from ar.plan_io import load_plan
 from ar.preview import build_ab_preview, pick_preview_start
 from ar.probe import probe
+from ar.ffmpeg_io import run_ffmpeg
 from ar.render import (apply_loudnorm, concat_zones, export_asr_wav, mux_video,
                        render_zones)
 from ar.verify import verify
@@ -38,7 +39,14 @@ def main() -> None:
             f"找不到 plan：{args.plan}\n"
             "restore.py 不會自行推測參數，請先執行 analyze.py 產出處理計畫。"
         )
-    plan = load_plan(args.plan)
+    try:
+        plan = load_plan(args.plan)
+    except ValueError as error:
+        # schema 版本不符時不要吐出完整 traceback，給一句使用者能照做的話，
+        # 與上面「找不到 plan」的乾淨中文訊息維持一致水準。
+        raise SystemExit(
+            f"{error}\n請重新執行 analyze.py 產生新版 plan.json。"
+        )
     # 中繼檔工作目錄，未指定時預設放在輸出檔同層的 work/ 子目錄
     work_dir = args.work_dir or args.out.parent / "work"
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -57,11 +65,16 @@ def main() -> None:
     merged = concat_zones(parts, work_dir / "merged.wav")
     normalized = apply_loudnorm(merged, work_dir / "normalized.wav", plan["target_lufs"])
 
-    # 影片來源需把修復後音軌與原始畫面重新封裝；純音訊直接輸出
+    # 影片來源需把修復後音軌與原始畫面重新封裝；純音訊依輸出副檔名決定
     if spec.is_video:
         mux_video(input_path, normalized, args.out)
-    else:
+    elif args.out.suffix.lower() == ".wav":
+        # 中繼本來就是 WAV，直接搬位元組，不多做一次無謂的編解碼
         args.out.write_bytes(normalized.read_bytes())
+    else:
+        # 使用者指定了別的容器（如 .mp3／.m4a）。位元組複製會產出
+        # 「副檔名說是 mp3、內容其實是 WAV」的檔案，下游可能誤判或播不出來。
+        run_ffmpeg(["-y", "-i", str(normalized), str(args.out)])
 
     # 供 ASR 使用的 16k 單聲道 WAV
     export_asr_wav(normalized, work_dir / "restored-16k.wav")
@@ -70,8 +83,11 @@ def main() -> None:
     build_ab_preview(input_path, normalized, pick_preview_start(plan),
                      work_dir / "preview-ab.wav", PREVIEW_SECONDS)
 
-    # 修復後的四項指標，與驗證結果
-    after = collect_metrics(normalized, plan, report_path=report_path)
+    # 影片情境要量**實際交付的檔案**：mux 會把音軌重編成 AAC，
+    # 有損編碼可能讓真峰值上升或響度偏移，量 pre-mux 的 WAV 等於
+    # 驗證了一個使用者拿不到的東西。
+    after_source = args.out if spec.is_video else normalized
+    after = collect_metrics(after_source, plan, report_path=report_path)
     result = verify(before, after, plan["target_lufs"])
     (work_dir / "verify.json").write_text(
         json.dumps({"before": before, "after": after, "result": asdict(result)},
@@ -91,7 +107,11 @@ def _print_result(before: dict, after: dict, result, out_path: Path, work_dir: P
     print("修復前後指標：")
     for key, label in (("noise_lufs", "底噪 LUFS"), ("integrated_lufs", "整體 LUFS"),
                        ("true_peak", "真峰值 dBTP"), ("utterance_lufs_stdev", "句間標準差")):
-        print(f"  {label}: {before[key]:.2f} → {after[key]:.2f}")
+        # noise_lufs 缺 report.json 時為 None（不可驗證），格式化前需個別判斷，
+        # 否則 f"{None:.2f}" 會拋 TypeError 讓整支 CLI 崩潰
+        before_str = f"{before[key]:.2f}" if before[key] is not None else "N/A"
+        after_str = f"{after[key]:.2f}" if after[key] is not None else "N/A"
+        print(f"  {label}: {before_str} → {after_str}")
     print("\n驗證結果：")
     for check in result.checks:
         print(f"  [{'通過' if check.passed else '失敗'}] {check.name}：{check.detail}")

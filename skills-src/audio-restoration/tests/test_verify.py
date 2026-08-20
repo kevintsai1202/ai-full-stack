@@ -49,6 +49,16 @@ def test_flattening_not_effective_fails():
     assert any("拉平" in c.detail for c in result.checks if not c.passed)
 
 
+def test_noise_check_reports_unverifiable_when_missing():
+    """底噪為 None 時應回報不可驗證，而不是假裝通過或直接失敗。"""
+    before = {**_before(), "noise_lufs": None}
+    after = _after(noise_lufs=None)
+    result = verify(before, after, target_lufs=-16.0)
+    noise_check = next(c for c in result.checks if c.name == "底噪下降")
+    assert noise_check.passed is True
+    assert "不可驗證" in noise_check.detail
+
+
 def test_single_utterance_flattening_is_not_a_failure():
     """單句音檔的標準差恆為 0，不得因此判為拉平失敗。"""
     before = {**_before(), "utterance_lufs_stdev": 0.0}

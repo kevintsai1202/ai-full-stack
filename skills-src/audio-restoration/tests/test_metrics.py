@@ -45,8 +45,13 @@ def test_utterance_stdev_reflects_level_difference(synth_wav: Path, tmp_path: Pa
     assert metrics["utterance_lufs_stdev"] > 3.0
 
 
-def test_noise_falls_back_when_report_missing(synth_wav: Path, tmp_path: Path):
-    """沒有 report.json 時退回整體響度，不得拋例外中斷修復流程。"""
+def test_noise_is_none_when_report_missing(synth_wav: Path, tmp_path: Path):
+    """沒有 report.json 時底噪回 None（代表未量測），不得用整體響度頂替。
+
+    拿整體響度冒充底噪會讓「底噪下降」檢查幾乎恆真——loudnorm 本來就會
+    把整體響度收斂到目標——卻在報告上印成看似真實的底噪降幅。
+    """
     metrics = collect_metrics(synth_wav, _metrics_plan(),
                               report_path=tmp_path / "nonexistent.json")
-    assert metrics["noise_lufs"] == metrics["integrated_lufs"]
+    assert metrics["noise_lufs"] is None
+    assert metrics["integrated_lufs"] is not None
