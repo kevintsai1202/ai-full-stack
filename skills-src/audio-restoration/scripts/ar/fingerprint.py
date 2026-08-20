@@ -13,7 +13,11 @@ import numpy as np
 from .ffmpeg_io import FFmpegError, require_tool
 from .silence import Interval
 
-ZONE_THRESHOLD = 0.15  # 指紋餘弦距離門檻，超過視為錄音條件改變
+# 趨勢比較的餘弦距離門檻。真實素材實測：門檻在 0.30-0.70 之間給出幾乎
+# 相同的切點，代表這個設計對門檻不敏感——穩健的訊號。取中間值 0.40。
+ZONE_THRESHOLD = 0.40
+ZONE_TREND_WINDOWS = 5      # 變化點前後各取幾個噪音窗做趨勢比較
+MIN_ZONE_SECONDS = 120.0    # 最小 zone 長度（秒）
 BAND_RATIO = 2.0 ** (1.0 / 3.0)  # 1/3 八度頻帶的頻率比
 BAND_START_HZ = 40.0  # 最低頻帶起點
 
@@ -120,25 +124,62 @@ def cosine_distance(a: np.ndarray, b: np.ndarray) -> float:
     return float(1.0 - np.dot(a, b) / denominator)
 
 
-def detect_zones(fingerprints: list[np.ndarray], windows: list[Interval],
-                 total_duration: float, threshold: float = ZONE_THRESHOLD) -> list[Zone]:
-    """依相鄰指紋距離切分 zone。
+def _group_fingerprint(fingerprints: list[np.ndarray], indices) -> np.ndarray:
+    """一組噪音窗的代表指紋：各頻帶取中位數後重新正規化。
 
-    切點不取「距離超標的兩個噪音窗」之間的中點 —— 那之間全是語音。
-    zone 交界的區級增益是硬切（斜坡只作用在 zone 內部的語句交界），切在
-    語音中段會產生可聽的喀聲。切點改取「後一個窗（第一個呈現新特徵者）」
-    的中點，讓 zone 邊界必定落在確定無人聲的噪音窗內，跳變才聽不見。
+    取中位數而非平均：停頓裡常混有呼吸、鍵盤、翻頁、殘響尾音等瞬態事件，
+    平均會被它們拉走，中位數取的是「這段時間最常出現的頻譜形狀」。
     """
-    if not fingerprints:
-        return [Zone(index=0, start=0.0, end=total_duration, noise_window_indices=[])]
+    stacked = np.array([fingerprints[i] for i in indices])
+    median = np.median(stacked, axis=0)
+    total = median.sum()
+    return median / total if total > 0 else median
 
+
+def detect_zones(fingerprints: list[np.ndarray], windows: list[Interval],
+                 total_duration: float, threshold: float = ZONE_THRESHOLD,
+                 trend_windows: int = ZONE_TREND_WINDOWS,
+                 min_zone_seconds: float = MIN_ZONE_SECONDS) -> list[Zone]:
+    """偵測錄音條件變化點並切分 zone。
+
+    **不比較相鄰的兩個噪音窗**。真實素材實測揭露：底噪的頻譜形狀本來就
+    會隨時間漂移（冷氣起停、風扇轉速、室外聲、螢幕錄影裡播放的內容），
+    那不代表錄音條件改變。一支單一講者、單一場地的 1273 秒錄音，用相鄰
+    比較切出了 46 個 zone，相鄰距離在 0.001 與 0.95 之間劇烈鋸齒震盪，
+    找不到任何能分開「同條件」與「換條件」的門檻。
+
+    改為看**趨勢的持續性**：對每個候選位置，比較前 trend_windows 個窗與
+    後 trend_windows 個窗的中位指紋。真正的設備／場地變更會讓兩側持續
+    不同；隨機漂移不會。再加上最小 zone 長度約束 —— 換麥克風不會在兩
+    分鐘內來回發生。同一支素材用這個方法收斂到 5 個 zone，且門檻在
+    0.30-0.70 之間給出幾乎相同的切點。
+
+    切點取噪音窗的中點，讓 zone 邊界必定落在確定無人聲的區間內 ——
+    區級增益在 zone 交界是硬切（斜坡只作用在 zone 內的語句交界），
+    切在語音中段會是一聲清楚可聽的喀聲。
+    """
+    # 窗數不足以做前後比較時不分區。硬切一刀的風險遠大於少分一區。
+    if len(fingerprints) < 2 * trend_windows + 1:
+        return [Zone(index=0, start=0.0, end=total_duration,
+                     noise_window_indices=list(range(len(windows))))]
+
+    # 每個候選位置的「前後兩組中位指紋」距離
+    candidates: list[tuple[float, float]] = []
+    for center in range(trend_windows, len(fingerprints) - trend_windows):
+        before = _group_fingerprint(fingerprints, range(center - trend_windows, center))
+        after = _group_fingerprint(fingerprints, range(center, center + trend_windows))
+        distance = cosine_distance(before, after)
+        if distance > threshold:
+            cut = (windows[center].start + windows[center].end) / 2.0
+            candidates.append((cut, distance))
+
+    # 依距離由大到小貪婪選點，強制彼此間隔至少 min_zone_seconds。
+    # 距離最大者優先，確保保留的是證據最強的變化點。
     cut_points: list[float] = []
-    for index in range(len(fingerprints) - 1):
-        if cosine_distance(fingerprints[index], fingerprints[index + 1]) > threshold:
-            # 切點取「第一個呈現新特徵的噪音窗」的中點，而不是兩窗之間的中點：
-            # 兩窗之間全是語音，切在那裡會讓 zone 邊界落在講話中段。
-            cut = (windows[index + 1].start + windows[index + 1].end) / 2.0
+    for cut, _ in sorted(candidates, key=lambda item: -item[1]):
+        if all(abs(cut - chosen) >= min_zone_seconds for chosen in cut_points):
             cut_points.append(cut)
+    cut_points.sort()
 
     bounds = [0.0, *cut_points, total_duration]
     zones: list[Zone] = []

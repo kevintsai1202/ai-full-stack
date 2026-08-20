@@ -51,20 +51,29 @@ def test_fingerprint_ignores_volume_difference():
     assert cosine_distance(a, b) < 1e-6
 
 
-def test_detect_zones_splits_at_noise_change():
-    """前兩窗白雜訊、後兩窗低頻雜訊，應切成兩個 zone。"""
-    fps = [
-        spectral_fingerprint(_white_noise(1), SR),
-        spectral_fingerprint(_white_noise(2), SR),
-        spectral_fingerprint(_low_passed_noise(3), SR),
-        spectral_fingerprint(_low_passed_noise(4), SR),
-    ]
-    windows = [Interval(0, 1), Interval(10, 11), Interval(20, 21), Interval(30, 31)]
-    zones = detect_zones(fps, windows, total_duration=40.0, threshold=0.15)
+def _windows(count: int, spacing: float = 10.0) -> list[Interval]:
+    """產生等距的噪音採樣窗，每個長 1 秒。"""
+    return [Interval(i * spacing, i * spacing + 1.0) for i in range(count)]
+
+
+def _fps(seeds_white: int, seeds_low: int) -> list[np.ndarray]:
+    """前段白雜訊、後段低頻雜訊，模擬中途換了錄音條件。"""
+    white = [spectral_fingerprint(_white_noise(s), SR) for s in range(1, seeds_white + 1)]
+    low = [spectral_fingerprint(_low_passed_noise(s), SR)
+           for s in range(100, 100 + seeds_low)]
+    return white + low
+
+
+def test_detect_zones_splits_at_sustained_change():
+    """前段白雜訊、後段低頻雜訊持續不同，應切成兩個 zone。"""
+    fps = _fps(4, 4)
+    windows = _windows(8)
+    zones = detect_zones(fps, windows, total_duration=90.0,
+                         trend_windows=2, min_zone_seconds=5.0)
     assert len(zones) == 2
     assert zones[0].start == 0.0
     assert abs(zones[0].end - zones[1].start) < 1e-6
-    assert abs(zones[1].end - 40.0) < 1e-6
+    assert abs(zones[1].end - 90.0) < 1e-6
 
 
 def test_zone_cut_lands_inside_a_noise_window():
@@ -73,26 +82,56 @@ def test_zone_cut_lands_inside_a_noise_window():
     兩窗之間全是人聲；zone 交界的區級增益是硬切，切在語音中段會產生
     可聽的喀聲。切在噪音窗內則跳變發生在無人聲處。
     """
-    fps = [
-        spectral_fingerprint(_white_noise(1), SR),
-        spectral_fingerprint(_white_noise(2), SR),
-        spectral_fingerprint(_low_passed_noise(3), SR),
-        spectral_fingerprint(_low_passed_noise(4), SR),
-    ]
-    windows = [Interval(0, 1), Interval(10, 11), Interval(20, 21), Interval(30, 31)]
-    zones = detect_zones(fps, windows, total_duration=40.0, threshold=0.15)
+    zones = detect_zones(_fps(4, 4), _windows(8), total_duration=90.0,
+                         trend_windows=2, min_zone_seconds=5.0)
     cut = zones[0].end
-    assert any(w.start <= cut <= w.end for w in windows), f"切點 {cut} 落在語音區"
+    assert any(w.start <= cut <= w.end for w in _windows(8)), f"切點 {cut} 落在語音區"
 
 
 def test_detect_zones_returns_single_zone_when_uniform():
     """底噪一致時只應有一個 zone，不得無故切割。"""
-    fps = [spectral_fingerprint(_white_noise(s), SR) for s in (1, 2, 3)]
-    windows = [Interval(0, 1), Interval(10, 11), Interval(20, 21)]
-    zones = detect_zones(fps, windows, total_duration=30.0, threshold=0.15)
+    fps = [spectral_fingerprint(_white_noise(s), SR) for s in range(1, 9)]
+    zones = detect_zones(fps, _windows(8), total_duration=90.0,
+                         trend_windows=2, min_zone_seconds=5.0)
     assert len(zones) == 1
     assert zones[0].start == 0.0
-    assert abs(zones[0].end - 30.0) < 1e-6
+    assert abs(zones[0].end - 90.0) < 1e-6
+
+
+def test_isolated_outlier_window_does_not_split():
+    """單一異常窗不得造成切點 —— 這是相鄰比較最致命的假陽性來源。
+
+    真實素材上，底噪頻譜隨時間漂移（冷氣起停、風扇轉速、螢幕錄影裡
+    播放的內容）會讓相鄰距離劇烈震盪。1273 秒的單一場地錄音因此被切成
+    46 個 zone。趨勢比較要求變化在前後各數個窗都持續存在，單點異常
+    不足以構成證據。
+    """
+    fps = [spectral_fingerprint(_white_noise(s), SR) for s in range(1, 9)]
+    fps[4] = spectral_fingerprint(_low_passed_noise(7), SR)  # 只有一個窗不同
+    zones = detect_zones(fps, _windows(8), total_duration=90.0,
+                         trend_windows=2, min_zone_seconds=5.0)
+    assert len(zones) == 1, f"單一異常窗不該切出 {len(zones)} 個 zone"
+
+
+def test_min_zone_seconds_suppresses_dense_cuts():
+    """最小 zone 長度應濾掉密集切點 —— 換麥克風不會在幾分鐘內來回發生。"""
+    fps = ([spectral_fingerprint(_white_noise(s), SR) for s in range(1, 5)]
+           + [spectral_fingerprint(_low_passed_noise(s), SR) for s in range(100, 104)]
+           + [spectral_fingerprint(_white_noise(s), SR) for s in range(20, 24)])
+    windows = _windows(12)
+    loose = detect_zones(fps, windows, total_duration=130.0,
+                         trend_windows=2, min_zone_seconds=5.0)
+    tight = detect_zones(fps, windows, total_duration=130.0,
+                         trend_windows=2, min_zone_seconds=100.0)
+    assert len(tight) < len(loose)
+
+
+def test_too_few_windows_returns_single_zone():
+    """窗數不足以做前後比較時不分區 —— 硬切一刀的風險大於少分一區。"""
+    fps = [spectral_fingerprint(_white_noise(s), SR) for s in (1, 2, 3)]
+    zones = detect_zones(fps, _windows(3), total_duration=30.0, trend_windows=5)
+    assert len(zones) == 1
+    assert zones[0].noise_window_indices == [0, 1, 2]
 
 
 def test_spectral_fingerprint_accepts_minimum_required_samples():
