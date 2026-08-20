@@ -29,6 +29,10 @@
 - **拉平只能用純增益**，禁止使用 `acompressor` 等壓縮器（壓縮會頂高底噪，破壞後續降噪的訊噪比前提）。
 - **影片換揉**：固定 `-c:v copy -c:a aac -b:a 192k`，影像軌不得重編。
 - **本專案產出位置**：`d:\GitHub\hahow-ai-full-stack\audio-restore\<檔名主幹>\`。
+- **CLI 輸出編碼**：每支 CLI 入口（`analyze.py`／`restore.py`／`batch.py`）開頭都必須加上
+  `sys.stdout.reconfigure(encoding="utf-8")` 與 `sys.stderr.reconfigure(encoding="utf-8")`。
+  Windows 主控台預設 cp950，印出 `⚠` 等非 Big5 字元會拋 `UnicodeEncodeError`
+  並讓行程以非零碼結束 —— 看起來像修復失敗，實際只是印不出來。
 
 ---
 
