@@ -22,8 +22,12 @@ DeepFilterNet 會**重新合成**語音波形，講師的音色會有可察覺�
 
 1. 從原檔切出該 zone 的時間範圍，匯出為 48kHz WAV
 2. 跑 DeepFilterNet 處理該段
-3. 把處理結果放回 `plan.json` 對應 zone 的位置，將該 zone 的 `denoise_db` 設為 0（避免二次降噪）
-4. 重跑 `restore.py`，其餘流程不變
+3. **目前無自動整合功能，需手動流程**：用外部剪輯工具（如 Audacity、ffmpeg 手動
+   拼接）把 DeepFilterNet 處理後的該段音訊，替換掉原始檔（或修復後輸出）對應
+   時間段的音軌，取代原本 ffmpeg 濾鏡鏈的處理結果。`restore.py` 尚不支援
+   per-zone 音源覆寫，未來版本可能會加入這項功能。
+4. 該 zone 的 `denoise_db` 可設為 0 避免對已由 DeepFilterNet 處理過的段落
+   二次降噪，但仍需按上一步手動完成音源替換，`restore.py` 本身不會自動套用
 
 ## 判斷是否值得
 

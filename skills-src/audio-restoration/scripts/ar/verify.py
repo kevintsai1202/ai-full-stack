@@ -83,7 +83,7 @@ def _check_loudness(after: dict, target_lufs: float) -> Check:
     return Check("響度收斂", passed,
                  f"實測 {after['integrated_lufs']:.1f} LUFS，"
                  f"目標 {target_lufs:.1f}，誤差 {delta:.2f}"
-                 + ("" if passed else "，loudnorm 未收斂"))
+                 + ("" if passed else "，請檢查 restore 輸出的增益值與 alimiter 觸發情況"))
 
 
 def _check_true_peak(after: dict) -> Check:

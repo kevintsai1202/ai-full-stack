@@ -23,8 +23,8 @@ def collect_metrics(path: Path, plan: dict, report_path: Path | None = None) -> 
     # report.json 中經雙重確認的噪音採樣窗（詞間 gap ≥ 0.6 秒且 silencedetect 判靜音）
     windows = _noise_windows(report_path)
     # 沒有噪音採樣窗時回 None 代表「底噪未量測」，不可拿整體響度頂替。
-    # loudnorm 幾乎必然把整體響度收斂到目標，用它冒充底噪會讓「底噪下降」
-    # 這項檢查幾乎恆真，卻在報告上印成「底噪下降 2.4 dB」誤導使用者以為
+    # loudnorm 幾乎必然把整體響度收斂到目標，用它冒充底噪會讓「降噪淨效果」
+    # 這項檢查幾乎恆真，卻在報告上印成看似真實的改善數字誤導使用者以為
     # 降噪確實生效。實測已證實：無 report.json 時 noise 與 integrated
     # 會是完全相同的數字。
     # 底噪用 RMS 而非 LUFS：ebur128 的 integrated loudness 有 **-70 LUFS 絕對

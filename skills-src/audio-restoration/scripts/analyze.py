@@ -16,7 +16,7 @@ if hasattr(sys.stderr, "reconfigure"):
 from ar.diagnose import diagnose_zone
 from ar.fingerprint import detect_zones, read_samples, spectral_fingerprint
 from ar.gain import compute_utterance_gains, compute_zone_gains
-from ar.measure import measure_interval, measure_intervals, measure_utterances
+from ar.measure import measure_intervals, measure_utterances
 from ar.plan_io import write_plan, write_report
 from ar.probe import probe
 from ar.segments import classify
@@ -64,8 +64,10 @@ def main() -> None:
     for zone in zones:
         if not zone.noise_window_indices:
             # 不可退回別區的噪音窗：那會讓這一區用錯誤的降噪基準，且錯得無聲無息。
-            # detect_zones 的切點取自相鄰窗的中點，每個 zone 理論上必含至少一個窗，
-            # 走到這裡代表分區結果異常，應該停下來而不是猜一個。
+            # detect_zones 的切點取自「變化點所在噪音窗」的中點，且經最小 zone
+            # 長度過濾，正常情況下每個 zone 都會含至少一個窗；但分區偵測異常時
+            # 仍可能產生無窗的 zone（這正是本 SystemExit 存在的理由），
+            # 走到這裡應該停下來而不是猜一個。
             raise SystemExit(
                 f"Zone {zone.index}（{zone.start:.1f}s–{zone.end:.1f}s）沒有任何噪音採樣窗，"
                 "無法為此區建立降噪基準。這通常代表分區偵測異常，"

@@ -68,6 +68,10 @@ def render_zones(input_path: Path, plan: dict, work_dir: Path) -> list[Path]:
             "-af", build_zone_chain(zone),
             "-c:a", "pcm_f32le", str(out_path),
         ])
+        # raw_path 只是傳給 ffmpeg 的中繼原始資料，wav 產出後即可丟棄；
+        # 長課程逐 zone 累積下來每次都留著會佔用可觀磁碟空間（實測單一
+        # zone 可達數十 MB，整支課程累積上百 MB）
+        raw_path.unlink()
         parts.append(out_path)
     return parts
 

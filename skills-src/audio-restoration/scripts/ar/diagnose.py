@@ -5,7 +5,6 @@ from pathlib import Path
 import numpy as np
 
 from .fingerprint import Zone, read_samples
-from .measure import LoudnessStats
 
 AI_RESCUE_SNR = 10.0        # SNR 低於此值，ffmpeg 濾鏡鏈救不回
 SIBILANCE_THRESHOLD = 0.18  # 5-8kHz 能量佔比上限

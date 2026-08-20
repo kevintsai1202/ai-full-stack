@@ -13,6 +13,20 @@ description: 修復真人錄製的講課／直播音軌音質問題 —— 底�
 
 TTS 合成語音不適用本技能 —— 它沒有底噪，問題型態完全不同。
 
+## 環境準備
+
+以下所有指令都依賴 `$HOME\.audio-restoration\.venv`。第一次使用需先建立：
+
+```powershell
+python -m venv "$HOME\.audio-restoration\.venv"
+& "$HOME\.audio-restoration\.venv\Scripts\python" -m pip install -r "$HOME\.claude\skills\audio-restoration\requirements.txt"
+```
+
+`requirements.txt` 含 `faster-whisper`（`analyze.py` 在找不到既有 `timeline.json` 時
+會自動跑一次 ASR 產生詞級時間軸，這是必要依賴，不是選用）。AI 救援層
+（`references/rescue-ai.md`）需要的 `deepfilternet`／PyTorch 不在此列，須另外
+取得使用者明示同意後安裝。
+
 ## 兩階段流程
 
 ### 第一階段：體檢
@@ -61,7 +75,7 @@ TTS 合成語音不適用本技能 —— 它沒有底噪，問題型態完全�
 
 ## 設計約束（修改程式碼前必讀）
 
-- **處理順序不可調換**：拉平 → 降噪 → highpass → deesser → loudnorm → alimiter。afftdn 是門檻式運算，位準未拉平時門檻沒有單一意義。
+- **處理順序不可調換**：拉平 → 降噪 → highpass → deesser → 純線性正規化 → alimiter。afftdn 是門檻式運算，位準未拉平時門檻沒有單一意義。最終正規化刻意不用 loudnorm 套用（改為量測後直接算增益、套純線性 `volume`）——loudnorm 在低 LRA 素材上會靜默退回動態模式，把底噪連同人聲一起往上推，真實素材實測底噪因此不降反升 11.6dB。
 - **拉平只能用純增益**，禁用 `acompressor` / `dynaudnorm` / `speechnorm`。壓縮會頂高底噪，破壞降噪前提。
 - **切句依據是 ASR 詞級時間軸**，不是 silencedetect（音量門檻會讓小聲句整句消失），也不是 SRT 字幕（時間戳為閱讀調整過）。
 - **噪音採樣窗需雙重確認**：詞間 gap ≥ 0.6 秒且 silencedetect 亦判定靜音。採樣窗混入人聲會讓降噪把人聲當噪音消掉。
@@ -69,11 +83,14 @@ TTS 合成語音不適用本技能 —— 它沒有底噪，問題型態完全�
 
 ## 常見失敗與處置
 
+四項驗證分別是「降噪淨效果」「響度收斂」「真峰值」「拉平生效」（見 `ar/verify.py`）。
+
 | 驗證失敗項 | 原因 | 處置 |
 |---|---|---|
-| 底噪下降超過 25dB | 降噪過頭，人聲被削 | 調低 `plan.json` 的 `denoise_db` 重跑 |
-| 響度未收斂 | loudnorm 兩段式量測異常 | 檢查中繼檔是否有無聲段落 |
-| 拉平未生效 | 句級增益被限幅吃光 | 提高 `max_gain_db`，或先手動分割錄音條件差異過大的段落 |
+| 降噪淨效果未過 | 配對淨壓制 ≥0（未改善）或 >25dB（降噪過頭） | 檢查 `plan.json` 的 `denoise_db` 是否需調整；SNR≥35 的乾淨素材會自動回報「不適用」，不會被誤判為失敗 |
+| 響度未收斂 | 目標響度未收斂到 ±0.5 LUFS | 檢查 restore 輸出的增益值與 alimiter 是否大量觸發（通常代表素材峰值過高，限幅吃掉了大半增益） |
+| 真峰值超標 | 最終輸出真峰值 > −1.5 dBTP | 通常是輸出經 AAC 等有損重編所致，確認處理目標 −2.0 dBTP 的 0.5dB 餘裕是否被吃掉（例如編碼位元率過低） |
+| 拉平未生效 | 句間響度標準差未下降 | 檢查 `timeline.json` 是否涵蓋全檔（時長是否與媒體相符）、句數是否過少而無法反映拉平效果 |
 | 找不到噪音採樣窗 | 整段都有人聲或 ASR 斷句過密 | 手動指定一段確定無人聲的區間 |
 
 ## AI 救援層

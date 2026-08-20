@@ -50,7 +50,7 @@ def main() -> None:
         result = subprocess.run(
             [sys.executable, str(analyze), "--input", str(media),
              "--work-dir", str(work_dir), "--target", str(args.target)],
-            text=True,
+            text=True, encoding="utf-8",
         )
         entries.append(_summarize(media, work_dir, result.returncode))
 
@@ -102,7 +102,7 @@ def _batch_restore(media_files: list[Path], out_dir: Path) -> None:
         result = subprocess.run(
             [sys.executable, str(restore), "--plan", str(plan_path),
              "--out", str(out_path), "--work-dir", str(work_dir / "work")],
-            text=True,
+            text=True, encoding="utf-8",
         )
         entries.append(_summarize_restore(media, work_dir, result.returncode))
 

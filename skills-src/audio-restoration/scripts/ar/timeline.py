@@ -95,7 +95,7 @@ def find_asr_python() -> str:
 def _has_faster_whisper(python_exe: str) -> bool:
     """檢查指定 Python 是否已安裝 faster-whisper。"""
     result = subprocess.run([python_exe, "-c", "import faster_whisper"],
-                            capture_output=True, text=True)
+                            capture_output=True, text=True, encoding="utf-8")
     return result.returncode == 0
 
 
