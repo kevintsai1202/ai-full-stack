@@ -1055,8 +1055,7 @@ _PEAK_RE = re.compile(r"Peak level dB:\s*(-?[\d.]+|-inf)")
 # 與 astats 的 "Peak level dB:" 是兩個不同的量：後者是取樣點的最大值，
 # 前者經過過採樣、含 inter-sample peak。驗證真峰值上限必須用前者，
 # 用樣本峰值會系統性低估 0.3-3dB，可能實際超標卻回報合格。
-_TRUE_PEAK_RE = re.compile(r"True peak:\s*
-\s*Peak:\s*(-?[\d.]+|-inf)\s*dBFS")
+_TRUE_PEAK_RE = re.compile(r"True peak:\s*\n\s*Peak:\s*(-?[\d.]+|-inf)\s*dBFS")
 
 SILENT_FLOOR = -120.0  # 量到 -inf 時採用的替代值，避免後續運算出現無限大
 
