@@ -2,6 +2,7 @@
 import argparse
 import sys
 from pathlib import Path
+from statistics import median
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -41,7 +42,13 @@ def main() -> None:
     classification = classify(timeline, silences, spec.duration)
 
     if not classification.noise_windows:
-        raise SystemExit("找不到可用的噪音採樣窗（可能整段都有人聲），無法建立降噪基準")
+        raise SystemExit(
+            "找不到可用的噪音採樣窗，無法建立降噪基準。\n"
+            "可能原因與處置：\n"
+            "  1. 整段幾乎都有人聲（講者沒有停頓）→ 手動指定一段確定無人聲的區間\n"
+            "  2. ASR 斷句過密，詞間 gap 都不足 0.6 秒 → 檢查 timeline.json 的詞級時間戳\n"
+            "  3. 底噪偏高使 silencedetect 判不出靜音 → 調高 detect_silence 的 noise_db 門檻"
+        )
 
     fingerprints = [
         spectral_fingerprint(read_samples(args.input, w.start, w.end), 16000)
@@ -54,16 +61,40 @@ def main() -> None:
 
     diagnoses = []
     for zone in zones:
-        indices = zone.noise_window_indices or [0]
-        zone_noise = min((noise_stats[i] for i in indices), key=lambda s: s.lufs)
-        zone_speech = measure_interval(args.input, zone.start, min(zone.end, zone.start + 60.0))
+        if not zone.noise_window_indices:
+            # 不可退回別區的噪音窗：那會讓這一區用錯誤的降噪基準，且錯得無聲無息。
+            # detect_zones 的切點取自相鄰窗的中點，每個 zone 理論上必含至少一個窗，
+            # 走到這裡代表分區結果異常，應該停下來而不是猜一個。
+            raise SystemExit(
+                f"Zone {zone.index}（{zone.start:.1f}s–{zone.end:.1f}s）沒有任何噪音採樣窗，"
+                "無法為此區建立降噪基準。這通常代表分區偵測異常，"
+                "請檢查 report.json 的 zones 與 noise_windows 是否對得上。"
+            )
+        # 底噪取該區各採樣窗的中位數：單一異常安靜的窗（例如空調剛好停機）
+        # 會讓 min 低估底噪、使 SNR 被高估而降噪不足；中位數對離群值穩健。
+        zone_noise_lufs = median(
+            [noise_stats[i].lufs for i in zone.noise_window_indices]
+        )
+        # 人聲響度取該區各語句的中位數，而非整段區間的響度。
+        # 整段含靜音，會把人聲位準拉低，讓 SNR 被低估、降噪被拉得過強。
+        zone_utterance_lufs = [
+            stat.lufs
+            for utterance, stat in zip(classification.utterances, utterance_stats)
+            if zone.start <= (utterance.start + utterance.end) / 2.0 < zone.end
+        ]
+        if not zone_utterance_lufs:
+            raise SystemExit(
+                f"Zone {zone.index}（{zone.start:.1f}s–{zone.end:.1f}s）沒有任何語句，"
+                "無法判斷人聲響度。請檢查 ASR 時間軸是否涵蓋整支檔案。"
+            )
+        zone_speech_lufs = median(zone_utterance_lufs)
         # 落在此 zone 內的語句結束時刻，供殘響量測使用
         zone_ends = [
             seg.end for seg in timeline.segments
             if zone.start <= seg.end < zone.end
         ]
         diagnoses.append(
-            diagnose_zone(args.input, zone, zone_noise, zone_speech, zone_ends)
+            diagnose_zone(args.input, zone, zone_noise_lufs, zone_speech_lufs, zone_ends)
         )
 
     zone_gains = compute_zone_gains(diagnoses, WORKING_LUFS)

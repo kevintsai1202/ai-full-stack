@@ -154,15 +154,21 @@ def pick_denoise_level(snr_db: float) -> int:
     return 12
 
 
-def diagnose_zone(path: Path, zone: Zone, noise_stats: LoudnessStats,
-                  speech_stats: LoudnessStats, utterance_ends: list[float],
+def diagnose_zone(path: Path, zone: Zone, noise_lufs: float,
+                  speech_lufs: float, utterance_ends: list[float],
                   sample_rate: int = 16000) -> ZoneDiagnosis:
     """對單一 zone 執行全部診斷並決定處理策略。
 
+    noise_lufs / speech_lufs 收 float 而非 LoudnessStats：本函式只需要響度，
+    收整個 stats 物件會讓呼叫端誤以為 rms_db／peak_db 也會被使用，進而隨便
+    塞一個「只有 lufs 有意義」的物件進來。
+
+    speech_lufs 必須是**語句的**響度彙總，不能是整段區間的響度 —— 整段含靜音，
+    會把人聲位準拉低，使 SNR 被低估、降噪強度被拉高。
     utterance_ends 是落在此 zone 內的各語句結束時刻（秒），用於量測殘響。
     """
     samples = read_samples(path, zone.start, min(zone.end, zone.start + 30.0), sample_rate)
-    snr = speech_stats.lufs - noise_stats.lufs
+    snr = speech_lufs - noise_lufs
     sibilance = band_energy_ratio(samples, sample_rate, 5000.0, 8000.0)
     rumble = band_energy_ratio(samples, sample_rate, 0.0, 80.0)
     clipped = clipped_ratio(samples)
@@ -187,8 +193,8 @@ def diagnose_zone(path: Path, zone: Zone, noise_stats: LoudnessStats,
         zone_index=zone.index,
         start=zone.start,
         end=zone.end,
-        noise_lufs=noise_stats.lufs,
-        speech_lufs=speech_stats.lufs,
+        noise_lufs=noise_lufs,
+        speech_lufs=speech_lufs,
         snr_db=snr,
         sibilance_ratio=sibilance,
         rumble_ratio=rumble,

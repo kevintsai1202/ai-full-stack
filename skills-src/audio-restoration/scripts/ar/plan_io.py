@@ -10,7 +10,7 @@ from pathlib import Path
 from .diagnose import ZoneDiagnosis
 from .probe import MediaSpec
 
-PLAN_SCHEMA_VERSION = 1
+PLAN_SCHEMA_VERSION = 1  # plan.json 結構版本，改變欄位語意時必須遞增
 
 
 def write_report(work_dir: Path, spec: MediaSpec, classification, diagnoses,
