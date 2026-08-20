@@ -33,6 +33,10 @@
   `sys.stdout.reconfigure(encoding="utf-8")` 與 `sys.stderr.reconfigure(encoding="utf-8")`。
   Windows 主控台預設 cp950，印出 `⚠` 等非 Big5 字元會拋 `UnicodeEncodeError`
   並讓行程以非零碼結束 —— 看起來像修復失敗，實際只是印不出來。
+  **測試中呼叫 CLI 的 `subprocess.run` 同樣必須帶 `encoding="utf-8"`**：
+  不帶會讓子行程的 UTF-8 輸出以 cp950 解碼失敗，在背景執行緒拋
+  `UnicodeDecodeError`。它不會讓測試失敗，只會變成一則容易被忽略的
+  warning —— 但同樣的疏漏若出現在正式程式碼就是真的當掉。
 
 ---
 
@@ -3611,7 +3615,7 @@ def test_restore_output_hits_target_loudness(synth_wav: Path, tmp_path: Path):
         [sys.executable, str(SCRIPTS / "restore.py"),
          "--plan", str(plan_path), "--out", str(out_path),
          "--work-dir", str(tmp_path / "work")],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, encoding="utf-8", check=True,
     )
     assert abs(measure_interval(out_path, 0.0, 8.0).lufs - (-16.0)) < 1.0
 ```
@@ -3892,7 +3896,7 @@ def test_batch_skips_non_media_files(synth_wav: Path, tmp_path: Path):
     subprocess.run(
         [sys.executable, str(SCRIPTS / "batch.py"),
          "--input-dir", str(media_dir), "--out-dir", str(tmp_path / "out")],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, encoding="utf-8", check=True,
     )
     summary = json.loads((tmp_path / "out" / "summary.json").read_text(encoding="utf-8"))
     assert len(summary["files"]) == 1
@@ -4039,16 +4043,25 @@ def _batch_restore(media_files: list[Path], out_dir: Path) -> None:
 
 
 def _summarize_restore(media: Path, work_dir: Path, returncode: int) -> dict:
-    """摘要單一檔案的修復前後指標。"""
+    """摘要單一檔案的修復前後指標。
+
+    returncode 優先於 verify.json 的存在與否：work_dir 會在多次 --restore
+    之間保留，若這次在寫出新 verify.json 之前就失敗（例如 ffmpeg 崩潰），
+    讀到的會是**上一輪殘留**的舊資料，讓使用者以為卡在同一個驗證項，
+    掩蓋這次真正的失敗原因。
+    """
     verify_path = work_dir / "work" / "verify.json"
+    if returncode != 0:
+        return {"file": media.name, "skipped": False, "ok": False,
+                "reason": f"修復失敗（結束碼 {returncode}），請看該檔的終端輸出"}
     if not verify_path.exists():
         return {"file": media.name, "skipped": False, "ok": False,
-                "reason": "修復失敗，未產出 verify.json"}
+                "reason": "修復未產出 verify.json"}
     payload = json.loads(verify_path.read_text(encoding="utf-8"))
     return {
         "file": media.name,
         "skipped": False,
-        "ok": returncode == 0 and payload["result"]["passed"],
+        "ok": payload["result"]["passed"],
         "before": payload["before"],
         "after": payload["after"],
         "failed_checks": [
@@ -4225,9 +4238,13 @@ $ErrorActionPreference = "Stop"
 $source = $PSScriptRoot
 
 # 只部署執行時需要的檔案，測試與開發用檔案不進全域目錄
-$include = @("SKILL.md", "scripts", "references")
+# requirements.txt 也要帶：使用者換機或 venv 損毀時，需要能在全域目錄
+# 直接 pip install -r 重建環境，不必回頭翻專案原始碼
+$include = @("SKILL.md", "scripts", "references", "requirements.txt")
 
 if (Test-Path $Target) {
+    # 整個刪除重建。全域目錄非版控，手動改過的內容會消失，故先明說
+    Write-Host "移除既有的 $Target（手動修改過的內容不會保留）"
     Remove-Item -Recurse -Force $Target
 }
 New-Item -ItemType Directory -Force -Path $Target | Out-Null
