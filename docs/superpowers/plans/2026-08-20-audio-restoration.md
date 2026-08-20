@@ -1486,13 +1486,13 @@ git commit -m "feat(audio-restoration): 加入頻譜指紋與錄音條件分區�
 **Interfaces:**
 - Consumes: `fingerprint.Zone`、`measure.LoudnessStats`、`fingerprint.read_samples`、`timeline.Timeline`
 - Produces:
-  - `diagnose.ZoneDiagnosis`（dataclass：`zone_index: int`、`start: float`、`end: float`、`noise_lufs: float`、`speech_lufs: float`、`snr_db: float`、`sibilance_ratio: float`、`rumble_ratio: float`、`clipped_ratio: float`、`reverb_slope: float`、`denoise_db: int`、`needs_deesser: bool`、`needs_highpass: bool`、`needs_ai_rescue: bool`、`issues: list[str]`）
+  - `diagnose.ZoneDiagnosis`（dataclass：`zone_index: int`、`start: float`、`end: float`、`noise_rms_db: float`、`speech_rms_db: float`、`snr_db: float`、`sibilance_ratio: float`、`rumble_ratio: float`、`clipped_ratio: float`、`reverb_slope: float`、`denoise_db: int`、`needs_deesser: bool`、`needs_highpass: bool`、`needs_ai_rescue: bool`、`issues: list[str]`）
   - `diagnose.band_energy_ratio(samples: np.ndarray, sample_rate: int, low_hz: float, high_hz: float) -> float`
   - `diagnose.clipped_ratio(samples: np.ndarray) -> float`
   - `diagnose.reverb_slope(tail_samples: np.ndarray, sample_rate: int) -> float`（輸入必須是「從語句結束時刻起算的尾段」，函式不自行切窗）
   - `diagnose.zone_reverb_slope(path: Path, zone: Zone, utterance_ends: list[float], sample_rate: int = 16000, window: float = 0.3) -> float`
   - `diagnose.pick_denoise_level(snr_db: float) -> int`
-  - `diagnose.diagnose_zone(path: Path, zone: Zone, noise_lufs: float, speech_lufs: float, utterance_ends: list[float], sample_rate: int = 16000) -> ZoneDiagnosis`
+  - `diagnose.diagnose_zone(path: Path, zone: Zone, noise_rms_db: float, speech_rms_db: float, utterance_ends: list[float], sample_rate: int = 16000) -> ZoneDiagnosis`
 
 **門檻定義（Task 14 以真實素材校準）：**
 
@@ -1651,8 +1651,8 @@ class ZoneDiagnosis:
     zone_index: int          # 該區在整支檔案中的序號（從 0 起）
     start: float             # 該區起始時間（秒）
     end: float               # 該區結束時間（秒）
-    noise_lufs: float        # 該區底噪響度
-    speech_lufs: float       # 該區人聲響度
+    noise_rms_db: float      # 該區底噪 RMS（不用 LUFS：有 -70 絕對閘門）
+    speech_rms_db: float     # 該區人聲 RMS
     snr_db: float            # 訊噪比
     sibilance_ratio: float   # 5-8kHz 能量佔比
     rumble_ratio: float      # <80Hz 能量佔比
@@ -1777,21 +1777,25 @@ def pick_denoise_level(snr_db: float) -> int:
     return 12
 
 
-def diagnose_zone(path: Path, zone: Zone, noise_lufs: float,
-                  speech_lufs: float, utterance_ends: list[float],
+def diagnose_zone(path: Path, zone: Zone, noise_rms_db: float,
+                  speech_rms_db: float, utterance_ends: list[float],
                   sample_rate: int = 16000) -> ZoneDiagnosis:
     """對單一 zone 執行全部診斷並決定處理策略。
 
-    noise_lufs / speech_lufs 收 float 而非 LoudnessStats：本函式只需要響度，
-    收整個 stats 物件會讓呼叫端誤以為 rms_db／peak_db 也會被使用，進而隨便
-    塞一個「只有 lufs 有意義」的物件進來。
+    **SNR 兩端都用 RMS，不用 LUFS。** ebur128 的 integrated loudness 有
+    -70 LUFS 絕對閘門，比它更安靜的底噪一律被截斷成 -70。用 LUFS 算 SNR
+    會在安靜錄音上系統性低估訊噪比，讓降噪強度被選得過強。SNR 在聲學上
+    本來就是功率比，用 RMS 才是正確定義。
 
-    speech_lufs 必須是**語句的**響度彙總，不能是整段區間的響度 —— 整段含靜音，
-    會把人聲位準拉低，使 SNR 被低估、降噪強度被拉高。
+    收 float 而非 LoudnessStats：本函式只需要這兩個數字，收整個 stats
+    物件會讓呼叫端誤以為其他欄位也會被使用。
+
+    speech_rms_db 必須是**語句的**響度彙總，不能是整段區間的響度 —— 整段含
+    靜音，會把人聲位準拉低，使 SNR 被低估、降噪強度被拉高。
     utterance_ends 是落在此 zone 內的各語句結束時刻（秒），用於量測殘響。
     """
     samples = read_samples(path, zone.start, min(zone.end, zone.start + 30.0), sample_rate)
-    snr = speech_lufs - noise_lufs
+    snr = speech_rms_db - noise_rms_db
     sibilance = band_energy_ratio(samples, sample_rate, 5000.0, 8000.0)
     rumble = band_energy_ratio(samples, sample_rate, 0.0, 80.0)
     clipped = clipped_ratio(samples)
@@ -1816,8 +1820,8 @@ def diagnose_zone(path: Path, zone: Zone, noise_lufs: float,
         zone_index=zone.index,
         start=zone.start,
         end=zone.end,
-        noise_lufs=noise_lufs,
-        speech_lufs=speech_lufs,
+        noise_rms_db=noise_rms_db,
+        speech_rms_db=speech_rms_db,
         snr_db=snr,
         sibilance_ratio=sibilance,
         rumble_ratio=rumble,
@@ -1889,7 +1893,7 @@ def _spec(tmp_path: Path) -> MediaSpec:
 def _diagnosis() -> ZoneDiagnosis:
     """測試用診斷結果。"""
     return ZoneDiagnosis(
-        zone_index=0, start=0.0, end=8.0, noise_lufs=-55.0, speech_lufs=-20.0,
+        zone_index=0, start=0.0, end=8.0, noise_rms_db=-55.0, speech_rms_db=-20.0,
         snr_db=35.0, sibilance_ratio=0.05, rumble_ratio=0.02, clipped_ratio=0.0,
         reverb_slope=-60.0, denoise_db=12, needs_deesser=False,
         needs_highpass=False, needs_ai_rescue=False, issues=[],
@@ -2166,33 +2170,31 @@ def main() -> None:
             )
         # 底噪取該區各採樣窗的中位數：單一異常安靜的窗（例如空調剛好停機）
         # 會讓 min 低估底噪、使 SNR 被高估而降噪不足；中位數對離群值穩健。
-        zone_noise_lufs = median(
-            [noise_stats[i].lufs for i in zone.noise_window_indices]
+        zone_noise_rms = median(
+            [noise_stats[i].rms_db for i in zone.noise_window_indices]
         )
         # 人聲響度取該區各語句的中位數，而非整段區間的響度。
         # 整段含靜音，會把人聲位準拉低，讓 SNR 被低估、降噪被拉得過強。
-        zone_utterance_lufs = [
-            stat.lufs
+        zone_utterance_rms = [
+            stat.rms_db
             for utterance, stat in zip(classification.utterances, utterance_stats)
             if zone.start <= (utterance.start + utterance.end) / 2.0 < zone.end
         ]
-        if not zone_utterance_lufs:
+        if not zone_utterance_rms:
             raise SystemExit(
                 f"Zone {zone.index}（{zone.start:.1f}s–{zone.end:.1f}s）沒有任何語句，"
                 "無法判斷人聲響度。請檢查 ASR 時間軸是否涵蓋整支檔案。"
             )
-        zone_speech_lufs = median(zone_utterance_lufs)
-        # afftdn 的 nf 語意是訊號位準，用 RMS 而非 LUFS
-        zone_noise_floors.append(
-            median([noise_stats[i].rms_db for i in zone.noise_window_indices])
-        )
+        zone_speech_rms = median(zone_utterance_rms)
+        # afftdn 的 nf 語意就是訊號位準，與 SNR 用的是同一個量
+        zone_noise_floors.append(zone_noise_rms)
         # 落在此 zone 內的語句結束時刻，供殘響量測使用
         zone_ends = [
             seg.end for seg in timeline.segments
             if zone.start <= seg.end < zone.end
         ]
         diagnoses.append(
-            diagnose_zone(args.input, zone, zone_noise_lufs, zone_speech_lufs, zone_ends)
+            diagnose_zone(args.input, zone, zone_noise_rms, zone_speech_rms, zone_ends)
         )
 
     zone_gains = compute_zone_gains(diagnoses, WORKING_LUFS)
@@ -2288,11 +2290,11 @@ from ar.measure import LoudnessStats
 from ar.segments import Utterance
 
 
-def _diagnosis(index: int, speech_lufs: float) -> ZoneDiagnosis:
+def _diagnosis(index: int, speech_rms_db: float) -> ZoneDiagnosis:
     """建立指定人聲響度的診斷結果。"""
     return ZoneDiagnosis(
         zone_index=index, start=index * 10.0, end=(index + 1) * 10.0,
-        noise_lufs=-55.0, speech_lufs=speech_lufs, snr_db=35.0,
+        noise_rms_db=-55.0, speech_rms_db=speech_rms_db, snr_db=35.0,
         sibilance_ratio=0.05, rumble_ratio=0.02, clipped_ratio=0.0,
         reverb_slope=-60.0, denoise_db=12, needs_deesser=False,
         needs_highpass=False, needs_ai_rescue=False, issues=[],
@@ -2451,7 +2453,7 @@ NONSPEECH_ATTENUATION_DB = -6.0  # 非語音雜訊區間的額外衰減
 def compute_zone_gains(diagnoses: list[ZoneDiagnosis],
                        working_lufs: float = -20.0) -> list[float]:
     """算出每個 zone 補到共同工作位準所需的純增益。"""
-    return [working_lufs - d.speech_lufs for d in diagnoses]
+    return [working_lufs - d.speech_rms_db for d in diagnoses]
 
 
 def _zone_index_for(time: float, zones: list[Zone]) -> int:
@@ -2703,7 +2705,7 @@ def test_loudnorm_measure_chain_requests_json():
     chain = build_loudnorm_measure_chain(-16.0)
     assert "print_format=json" in chain
     assert "I=-16.0" in chain
-    assert "TP=-1.5" in chain
+    assert "TP=-2.0" in chain
 
 
 def test_loudnorm_apply_chain_uses_measured_values():
@@ -2727,13 +2729,16 @@ def test_loudnorm_apply_chain_uses_measured_values():
 def test_alimiter_limit_is_linear_not_db():
     """alimiter 的 limit 吃線性值，須由 dBTP 換算。
 
-    -1.5 dBTP → 10^(-1.5/20) ≈ 0.8414。若誤把 -1.5 直接填進去，
+    處理目標 -2.0 dBTP → 10^(-2.0/20) ≈ 0.7943。若誤把 -2.0 直接填進去，
     ffmpeg 不會報錯，但限幅門檻會完全失效。
+
+    注意處理目標（-2.0）比驗收標準（-1.5）低 0.5 dB，那是留給有損編碼的
+    餘裕 —— 實測 AAC 192k 重編會讓真峰值上升約 0.1 dB。
     """
     chain = build_loudnorm_apply_chain(-16.0, {
         "input_i": "-23.1", "input_tp": "-5.2", "input_lra": "8.3",
         "input_thresh": "-33.4", "target_offset": "0.4"})
-    assert "alimiter=limit=0.8414" in chain
+    assert "alimiter=limit=0.7943" in chain
 
 
 def test_alimiter_disables_auto_level():
@@ -2770,7 +2775,11 @@ Expected: FAIL — `No module named 'ar.chain'`
 highpass 與 deesser 只在該區診斷確有需要時才掛，無差別套用會削掉男聲低頻
 或讓咬字變鈍。
 """
-TRUE_PEAK = -1.5          # 目標真峰值（dBTP）
+# 處理階段的真峰值目標，比驗收標準（-1.5 dBTP）低 0.5 dB。
+# 這 0.5 dB 是留給有損編碼的餘裕：真實素材實測顯示 pre-mux 的 WAV 真峰值
+# 精確落在 -1.5，但 AAC 192k 重編後上升到 -1.4，直接超標。限幅器把訊號
+# 壓到剛好卡在驗收線上，等於沒有任何容錯空間。
+TRUE_PEAK_TARGET = -2.0
 LRA = 11                  # 目標響度範圍
 DEFAULT_NOISE_FLOOR = -40.0  # 沒有實測底噪時的退路值
 NOISE_FLOOR_MIN = -80.0   # afftdn 的 nf 合法下限
@@ -2815,7 +2824,7 @@ def build_zone_chain(zone_plan: dict) -> str:
 
 def build_loudnorm_measure_chain(target_lufs: float) -> str:
     """兩段式 loudnorm 的第一段：量測，輸出 JSON。"""
-    return (f"loudnorm=I={target_lufs}:TP={TRUE_PEAK}:LRA={LRA}"
+    return (f"loudnorm=I={target_lufs}:TP={TRUE_PEAK_TARGET}:LRA={LRA}"
             f":print_format=json")
 
 
@@ -2825,7 +2834,7 @@ def build_loudnorm_apply_chain(target_lufs: float, measured: dict) -> str:
     linear=true 讓 loudnorm 走線性增益而非動態壓縮，避免破壞已拉平的動態。
     """
     return (
-        f"loudnorm=I={target_lufs}:TP={TRUE_PEAK}:LRA={LRA}"
+        f"loudnorm=I={target_lufs}:TP={TRUE_PEAK_TARGET}:LRA={LRA}"
         f":measured_I={measured['input_i']}"
         f":measured_TP={measured['input_tp']}"
         f":measured_LRA={measured['input_lra']}"
@@ -2836,7 +2845,7 @@ def build_loudnorm_apply_chain(target_lufs: float, measured: dict) -> str:
         # 做「自動電平補償」，把 loudnorm 剛做完的線性正規化結果重新推高。
         # 實測：不加時輸出偏離目標 1.5-2.0 LUFS，加了之後誤差降到 0.0-0.5。
         # 我們用 alimiter 只為了防止真峰值超標，不要它動響度。
-        f"alimiter=limit={10 ** (TRUE_PEAK / 20):.4f}:level=false"
+        f"alimiter=limit={10 ** (TRUE_PEAK_TARGET / 20):.4f}:level=false"
     )
 ```
 
@@ -3251,7 +3260,7 @@ git commit -m "feat(audio-restoration): 加入分區渲染、串接與輸出"
 
 | 指標 | 合格條件 |
 |---|---|
-| 底噪下降 | `after.noise_lufs < before.noise_lufs` 且降幅 ≤ 25dB |
+| 底噪下降 | `after.noise_rms_db < before.noise_rms_db` 且降幅 ≤ 25dB |
 | 響度收斂 | `abs(after.integrated_lufs - target) <= 0.5` |
 | 真峰值 | `after.true_peak <= -1.5` |
 | 拉平生效 | `after.utterance_lufs_stdev < before.utterance_lufs_stdev` |
@@ -3267,13 +3276,13 @@ from ar.verify import verify
 
 def _before() -> dict:
     """修復前的指標。"""
-    return {"noise_lufs": -45.0, "integrated_lufs": -24.0,
+    return {"noise_rms_db": -45.0, "integrated_lufs": -24.0,
             "true_peak": -3.0, "utterance_lufs_stdev": 6.0}
 
 
 def _after(**overrides) -> dict:
     """修復後的指標（可覆寫單項以測試失敗情境）。"""
-    base = {"noise_lufs": -58.0, "integrated_lufs": -16.1,
+    base = {"noise_rms_db": -58.0, "integrated_lufs": -16.1,
             "true_peak": -1.6, "utterance_lufs_stdev": 1.8}
     base.update(overrides)
     return base
@@ -3288,7 +3297,7 @@ def test_all_checks_pass_for_good_result():
 
 def test_excessive_noise_reduction_fails():
     """底噪降幅超過 25dB 視為降噪過頭，把人聲一併削掉了。"""
-    result = verify(_before(), _after(noise_lufs=-75.0), target_lufs=-16.0)
+    result = verify(_before(), _after(noise_rms_db=-75.0), target_lufs=-16.0)
     assert result.passed is False
     assert any("降噪過頭" in c.detail for c in result.checks if not c.passed)
 
@@ -3314,8 +3323,8 @@ def test_flattening_not_effective_fails():
 
 def test_noise_check_reports_unverifiable_when_missing():
     """底噪為 None 時應回報不可驗證，而不是假裝通過或直接失敗。"""
-    before = {**_before(), "noise_lufs": None}
-    after = _after(noise_lufs=None)
+    before = {**_before(), "noise_rms_db": None}
+    after = _after(noise_rms_db=None)
     result = verify(before, after, target_lufs=-16.0)
     noise_check = next(c for c in result.checks if c.name == "底噪下降")
     assert noise_check.passed is True
@@ -3391,14 +3400,17 @@ def verify(before: dict, after: dict, target_lufs: float) -> VerifyResult:
 def _check_noise(before: dict, after: dict) -> Check:
     """底噪應下降，但降幅過大代表降噪過頭。
 
+    量的是 RMS 不是 LUFS：ebur128 的 integrated loudness 有 -70 LUFS 絕對
+    閘門，安靜的底噪會被截斷成 -70，前後都是 -70、降幅永遠 0。
+
     底噪為 None 代表沒有噪音採樣窗可量（通常是缺 report.json）。
     此時明確回報「不可驗證」而不是拿別的數字頂替 —— 一個假裝通過的
     檢查比沒有檢查更危險。
     """
-    if before["noise_lufs"] is None or after["noise_lufs"] is None:
+    if before["noise_rms_db"] is None or after["noise_rms_db"] is None:
         return Check("底噪下降", True,
                      "無噪音採樣窗可量測，此項不可驗證（請確認 report.json 存在）")
-    drop = before["noise_lufs"] - after["noise_lufs"]
+    drop = before["noise_rms_db"] - after["noise_rms_db"]
     if drop <= 0:
         return Check("底噪下降", False, f"底噪未下降（變化 {drop:.1f} dB），降噪未生效")
     if drop > MAX_NOISE_DROP_DB:
@@ -3598,8 +3610,8 @@ def test_noise_measured_from_report_windows(synth_wav: Path, tmp_path: Path):
     """
     metrics = collect_metrics(synth_wav, _metrics_plan(),
                               report_path=_metrics_report(tmp_path / "report.json"))
-    assert metrics["noise_lufs"] < -40.0
-    assert metrics["noise_lufs"] < metrics["integrated_lufs"] - 20.0
+    assert metrics["noise_rms_db"] < -40.0
+    assert metrics["noise_rms_db"] < metrics["integrated_lufs"] - 20.0
 
 
 def test_utterance_stdev_reflects_level_difference(synth_wav: Path, tmp_path: Path):
@@ -3617,7 +3629,7 @@ def test_noise_is_none_when_report_missing(synth_wav: Path, tmp_path: Path):
     """
     metrics = collect_metrics(synth_wav, _metrics_plan(),
                               report_path=tmp_path / "nonexistent.json")
-    assert metrics["noise_lufs"] is None
+    assert metrics["noise_rms_db"] is None
     assert metrics["integrated_lufs"] is not None
 ```
 
@@ -3735,12 +3747,16 @@ def collect_metrics(path: Path, plan: dict, report_path: Path | None = None) -> 
     # 這項檢查幾乎恆真，卻在報告上印成「底噪下降 2.4 dB」誤導使用者以為
     # 降噪確實生效。實測已證實：無 report.json 時 noise 與 integrated
     # 會是完全相同的數字。
-    noise_lufs = (
-        min(measure_interval(path, start, end).lufs for start, end in windows)
+    # 底噪用 RMS 而非 LUFS：ebur128 的 integrated loudness 有 **-70 LUFS 絕對
+    # 閘門**，安靜的底噪一律被截斷成 -70，修復前後都量到 -70，降幅永遠是 0。
+    # 真實素材實測證實了這點（前 -70.00 → 後 -70.00，「底噪下降」判定失敗）。
+    # RMS 沒有閘門，能真實反映底噪位準。
+    noise_rms_db = (
+        min(measure_interval(path, start, end).rms_db for start, end in windows)
         if windows else None
     )
     return {
-        "noise_lufs": noise_lufs,
+        "noise_rms_db": noise_rms_db,
         "integrated_lufs": overall.lufs,
         # 用 ebur128 的真峰值，不是 astats 的樣本峰值
         "true_peak": overall.true_peak_db,
@@ -3856,9 +3872,9 @@ def _print_result(before: dict, after: dict, result, out_path: Path, work_dir: P
     print(f"AB 試聽：{work_dir / 'preview-ab.wav'}")
     print(f"ASR 用 WAV：{work_dir / 'restored-16k.wav'}\n")
     print("修復前後指標：")
-    for key, label in (("noise_lufs", "底噪 LUFS"), ("integrated_lufs", "整體 LUFS"),
+    for key, label in (("noise_rms_db", "底噪 RMS dB"), ("integrated_lufs", "整體 LUFS"),
                        ("true_peak", "真峰值 dBTP"), ("utterance_lufs_stdev", "句間標準差")):
-        # noise_lufs 缺 report.json 時為 None（不可驗證），格式化前需個別判斷，
+        # noise_rms_db 缺 report.json 時為 None（不可驗證），格式化前需個別判斷，
         # 否則 f"{None:.2f}" 會拋 TypeError 讓整支 CLI 崩潰
         before_str = f"{before[key]:.2f}" if before[key] is not None else "N/A"
         after_str = f"{after[key]:.2f}" if after[key] is not None else "N/A"
@@ -4161,8 +4177,8 @@ def _print_restore_summary(entries: list[dict]) -> None:
             print(f"  {entry['file']}: 未通過（{failed}）")
             continue
         before, after = entry["before"], entry["after"]
-        print(f"  {entry['file']}: 底噪 {before['noise_lufs']:.1f} → "
-              f"{after['noise_lufs']:.1f} LUFS／整體 {before['integrated_lufs']:.1f} → "
+        print(f"  {entry['file']}: 底噪 {before['noise_rms_db']:.1f} → "
+              f"{after['noise_rms_db']:.1f} dB／整體 {before['integrated_lufs']:.1f} → "
               f"{after['integrated_lufs']:.1f}／句間標準差 "
               f"{before['utterance_lufs_stdev']:.2f} → {after['utterance_lufs_stdev']:.2f}")
 
