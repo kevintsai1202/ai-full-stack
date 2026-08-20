@@ -20,22 +20,29 @@ REVERB_SLOPE_THRESHOLD = -60.0
 
 @dataclass
 class ZoneDiagnosis:
-    """一個 zone 的完整診斷結果與處理決策。"""
-    zone_index: int
-    start: float
-    end: float
+    """一個 zone 的完整診斷結果與處理決策。
+
+    本物件會被序列化進 report.json 與 plan.json 供人工檢視與調整，
+    因此每個欄位的語意都必須能獨立看懂，不能倚賴閱讀程式碼。
+    """
+    zone_index: int          # 該區在整支檔案中的序號（從 0 起）
+    start: float             # 該區起始時間（秒）
+    end: float                # 該區結束時間（秒）
     noise_lufs: float        # 該區底噪響度
     speech_lufs: float       # 該區人聲響度
     snr_db: float            # 訊噪比
     sibilance_ratio: float   # 5-8kHz 能量佔比
     rumble_ratio: float      # <80Hz 能量佔比
     clipped_ratio: float     # 削峰樣本比例
-    reverb_slope: float      # 語句結束後的能量衰減斜率（dB/秒）
-    denoise_db: int          # afftdn 降噪強度
-    needs_deesser: bool
-    needs_highpass: bool
-    needs_ai_rescue: bool
-    issues: list[str] = field(default_factory=list)
+    # 語句結束後的能量衰減斜率（dB/秒，T20 量測，等於 -60/RT60）。
+    # None 代表「量不到」（該區無可用語句結束點、或尾段全在靜音地板），
+    # 不是「衰減極慢」——序列化後為 JSON null，下游不得當成數值比較。
+    reverb_slope: float | None
+    denoise_db: int          # afftdn 降噪強度（12／18／24）
+    needs_deesser: bool      # 是否掛 deesser（齒音超標）
+    needs_highpass: bool     # 是否掛 highpass（低頻隆隆超標）
+    needs_ai_rescue: bool    # ffmpeg 濾鏡鏈是否救不回（SNR 過低）
+    issues: list[str] = field(default_factory=list)  # 給人看的問題描述
 
 
 def band_energy_ratio(samples: np.ndarray, sample_rate: int,
@@ -98,18 +105,22 @@ def reverb_slope(tail_samples: np.ndarray, sample_rate: int) -> float:
         return 0.0
 
     db = 20.0 * np.log10(rms)
-    # 起始位準取前三幀最大值，避免單一幀落在過零點而低估起點
-    start_db = float(db[:3].max())
+    # 起始位準取前三幀最大值，避免單一幀落在過零點而低估起點。
+    # 時間基準必須跟著取在峰值那一幀：若峰值落在 index 1 而從 t=0 起算，
+    # 分母會多算峰值前的幀數，把陡峭度低估（且低估方向是更接近 0，
+    # 也就是更容易誤判為殘響重的假陽性方向）。
+    peak_index = int(np.argmax(db[:3]))
+    start_db = float(db[peak_index])
     step = frame / sample_rate
 
-    for index in range(1, frame_count):
+    for index in range(peak_index + 1, frame_count):
         if db[index] <= start_db - DECAY_TARGET_DB:
-            return -DECAY_TARGET_DB / (index * step)
+            return -DECAY_TARGET_DB / ((index - peak_index) * step)
 
     # 整個窗內都沒降滿 DECAY_TARGET_DB：用實際總降幅外推
     total_drop = start_db - float(db[-1])
-    elapsed = (frame_count - 1) * step
-    if total_drop <= 0.0:
+    elapsed = (frame_count - 1 - peak_index) * step
+    if total_drop <= 0.0 or elapsed <= 0.0:
         return 0.0
     return -total_drop / elapsed
 
@@ -155,13 +166,14 @@ def diagnose_zone(path: Path, zone: Zone, noise_stats: LoudnessStats,
     sibilance = band_energy_ratio(samples, sample_rate, 5000.0, 8000.0)
     rumble = band_energy_ratio(samples, sample_rate, 0.0, 80.0)
     clipped = clipped_ratio(samples)
-    slope = zone_reverb_slope(path, zone, utterance_ends, sample_rate)
+    raw_slope = zone_reverb_slope(path, zone, utterance_ends, sample_rate)
+    # 在此把內部的 0.0 哨兵轉成 None，讓「量不到」的語意能安全地跨出本模組
+    slope = None if raw_slope == 0.0 else raw_slope
 
     issues: list[str] = []
     if clipped > CLIP_THRESHOLD:
         issues.append(f"削峰樣本比例 {clipped:.4f} 超標（修復無法還原已削掉的波形）")
-    # slope == 0.0 是「無法判斷」的哨兵，不得當成衰減極慢而誤報殘響
-    if slope != 0.0 and slope > REVERB_SLOPE_THRESHOLD:
+    if slope is not None and slope > REVERB_SLOPE_THRESHOLD:
         issues.append(f"衰減斜率 {slope:.1f} dB/s 過於平緩，空間殘響重")
     if sibilance > SIBILANCE_THRESHOLD:
         issues.append(f"5-8kHz 能量佔比 {sibilance:.3f}，齒音過重")
