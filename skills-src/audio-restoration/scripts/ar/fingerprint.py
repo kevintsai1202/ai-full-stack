@@ -124,8 +124,10 @@ def detect_zones(fingerprints: list[np.ndarray], windows: list[Interval],
                  total_duration: float, threshold: float = ZONE_THRESHOLD) -> list[Zone]:
     """依相鄰指紋距離切分 zone。
 
-    切點取在「距離超標的兩個噪音窗」之間的中點，因為錄音條件的實際改變點
-    必然落在這兩次採樣之間。
+    切點不取「距離超標的兩個噪音窗」之間的中點 —— 那之間全是語音。
+    zone 交界的區級增益是硬切（斜坡只作用在 zone 內部的語句交界），切在
+    語音中段會產生可聽的喀聲。切點改取「後一個窗（第一個呈現新特徵者）」
+    的中點，讓 zone 邊界必定落在確定無人聲的噪音窗內，跳變才聽不見。
     """
     if not fingerprints:
         return [Zone(index=0, start=0.0, end=total_duration, noise_window_indices=[])]
@@ -133,8 +135,10 @@ def detect_zones(fingerprints: list[np.ndarray], windows: list[Interval],
     cut_points: list[float] = []
     for index in range(len(fingerprints) - 1):
         if cosine_distance(fingerprints[index], fingerprints[index + 1]) > threshold:
-            midpoint = (windows[index].end + windows[index + 1].start) / 2.0
-            cut_points.append(midpoint)
+            # 切點取「第一個呈現新特徵的噪音窗」的中點，而不是兩窗之間的中點：
+            # 兩窗之間全是語音，切在那裡會讓 zone 邊界落在講話中段。
+            cut = (windows[index + 1].start + windows[index + 1].end) / 2.0
+            cut_points.append(cut)
 
     bounds = [0.0, *cut_points, total_duration]
     zones: list[Zone] = []

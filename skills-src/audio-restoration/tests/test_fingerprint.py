@@ -67,6 +67,24 @@ def test_detect_zones_splits_at_noise_change():
     assert abs(zones[1].end - 40.0) < 1e-6
 
 
+def test_zone_cut_lands_inside_a_noise_window():
+    """切點必須落在某個噪音窗內部，不得落在兩窗之間的語音區。
+
+    兩窗之間全是人聲；zone 交界的區級增益是硬切，切在語音中段會產生
+    可聽的喀聲。切在噪音窗內則跳變發生在無人聲處。
+    """
+    fps = [
+        spectral_fingerprint(_white_noise(1), SR),
+        spectral_fingerprint(_white_noise(2), SR),
+        spectral_fingerprint(_low_passed_noise(3), SR),
+        spectral_fingerprint(_low_passed_noise(4), SR),
+    ]
+    windows = [Interval(0, 1), Interval(10, 11), Interval(20, 21), Interval(30, 31)]
+    zones = detect_zones(fps, windows, total_duration=40.0, threshold=0.15)
+    cut = zones[0].end
+    assert any(w.start <= cut <= w.end for w in windows), f"切點 {cut} 落在語音區"
+
+
 def test_detect_zones_returns_single_zone_when_uniform():
     """底噪一致時只應有一個 zone，不得無故切割。"""
     fps = [spectral_fingerprint(_white_noise(s), SR) for s in (1, 2, 3)]
