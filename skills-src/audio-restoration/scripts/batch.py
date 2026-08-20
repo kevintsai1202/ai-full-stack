@@ -114,16 +114,25 @@ def _batch_restore(media_files: list[Path], out_dir: Path) -> None:
 
 
 def _summarize_restore(media: Path, work_dir: Path, returncode: int) -> dict:
-    """摘要單一檔案的修復前後指標。"""
+    """摘要單一檔案的修復前後指標。
+
+    returncode 優先於 verify.json 的存在與否：work_dir 會在多次 --restore
+    之間保留，若這次在寫出新 verify.json 之前就失敗（例如 ffmpeg 崩潰），
+    讀到的會是**上一輪殘留**的舊資料，讓使用者以為卡在同一個驗證項，
+    掩蓋這次真正的失敗原因。
+    """
     verify_path = work_dir / "work" / "verify.json"
+    if returncode != 0:
+        return {"file": media.name, "skipped": False, "ok": False,
+                "reason": f"修復失敗（結束碼 {returncode}），請看該檔的終端輸出"}
     if not verify_path.exists():
         return {"file": media.name, "skipped": False, "ok": False,
-                "reason": "修復失敗，未產出 verify.json"}
+                "reason": "修復未產出 verify.json"}
     payload = json.loads(verify_path.read_text(encoding="utf-8"))
     return {
         "file": media.name,
         "skipped": False,
-        "ok": returncode == 0 and payload["result"]["passed"],
+        "ok": payload["result"]["passed"],
         "before": payload["before"],
         "after": payload["after"],
         "failed_checks": [

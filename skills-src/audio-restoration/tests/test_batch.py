@@ -62,7 +62,7 @@ def test_batch_skips_non_media_files(synth_wav: Path, tmp_path: Path):
     subprocess.run(
         [sys.executable, str(SCRIPTS / "batch.py"),
          "--input-dir", str(media_dir), "--out-dir", str(tmp_path / "out")],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, encoding="utf-8", check=True,
     )
     summary = json.loads((tmp_path / "out" / "summary.json").read_text(encoding="utf-8"))
     assert len(summary["files"]) == 1
