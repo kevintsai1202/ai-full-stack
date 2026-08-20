@@ -14,6 +14,20 @@ _PEAK_RE = re.compile(r"Peak level dB:\s*(-?[\d.]+|-inf)")
 SILENT_FLOOR = -120.0  # 量到 -inf 時採用的替代值，避免後續運算出現無限大
 
 
+class MeasurementParseError(RuntimeError):
+    """ffmpeg 執行成功，但從其輸出解析不到預期的量測欄位時拋出。
+
+    這與「量到 -inf（真實靜音）」是完全不同的狀況：後者是合法的量測結果，
+    只是數值為負無限大；前者代表 regex 沒有在 stderr 中抓到對應欄位
+    （可能是 ffmpeg 版本差異、濾鏡輸出格式變動、或輸出被截斷等環境問題）。
+    若把「解析失敗」也靜默套用 SILENT_FLOOR，會讓兩者無法區分：一個其實
+    音量正常的片段會被誤判成全靜音，下游逐句增益計算據此套用極端增益，
+    而且因為沒有任何訊號，這個錯誤要等整條流程跑完才會被發現。因此解析
+    失敗一律視為不可信的量測結果，直接拋例外中斷，交由呼叫端決定如何
+    處理（記錄失敗區間、對該句重試、或提示人工檢查）。
+    """
+
+
 @dataclass
 class LoudnessStats:
     """一段區間的響度量測結果。"""
@@ -22,9 +36,22 @@ class LoudnessStats:
     peak_db: float  # 峰值位準
 
 
-def _to_float(value: str | None) -> float:
-    """把 ffmpeg 輸出的數值字串轉為 float，-inf 以地板值取代。"""
-    if value is None or value == "-inf":
+def _extract(match: re.Match | None, label: str, start: float, end: float) -> float:
+    """從 regex match 物件取出數值。
+
+    match 為 None 代表 ffmpeg 輸出中完全沒抓到這個欄位，屬於解析失敗，
+    非真實靜音，直接拋出 MeasurementParseError；只有 match 存在且擷取到
+    的數值字串是 "-inf" 時，才代表 ffmpeg 真的量到負無限大，以 SILENT_FLOOR
+    地板值取代，避免後續運算出現無限大。
+    """
+    if match is None:
+        raise MeasurementParseError(
+            f"無法從 ffmpeg 輸出解析出「{label}」（區間 {start:.3f}-{end:.3f}s）："
+            "欄位不存在，可能是 ffmpeg 版本或濾鏡輸出格式差異，非真實靜音，"
+            "此量測結果不可信，需人工檢查"
+        )
+    value = match.group(1)
+    if value == "-inf":
         return SILENT_FLOOR
     return float(value)
 
@@ -44,17 +71,26 @@ def measure_interval(path: Path, start: float, end: float) -> LoudnessStats:
     rms_match = _RMS_RE.search(stderr)
     peak_match = _PEAK_RE.search(stderr)
     return LoudnessStats(
-        lufs=_to_float(i_match.group(1) if i_match else None),
-        rms_db=_to_float(rms_match.group(1) if rms_match else None),
-        peak_db=_to_float(peak_match.group(1) if peak_match else None),
+        lufs=_extract(i_match, "LUFS (I:)", start, end),
+        rms_db=_extract(rms_match, "RMS level dB", start, end),
+        peak_db=_extract(peak_match, "Peak level dB", start, end),
     )
 
 
 def measure_utterances(path: Path, utterances: list[Utterance]) -> list[LoudnessStats]:
-    """逐句量測。"""
+    """逐句量測。
+
+    任一句解析失敗會拋出 MeasurementParseError 中斷整個批次——對一份需要
+    精準逐句補償增益的錄音而言，讓「無法信任的量測值」悄悄流入下游，
+    比中斷一次批次跑更危險；由呼叫端（例如 analyze.py）決定要整批重跑、
+    跳過該句、或提示人工檢查。
+    """
     return [measure_interval(path, u.start, u.end) for u in utterances]
 
 
 def measure_intervals(path: Path, intervals: list[Interval]) -> list[LoudnessStats]:
-    """逐區間量測（供噪音窗使用）。"""
+    """逐區間量測（供噪音窗使用）。
+
+    同 measure_utterances，任一區間解析失敗即拋出例外中斷，理由同上。
+    """
     return [measure_interval(path, i.start, i.end) for i in intervals]
