@@ -1,6 +1,7 @@
 """收集驗證所需的四項指標。"""
 import json
 import statistics
+from statistics import median
 from pathlib import Path
 
 from .measure import measure_interval
@@ -30,8 +31,12 @@ def collect_metrics(path: Path, plan: dict, report_path: Path | None = None) -> 
     # 閘門**，安靜的底噪一律被截斷成 -70，修復前後都量到 -70，降幅永遠是 0。
     # 真實素材實測證實了這點（前 -70.00 → 後 -70.00，「底噪下降」判定失敗）。
     # RMS 沒有閘門，能真實反映底噪位準。
+    # 取中位數而非 min：min 選的是最安靜的那個窗，而片頭/片尾常有近乎
+    # 數位靜音的區段（實測某素材第一個窗 -81.5 dB，比其他窗低 15dB 以上）。
+    # 那個離群值會主導底噪代表值，讓修復前後都測不出改善。
+    # analyze.py 給 afftdn 的底噪也是取中位數，兩處必須用同一種聚合。
     noise_rms_db = (
-        min(measure_interval(path, start, end).rms_db for start, end in windows)
+        median([measure_interval(path, start, end).rms_db for start, end in windows])
         if windows else None
     )
     return {
