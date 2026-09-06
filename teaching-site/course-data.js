@@ -78,6 +78,13 @@ window.COURSE = {
         "hours": 16,
         "title": "Spring AI、企業級 RAG 與 React 全端整合",
         "date": "Day 3 ~ Day 4"
+      },
+      {
+        "id": "day3",
+        "n": 3,
+        "hours": 0,
+        "title": "延伸實戰：上線與部署",
+        "date": "延伸章"
       }
     ],
     "format": "混成學習 (Blended Learning)",
@@ -215,6 +222,44 @@ window.COURSE = {
         "id": "u1",
         "title": "開發環境、專案骨架與 AI 協作流程",
         "subtitle": "建立 Windows/macOS 開發環境，搭建 Spring Boot + React Monorepo 專案骨架並進行健康檢查驗證。",
+        "scenario": {
+          "title": "新同事今天能不能把專案跑起來？",
+          "description": "你剛加入 AI CRM 團隊，需要在同一天準備好 Java、Maven、Node.js 與 Git，啟動前後端專案，並用健康檢查確認環境真的可以開始工作。",
+          "examples": [
+            {
+              "title": "版本對不上，還沒開始寫功能就編譯失敗",
+              "description": "學員的 java -version 顯示 JDK 8，但課程專案使用 Spring Boot 4 與 Java 21；或 Maven 在另一個終端機抓到不同的 JAVA_HOME，結果 mvn clean compile 直接失敗。"
+            },
+            {
+              "title": "看起來都安裝了，VS Code 卻找不到指令",
+              "description": "系統終端機能執行 node，VS Code 終端機卻出現不是內部或外部命令，原因可能是 Path 尚未重新載入，或仍開著舊版 PowerShell。"
+            },
+            {
+              "title": "AI 改了很多檔案，卻找不到是哪一步壞掉",
+              "description": "沒有先建立可執行的專案骨架與 Git 基線時，後續每次請 AI 修改都混在一起，出錯後很難判斷是依賴、設定還是程式碼造成的。"
+            }
+          ],
+          "technologyRoles": [
+            {
+              "name": "JDK 21",
+              "role": "提供編譯與執行 Java／Spring Boot 的一致版本，先確認它才不會把環境錯誤誤認成程式錯誤。"
+            },
+            {
+              "name": "Maven",
+              "role": "依照 pom.xml 下載依賴、編譯與啟動專案，也能把實際使用的 Java 版本印出來檢查。"
+            },
+            {
+              "name": "Spring Initializr",
+              "role": "產生標準 Maven 目錄、pom.xml 與 Spring Boot 入口，替後面每章疊加功能建立共同起點。"
+            },
+            {
+              "name": "Git + AI 助手",
+              "role": "Git 保存可回復的基線，AI 協助解釋錯誤與產生樣板，但最後仍要用版本與健康檢查驗證結果。"
+            }
+          ],
+          "image": "u1-scenario.webp",
+          "alt": "開發者準備全端專案並完成環境檢查"
+        },
         "time": "09:00 ~ 12:00",
         "features": [
           "驗證 Java / Maven 環境，透過 Spring Initializr 建立課程初始專案，確認可啟動後再進入後續開發。"
@@ -236,12 +281,22 @@ window.COURSE = {
           {
             "heading": "環境準備重點",
             "group": "環境準備重點",
-            "body": "第一章不是在講工具清單，而是在建立後續兩天都要依賴的開發基線。只要 Java、Maven、VS Code 與 AI 協作方式一開始沒有對齊，後面所有章節都會被環境問題反覆打斷。\n\n這一章的核心目標，是讓學員知道哪些工具是編輯器責任、哪些是執行環境責任，以及 AI 助手應該介入在哪一種工作。\n\n- VS Code 負責編輯、導覽、除錯與擴充整合\n- Java 與 Maven 負責專案編譯、依賴下載與執行\n- AI 助手適合做解釋、產生樣板、補測試與協助排錯\n- Git 是 AI Agent 開發工具的必要安裝；Node.js 與 Python 是 Skills 的必要腳本執行工具\n- PowerShell 7+ 是本課程預設終端機環境"
+            "body": "第一章不是在講工具清單，而是在建立後續兩天都要依賴的開發基線。只要 Java、Maven、VS Code 與 AI 協作方式一開始沒有對齊，後面所有章節都會被環境問題反覆打斷。\n\n這一章的核心目標，是讓學員知道哪些工具是編輯器責任、哪些是執行環境責任，以及 AI 助手應該介入在哪一種工作。\n\n- VS Code 負責編輯、導覽、除錯與擴充整合\n- Java 與 Maven 負責專案編譯、依賴下載與執行\n- AI 助手適合做解釋、產生樣板、補測試與協助排錯\n- Git 是 AI Agent 開發工具的必要安裝；Node.js 與 Python 是 Skills 的必要腳本執行工具\n- PowerShell 7+ 是本課程預設終端機環境\n- IDE（Antigravity 或 VS Code 擇一）是唯一需要手動安裝的工具，其餘一律交給 AI Agent 安裝；Java / Spring 擴充套件等 JDK 21 裝好後再裝"
+          },
+          {
+            "heading": "第一步：先手動安裝 IDE（Antigravity 或 VS Code 擇一）",
+            "group": "開發工具安裝與驗證",
+            "body": "**為什麼這一步要自己動手？**\n\n本章後面所有工具（PowerShell 7、JDK 21、Maven、Git、Node.js、Python）都是「把提示詞貼給 AI Agent，讓它在終端機裡幫你安裝」。但在 AI Agent 本身還沒裝好之前，沒有人可以替你執行這些提示詞，所以 IDE 必須先由你手動完成。這是全課程唯一需要自己下載安裝檔的地方。\n\n**1. 安裝 IDE：Antigravity 或 VS Code 擇一，課程主要使用 Antigravity**\n\n兩者都是 VS Code 體系的編輯器，操作方式相同，只需要裝一個。課堂示範一律以 Antigravity 進行。\n\n- **選 Antigravity（建議）**：前往 [https://antigravity.google/](https://antigravity.google/) 下載並安裝 Antigravity IDE，以 Google 帳號登入。AI Agent 已內建，不必再裝其他東西\n- **選 VS Code**：前往 [https://code.visualstudio.com/](https://code.visualstudio.com/) 下載安裝，Windows 安裝時勾選「加入 PATH」與「以 Code 開啟」右鍵選單。VS Code 本身沒有 Agent，請再到擴充套件市集安裝 Claude Code 擴充套件並登入 Anthropic 帳號\n- 先不要裝 Java / Spring 擴充套件。它們要等 JDK 21 裝好之後再裝，才能一次抓到正確的 JDK，後面有專門一段說明\n\n**2. 確認 Agent 已就位**\n- 開啟任一空資料夾，在 Agent 對話框輸入「請執行 git --version 並告訴我結果」。看到它嘗試在終端機執行指令，就代表 Agent 已就位\n- 此時回報找不到 git 是正常的，下一段就會讓它自己安裝。終端機仍是舊版 Windows PowerShell 5.1 也沒關係，同樣交給下一段升級\n\n**3. 完成後你手上有什麼**\n- 一個 IDE：Antigravity 或 VS Code\n- 一個能替你執行指令的 AI Agent：Antigravity 內建，或 VS Code 中的 Claude Code\n- 接下來的每一項安裝，都只需要把下一段的提示詞貼給 Agent，然後核對它回報的驗證結果"
           },
           {
             "heading": "用 AI Agent 安裝開發工具",
             "group": "開發工具安裝與驗證",
-            "body": "本課程需要 PowerShell 7、JDK 21、Maven 3.9+、Git、Node.js、Python 與 VS Code（含 Java / Spring 擴充套件）。以下提供各組 AI Agent 提示詞，讓 AI 直接在 PowerShell 中完成安裝與環境變數設定。\n\n**為什麼 Git、Node.js、Python 是必裝項目？**\n\n這三個工具不只是「課程會用到」，而是 AI 協作開發的基礎設施：\n\n- **Git**：目前已是 AI Agent 開發工具（如 Claude Code、Antigravity）的必要安裝工具——版本控制、分支協作與 Agent 的變更管理都依賴它，請務必先安裝\n- **Node.js 與 Python**：是 Skills（技能）必要的腳本執行工具，Agent 執行技能時會用它們跑自動化腳本，所以也都需要先安裝；這兩項可以直接讓 Agent 代為安裝\n\n**PowerShell 7 安裝提示詞**（Windows 請最先安裝——內建的 Windows PowerShell 5.1 版本太舊，課程中的部分指令會無法輸入或執行；macOS 使用者可略過，直接使用內建終端機）\n```text\n我使用 Windows 11，請用 winget 幫我安裝 PowerShell 7（套件 ID：Microsoft.PowerShell）。\n安裝完成後告訴我怎麼從開始功能表開啟 pwsh，\n執行 $PSVersionTable.PSVersion 確認主版本號 >= 7，\n最後幫我把 VS Code 的預設終端機改成 PowerShell 7。\n```\n\n**JDK 21 安裝提示詞**\n```text\n我使用 Windows 11，請用 winget 幫我安裝 Eclipse Temurin JDK 21。\n安裝完成後，請設定 JAVA_HOME 環境變數（永久生效），\n確認 Path 中已包含 JDK bin 目錄，並執行 java -version 驗證。\n```\n\n**Maven 安裝提示詞**\n```text\n請用 winget 幫我安裝 Apache Maven 最新版。\n設定 M2_HOME 與 Path（永久生效），確認 Maven 使用 JDK 21，\n執行 mvn -version 顯示完整結果。\n```\n\n**Git 安裝提示詞**（AI Agent 開發工具的必要安裝，請務必完成）\n```text\n請用 winget 幫我安裝 Git，完成後設定 user.name 與 user.email，\n並執行 git --version 確認安裝成功。\n```\n\n**Node.js 安裝提示詞**（前端開發會用到，也是 Skills 必要的腳本執行工具；可讓 Agent 代為安裝）\n```text\n請用 winget 幫我安裝 Node.js LTS 版本，\n確認 Path 已包含 Node.js 目錄，\n並執行 node --version 與 npm --version 驗證安裝成功。\n```\n\n**Python 安裝提示詞**（Skills 必要的腳本執行工具；可讓 Agent 代為安裝）\n```text\n請用 winget 幫我安裝 Python 3 最新穩定版，\n安裝時將 Python 加入 Path，\n並執行 python --version 與 pip --version 驗證安裝成功。\n```\n\n**VS Code 必要擴充套件**\n- Extension Pack for Java\n- Spring Boot Extension Pack\n- 確認 Java 擴充套件已啟用內建 Lombok 支援\n\n**工具官方下載網址**\n\n若不透過 AI Agent 或套件管理器安裝，也可直接前往官方網站下載安裝檔：\n\n- PowerShell 7：[https://github.com/PowerShell/PowerShell/releases](https://github.com/PowerShell/PowerShell/releases)\n- JDK 21（Eclipse Temurin）：[https://adoptium.net/](https://adoptium.net/)\n- Maven：[https://maven.apache.org/download.cgi](https://maven.apache.org/download.cgi)\n- Git：[https://git-scm.com/downloads](https://git-scm.com/downloads)\n- Node.js（LTS）：[https://nodejs.org/](https://nodejs.org/)\n- Python 3：[https://www.python.org/downloads/](https://www.python.org/downloads/)\n- VS Code：[https://code.visualstudio.com/](https://code.visualstudio.com/)\n- Antigravity IDE：[https://antigravity.google/](https://antigravity.google/)"
+            "body": "上一步已手動裝好 IDE（Antigravity 或 VS Code），接下來的 PowerShell 7、JDK 21、Maven 3.9+、Git、Node.js、Python 全部交給 AI Agent 安裝；Java / Spring 擴充套件則等 JDK 裝好後，在下一段再裝。以下提供各組提示詞，貼給 Agent 即可讓它直接在 PowerShell 中完成安裝與環境變數設定。\n\n**為什麼 Git、Node.js、Python 是必裝項目？**\n\n這三個工具不只是「課程會用到」，而是 AI 協作開發的基礎設施：\n\n- **Git**：目前已是 AI Agent 開發工具（如 Claude Code、Antigravity）的必要安裝工具——版本控制、分支協作與 Agent 的變更管理都依賴它，請務必先安裝\n- **Node.js 與 Python**：是 Skills（技能）必要的腳本執行工具，Agent 執行技能時會用它們跑自動化腳本，所以也都需要先安裝；這兩項可以直接讓 Agent 代為安裝\n\n**PowerShell 7 安裝提示詞**（Windows 請最先安裝——內建的 Windows PowerShell 5.1 版本太舊，課程中的部分指令會無法輸入或執行；macOS 使用者可略過，直接使用內建終端機）\n```text\n我使用 Windows 11，請用 winget 幫我安裝 PowerShell 7（套件 ID：Microsoft.PowerShell）。\n安裝完成後告訴我怎麼從開始功能表開啟 pwsh，\n執行 $PSVersionTable.PSVersion 確認主版本號 >= 7，\n最後幫我把 VS Code 的預設終端機改成 PowerShell 7。\n```\n\n**JDK 21 安裝提示詞**\n```text\n我使用 Windows 11，請用 winget 幫我安裝 Eclipse Temurin JDK 21。\n安裝完成後，請設定 JAVA_HOME 環境變數（永久生效），\n確認 Path 中已包含 JDK bin 目錄，並執行 java -version 驗證。\n```\n\n**Maven 安裝提示詞**\n```text\n請用 winget 幫我安裝 Apache Maven 最新版。\n設定 M2_HOME 與 Path（永久生效），確認 Maven 使用 JDK 21，\n執行 mvn -version 顯示完整結果。\n```\n\n**Git 安裝提示詞**（AI Agent 開發工具的必要安裝，請務必完成）\n```text\n請用 winget 幫我安裝 Git，完成後設定 user.name 與 user.email，\n並執行 git --version 確認安裝成功。\n```\n\n**Node.js 安裝提示詞**（前端開發會用到，也是 Skills 必要的腳本執行工具；可讓 Agent 代為安裝）\n```text\n請用 winget 幫我安裝 Node.js LTS 版本，\n確認 Path 已包含 Node.js 目錄，\n並執行 node --version 與 npm --version 驗證安裝成功。\n```\n\n**Python 安裝提示詞**（Skills 必要的腳本執行工具；可讓 Agent 代為安裝）\n```text\n請用 winget 幫我安裝 Python 3 最新穩定版，\n安裝時將 Python 加入 Path，\n並執行 python --version 與 pip --version 驗證安裝成功。\n```\n\n**工具官方下載網址**\n\n若不透過 AI Agent 或套件管理器安裝，也可直接前往官方網站下載安裝檔：\n\n- PowerShell 7：[https://github.com/PowerShell/PowerShell/releases](https://github.com/PowerShell/PowerShell/releases)\n- JDK 21（Eclipse Temurin）：[https://adoptium.net/](https://adoptium.net/)\n- Maven：[https://maven.apache.org/download.cgi](https://maven.apache.org/download.cgi)\n- Git：[https://git-scm.com/downloads](https://git-scm.com/downloads)\n- Node.js（LTS）：[https://nodejs.org/](https://nodejs.org/)\n- Python 3：[https://www.python.org/downloads/](https://www.python.org/downloads/)\n- VS Code：[https://code.visualstudio.com/](https://code.visualstudio.com/)\n- Antigravity IDE：[https://antigravity.google/](https://antigravity.google/)"
+          },
+          {
+            "heading": "JDK 裝好之後：安裝 Java / Spring 擴充套件",
+            "group": "開發工具安裝與驗證",
+            "body": "**為什麼要等 JDK 裝好才裝擴充套件？**\n\nExtension Pack for Java 啟動時會掃描系統的 JAVA_HOME 與 PATH 來決定專案使用的 JDK。JDK 21 先就位，擴充套件裝完就直接可用；反過來先裝套件，之後還得重開 IDE 讓它重新掃描，初學者常在這一步看到專案一片紅字就以為裝錯了。\n\n另外要知道：Java 擴充套件內建的 JRE 只用來啟動它自己的語言伺服器，**不會**替你的專案安裝 JDK。編譯與執行 Spring Boot 專案靠的是上一段由 AI 安裝並設定 JAVA_HOME 的 JDK 21，Maven 也依賴同一份設定。\n\n**安裝步驟**\n1. 確認上一段的 AI 安裝已完成，並且在新開的終端機執行 `java -version` 能看到 21\n2. 完全關閉再重新開啟 IDE（Antigravity 或 VS Code），讓它讀到新的 JAVA_HOME 與 PATH\n3. 開啟左側「擴充功能」面板（Ctrl + Shift + X），搜尋並安裝兩組擴充套件：**Extension Pack for Java** 與 **Spring Boot Extension Pack**\n4. 安裝後確認 Java 擴充套件已啟用內建 Lombok 支援\n\n**怎麼確認擴充套件抓到正確的 JDK**\n- 開啟命令面板（Ctrl + Shift + P）執行「Java: Configure Java Runtime」，Project JDKs 應列出 JDK 21 並標示為預設\n- 若列出的是其他版本或空白，代表 JAVA_HOME 沒設好或 IDE 沒重開，回上一段用 AI 重新檢查環境變數後再重開 IDE\n\n這兩組擴充套件會在後面建立 Spring Boot 專案時提供補全、導覽與除錯，是課程接下來每一章都會用到的基礎。"
           },
           {
             "heading": "環境驗證與常見問題",
@@ -326,6 +381,44 @@ window.COURSE = {
         "id": "u2",
         "title": "Spring MVC、REST API 與 CRM Domain Modeling",
         "subtitle": "設計 CRM 核心 domain model 與 RESTful API，並使用 Bean Validation 進行請求資料驗證。",
+        "scenario": {
+          "title": "業務送出一筆客戶資料後，系統如何安全地接住？",
+          "description": "業務從客戶頁面新增資料，請求必須經過路由、Controller、Service 與輸入驗證，最後才回傳可供前端使用的客戶結果。",
+          "examples": [
+            {
+              "title": "把所有邏輯塞進 Controller，改一個欄位就牽一大片",
+              "description": "Controller 同時處理路由、格式轉換、商業規則與資料存取時，新增重複客戶檢查就會變成一支難以測試、也難以重用的超大方法。"
+            },
+            {
+              "title": "表單送出成功，資料卻不符合業務規則",
+              "description": "前端沒有驗證不能取代後端驗證；例如公司名稱是空白、Email 格式錯誤，或成交金額是負數，都應在進入核心邏輯前被攔下。"
+            },
+            {
+              "title": "前端每支 API 都要猜回應格式",
+              "description": "有的錯誤回 message，有的回 error，有的直接回空白，前端就必須為每支 API 寫特例，遇到例外時很容易顯示錯誤訊息失敗。"
+            }
+          ],
+          "technologyRoles": [
+            {
+              "name": "Spring MVC／DispatcherServlet",
+              "role": "接住 HTTP 請求並依路由交給正確的 Controller，讓網址與 Java 方法有清楚的對應關係。"
+            },
+            {
+              "name": "Controller",
+              "role": "負責 HTTP 邊界、輸入輸出與狀態碼，不把整段商業決策塞在這一層。"
+            },
+            {
+              "name": "Service",
+              "role": "集中客戶建立、重複檢查等商業規則，讓流程可被測試，也能被其他入口重用。"
+            },
+            {
+              "name": "Bean Validation／REST JSON",
+              "role": "用規則檢查輸入，並建立前端可以穩定依賴的請求與回應契約。"
+            }
+          ],
+          "image": "u2-scenario.webp",
+          "alt": "客戶資料從表單經過後端分層與驗證後建立成功"
+        },
         "time": "13:00 ~ 17:00",
         "features": [
           "理解 Spring MVC 的請求流程與 REST API 設計原則，透過 AI Agent 建立一個不依賴資料庫、可立即啟動的客戶 API 示範專案，驗證 Controller / Service 分工正確。"
@@ -443,6 +536,44 @@ window.COURSE = {
         "id": "u3",
         "title": "PostgreSQL、Flyway、JPA 與動態查詢",
         "subtitle": "使用 Docker 建立 PostgreSQL 資料庫，整合 Flyway 版控遷移，並以 Specification 實作多條件動態查詢。",
+        "scenario": {
+          "title": "客戶資料不能因為重開機就消失",
+          "description": "CRM 需要保存客戶、商機與互動紀錄；系統重啟後資料仍要存在，資料表變更要有版本紀錄，業務也要能組合多個條件找到目標客戶。",
+          "examples": [
+            {
+              "title": "容器重建後，客戶資料全部不見",
+              "description": "如果 PostgreSQL 沒有掛 named volume，docker compose down 再 up 之後資料庫像換了一本空白簿子，客戶、商機與向量索引都得重新建立。"
+            },
+            {
+              "title": "同學各自改資料庫，最後沒有人知道正確版本",
+              "description": "有人手動加欄位、有人直接改舊 SQL，換到另一台電腦時 Schema 不一致，應用程式可能因欄位不存在或 migration checksum 不符而啟動失敗。"
+            },
+            {
+              "title": "資料表就像上課筆記：有架構才找得到重點",
+              "description": "整理良好的筆記會把章節、標題與索引放在固定位置，資料庫也要把 Customer、Opportunity、Activity 與關聯設計清楚；如果欄位重複、命名混亂、資料散落，光找一位客戶的完整紀錄就要翻遍整本筆記。"
+            }
+          ],
+          "technologyRoles": [
+            {
+              "name": "Docker Compose + PostgreSQL",
+              "role": "用固定的容器設定建立一致的資料庫環境，搭配 volume 保存資料，不讓每位學員各自安裝出不同結果。"
+            },
+            {
+              "name": "Flyway",
+              "role": "把每次 Schema 變更寫成 V1、V2 等可追蹤腳本；新欄位新增版本，不回頭竄改已執行的歷史。"
+            },
+            {
+              "name": "JPA Entity／Repository",
+              "role": "把資料表與 Java 物件、查詢操作對應起來，讓程式能用領域語言處理客戶與互動資料。"
+            },
+            {
+              "name": "Specification",
+              "role": "把產業、狀態、金額等條件組合成動態查詢，不必為每一種篩選組合都硬寫一支 SQL。"
+            }
+          ],
+          "image": "u3-scenario.webp",
+          "alt": "CRM 客戶資料保存到資料庫並支援版本遷移與多條件搜尋"
+        },
         "time": "13:00 ~ 17:00",
         "features": [
           "安裝 Docker Desktop，透過 AI Agent 產生 PostgreSQL 18（含 pgvector）的 docker-compose.yml 與 application.yml，啟動容器後用 Flyway 管理 Schema 演進。",
@@ -612,6 +743,44 @@ window.COURSE = {
         "id": "u4",
         "title": "Spring Security、JWT、OpenAPI 與企業級錯誤處理",
         "subtitle": "整合 JWT 簽發與 Security 認證保護 API，建立 ProblemDetail 全域錯誤處理，並以 Swagger 導出 API 文件。",
+        "scenario": {
+          "title": "同一個客戶 API，不是每個人都能做同樣的事",
+          "description": "業務可以查詢客戶，管理員才可以刪除客戶；前端與測試人員還需要一份看得懂的 API 文件，以及一致的 401、403、404 錯誤回應。",
+          "examples": [
+            {
+              "title": "拿到登入 token，不代表什麼都能做",
+              "description": "業務帳號成功登入後可以查詢客戶，但若沒有管理員角色仍不該刪除客戶；只驗證『你是誰』，沒有再檢查『你能做什麼』就會越權。"
+            },
+            {
+              "title": "401、403、404 混在一起，前端無法正確處理",
+              "description": "沒有 token 是 401、身份存在但權限不足是 403、客戶不存在是 404；如果後端都回同一種 500，前端只能顯示模糊的『系統錯誤』。"
+            },
+            {
+              "title": "文件、錯誤訊息與實際 API 三套說法",
+              "description": "API 改了欄位卻忘記更新文件，測試人員照 Swagger 呼叫才發現格式不符；缺少結構化 log 時，也很難回頭找出哪個請求造成問題。"
+            }
+          ],
+          "technologyRoles": [
+            {
+              "name": "Spring Security + JWT",
+              "role": "JWT 認出使用者身份，Security 規則再依角色限制查詢、建立或刪除等操作。"
+            },
+            {
+              "name": "springdoc-openapi／Swagger UI",
+              "role": "從 API 定義產生可互動文件，讓前端與測試人員能直接看到參數、回應與授權方式。"
+            },
+            {
+              "name": "@RestControllerAdvice／RFC 7807",
+              "role": "集中處理例外並輸出一致的錯誤 JSON，讓前端能依狀態碼與欄位穩定處理。"
+            },
+            {
+              "name": "@Slf4j + Spring Actuator",
+              "role": "留下可追查的結構化日誌，並在不重啟應用程式的情況下觀察或調整診斷設定。"
+            }
+          ],
+          "image": "u4-scenario.webp",
+          "alt": "不同角色經過安全閘門存取 CRM API 並看到文件與錯誤處理"
+        },
         "time": "09:00 ~ 12:00",
         "features": [
           "透過 springdoc-openapi 自動產生互動式 API 文件，讓前端與測試人員不需要看程式碼就能理解與呼叫 API。",
@@ -826,6 +995,44 @@ window.COURSE = {
         "id": "u5",
         "title": "React CRM 工作台與前後端整合",
         "subtitle": "建立前端 CRM 工作台，對接登入與客戶列表、詳情、生意機會看板，並把總覽做成含漏斗、營收預測、風險分布等分析圖表與客戶分群的經營儀表板。",
+        "scenario": {
+          "title": "主管看到高風險客戶後，能不能直接追到明細？",
+          "description": "登入 CRM 後，主管先從漏斗、營收預測與風險分布掌握全局，再點擊圖表中的高風險區塊，下鑽到客戶詳情與最近互動。",
+          "examples": [
+            {
+              "title": "圖表很漂亮，點下去卻沒有客戶明細",
+              "description": "主管從高風險區塊下鑽時，前端可能送錯篩選條件、路由參數或 API base URL，畫面看得到統計數字，卻無法找到產生數字的客戶。"
+            },
+            {
+              "title": "載入中、錯誤與空資料都被當成同一個畫面",
+              "description": "API 還沒回來時看到空白、服務失敗時沒有重試、真的沒有資料時卻顯示錯誤，使用者無法判斷是系統壞掉還是目前沒有符合條件的客戶。"
+            },
+            {
+              "title": "Token 過期後，整個工作台突然失去反應",
+              "description": "登入時間較久後 API 回 401，如果前端沒有集中處理授權失效，使用者可能只看到某個區塊消失，卻不知道需要重新登入。"
+            }
+          ],
+          "technologyRoles": [
+            {
+              "name": "React 19／JSX Components",
+              "role": "把儀表板、客戶列表與詳情拆成可重用元件，讓畫面能依狀態更新而不是整頁重畫。"
+            },
+            {
+              "name": "Vite + Proxy",
+              "role": "提供前端開發伺服器與 API 代理，降低本機前後端不同 port 造成的串接摩擦。"
+            },
+            {
+              "name": "Axios Interceptor",
+              "role": "集中附加 JWT、攔截 401 與統一錯誤處理，避免每個 API 呼叫都重複寫授權邏輯。"
+            },
+            {
+              "name": "Loading／Error／Empty 狀態",
+              "role": "把等待、失敗與沒有資料分開呈現，讓使用者知道下一步是等待、重試、調整篩選還是重新登入。"
+            }
+          ],
+          "image": "u5-scenario.webp",
+          "alt": "業務從 CRM 儀表板圖表下鑽到客戶詳情"
+        },
         "time": "13:00 ~ 17:00",
         "features": [
           "掌握 Node.js 環境、使用 Vite 建立 React 19 專案、JSX 語法元件結構，並學習如何以 Proxy 串接後端 API 及套用 uiuxpromax 優化前端視覺體驗。"
@@ -931,6 +1138,44 @@ window.COURSE = {
         "id": "u6",
         "title": "Spring AI ChatClient、SSE 與 tool calling",
         "subtitle": "建立會即時串流回覆的 AI 對話助理，讓 AI 查 CRM 真實資料作答，並自動算出客戶風險等級、判讀每筆往來的情緒與意圖。",
+        "scenario": {
+          "title": "AI 的客戶摘要，數字真的來自 CRM 嗎？",
+          "description": "業務詢問客戶近況時，AI 先透過工具查詢真實互動、商機與金額，再用串流對話整理成摘要；模型負責寫文字，不自行猜測數字。",
+          "examples": [
+            {
+              "title": "AI 把客戶金額講錯，業務卻差點拿去報告",
+              "description": "模型只靠訓練內容或對話上下文時，可能把不存在的成交金額當成事實；即使文字很流暢，也不能代表數字真的來自 CRM。"
+            },
+            {
+              "title": "使用者以為 AI 卡住，其實答案還在生成",
+              "description": "如果後端等整段回覆完成才一次送出，長摘要會讓畫面長時間沒有反應；若前端沒有正確處理串流結束，也可能出現重複訊息或半截內容。"
+            },
+            {
+              "title": "不同業務的對話記憶互相污染",
+              "description": "所有人共用同一個 sessionId 時，A 業務提到的客戶偏好可能出現在 B 業務的回答裡，這是資料隔離問題，不是模型變聰明。"
+            }
+          ],
+          "technologyRoles": [
+            {
+              "name": "Spring AI ChatClient",
+              "role": "提供 Java 應用呼叫模型的統一入口，集中設定 system prompt、模型選項與對話流程。"
+            },
+            {
+              "name": "Tool Calling",
+              "role": "讓模型提出查詢客戶、商機或互動紀錄的工具請求，由程式取得真實資料後再交回模型整理。"
+            },
+            {
+              "name": "SSE／EventSource",
+              "role": "用 HTTP 單向串流把模型產生的片段即時送到 React，讓使用者看到逐字出現的回覆。"
+            },
+            {
+              "name": "ChatMemory／sessionId",
+              "role": "保存同一段對話的上下文並隔離不同使用者，避免記憶混用或重啟後誤以為資料仍在。"
+            }
+          ],
+          "image": "u6-scenario.webp",
+          "alt": "AI 助理透過工具查詢 CRM 真實資料並串流回傳風險建議"
+        },
         "time": "09:00 ~ 12:00",
         "features": [
           "建立 Spring AI 對話入口，理解串流輸出、對話記憶與多 session 管理。",
@@ -1114,6 +1359,44 @@ window.COURSE = {
         "id": "u7",
         "title": "團隊智慧分析、全公司評估與 RAG 知識庫",
         "subtitle": "做出給主管的團隊績效分析與 AI 診斷、全公司整體評估，並建立可上傳文件、具備長期記憶的 RAG 知識庫。",
+        "scenario": {
+          "title": "AI 不只要懂客戶，也要懂公司的文件",
+          "description": "業務詢問產品條款或合規方案時，AI 先從公司文件與歷史對話找出相關片段，再附上來源回答；主管則可以從團隊資料看出需要優先跟進的客戶。",
+          "examples": [
+            {
+              "title": "公司政策更新了，AI 卻拿舊規則回答",
+              "description": "模型的訓練資料不知道公司昨天才改過的退貨政策；若沒有先搜尋最新文件，回答可能聽起來合理，卻沒有任何可追溯來源。"
+            },
+            {
+              "title": "文件整本塞進 Prompt，真正重點反而找不到",
+              "description": "長文件沒有切成語意完整的小段，或切得太碎，檢索回來的內容就可能只剩半句規則；AI 看了很多字，卻沒有拿到能回答問題的段落。"
+            },
+            {
+              "title": "主管看到分析結果，卻不知道該先跟進誰",
+              "description": "只有把 CRM 真實資料、文件知識與歷史對話串起來，AI 才能說明風險來源與建議依據，而不是只給一個沒有證據的排名。"
+            }
+          ],
+          "technologyRoles": [
+            {
+              "name": "RAG／QuestionAnswerAdvisor",
+              "role": "先檢索相關文件片段，再把片段放進模型上下文，讓回答有資料依據並能附上來源。"
+            },
+            {
+              "name": "TokenTextSplitter",
+              "role": "把長文件切成大小適中的語意片段，避免整份文件稀釋檢索結果或在句子中間斷裂。"
+            },
+            {
+              "name": "pgvector／VectorStore",
+              "role": "把文件與歷史對話轉成向量並以語意相似度搜尋，找出不一定包含相同關鍵字但意思接近的內容。"
+            },
+            {
+              "name": "MCP／Skills（選修）",
+              "role": "把外部系統工具或可重用工作知識接到 Agent，讓 AI 不只回答，也能在受控邊界內執行工作。"
+            }
+          ],
+          "image": "u7-scenario.webp",
+          "alt": "公司文件經過向量檢索後產生附來源的 AI 回答與團隊分析"
+        },
         "time": "13:00 ~ 17:00",
         "features": [
           "做出主管視角的「團隊分析」與 AI 診斷，以及一次掌握全局的「全公司整體評估」，並讓每位業務有專屬的「我的工作台」。",
@@ -1267,6 +1550,40 @@ window.COURSE = {
         "id": "u8",
         "title": "結訓專案衝刺與 Demo Day 驗收",
         "subtitle": "整合 Unit 1-7 所有產出，完成一套從登入、客戶管理、AI 對話、風險與情緒洞察、團隊分析到 RAG 知識查詢的完整 AI CRM 系統，並進行展示驗收。",
+        "scenario": {
+          "title": "從登入到 AI 答案，整條流程真的能重跑嗎？",
+          "description": "Demo Day 不只展示漂亮畫面，而是要完整走過登入、客戶管理、AI 對話與知識庫問答，並用三種典型客戶情境驗證資料、權限與 AI 回答。",
+          "examples": [
+            {
+              "title": "每一層單獨都能跑，串起來卻在登入後失敗",
+              "description": "後端 API、React 畫面與 AI 助理各自測試都正常，但整合時可能因 CORS、JWT header、API base URL 或 seed customer ID 不一致而斷在中間。"
+            },
+            {
+              "title": "現場才輸入資料，Demo 很容易被偶發錯誤打斷",
+              "description": "沒有準備固定帳號、客戶與文件時，展示者可能遇到空資料、權限不符或模型回覆不穩，觀眾也無法重現同一條流程。"
+            },
+            {
+              "title": "AI 回答每次不同，不能只用畫面看起來像成功",
+              "description": "LLM 文字不適合逐字比對，但仍可驗證工具是否查到正確客戶、RAG 是否回傳相關文件、SSE 是否完整結束，以及前端是否呈現引用來源。"
+            }
+          ],
+          "technologyRoles": [
+            {
+              "name": "JUnit 5／Mockito",
+              "role": "把 Java 工具方法、服務規則與 Prompt 組裝拆開測試，先確認後端邏輯而不是依賴現場操作。"
+            },
+            {
+              "name": "Playwright E2E",
+              "role": "用瀏覽器重跑登入、客戶查詢、AI 對話與 RAG 問答，驗證跨前後端的真實使用流程。"
+            },
+            {
+              "name": "整合檢查清單",
+              "role": "依資料庫、後端、前端、AI 與部署順序逐層確認，讓錯誤可以定位在明確邊界，而不是只得到 Demo 失敗。"
+            }
+          ],
+          "image": "u8-scenario.webp",
+          "alt": "講者在 Demo Day 展示從登入到 AI CRM 驗收的完整流程"
+        },
         "time": "13:00 ~ 17:00",
         "features": [
           "全端系統整合與除錯",
@@ -1356,11 +1673,57 @@ window.COURSE = {
             "spec": "E2E Testing / Checklist / Demo Day"
           }
         ]
-      },
+      }
+    ]
+  },
+  "day3": {
+    "id": "day3",
+    "title": "延伸實戰：上線與部署",
+    "date": "延伸章",
+    "learningGoal": "把結訓的 AI CRM 推向真實世界：先用 Cloudflare Tunnel 快速對外上線，再走完映像打包、伺服器部署與 Kubernetes 編排的完整部署路徑",
+    "units": [
       {
         "id": "u9",
         "title": "Cloudflare Tunnel 上線實戰——把 AI CRM 從內網推向全世界",
         "subtitle": "用 Docker Compose 把整套 AI CRM 打包在自己的內網機器上，透過 Cloudflare Tunnel 打洞對外服務：免公網 IP、免開防火牆 port、零月費。",
+        "scenario": {
+          "title": "手機不在同一個 Wi-Fi，也能打開你的 CRM",
+          "description": "AI CRM 原本只在家中電腦可見，現在透過反向 Tunnel 將前端安全地提供給外部手機存取，完成真正的登入、查客戶與 AI 對話驗收。",
+          "examples": [
+            {
+              "title": "家裡能開，手機 4G 卻完全連不到",
+              "description": "localhost 只代表本機，區網 IP 也不等於公網服務；如果只在同一個 Wi-Fi 測試，容易誤以為系統已經上線。"
+            },
+            {
+              "title": "為了讓外部連線，直接在防火牆開一個 port",
+              "description": "開入站孔洞可能把未完成的開發服務暴露到網路；還要自己處理公網 IP、TLS、憑證與路由，風險和維護成本都會增加。"
+            },
+            {
+              "title": "四個服務各自啟動，順序一錯就互相找不到",
+              "description": "前端、後端、PostgreSQL 與 Tunnel 若靠手動指令啟動，可能後端先啟動卻連不到資料庫，或 Tunnel 已連線但前端還沒有準備好。"
+            }
+          ],
+          "technologyRoles": [
+            {
+              "name": "Cloudflare Tunnel／cloudflared",
+              "role": "由內網機器主動向外建立連線，讓外部請求安全回到本機服務，不必直接開防火牆入站 port。"
+            },
+            {
+              "name": "Docker Compose",
+              "role": "把前端、後端、資料庫與 Tunnel 的服務、網路、啟動依賴寫成可重複執行的部署組合。"
+            },
+            {
+              "name": "healthcheck／depends_on",
+              "role": "讓服務依健康狀態啟動，而不是只依賴指令執行順序，降低剛開機時的連線失敗。"
+            },
+            {
+              "name": "volume／.env",
+              "role": "volume 保存資料，.env 管理各環境設定與密碼，讓對外服務不會把資料或秘密綁死在映像裡。"
+            }
+          ],
+          "image": "u9-scenario.webp",
+          "alt": "內網 AI CRM 透過反向 Tunnel 提供外部手機存取"
+        },
         "time": "延伸單元 · 上線實戰",
         "features": [
           "把結訓專案真正推上網：外網手機 4G 直接打開你內網機器上的 AI CRM，完成登入與 AI 對話。"
@@ -1467,6 +1830,420 @@ window.COURSE = {
             "kind": "term",
             "alt": "Cloudflare Tunnel 上線實戰 專業術語解釋",
             "spec": "Reverse Tunnel / Quick Tunnel / Named Tunnel / Multi-stage Build"
+          }
+        ]
+      },
+      {
+        "id": "u10",
+        "title": "Docker 映像打包——從「能跑」到「能交付」",
+        "subtitle": "延伸部署三部曲第一步：把 AI CRM 封裝成環境自帶、快取友善、版本可考的映像檔，替後面的伺服器部署與 Kubernetes 編排打好地基。",
+        "scenario": {
+          "title": "把『在我電腦可以跑』變成可交付版本",
+          "description": "後端、前端、依賴與執行環境被封裝成版本化映像；換到另一台機器時，不必重新猜測 JDK、Maven 或 Node.js 是否設定正確。",
+          "examples": [
+            {
+              "title": "本機能編譯，伺服器卻因版本不同啟動失敗",
+              "description": "開發者電腦使用 JDK 21、Node.js LTS，伺服器卻是另一個版本；若只搬原始碼，部署時就要重新猜依賴與建置環境。"
+            },
+            {
+              "title": "每次改一行程式，都要重新下載所有依賴",
+              "description": "Dockerfile 沒有把 pom.xml、package.json 與原始碼分層，導致一點小修改就讓 Maven 或 npm 從頭開始，建置時間很長且難以定位。"
+            },
+            {
+              "title": "大家都叫它 latest，卻不知道現在跑的是哪一版",
+              "description": "沒有明確 tag 與建置資訊時，測試機、同學電腦與伺服器可能跑著不同內容；發現問題也無法準確退回上一個可用版本。"
+            }
+          ],
+          "technologyRoles": [
+            {
+              "name": "Dockerfile multi-stage build",
+              "role": "第一階段用 Maven／Node.js 建置，第二階段只保留 JRE 或 Nginx 與產物，降低映像體積與環境差異。"
+            },
+            {
+              "name": "Docker layer cache",
+              "role": "把不常變的依賴安裝層放在原始碼之前，改一行程式時可以重用快取，加快重建。"
+            },
+            {
+              "name": "image tag／.dockerignore",
+              "role": "tag 提供可追蹤的版本名稱，.dockerignore 排除 node_modules、target 與秘密檔，避免把不該交付的內容塞進映像。"
+            },
+            {
+              "name": "Nginx + Spring Boot image",
+              "role": "Nginx 服務 React 靜態檔並反代 API，Spring Boot 映像專注執行後端，讓每個交付物責任清楚。"
+            }
+          ],
+          "image": "u10-scenario.webp",
+          "alt": "程式碼經過多階段建置成可搬運的版本化 Docker 映像"
+        },
+        "time": "延伸單元 · 部署三部曲 1/3",
+        "features": [
+          "做出有版本號的前後端映像：改一行程式碼重建能命中快取，compose 引用映像跑通登入與 AI 對話。"
+        ],
+        "goals": [
+          "理解「打包成映像」與「在我電腦上可以跑」的本質差異",
+          "為 Spring Boot 後端與 React 前端撰寫多階段 Dockerfile",
+          "用 .dockerignore 與層快取讓重建又快又乾淨",
+          "用 docker images 與 docker history 檢查映像體積與分層",
+          "建立 tag 版本策略，不再只用 latest"
+        ],
+        "principle": "映像是不可變的交付物：程式碼、依賴、執行環境一次封死，之後不管搬到哪台機器，跑起來都一樣。打包階段的所有決策——用哪個 base image、哪些檔案進映像、tag 怎麼命名——都是在替後面的部署鋪路。打包做得紮實，伺服器搬運與 k8s 編排就只是「換個地方執行同一個映像」；打包做得隨便，每換一個環境就重新踩一次坑。",
+        "concepts": [
+          {
+            "heading": "為什麼要打包：交付物的演進",
+            "group": "打包的本質",
+            "body": "回顧交付軟體的方式演進：\n\n**1. 交付原始碼**：對方要自己裝 JDK 21、Node、設定環境變數，任何一個版本不對就跑不起來。\n\n**2. 交付 jar 檔**：好一點，但對方還是要有正確版本的 JRE，前端靜態檔、資料庫都要另外處理。\n\n**3. 交付映像**：JRE、jar、設定的讀取方式全部封在裡面，對方只需要 Docker。`docker run` 下去，行為跟你機器上一模一樣。\n\n「在我電腦上可以跑」之所以是工程界的老哏，就是因為前兩種交付方式把環境問題留給了對方。映像把環境也變成交付物的一部分，這件事在單機時代是便利，到了 k8s 時代是前提——k8s 只認映像，不認你的原始碼。",
+            "note": "若已完成 Unit 9（Cloudflare Tunnel），多階段建置已動手做過——本單元快速複習核心，重點放在 Tunnel 章沒講的映像管理紀律。"
+          },
+          {
+            "heading": "後端多階段 Dockerfile 與層快取設計",
+            "group": "打包的本質",
+            "body": "多階段建置的核心思想：**建置工具不進最終映像**。Maven、原始碼、.m2 快取只存在於建置階段，最終映像只有 JRE 加一個 jar。\n\n```dockerfile\n# 建置階段：完整的 Maven + JDK 21 映像\nFROM maven:3.9-eclipse-temurin-21 AS build\nWORKDIR /app\n# 先只複製 pom.xml 並下載依賴：pom 沒變，這一層永遠命中快取\nCOPY pom.xml .\nRUN mvn dependency:go-offline\n# 再複製原始碼並打包：改程式碼只讓這一層之後重跑\nCOPY src ./src\nRUN mvn package -DskipTests\n\n# 執行階段：只用精簡 JRE 映像\nFROM eclipse-temurin:21-jre\nCOPY --from=build /app/target/*.jar app.jar\nENTRYPOINT [\"java\", \"-jar\", \"/app.jar\"]\n```\n\n三個設計重點：\n\n**1. base image 明確指定 JDK 21**。版本不對時，錯誤訊息常常不會直說「版本錯誤」，而是出現一堆看似編碼或檔案損壞的誤導訊息——版本要寫死在 Dockerfile，不依賴任何機器的 JAVA_HOME。\n\n**2. COPY pom.xml 與 COPY src 分兩層**。Docker 逐層快取：pom 沒變就不重新下載依賴，改一行 Java 程式碼的重建時間從幾分鐘縮到幾十秒。\n\n**3. 執行階段用 -jre 而不是完整 JDK**。跑 jar 不需要編譯器，映像體積從 800MB+ 降到 300MB 以下。",
+            "note": "Dockerfile 裡指令的順序就是快取策略：會頻繁變動的內容（原始碼）放後面，很少變動的內容（依賴）放前面。"
+          },
+          {
+            "heading": ".dockerignore：別把整個資料夾都送進建置",
+            "group": "映像管理紀律",
+            "body": "`docker build` 會把建置目錄（build context）整包送給 Docker daemon。沒有 .dockerignore 的話，`node_modules/`、`target/`、`.git/` 全部跟著上傳——建置變慢、快取容易失效，更糟的是 `.env` 這種含密碼的檔案可能被不小心 COPY 進映像。\n\n```text\n# backend/.dockerignore\ntarget/\n.git/\n.env\n*.md\n\n# frontend/.dockerignore\nnode_modules/\ndist/\n.git/\n.env\n```\n\n原則：**映像裡只該有「執行需要的東西」，建置 context 裡只該有「建置需要的東西」**。",
+            "note": "映像是會到處搬的——密碼一旦進了映像，就等於跟著映像到處外洩。"
+          },
+          {
+            "heading": "tag 版本策略：latest 是陷阱",
+            "group": "映像管理紀律",
+            "body": "`docker build -t ai-crm-backend .` 預設 tag 是 latest，但 **latest 只是一個會被不斷覆蓋的浮動標籤**——它不代表「最新版」，只代表「最後一次沒寫 tag 的 build」。部署場景的兩個災難：\n\n- 伺服器上 `docker pull` 拉到的 latest 跟你以為的版本不同，而你無從查證。\n- 新版有 bug 想退回上一版，但上一版的映像已經被 latest 覆蓋，無版可退。\n\n從本單元開始養成習慣：**每次建置都打明確的版本 tag**：\n\n```powershell\ndocker build -t ai-crm-backend:1.0.0 ./backend\n# 或用 git short SHA，跟程式碼版本一一對應\ndocker build -t \"ai-crm-backend:$(git rev-parse --short HEAD)\" ./backend\n```\n\n舊 tag 的映像會留在本機——下一單元的「一鍵退版」就是靠它。打包完用 `docker images` 看體積、`docker history` 看每一層是哪個指令產生的：如果改一行程式碼後「下載依賴」那層也重跑了，通常是 COPY 順序寫錯，一眼就能看出來。",
+            "note": "後端映像體積超過 400MB，通常是執行階段誤用了完整 JDK 而不是 JRE。"
+          },
+          {
+            "heading": "compose 本機驗證：映像的第一次整合測試",
+            "group": "整合驗證",
+            "body": "映像各自建好後，用 docker compose 做整合驗證。與開發時期最大的差異：**compose 檔引用的是建好的映像，不是原始碼目錄**。\n\n```yaml\nservices:\n  backend:\n    image: ai-crm-backend:1.0.0     # 用映像，不用 build:\n    env_file: .env\n    depends_on:\n      postgres:\n        condition: service_healthy\n  frontend:\n    image: ai-crm-frontend:1.0.0\n    ports: [\"80:80\"]\n  postgres:\n    image: pgvector/pgvector:pg16\n    volumes: [\"pgdata:/var/lib/postgresql/data\"]\nvolumes:\n  pgdata:\n```\n\n跑通「登入 → 查客戶 → AI 對話」之後，你手上就有一組**驗證過的、有版本號的映像**——這是下一單元要搬去伺服器的貨。",
+            "note": "從這一刻起，跑你系統的不再是你的程式碼，而是一個有版本號的交付物。"
+          }
+        ],
+        "prompt": "本章是延伸部署三部曲的第一步：把 AI CRM 打包成有版本號的映像。先為前後端撰寫多階段 Dockerfile 與 .dockerignore，驗證層快取與映像體積，最後用 compose 引用映像跑通完整業務流程。理解重點後，依序使用下方提示詞請 AI 協助完成。",
+        "promptMac": "本章是延伸部署三部曲的第一步：把 AI CRM 打包成有版本號的映像。先為前後端撰寫多階段 Dockerfile 與 .dockerignore，驗證層快取與映像體積，最後用 compose 引用映像跑通完整業務流程。理解重點後，依序使用下方提示詞請 AI 協助完成。",
+        "prompts": [
+          { "title": "① 打包後端映像", "kind": "build", "note": "多階段建置＋層快取設計，一次到位", "text": "請幫我為這個 Spring Boot 專案撰寫多階段建置的 Dockerfile：建置階段用支援 Java 21 的 Maven 映像，執行階段只用精簡的 JRE 21 映像。請把「複製 pom.xml 並下載依賴」和「複製原始碼並打包」拆成不同層，讓我改程式碼時不用重新下載依賴。同時幫我建立 .dockerignore，排除建置產物、git 目錄和環境變數檔。所有設定值都要能用環境變數注入，不要寫死在映像裡。請加中文註解，並解釋每一層的快取行為。" },
+          { "title": "② 打包前端映像", "kind": "build", "note": "Node 建置、nginx 服務、反代 /api 到後端", "text": "請幫我為這個 React + Vite 專案撰寫多階段建置的 Dockerfile：建置階段用 Node 映像執行 npm ci 與 npm run build，執行階段用 nginx 精簡映像服務 dist 靜態檔。另外幫我寫 nginx 設定檔，把 /api 開頭的請求反向代理到名為 backend 的容器 8080 埠，其他路徑都回傳前端頁面。請加中文註解，並說明為什麼反代之後就不會有 CORS 問題。" },
+          { "title": "✅ 驗證 — 快取、體積與版本 tag", "kind": "verify", "note": "打包品質的三項體檢", "text": "請陪我驗證剛才建好的兩個映像：第一，用 docker images 和 docker history 檢查映像體積與分層，告訴我哪幾層最大、是否合理；第二，我會改一行程式碼再重建一次，請幫我從建置輸出判斷依賴下載層有沒有命中快取；第三，幫我用版本號替兩個映像打 tag，並把 docker compose 檔改成引用映像（不用 build），啟動全套服務後完成登入與 AI 對話驗收。" },
+          { "title": "🔧 排錯 — 建置失敗或跑不起來", "kind": "fix", "note": "常見：JDK 版本不符、快取失效、容器互連失敗", "text": "我的映像建置或啟動遇到問題（我會把完整錯誤訊息貼給你）。常見狀況有：Maven 建置報出看不懂的編譯錯誤（可能是 base image 的 JDK 版本不對）、每次重建都重新下載全部依賴（可能是 COPY 順序或 .dockerignore 問題）、compose 啟動後後端連不上資料庫（可能是 healthcheck 或服務名稱問題）。請依我貼的訊息判斷根因並直接修正，修正後告訴我要用什麼指令驗證。" }
+        ],
+        "tasks": [
+          {
+            "id": "u10-t1",
+            "label": "為後端撰寫多階段 Dockerfile，建置成功並確認映像體積在 400MB 以下"
+          },
+          {
+            "id": "u10-t2",
+            "label": "為前端撰寫多階段 Dockerfile（nginx 服務靜態檔＋反代 /api），建置成功"
+          },
+          {
+            "id": "u10-t3",
+            "label": "補上 .dockerignore，改一行程式碼重建，用建置輸出證明依賴層命中快取"
+          },
+          {
+            "id": "u10-t4",
+            "label": "為兩個映像打版本 tag，用 compose 引用映像啟動全套並完成登入與 AI 對話"
+          }
+        ],
+        "materials": [],
+        "illustrations": [
+          {
+            "name": "u10-1.svg",
+            "kind": "hero",
+            "alt": "Docker 映像打包",
+            "spec": "多階段建置：原始碼進、有版本號映像出"
+          },
+          {
+            "name": "u10-2.svg",
+            "kind": "diagram",
+            "alt": "多階段建置與層快取流程",
+            "spec": "流程圖：依賴層（快取）-> 原始碼層 -> 精簡執行映像 -> 版本 tag"
+          },
+          {
+            "name": "u10-3-term.svg",
+            "kind": "term",
+            "alt": "Docker 映像打包 專業術語解釋",
+            "spec": "Image / Layer Cache / .dockerignore / Tag"
+          }
+        ]
+      },
+      {
+        "id": "u11",
+        "title": "部署到 Docker 伺服器——搬運、上線、更新與退版",
+        "subtitle": "延伸部署三部曲第二步：把有版本號的映像搬到另一台機器跑起來，學會映像／設定／資料三分離，以及上線後最重要的日常操作——換版與退版。",
+        "scenario": {
+          "title": "新版有問題時，能不能快速退回舊版？",
+          "description": "伺服器上的映像、環境設定與客戶資料各自管理；更新只切換版本 tag，發現問題時可以退回上一版，同時保留資料與設定。",
+          "examples": [
+            {
+              "title": "新版上線後登入失敗，卻沒有舊版可以切回",
+              "description": "如果直接覆蓋執行中的容器或只使用 latest，發現 JWT、CORS 或 AI 設定有問題時，沒有明確的上一版映像可以快速恢復。"
+            },
+            {
+              "title": "把密碼寫進映像，換環境就得重新打包",
+              "description": "資料庫密碼、JWT secret 與模型 API key 若寫在 Dockerfile 或程式碼裡，會跟著映像流出，也讓測試機與正式機無法使用不同設定。"
+            },
+            {
+              "title": "退版成功了，客戶資料卻跟著消失",
+              "description": "若資料沒有放在獨立 volume，刪除新版容器時也可能刪掉資料；真正安全的退版應只替換程式映像，保留設定與資料。"
+            }
+          ],
+          "technologyRoles": [
+            {
+              "name": "Docker Compose",
+              "role": "在伺服器上用同一份服務編排啟動前端、後端與資料庫，減少手動操作造成的差異。"
+            },
+            {
+              "name": "image tag／docker save-load",
+              "role": "tag 指向可辨識的程式版本，save／load 或 registry 負責把同一個映像搬到伺服器，更新與退版都能精準切換。"
+            },
+            {
+              "name": ".env",
+              "role": "把每個環境的網址、密碼與 API key 放在部署設定，不把秘密烘進映像或提交到 Git。"
+            },
+            {
+              "name": "named volume",
+              "role": "把 PostgreSQL 客戶資料與向量資料放在映像之外，讓更新或退版不會改變資料生命週期。"
+            }
+          ],
+          "image": "u11-scenario.webp",
+          "alt": "版本化 Docker 映像、設定與資料分離後部署並支援更新退版"
+        },
+        "time": "延伸單元 · 部署三部曲 2/3",
+        "features": [
+          "在目標伺服器用 compose 上線 AI CRM，外部裝置完成業務驗收，並實際演練一次更新與一鍵退版。"
+        ],
+        "goals": [
+          "理解部署三要素：映像、設定、資料，以及三者分離的原因",
+          "用 docker save / docker load 在沒有 registry 的環境搬運映像",
+          "把映像推上 GHCR 並在目標環境拉取",
+          "在伺服器端用 compose 加 .env 完成設定注入與啟動",
+          "完成版本更新與退版操作，理解為什麼舊 tag 是你的保險"
+        ],
+        "principle": "部署的本質是把三樣東西放到目標機器上：映像（程式與環境）、設定（每個環境不同的變數與密碼）、資料（volume，跟著機器走不跟著映像走）。三者嚴格分離：映像到處搬但永不修改、設定留在各環境的 .env 不進版控、資料只存在 volume。分離做得乾淨，「更新」就只是換一個 tag，「退版」就只是換回舊 tag——資料與設定原地不動。",
+        "concepts": [
+          {
+            "heading": "部署三要素：映像、設定、資料",
+            "group": "部署的心智模型",
+            "body": "一套跑在伺服器上的系統由三個生命週期完全不同的東西組成：\n\n| 要素 | 內容 | 生命週期 | 存放位置 |\n|---|---|---|---|\n| 映像 | 程式碼＋執行環境 | 每次發版換新，舊版保留 | 本機映像庫或 registry |\n| 設定 | DB 密碼、JWT secret、AI key | 每個環境一份，很少變動 | 伺服器上的 .env（不進 git） |\n| 資料 | PostgreSQL 的資料目錄 | 持續成長，絕不隨換版消失 | named volume |\n\n所有部署事故幾乎都源自三者混在一起：密碼烙進映像（換環境就爆）、資料放在容器內（換版就消失）、設定進了 git（洩漏）。三者分離之後，接下來的每個操作都變得單純。",
+            "note": "這個心智模型在下一單元的 k8s 原封不動適用，只是換了一套詞彙：設定變成 ConfigMap 與 Secret，資料變成 PVC。"
+          },
+          {
+            "heading": "路線 A：免 registry 的 save / load 搬運",
+            "group": "映像搬運",
+            "body": "沒有 registry、目標機器在內網、或只是想快速驗證時，最直接的搬運方式是把映像匯出成檔案：\n\n```powershell\n# 開發機：把映像匯出成 tar 檔（兩個映像一起打包）\ndocker save -o ai-crm-images.tar ai-crm-backend:1.0.0 ai-crm-frontend:1.0.0\n\n# 傳到伺服器後載入本機映像庫\ndocker load -i ai-crm-images.tar\ndocker images   # 確認兩個映像都在、tag 正確\n```\n\n優點是零依賴——不需要帳號、不需要對外網路；缺點是每次發版都要手動搬檔案。它適合內網部署、教學演練與緊急救援，正式的持續部署還是要走 registry。\n\n沒有第二台機器的演練方式：`docker save` 之後，用 `docker rmi` 把本機映像刪掉（模擬目標機器上沒有映像），再 `docker load` 還原——整條流程的指令與驗證方式一模一樣。",
+            "note": "save/load 是內網環境與緊急救援的救命招，值得完整演練一次。"
+          },
+          {
+            "heading": "路線 B：registry 推拉（GHCR）",
+            "group": "映像搬運",
+            "body": "registry 是映像的集中倉庫：開發機 push 上去，任何一台伺服器 pull 下來。示範 GHCR（GitHub Container Registry）——因為你已經有 GitHub 帳號：\n\n```powershell\n# 1. 用 GitHub Personal Access Token（勾選 write:packages）登入\ndocker login ghcr.io -u <你的GitHub帳號>\n\n# 2. registry 的 tag 命名規則：ghcr.io/<帳號>/<映像名>:<版本>\ndocker tag ai-crm-backend:1.0.0 ghcr.io/<帳號>/ai-crm-backend:1.0.0\ndocker push ghcr.io/<帳號>/ai-crm-backend:1.0.0\n\n# 3. 伺服器端拉取（私有映像需要先 docker login）\ndocker pull ghcr.io/<帳號>/ai-crm-backend:1.0.0\n```\n\n兩個要點：**docker tag 不會複製映像**，只是幫同一個映像多掛一個名字；推上去的映像**預設是私有的**，要給伺服器拉就在伺服器上 docker login——不要為了省登入把含商業邏輯的映像設成 public。",
+            "note": "registry tag 是「地址＋名字＋版本」三段式：ghcr.io/帳號/名字:版本。"
+          },
+          {
+            "heading": "伺服器端的 compose 與 .env",
+            "group": "上線與日常操作",
+            "body": "伺服器上只需要兩個檔案：docker-compose.yml 與 .env。compose 檔可以進 git（裡面沒有秘密），.env 只存在伺服器上。跟開發環境的三個差異：\n\n**1. restart: unless-stopped**——伺服器重開機後服務自動回來，開發機不需要、伺服器是必備。\n\n**2. 版本號抽成 ${APP_VERSION}**——整套系統的版本由 .env 的一行控制，這就是更新與退版的開關。\n\n**3. 只有 frontend 開 port**——postgres 完全不寫 ports:、後端也不需要，nginx 反代是唯一入口；防火牆只開 80/443，或直接套用 Unit 9 的 Cloudflare Tunnel，一個 port 都不用開。\n\n```yaml\nservices:\n  backend:\n    image: ghcr.io/<帳號>/ai-crm-backend:${APP_VERSION}\n    env_file: .env\n    restart: unless-stopped\n  frontend:\n    image: ghcr.io/<帳號>/ai-crm-frontend:${APP_VERSION}\n    restart: unless-stopped\n    ports: [\"80:80\"]\n```",
+            "note": "驗收堅持用另一台裝置的瀏覽器連伺服器 IP——localhost 是會騙人的，從外面連進來成功才證明真的部署好了。"
+          },
+          {
+            "heading": "日常操作：更新與退版",
+            "group": "上線與日常操作",
+            "body": "上線不是終點，之後每一次改版都是同一套循環：\n\n```powershell\n# 更新到 1.1.0：改 .env 的 APP_VERSION=1.1.0，然後\ndocker compose pull\ndocker compose up -d\n\n# 發現 1.1.0 有問題，退版：APP_VERSION 改回 1.0.0，再\ndocker compose up -d\n```\n\n退版能在一分鐘內完成，靠的是兩件在上一單元就開始做的事：**舊 tag 的映像還在**（沒被 latest 覆蓋），以及**資料在 volume 裡**（換版不動資料）。\n\n誠實的限制：資料庫 schema 如果在新版跑了不可逆的 migration，退版就不只是換 tag 的事——所以 Flyway 的 migration 要保持向後相容至少一個版本，這是 Unit 3 教過的紀律在部署場景的回報。",
+            "note": "上線檢查清單：.env 權限收緊、密碼全換生產值、資料庫與後端不對外、restart 策略設好、舊版映像至少留一版、退版流程實際演練過。"
+          }
+        ],
+        "prompt": "本章是延伸部署三部曲的第二步：把上一單元的映像搬到目標伺服器上線。先選一條搬運路線（save/load 或 GHCR），在伺服器端用 compose 加 .env 啟動，用外部裝置完成業務驗收，最後演練一輪更新與退版。理解重點後，依序使用下方提示詞請 AI 協助完成。",
+        "promptMac": "本章是延伸部署三部曲的第二步：把上一單元的映像搬到目標伺服器上線。先選一條搬運路線（save/load 或 GHCR），在伺服器端用 compose 加 .env 啟動，用外部裝置完成業務驗收，最後演練一輪更新與退版。理解重點後，依序使用下方提示詞請 AI 協助完成。",
+        "prompts": [
+          { "title": "① 免 registry 搬運部署", "kind": "build", "note": "save / load 把映像帶去任何一台有 Docker 的機器", "text": "我在開發機上有兩個建好的映像（後端和前端，各有版本 tag），想把它們部署到另一台裝了 Docker 但連不上 registry 的機器。請教我用 docker save 把兩個映像打包成一個檔案、傳到目標機器後用 docker load 還原，並告訴我每一步怎麼驗證成功。如果我手邊沒有第二台機器，請設計一個在同一台機器上完整演練這個流程的方法。" },
+          { "title": "② 伺服器端 compose 上線", "kind": "build", "note": "設定注入、restart 策略、最小暴露", "text": "請幫我為生產伺服器撰寫 docker compose 檔與 .env 範本：後端與前端引用有版本號的映像（版本號抽成環境變數，讓我之後改一行就能換版）、資料庫用支援向量檢索的 PostgreSQL 並掛持久化 volume、全部服務設定成重開機自動恢復。只有前端對外開 port，資料庫和後端都不對外。所有密碼放 .env 並告訴我怎麼收緊這個檔案的權限。請加中文註解，並列出上線前的檢查清單。" },
+          { "title": "③ 選做 — 推上 GHCR", "kind": "build", "note": "正規的映像發布路線", "text": "請教我把本機映像推上 GitHub Container Registry：從建立 Personal Access Token（需要哪些權限）、docker login、依照 ghcr.io 的命名規則重新 tag、到 push 成功。然後告訴我在另一台伺服器上要怎麼登入並拉取這個私有映像。請順便解釋 docker tag 指令做的事情是複製映像還是掛別名，以及為什麼映像預設應該保持私有。" },
+          { "title": "✅ 驗證 — 更新與退版演練", "kind": "verify", "note": "換版只換 tag，資料原地不動", "text": "請陪我完整演練一次版本更新與退版：我先改一個看得到的小地方（例如頁面標題）發布成新版本映像，在伺服器上更新 .env 的版本號並重新拉起，用瀏覽器確認改動生效、資料還在；然後假設新版有問題，把版本號改回上一版再拉起一次，確認畫面退回舊版、資料依然完好。每一步請告訴我要記錄什麼證據，最後解釋為什麼這個流程能這麼快，以及什麼情況下退版沒有這麼簡單。" },
+          { "title": "🔧 排錯 — 搬運或啟動失敗", "kind": "fix", "note": "常見：pull 權限、port 佔用、環境變數沒吃到", "text": "我在伺服器部署時遇到問題（我會把錯誤訊息貼給你）。常見狀況有：docker pull 回報 denied 或 unauthorized（可能是私有映像沒登入或 token 權限不足）、compose up 說 port is already allocated（可能是伺服器上有舊服務佔用）、容器起來了但後端報資料庫密碼錯誤（可能是 .env 沒被讀到或變數名稱不符）、瀏覽器打得開前端但 API 全部失敗。請依我貼的訊息判斷根因並直接修正。" }
+        ],
+        "tasks": [
+          {
+            "id": "u11-t1",
+            "label": "用 docker save / docker load 完成一次映像搬運（雙機或單機模擬），docker images 證明載入成功"
+          },
+          {
+            "id": "u11-t2",
+            "label": "在目標環境建立 compose 與 .env，啟動全套服務並從另一台裝置完成登入與 AI 對話"
+          },
+          {
+            "id": "u11-t3",
+            "label": "發布新版本、更新上線，再演練退回舊版，全程記錄指令與結果"
+          },
+          {
+            "id": "u11-t4",
+            "label": "（選做）把兩個映像推上 GHCR 並在目標環境拉取成功"
+          }
+        ],
+        "materials": [],
+        "illustrations": [
+          {
+            "name": "u11-1.svg",
+            "kind": "hero",
+            "alt": "部署到 Docker 伺服器",
+            "spec": "映像、設定、資料三分離：從開發機搬到伺服器"
+          },
+          {
+            "name": "u11-2.svg",
+            "kind": "diagram",
+            "alt": "更新與退版流程",
+            "spec": "流程圖：APP_VERSION 換版 -> pull/up -> 驗證 -> 有問題改回舊 tag 退版"
+          },
+          {
+            "name": "u11-3-term.svg",
+            "kind": "term",
+            "alt": "部署到 Docker 伺服器 專業術語解釋",
+            "spec": "Registry / save-load / .env 注入 / Rollback"
+          }
+        ]
+      },
+      {
+        "id": "u12",
+        "title": "Kubernetes 初體驗——用 Docker Desktop 內建叢集部署 AI CRM",
+        "subtitle": "延伸部署三部曲最後一步：零成本啟用單節點 k8s，把 compose 的每一行翻譯成 k8s 物件，親手體驗 compose 給不了的自癒與滾動更新。",
+        "scenario": {
+          "title": "服務掛掉或換版時，系統能自己維持可用嗎？",
+          "description": "後端宣告需要多個副本後，即使學生刪掉一個 Pod，叢集也會自動補回；換成新版本時，新的 Pod 健康後才逐步替換舊版本。",
+          "examples": [
+            {
+              "title": "手動啟動的容器掛掉，服務就整個中斷",
+              "description": "如果只用 docker run 啟動一個後端，容器被刪掉或程序崩潰後沒有人補回；服務是否可用取決於人有沒有記得處理。"
+            },
+            {
+              "title": "換版時一次停掉全部服務，使用者看到空白畫面",
+              "description": "直接把所有舊容器停掉再換新版，建置或啟動只要有一點問題就會造成整段 downtime；更安全的做法是新 Pod 健康後再逐步替換。"
+            },
+            {
+              "title": "只說『我要兩份』，但沒有寫清楚怎麼維持",
+              "description": "Kubernetes 的重點不是記住一串啟動指令，而是宣告期望狀態；現實少一個副本、版本不符或 Pod 不健康時，控制器會持續把現實拉回宣告。"
+            }
+          ],
+          "technologyRoles": [
+            {
+              "name": "Deployment／ReplicaSet",
+              "role": "宣告要跑幾個副本與哪個映像版本，並負責自癒、擴縮與版本替換。"
+            },
+            {
+              "name": "Pod",
+              "role": "承載實際執行中的容器；刪掉 Pod 可以觀察叢集如何依宣告自動建立替代品。"
+            },
+            {
+              "name": "Readiness Probe／Rolling Update",
+              "role": "只有新 Pod 通過健康檢查才接流量，再逐步替換舊版本，降低更新中斷的機會。"
+            },
+            {
+              "name": "Docker Desktop Kubernetes",
+              "role": "在本機提供可操作的單節點叢集，讓學員不用先租雲端，就能觀察部署、自癒與滾動更新。"
+            }
+          ],
+          "image": "u12-scenario.webp",
+          "alt": "Kubernetes 叢集自動補回 Pod 並執行不中斷滾動更新"
+        },
+        "time": "延伸單元 · 部署三部曲 3/3",
+        "features": [
+          "AI CRM 跑進本機叢集：親手刪掉 Pod 看它自動重生，完成一次不斷線的滾動更新與一行退版。"
+        ],
+        "goals": [
+          "說出 k8s 解決了 compose 解決不了的哪些問題",
+          "啟用 Docker Desktop 內建 Kubernetes 並用 kubectl 確認叢集狀態",
+          "用 compose 對照表理解 Deployment、Service、ConfigMap、Secret 四個核心物件",
+          "撰寫 manifest 部署 AI CRM，用 port-forward 從瀏覽器存取",
+          "實際演練自癒（刪 Pod 自動重生）與滾動更新（換版不斷線）"
+        ],
+        "principle": "k8s 的核心是宣告式收斂：你不下「啟動容器」這種命令，而是提交一份「期望狀態」的宣告——我要 2 個後端副本、跑 1.0.0 版、吃這些設定——k8s 持續比對現實與宣告，有落差就自動修正。容器掛了？現實少了一個副本，補起來。你改了宣告的映像版本？現實跟宣告不符，逐個換掉。理解了「宣告期望、系統收斂」這一件事，k8s 的各種行為就都說得通了。",
+        "concepts": [
+          {
+            "heading": "compose 夠用了，為什麼還要 k8s？",
+            "group": "定位與心智模型",
+            "body": "對一台伺服器、一套系統來說，上一單元的部署幾乎沒有不滿意的地方。但規模一上來，三個問題浮現：\n\n**1. 容器掛了誰重啟？** restart 策略只能處理容器行程死掉，如果整台機器掛了、或容器活著但服務已經沒回應，compose 無能為力。\n\n**2. 換版要斷線。** compose up 換版時舊容器停、新容器起，中間就是服務中斷。\n\n**3. 多台機器怎麼辦？** compose 管一台機器，十台機器就是十份 compose 各自為政。\n\nk8s 就是回答這三個問題的：偵測到副本數不足就自動補（自癒）、逐個替換副本並確認健康才繼續（滾動更新）、把 N 台機器抽象成一個資源池統一調度（叢集）。\n\n**定位要誠實**：Docker Desktop 的 k8s 是單節點學習環境，目的是把企業天天在用的物件模型在本機摸過一輪；它不是生產叢集，本單元也不教叢集維運（Ingress controller、HPA、多節點排程都不在範圍內）。",
+            "note": "Docker Desktop → Settings → Kubernetes → Enable Kubernetes，完成後 kubectl get nodes 看到一個 Ready 節點，你就有一座（單節點的）叢集了。"
+          },
+          {
+            "heading": "核心翻譯表：compose ↔ k8s",
+            "group": "定位與心智模型",
+            "body": "你已經很懂 compose，所以學 k8s 最快的路徑是翻譯，不是從零學：\n\n| compose 裡的概念 | k8s 對應物件 | 差異重點 |\n|---|---|---|\n| services.backend | **Deployment** | 多了 replicas 副本數，k8s 負責讓現實維持這個數字 |\n| 服務名稱互連 | **Service** | 一樣是內部 DNS 名稱，但背後多了負載均衡 |\n| environment: | **ConfigMap** | 設定獨立成物件，可以不重建映像只換設定 |\n| .env 裡的密碼 | **Secret** | 內容是 base64 編碼（不是加密），權限行為更收斂 |\n| named volume | **PVC** | 宣告「我要一塊儲存空間」，由叢集撮合實際存放位置 |\n| ports: | **port-forward / NodePort** | 本單元用 port-forward；生產環境是 Ingress 的職責 |",
+            "note": "把你的 compose 檔貼給 AI 請它翻譯成 manifest，並要求每個物件旁註解對應 compose 的哪一行——這是本單元最有效率的學法。"
+          },
+          {
+            "heading": "manifest 關鍵細節：本機映像與副本數",
+            "group": "動手部署",
+            "body": "後端 Deployment 的最小可用版本：\n\n```yaml\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: backend\nspec:\n  replicas: 2                     # 期望 2 個副本\n  selector:\n    matchLabels: { app: backend }\n  template:\n    metadata:\n      labels: { app: backend }\n    spec:\n      containers:\n        - name: backend\n          image: ai-crm-backend:1.0.0\n          imagePullPolicy: IfNotPresent   # 用本機映像，不去 registry 拉\n          envFrom:\n            - configMapRef: { name: crm-config }\n            - secretRef: { name: crm-secret }\n```\n\n兩個單機練習的關鍵細節：\n\n**1. imagePullPolicy: IfNotPresent**——Docker Desktop 的 k8s 與 Docker 共用同一套本機映像庫，設了這個，k8s 會直接用你 Unit 10 build 的映像；不設就會跑去 registry 拉一個不存在的映像，看到經典的 ImagePullBackOff。\n\n**2. replicas: 2**——後端是無狀態的（狀態都在資料庫），可以放心開兩個副本，這也是自癒與滾動更新示範的舞台。",
+            "note": "Secret 的 base64 是編碼不是加密——密碼不進 git 的紀律一樣要守，Secret 用 kubectl 指令從值直接建立，不要產生含密碼的 YAML 檔。"
+          },
+          {
+            "heading": "資料庫怎麼辦：誠實的取捨",
+            "group": "動手部署",
+            "body": "資料庫是有狀態服務，把生產資料庫跑進 k8s 是一個需要專業維運的決策，不是本課範圍。單機練習給你兩條誠實的路：\n\n**路線 A（本單元採用）**：postgres 也進叢集，用單副本 Deployment + PVC。在單節點學習環境完全夠用，也讓你練到 PVC 的宣告；但要知道生產環境不會這樣做。\n\n**路線 B**：postgres 留在 docker compose（或雲端託管資料庫），k8s 裡只跑無狀態的前後端。這更接近多數企業的實務：**無狀態服務進 k8s，資料庫用託管服務**。\n\n課堂選 A 是為了教學完整性；工作上遇到請優先評估 B。",
+            "note": "Docker Desktop 內建 default StorageClass，manifest 裡不要指定不存在的 storageClassName，否則 PVC 會 Pending。"
+          },
+          {
+            "heading": "體驗 k8s 的招牌：自癒與滾動更新",
+            "group": "高光實驗",
+            "body": "全部 kubectl apply 之後，先 port-forward 讓瀏覽器連進叢集完成業務驗收，然後做兩個實驗。\n\n**自癒**：\n\n```powershell\nkubectl get pods                  # 記下某個 backend pod 的名字\nkubectl delete pod backend-xxxxx  # 親手殺掉它\nkubectl get pods -w               # 看著新的 pod 在幾秒內自動長出來\n```\n\n你沒有下任何「重啟」指令——k8s 發現現實（1 個副本）與宣告（2 個副本）不符，自己把它補齊了。\n\n**滾動更新**：\n\n```powershell\nkubectl set image deployment/backend backend=ai-crm-backend:1.1.0\nkubectl rollout status deployment/backend   # 新的起來健康了才殺舊的\nkubectl rollout undo deployment/backend     # 一行退版\n```\n\n對照上一單元：compose 換版是「停舊起新」有斷線；k8s 換版是逐副本替換，服務全程有人接客。退版也從「改 .env 再 up」變成一行 rollout undo。",
+            "note": "排錯三寶：ImagePullBackOff 查 imagePullPolicy 與映像名、CrashLoopBackOff 用 kubectl logs --previous 看死前日誌、Pending 用 describe 看 Events。"
+          },
+          {
+            "heading": "學習環境與生產的差距",
+            "group": "帶走這張清單",
+            "body": "| 本單元（Docker Desktop） | 生產環境 |\n|---|---|\n| 單節點，控制平面＋工作節點同一台 | 多節點，控制平面高可用 |\n| port-forward 進叢集 | Ingress + LoadBalancer + TLS |\n| 本機映像 IfNotPresent | 私有 registry + 映像簽章掃描 |\n| kubectl apply 手動部署 | GitOps（Argo CD / Flux）自動同步 |\n| 資料庫進叢集練習 | 託管資料庫或專業 StatefulSet 維運 |\n\n左邊學會的物件模型、manifest 語法、kubectl 操作，到右邊全部沿用——差的是規模與周邊配套，不是核心概念。",
+            "note": "延伸部署三部曲總結：打包成版本可考的映像 → 三要素分離搬上伺服器 → 交給 k8s 宣告式收斂。從 localhost 到叢集，AI CRM 走完了企業級應用真實會走的路。"
+          }
+        ],
+        "prompt": "本章是延伸部署三部曲的最後一步：啟用 Docker Desktop 內建 Kubernetes，把 compose 翻譯成 manifest 部署 AI CRM，並親手體驗自癒與滾動更新。理解宣告式收斂的核心思想後，依序使用下方提示詞請 AI 協助完成。",
+        "promptMac": "本章是延伸部署三部曲的最後一步：啟用 Docker Desktop 內建 Kubernetes，把 compose 翻譯成 manifest 部署 AI CRM，並親手體驗自癒與滾動更新。理解宣告式收斂的核心思想後，依序使用下方提示詞請 AI 協助完成。",
+        "prompts": [
+          { "title": "① compose 翻譯成 k8s manifest", "kind": "build", "note": "用你已經懂的 compose 當對照", "text": "這是我目前在用的 docker compose 檔（我會貼上）。請幫我把它翻譯成 Kubernetes manifest，部署到 Docker Desktop 內建的單節點叢集：後端和前端各做一個 Deployment（後端開兩個副本）加 Service，資料庫做單副本 Deployment 加 PersistentVolumeClaim。因為映像在我本機，請設定成優先使用本機映像、不要去 registry 拉。請在每個 k8s 物件旁邊用中文註解標明它對應 compose 檔的哪一行，讓我能對照著理解。" },
+          { "title": "② 設定與密碼抽離", "kind": "build", "note": "ConfigMap 管設定、Secret 管密碼", "text": "請幫我把部署設定抽離成 Kubernetes 的 ConfigMap 與 Secret：非敏感的設定放 ConfigMap，資料庫密碼、JWT secret、AI 金鑰放 Secret，並改寫 Deployment 用 envFrom 一次注入。Secret 請教我用 kubectl 指令從值直接建立，不要產生含密碼的 YAML 檔。最後請解釋 Secret 的 base64 是編碼還是加密、這對「什麼能進 git」有什麼影響。" },
+          { "title": "③ 自癒與滾動更新示範", "kind": "build", "note": "k8s 給你、compose 給不了的兩件事", "text": "我的服務已經在本機 Kubernetes 上跑起來了。請帶我做兩個實驗：第一，親手刪掉一個後端 Pod，教我用什麼指令即時觀察它自動重生，並解釋 k8s 為什麼會這樣做；第二，把後端滾動更新到新版本映像，教我怎麼確認更新過程中服務沒有斷線，然後再用一行指令退回原版本。每個實驗請先告訴我預期會看到什麼，再開始操作。" },
+          { "title": "✅ 驗證 — 全套 k8s 驗收", "kind": "verify", "note": "從叢集狀態到業務功能一路檢查", "text": "請陪我完成 Kubernetes 部署的完整驗收：kubectl get nodes 節點 Ready、get pods 全部 Running 且副本數符合宣告、get svc 確認 Service 都建立、port-forward 之後從瀏覽器完成登入、查客戶、AI 對話與知識庫問答。接著驗證持久化：刪掉資料庫 Pod 等它重生，確認之前的資料還在。最後把我做過的物件用 kubectl get all 列出來，幫我逐一解說每一項是什麼、為什麼存在。" },
+          { "title": "🔧 排錯 — Pod 起不來", "kind": "fix", "note": "常見：ImagePullBackOff、CrashLoopBackOff、Pending", "text": "我的 Pod 狀態不正常（我會貼上 kubectl get pods 和 kubectl describe pod 的輸出）。常見狀況有：ImagePullBackOff（可能是 imagePullPolicy 設定或映像名稱 tag 打錯，我的映像在本機）、CrashLoopBackOff（容器一直重啟，可能要看 kubectl logs 找應用錯誤，常見是連不上資料庫或 Secret 沒注入）、Pending（可能是 PVC 綁不到儲存）。請教我用 describe 和 logs 的哪些段落判斷根因，並直接幫我修正 manifest。" }
+        ],
+        "tasks": [
+          {
+            "id": "u12-t1",
+            "label": "啟用 Docker Desktop Kubernetes，kubectl get nodes 顯示節點 Ready"
+          },
+          {
+            "id": "u12-t2",
+            "label": "建立 ConfigMap 與 Secret，撰寫 postgres（含 PVC）、backend、frontend 的 manifest 並 apply 成功"
+          },
+          {
+            "id": "u12-t3",
+            "label": "port-forward 之後從瀏覽器完成登入、查客戶與 AI 對話"
+          },
+          {
+            "id": "u12-t4",
+            "label": "刪除一個 backend Pod，用 kubectl get pods -w 記錄它自動重生的過程"
+          },
+          {
+            "id": "u12-t5",
+            "label": "對 backend 執行滾動更新並確認不斷線，再用 rollout undo 退版"
+          }
+        ],
+        "materials": [],
+        "illustrations": [
+          {
+            "name": "u12-1.svg",
+            "kind": "hero",
+            "alt": "Kubernetes 初體驗",
+            "spec": "Docker Desktop 單節點叢集：宣告式收斂部署 AI CRM"
+          },
+          {
+            "name": "u12-2.svg",
+            "kind": "diagram",
+            "alt": "宣告式收斂與自癒流程",
+            "spec": "流程圖：宣告期望狀態 -> 比對現實 -> 落差自動修正（自癒／滾動更新）"
+          },
+          {
+            "name": "u12-3-term.svg",
+            "kind": "term",
+            "alt": "Kubernetes 初體驗 專業術語解釋",
+            "spec": "Deployment / Service / ConfigMap·Secret / Rolling Update"
           }
         ]
       }
@@ -1626,6 +2403,1123 @@ window.COURSE = {
         ]
       }
     ]
+  },
+  "courseVideo": {
+    "title": "課程開場：先看懂這門課怎麼走",
+    "description": "先用一支影片掌握課程路線、AI CRM 共用情境，以及影片和教學網站各自負責什麼。看完再進入第一個實作單元，學習會更有方向。",
+    "duration": "約 4 分 26 秒",
+    "src": "assets/videos/00-course-orientation.mp4",
+      "poster": "assets/illustrations/cover.webp",
+    "topics": [
+      "四天課程的學習路線",
+      "貫穿全程的 AI CRM 情境",
+      "影片示範與網站查詢的分工",
+      "如何重看影片並搭配網站實作"
+    ]
+  },
+  "glossary": {
+    "u1": [
+      {
+        "term": "Java",
+        "meaning": "本課程後端使用的程式語言；JDK 提供編譯與執行 Java 程式所需的工具，Spring Boot 則建立在 Java 之上。",
+        "example": "先知道 Java 是程式語言，再理解 JDK 是工具箱、Maven 是建置工具，後面的版本錯誤才不會混在一起。"
+      },
+      {
+        "term": "Spring",
+        "meaning": "協助 Java 應用程式管理物件、網頁請求與資料存取的開發框架生態系；Spring Boot 是其中讓專案更容易啟動的方式。",
+        "prerequisites": ["Java"],
+        "example": "先理解 Spring 是框架生態系，再看 Spring Boot、Spring Web 與 Spring Data JPA 各自負責哪一段。"
+      },
+      {
+        "term": "Git",
+        "meaning": "一套記錄檔案修改歷史的版本控制工具，可以比較差異、回到舊版本，也能讓多人協作時知道誰改了什麼。",
+        "example": "每次請 AI 大幅修改程式前，先用 Git 建立一個可回復的基線；如果結果不對，就能比較差異或回到上一個可用版本。"
+      },
+      {
+        "term": "GitHub",
+        "meaning": "提供 Git 遠端版本庫與協作功能的網站服務，可以備份程式碼、分享專案、建立 Issue 與 Pull Request；Git 是工具，GitHub 是放置與協作的線上平台。",
+        "prerequisites": ["Git"],
+        "example": "本課程先在本機用 Git 記錄變更，再視需要把專案推送到 GitHub，讓程式碼有遠端備份與協作位置。"
+      },
+      {
+        "term": ".gitignore",
+        "meaning": "Git 使用的排除清單，告訴 Git 哪些檔案或資料夾不要列入版本控制；它不是刪除檔案，而是避免這些內容被加入提交。",
+        "prerequisites": ["Git"],
+        "example": "把 `.env`、`target`、`node_modules` 與 IDE 快取寫進 `.gitignore`，避免密碼、編譯產物與可重新安裝的檔案被提交到 Git 或推送到 GitHub。"
+      },
+      {
+        "term": "Monorepo",
+        "meaning": "把前端、後端、文件與驗證腳本放在同一個版本庫中管理，像是一間有不同工作區的共享工作室。",
+        "prerequisites": ["Git"],
+        "example": "本節的 Spring Boot 後端與 React 前端都放在同一個專案資料夾，方便一起啟動與驗證。"
+      },
+      {
+        "term": "JDK 21",
+        "meaning": "Java Development Kit 的第 21 版，是編譯和執行 Java 程式所需的工具箱，不只是單純的 Java 執行器。",
+        "prerequisites": ["Java"],
+        "example": "Spring Boot 專案要先確認使用 Java 21，版本不對時，後面的建置錯誤可能會看起來很難理解。"
+      },
+      {
+        "term": "Maven",
+        "meaning": "Java 專案的建置與依賴管理工具，會依照設定下載套件、編譯程式並產生可執行成果。",
+        "prerequisites": ["JDK 21"],
+        "example": "執行 `mvn spring-boot:run` 時，Maven 會協助準備依賴並啟動後端。"
+      },
+      {
+        "term": "Health Check",
+        "meaning": "用來回答服務是否正常運作的最小檢查，像是先按門鈴確認房子有人，而不是立刻檢查整棟房子。",
+        "prerequisites": ["Spring Boot"],
+        "example": "先打開健康檢查端點，確認後端真的啟動，再測試登入或客戶 API。"
+      },
+      {
+        "term": "Spring Initializr",
+        "meaning": "Spring 官方的專案產生器，依照你選的 Java、建置工具與依賴，產出可開始開發的專案骨架。",
+        "prerequisites": ["Spring Boot"],
+        "example": "本節用 Spring Initializr 選 Java 21、Jar 與必要依賴，再下載成課程專案。"
+      },
+      {
+        "term": "Spring Boot",
+        "meaning": "建立 Java 應用程式的 Spring 框架，透過自動配置與 starter 依賴減少手動設定。",
+        "prerequisites": ["Spring"],
+        "example": "本課程先用 Spring Boot 建立後端，再逐章加入 API、資料庫與 AI 功能。"
+      },
+      {
+        "term": "Jar",
+        "meaning": "Java Archive 的封裝格式，能把編譯後的 Java 程式整理成可執行或可交付的檔案。",
+        "prerequisites": ["Maven"],
+        "example": "專案選 Jar 打包後，可用 Java 啟動產出的後端檔案。"
+      },
+      {
+        "term": "Group / Artifact",
+        "meaning": "Maven 用來辨識專案的兩個座標：Group 表示組織或命名空間，Artifact 表示專案名稱。",
+        "prerequisites": ["Maven"],
+        "example": "本課程用 `com.example` 與 `aicrm` 組成專案的識別位置。"
+      },
+      {
+        "term": "Spring Web",
+        "meaning": "Spring Boot 的 Web 依賴，提供建立 HTTP API 與處理網頁請求所需的基礎。",
+        "prerequisites": ["Spring Boot"],
+        "example": "選入 Spring Web 後，後續才能建立 CRM 的 REST API。"
+      },
+      {
+        "term": "Spring Data JPA",
+        "meaning": "Spring 對 JPA 資料存取的整合，讓程式可以用 Repository 等抽象操作關聯式資料庫。",
+        "prerequisites": ["Spring Boot"],
+        "example": "本節先選好 Spring Data JPA，第三章再接 PostgreSQL 實作資料持久化。"
+      },
+      {
+        "term": "PostgreSQL Driver",
+        "meaning": "讓 Java 應用程式能透過 JDBC 與 PostgreSQL 溝通的連接套件。",
+        "prerequisites": ["Spring Data JPA"],
+        "example": "選入 PostgreSQL Driver 後，Spring Boot 才能依設定連到 PostgreSQL。"
+      },
+      {
+        "term": "Flyway Migration",
+        "meaning": "用版本化 SQL 檔記錄資料庫結構變更的遷移方式，讓不同環境照相同順序更新。",
+        "prerequisites": ["PostgreSQL Driver"],
+        "example": "本課程先把 Flyway Migration 選入骨架，之後再建立第一個資料庫版本。"
+      },
+      {
+        "term": "BUILD SUCCESS",
+        "meaning": "Maven 建置完成時的成功訊息，表示目前的編譯與建置步驟沒有失敗。",
+        "prerequisites": ["Maven"],
+        "example": "第一次啟動前先看到 BUILD SUCCESS，才能把問題範圍縮小到後續的執行環境。"
+      }
+    ],
+    "u2": [
+      {
+        "term": "Spring",
+        "meaning": "建立在 Java 上的應用程式框架生態系；Spring MVC、Spring Security 與 Spring Data 都是延伸它的不同模組。",
+        "example": "先把 Spring 想成整個框架家族，再分辨本章用 Spring MVC 處理請求，後續章節再接安全與資料庫模組。"
+      },
+      {
+        "term": "Spring Boot",
+        "meaning": "讓 Spring 專案更容易建立、設定與啟動的工具，會用自動配置與 starter 減少手動組裝。",
+        "prerequisites": ["Spring"],
+        "example": "Spring Boot 啟動後，Spring MVC 才能接住瀏覽器送進來的 HTTP 請求。"
+      },
+      {
+        "term": "HTTP",
+        "meaning": "瀏覽器、前端與後端交換請求和回應時使用的網路協定；網址、方法、標頭、狀態碼與內容都屬於 HTTP 的一部分。",
+        "prerequisites": ["Spring Boot"],
+        "example": "前端用 HTTP 的 GET 讀取客戶、POST 建立客戶，Spring MVC 再把請求交給正確的程式角色。"
+      },
+      {
+        "term": "Spring MVC",
+        "meaning": "Spring Boot 用來處理網頁請求的結構，把收到的請求交給適合的 Controller，再回傳結果。",
+        "prerequisites": ["Spring Boot", "HTTP"],
+        "example": "瀏覽器送出查詢客戶的 HTTP 請求後，Spring MVC 會把它導向對應的 Controller 方法。"
+      },
+      {
+        "term": "DispatcherServlet",
+        "meaning": "Spring MVC 的總接待員，負責看懂請求並找到應該處理它的 Controller。",
+        "prerequisites": ["Spring MVC"],
+        "example": "初學者不用直接操作它，但理解這個角色就能明白請求為何會從網址走到 Controller。"
+      },
+      {
+        "term": "DTO",
+        "meaning": "Data Transfer Object 的縮寫，是專門拿來在前後端之間傳資料的小容器，避免直接暴露資料庫物件。",
+        "prerequisites": ["REST API"],
+        "example": "新增客戶時用輸入 DTO 接收表單，回傳時再用輸出 DTO 決定前端真正看得到哪些欄位。"
+      },
+      {
+        "term": "Bean Validation",
+        "meaning": "用 `@NotBlank`、`@Email` 等標註檢查輸入資料是否符合規則的機制，像表單的自動驗收員。",
+        "prerequisites": ["DTO"],
+        "example": "前端送來空白客戶名稱時，後端在進入商業邏輯前就回傳清楚的 400 錯誤。"
+      },
+      {
+        "term": "REST API",
+        "meaning": "以 HTTP 操作資源的介面設計風格，通常用 URL 表示資源、用方法表示要做的動作。",
+        "prerequisites": ["HTTP"],
+        "example": "`GET /api/customers` 表示讀取客戶資源，前端不必呼叫名稱含有動詞的網址。"
+      },
+      {
+        "term": "Front Controller",
+        "meaning": "讓所有請求先經過同一個入口，再由入口分派給正確處理者的設計模式。",
+        "prerequisites": ["HTTP"],
+        "example": "Spring MVC 用 DispatcherServlet 當 Front Controller，統一接住進入後端的 HTTP 請求。"
+      },
+      {
+        "term": "Controller",
+        "meaning": "接收 HTTP 請求、整理輸入並呼叫下一層的程式角色，應避免把完整業務規則都塞在這裡。",
+        "prerequisites": ["Spring MVC"],
+        "example": "查詢客戶時，Controller 讀取參數後交給 Service，最後把結果回傳給前端。"
+      },
+      {
+        "term": "Service",
+        "meaning": "承接業務規則與流程的程式層，讓 Controller 專注在請求與回應，讓資料存取也能獨立演進。",
+        "prerequisites": ["Controller"],
+        "example": "建立商機的規則放在 Service，Controller 只負責接收請求並回傳結果。"
+      },
+      {
+        "term": "IoC",
+        "meaning": "控制反轉的縮寫，物件的建立與生命週期交給 Spring 容器管理，而不是每個類別自行建立依賴。",
+        "prerequisites": ["Spring"],
+        "example": "Controller 不必自己 `new` Service，Spring 容器會在啟動時準備好需要的物件。"
+      },
+      {
+        "term": "DI",
+        "meaning": "依賴注入的縮寫，容器在建立物件時把它需要的其他物件提供進來。",
+        "prerequisites": ["IoC"],
+        "example": "用建構子接收 Service，就是讓 Spring 以 DI 把依賴注入 Controller。"
+      },
+      {
+        "term": "Stateless",
+        "meaning": "無狀態的意思，每次請求都攜帶完成處理所需的資訊，伺服器不依賴上一次請求的記憶。",
+        "prerequisites": ["REST API"],
+        "example": "REST API 以 Stateless 設計時，每次呼叫都要帶上必要的身分與查詢條件。"
+      },
+      {
+        "term": "CRUD",
+        "meaning": "Create、Read、Update、Delete 的縮寫，代表資料常見的新增、讀取、更新與刪除四種操作。",
+        "prerequisites": ["REST API"],
+        "example": "客戶 API 通常會分別提供 CRUD 端點，對應管理客戶資料的完整生命週期。"
+      },
+      {
+        "term": "ResponseEntity",
+        "meaning": "Spring 用來同時描述回應內容、HTTP 狀態碼與標頭的回應容器。",
+        "prerequisites": ["REST API"],
+        "example": "查不到客戶時，可用 ResponseEntity 回傳 404，而不是永遠回傳 200。"
+      },
+      {
+        "term": "Sales Funnel",
+        "meaning": "銷售漏斗，把客戶從潛在、洽談到成交或流失的階段視覺化，幫助業務理解轉換與流失。",
+        "prerequisites": ["CRUD"],
+        "example": "CRM 可以依 Sales Funnel 階段安排跟進，不同階段使用不同的業務策略。"
+      },
+      {
+        "term": "Lombok",
+        "meaning": "透過註解自動產生 getter、constructor 等 Java 樣板程式碼的工具，減少重複撰寫。",
+        "prerequisites": ["Spring Boot"],
+        "example": "使用 Lombok 前要先確認 IDE 與建置工具都支援，否則程式可能看起來像缺少方法。"
+      }
+    ],
+    "u3": [
+      {
+        "term": "SQL",
+        "meaning": "用來讀取、建立與修改關聯式資料庫資料的語言；資料表、欄位、條件與排序都是 SQL 的基本概念。",
+        "example": "先理解 SQL 如何查詢客戶，再看 JPA Repository 與 Specification 如何用 Java 表達相同的查詢意圖。"
+      },
+      {
+        "term": "Docker",
+        "meaning": "把程式與執行環境封裝成容器的工具；本章用它準備一致的 PostgreSQL 開發環境。",
+        "example": "先理解 Docker 負責提供隔離環境，再理解 Docker Container、Compose 與 Volume 的分工。"
+      },
+      {
+        "term": "JPA",
+        "meaning": "Java Persistence API 的標準規格，定義 Java 物件如何與關聯式資料庫互相對應；Hibernate 是常見的實作。",
+        "prerequisites": ["SQL", "PostgreSQL"],
+        "example": "JPA 讓程式可以用 Entity、Repository 與查詢方法操作資料庫，不代表 SQL 或資料表設計就不重要。"
+      },
+      {
+        "term": "PostgreSQL",
+        "meaning": "一套用表格保存資料的關聯式資料庫，能用 SQL 查詢客戶、商機與互動紀錄。",
+        "prerequisites": ["SQL"],
+        "example": "本節把原本只存在記憶體的客戶資料改成保存到 PostgreSQL，重新啟動後資料仍然存在。"
+      },
+      {
+        "term": "Docker Container",
+        "meaning": "把程式和它需要的環境隔離在一個可搬運的執行單位中，像是替服務準備一個獨立的小房間。",
+        "prerequisites": ["Docker"],
+        "example": "PostgreSQL 放在 Docker 容器裡，學員不必手動調整每台電腦的資料庫安裝方式。"
+      },
+      {
+        "term": "Flyway",
+        "meaning": "用編號 SQL 檔記錄資料庫結構如何一步步改變的工具，讓每個環境都依相同順序升級。",
+        "prerequisites": ["PostgreSQL"],
+        "example": "新增客戶電話欄位時，建立下一個 Flyway migration，而不是直接在正式資料庫手動改表。"
+      },
+      {
+        "term": "JPA Entity",
+        "meaning": "把資料庫的一筆資料描述成 Java 物件的寫法，讓程式可以用物件操作資料表。",
+        "prerequisites": ["PostgreSQL"],
+        "example": "`Customer` Entity 對應客戶資料表，Repository 再利用它完成查詢與儲存。"
+      },
+      {
+        "term": "Specification",
+        "meaning": "把可選的查詢條件組合起來的方法，讓搜尋功能不用為每一種條件排列組合寫一個方法。",
+        "prerequisites": ["JPA Entity"],
+        "example": "客戶名稱、產業與狀態可以自由組合時，用 Specification 動態產生真正需要的查詢。"
+      },
+      {
+        "term": "pgvector",
+        "meaning": "PostgreSQL 的向量資料擴充，讓資料庫可以保存向量並進行相似度搜尋。",
+        "prerequisites": ["PostgreSQL"],
+        "example": "本節先用 pgvector 映像準備資料庫，後續 RAG 才能查找語意相近的文件。"
+      },
+      {
+        "term": "Docker Compose",
+        "meaning": "用一份 YAML 設定同時描述多個容器、網路、環境變數與資料卷的工具。",
+        "prerequisites": ["Docker Container"],
+        "example": "用 Docker Compose 一次啟動 PostgreSQL、pgvector 與 CRM 需要的服務。"
+      },
+      {
+        "term": "Named Volume",
+        "meaning": "有固定名稱、獨立於容器生命週期的資料卷，容器刪除或重建後資料仍可保留。",
+        "prerequisites": ["Docker Compose"],
+        "example": "PostgreSQL 使用 Named Volume 後，重建資料庫容器不會把客戶資料一起刪掉。"
+      },
+      {
+        "term": "ddl-auto",
+        "meaning": "Hibernate 用來決定是否依 Entity 自動建立或修改資料庫結構的設定。",
+        "prerequisites": ["JPA Entity"],
+        "example": "正式環境不應讓 ddl-auto 偷改 schema，資料庫結構應交給 Flyway 管理。"
+      },
+      {
+        "term": "DataSource",
+        "meaning": "應用程式取得資料庫連線的設定與入口，包含網址、帳號、密碼與連線池等資訊。",
+        "prerequisites": ["PostgreSQL"],
+        "example": "Spring Boot 啟動時會依 application.yml 建立 DataSource，再交給 JPA 使用。"
+      },
+      {
+        "term": "ORM",
+        "meaning": "Object-Relational Mapping 的縮寫，把程式中的物件與關聯式資料表互相對應。",
+        "prerequisites": ["JPA"],
+        "example": "JPA 是 Java 常用的 ORM 規格，讓程式用 Entity 表達資料表內容。"
+      },
+      {
+        "term": "@Transactional",
+        "meaning": "標示一段資料庫操作應在同一個交易中完成的註解，成功就提交，失敗可回滾。",
+        "prerequisites": ["JPA Entity"],
+        "example": "建立客戶與第一筆互動紀錄需要一起成功時，可用 @Transactional 保護整個流程。"
+      },
+      {
+        "term": "@Modifying",
+        "meaning": "告訴 Spring Data 某個查詢會修改資料，而不是只讀取資料的註解。",
+        "prerequisites": ["JPA Entity"],
+        "example": "批次更新客戶狀態時，更新用的 Repository 方法需要搭配 @Modifying。"
+      },
+      {
+        "term": "JPA Auditing",
+        "meaning": "自動記錄資料建立者、修改者與時間等稽核欄位的機制。",
+        "prerequisites": ["JPA Entity"],
+        "example": "Customer 更新時，JPA Auditing 可以自動留下最後修改時間，不必每個 Service 手動填寫。"
+      },
+      {
+        "term": "Query Method",
+        "meaning": "依照 Repository 方法名稱推導查詢條件的寫法，適合簡單且固定的查詢。",
+        "prerequisites": ["JPA Entity"],
+        "example": "只有單一狀態條件時可用 Query Method；條件很多且可選時再改用 Specification。"
+      }
+    ],
+    "u4": [
+      {
+        "term": "Spring",
+        "meaning": "Java 應用程式的框架生態系；本章的安全、錯誤處理、文件與管理端點都建立在 Spring 的擴充能力上。",
+        "example": "先掌握 Spring 是框架底座，再理解 Spring Security、OpenAPI 與 Actuator 各自接在哪一層。"
+      },
+      {
+        "term": "Spring Boot",
+        "meaning": "負責把 Spring 應用程式快速組裝與啟動的工具，會整合本章使用的各種 starter 與自動配置。",
+        "prerequisites": ["Spring"],
+        "example": "Spring Boot 啟動後，Security、錯誤回應與 Actuator 才能以模組方式加入同一個後端。"
+      },
+      {
+        "term": "HTTP",
+        "meaning": "前端呼叫後端 API 時使用的請求與回應協定；安全驗證、狀態碼、錯誤格式與 API 文件都依附在 HTTP 上。",
+        "prerequisites": ["Spring Boot"],
+        "example": "先理解 HTTP 請求，再區分 401、403、404 與 500 分別代表哪一類問題。"
+      },
+      {
+        "term": "JSON",
+        "meaning": "前後端常用的文字資料格式，以物件與陣列表達結構化資料；JWT 與 ProblemDetail 都會看到 JSON 結構。",
+        "prerequisites": ["HTTP"],
+        "example": "前端收到 ProblemDetail JSON 後，才能依 status、title 與 detail 顯示正確錯誤。"
+      },
+      {
+        "term": "Spring Security",
+        "meaning": "Spring 生態系的安全框架，負責判斷誰可以登入、誰可以呼叫哪些功能。",
+        "prerequisites": ["Spring Boot"],
+        "example": "客戶資料 API 交給 Spring Security 保護，未登入的請求不能直接讀取資料。"
+      },
+      {
+        "term": "Authentication / Authorization",
+        "meaning": "Authentication 是確認你是誰，Authorization 是確認你被允許做什麼，兩者是不同的安全步驟。",
+        "prerequisites": ["Spring Security"],
+        "example": "登入完成是 Authentication；只有 ADMIN 能刪除客戶則屬於 Authorization。"
+      },
+      {
+        "term": "JWT",
+        "meaning": "JSON Web Token 的縮寫，是登入成功後簽發的一張可驗證電子通行證，請求時帶給後端辨認身分。",
+        "prerequisites": ["Authentication / Authorization", "JSON"],
+        "example": "前端把 JWT 放在 `Authorization` header，後端驗證簽章後才知道這個請求是哪位使用者發出。"
+      },
+      {
+        "term": "Security Filter Chain",
+        "meaning": "在請求抵達 Controller 前依序檢查的安全關卡，例如驗證 token、判斷角色與拒絕未授權請求。",
+        "prerequisites": ["Spring Security", "JWT"],
+        "example": "JWT 過濾器先把使用者身分放入安全上下文，後面的授權規則才能判斷能否執行操作。"
+      },
+      {
+        "term": "HTTP Status Code",
+        "meaning": "HTTP 回應中的數字狀態，讓呼叫端快速知道請求成功、失敗或需要進一步處理。",
+        "prerequisites": ["HTTP"],
+        "example": "401 代表尚未通過身分驗證，403 代表已辨識身分但沒有足夠權限。"
+      },
+      {
+        "term": "ProblemDetail",
+        "meaning": "Spring Boot 提供的標準錯誤回應格式，讓前端不必猜每種錯誤的欄位名稱。",
+        "prerequisites": ["HTTP Status Code"],
+        "example": "查不到客戶時，後端用一致的 `status`、`title` 與 `detail` 回傳可理解的錯誤。"
+      },
+      {
+        "term": "OpenAPI",
+        "meaning": "描述 HTTP API 路徑、參數、回應與安全要求的開放格式，能成為前後端共同依據。",
+        "prerequisites": ["HTTP"],
+        "example": "本節用 OpenAPI 把 CRM 端點的輸入與回應格式整理成可閱讀的文件。"
+      },
+      {
+        "term": "Swagger UI",
+        "meaning": "把 OpenAPI 文件轉成可瀏覽、可直接試呼叫 API 的網頁介面。",
+        "prerequisites": ["OpenAPI"],
+        "example": "開啟 Swagger UI 後，可以看到端點、參數與回應格式，並按 Try it out 驗證。"
+      },
+      {
+        "term": "@RestControllerAdvice",
+        "meaning": "集中攔截多個 Controller 例外並統一轉成 HTTP 錯誤回應的 Spring 註解。",
+        "prerequisites": ["Spring Boot", "ProblemDetail"],
+        "example": "把查無資料與輸入錯誤交給 @RestControllerAdvice 處理，各 API 就能維持一致格式。"
+      },
+      {
+        "term": "AOP",
+        "meaning": "Aspect-Oriented Programming 的縮寫，把 Log、權限或計時等橫切關注點集中處理。",
+        "prerequisites": ["Spring"],
+        "example": "用 AOP 記錄每次 Service 執行時間，不必在每個方法裡重複寫開始與結束 Log。"
+      },
+      {
+        "term": "Spring Boot Actuator",
+        "meaning": "提供健康狀態、指標與管理端點的 Spring Boot 模組，方便觀察服務運作情況。",
+        "prerequisites": ["Spring Boot"],
+        "example": "用 Actuator 檢查服務是否啟動，再進一步查看 Log 與資料庫連線問題。"
+      },
+    ],
+    "u5": [
+      {
+        "term": "JavaScript",
+        "meaning": "前端用來描述互動與畫面邏輯的程式語言；React、Vite 與 Node.js 都會在不同位置使用它。",
+        "example": "先理解 JavaScript 是語言，再理解 Node.js 是讓它能在瀏覽器外執行的環境，React 則是建立畫面的函式庫。"
+      },
+      {
+        "term": "Axios",
+        "meaning": "前端用來發送 HTTP 請求與接收後端回應的 JavaScript 函式庫。",
+        "prerequisites": ["JavaScript"],
+        "example": "先用 Axios 呼叫客戶 API，再用 Axios Interceptor 統一附加 JWT 與處理 401。"
+      },
+      {
+        "term": "Node.js",
+        "meaning": "讓 JavaScript 可以在瀏覽器外執行的環境，前端工具通常靠它安裝套件與啟動開發伺服器。",
+        "prerequisites": ["JavaScript"],
+        "example": "建立 React 專案前先確認 Node.js 版本，`npm` 也會隨它一起提供。"
+      },
+      {
+        "term": "React",
+        "meaning": "用元件組合網頁畫面的 JavaScript 函式庫；元件可以重複使用，就像把介面拆成積木。",
+        "prerequisites": ["Node.js"],
+        "example": "客戶卡片、搜尋列與商機看板都可以各自成為 React 元件。"
+      },
+      {
+        "term": "JSX",
+        "meaning": "讓 React 程式可以用接近 HTML 的寫法描述畫面的語法，最後仍會被轉成 JavaScript。",
+        "prerequisites": ["React"],
+        "example": "在 JSX 中寫 `<CustomerCard />`，代表把客戶卡片元件放到畫面裡。"
+      },
+      {
+        "term": "npm",
+        "meaning": "Node.js 常用的套件管理與指令工具，用來安裝依賴、啟動開發伺服器與建立前端成果。",
+        "prerequisites": ["Node.js"],
+        "example": "用 `npm install` 安裝依賴，再用 `npm run dev` 啟動 React 開發環境。"
+      },
+      {
+        "term": "Vite",
+        "meaning": "現代前端的開發與建置工具，提供快速啟動、模組熱更新與正式版打包。",
+        "prerequisites": ["npm"],
+        "example": "本節用 Vite 建立 React 專案，開發時在 5173 埠即時預覽畫面。"
+      },
+      {
+        "term": "Vite Proxy",
+        "meaning": "開發環境中的轉送設定，讓前端以同一個入口呼叫後端，減少跨來源請求造成的麻煩。",
+        "prerequisites": ["Vite"],
+        "example": "前端呼叫 `/api/customers` 時，Vite Proxy 會在開發時把請求轉給 Spring Boot。"
+      },
+      {
+        "term": "CORS",
+        "meaning": "Cross-Origin Resource Sharing 的縮寫，瀏覽器用它限制不同來源之間的請求是否被允許。",
+        "prerequisites": ["Axios"],
+        "example": "前端從 5173 呼叫後端 8080 時，要正確設定 CORS，不要用全部放行掩蓋來源設定問題。"
+      },
+      {
+        "term": "Functional Component",
+        "meaning": "用 JavaScript 函式描述畫面的 React 元件，輸入 props 後回傳要呈現的 JSX。",
+        "prerequisites": ["React", "JSX"],
+        "example": "客戶卡片可以寫成 Functional Component，接收客戶資料後回傳固定的畫面結構。"
+      },
+      {
+        "term": "State",
+        "meaning": "元件用來保存會改變的畫面資料；State 更新後，React 會重新計算需要呈現的畫面。",
+        "prerequisites": ["React"],
+        "example": "搜尋文字與登入狀態放在 State，使用者操作後畫面就能跟著更新。"
+      },
+      {
+        "term": "Axios Interceptor",
+        "meaning": "Axios 在送出請求或收到回應前後執行共用邏輯的攔截器，適合處理 Token 與錯誤。",
+        "prerequisites": ["Axios"],
+        "example": "用 Axios Interceptor 統一把 JWT 放進請求標頭，也能集中處理 401 登出流程。"
+      },
+      {
+        "term": "Hot Reload",
+        "meaning": "開發工具在不完整重開應用程式的情況下，把程式碼變更快速反映到畫面的功能。",
+        "prerequisites": ["Vite"],
+        "example": "修改 JSX 後透過 Hot Reload 立即看到畫面變化，適合逐步調整元件。"
+      },
+      {
+        "term": "uiuxpromax",
+        "meaning": "本課程使用的視覺與 UX 決策指引，協助 AI 產生有設計系統、狀態完整的前端介面，不是 npm 套件。",
+        "prerequisites": ["JavaScript"],
+        "example": "設計 CRM 工作台前先參考 uiuxpromax，再決定配色、元件狀態與驗收方式。"
+      }
+    ],
+    "u6": [
+      {
+        "term": "AI",
+        "meaning": "Artificial Intelligence 的縮寫；本章指能理解輸入、產生文字，並在程式安排下協助完成工作的模型能力。",
+        "example": "先分清楚 AI 模型負責產生文字，CRM 程式負責提供真實資料與限制可執行的工具。"
+      },
+      {
+        "term": "API",
+        "meaning": "Application Programming Interface 的縮寫，是程式之間約定如何呼叫功能與交換資料的介面。",
+        "prerequisites": ["AI"],
+        "example": "Spring AI 透過 API 呼叫模型，CRM 也透過 API 提供客戶查詢工具，兩者都必須遵守清楚的輸入與輸出契約。"
+      },
+      {
+        "term": "Spring AI",
+        "meaning": "Spring 生態系用來連接 AI 模型與建立 AI 功能的整合層，讓熟悉 Spring 的開發者沿用原本的開發方式。",
+        "prerequisites": ["AI", "API"],
+        "example": "本節用 Spring AI 設定模型、system prompt、對話記憶與工具，而不是在每個地方自行拼 HTTP 請求。"
+      },
+      {
+        "term": "ChatClient",
+        "meaning": "Spring AI 提供的對話入口，負責把使用者訊息、系統規則與模型呼叫串在一起。",
+        "prerequisites": ["Spring AI"],
+        "example": "使用者送出問題後，ChatClient 先帶上 AI CRM 的角色規則，再取得模型回答。"
+      },
+      {
+        "term": "SSE",
+        "meaning": "Server-Sent Events 的縮寫，讓伺服器可以在同一條連線上分段把文字推送給瀏覽器。",
+        "prerequisites": ["API", "ChatClient"],
+        "example": "AI 還沒完整回答時，前端就能逐段顯示文字，使用者不用等整篇回答完成。"
+      },
+      {
+        "term": "Tool Calling",
+        "meaning": "模型先判斷需要什麼資料，再請程式呼叫指定工具取得真實結果，而不是自己猜答案。",
+        "prerequisites": ["ChatClient"],
+        "example": "使用者問某位客戶的商機時，模型可以呼叫 Java service 查資料，再把查到的內容整理成回答。"
+      },
+      {
+        "term": "Groq",
+        "meaning": "提供 AI 模型推論 API 的服務，本節用它示範以 OpenAI 相容介面接入模型。",
+        "prerequisites": ["API"],
+        "example": "在 application.yml 設定 Groq 端點，API Key 則放在環境變數，不寫死在程式碼裡。"
+      },
+      {
+        "term": "API Key",
+        "meaning": "用來辨識與授權 API 呼叫者的秘密憑證，必須當成密碼管理。",
+        "prerequisites": ["Groq"],
+        "example": "把 Groq API Key 放在 `.env` 或部署平台的秘密設定，不要提交到 GitHub。"
+      },
+      {
+        "term": "sessionId",
+        "meaning": "辨識一段對話上下文的識別值，讓同一使用者的訊息能接續，又能與其他使用者隔離。",
+        "prerequisites": ["ChatClient"],
+        "example": "換一個 sessionId 後重新提問，AI 不應該讀到上一段對話的記憶。"
+      },
+      {
+        "term": "MessageChatMemoryAdvisor",
+        "meaning": "Spring AI 用來依 session 讀取與保存對話歷史的增強元件，會把記憶接到 ChatClient 呼叫鏈。",
+        "prerequisites": ["sessionId", "ChatClient"],
+        "example": "掛上 MessageChatMemoryAdvisor 後，第二次追問才能取得前一次對話的上下文。"
+      },
+      {
+        "term": "EventSource",
+        "meaning": "瀏覽器內建的 SSE 用戶端 API，負責開啟連線並接收伺服器逐段送來的事件。",
+        "prerequisites": ["SSE"],
+        "example": "React 用 EventSource 接收 AI 回覆，收到一段就更新畫面，不必等待完整答案。"
+      },
+      {
+        "term": "@Tool",
+        "meaning": "Spring AI 用來標示可被模型呼叫的方法註解，方法本身仍應遵守應用程式的安全邊界。",
+        "prerequisites": ["Tool Calling"],
+        "example": "把查詢客戶的方法標成 @Tool 後，AI 才能在需要時請程式取得真實資料。"
+      },
+      {
+        "term": "ToolCallback",
+        "meaning": "描述工具如何被模型呼叫的 Spring AI 物件，包含工具名稱、輸入與實際執行邏輯。",
+        "prerequisites": ["@Tool"],
+        "example": "用 ToolCallback 把 CustomerTools 暴露給 ChatClient，模型才能選擇正確的查詢工具。"
+      },
+      {
+        "term": "WebSocket",
+        "meaning": "讓瀏覽器與伺服器建立雙向長連線的通訊方式，與 SSE 的單向伺服器推送不同。",
+        "prerequisites": ["API"],
+        "example": "本節選 SSE 傳送 AI 回答；只有需要雙向即時互動時，才考慮 WebSocket。"
+      },
+      {
+        "term": "Query Token",
+        "meaning": "把短效身分 Token 放在 URL 查詢參數的傳遞方式，常用來配合無法自訂標頭的 EventSource，但要注意日誌與網址洩漏風險。",
+        "prerequisites": ["EventSource"],
+        "example": "若 EventSource 不能帶 Authorization header，可在 HTTPS 下使用短效 Query Token，並避免寫入一般 Log。"
+      }
+    ],
+    "u7": [
+      {
+        "term": "AI",
+        "meaning": "能理解文字並產生回答的模型能力；本章進一步處理如何讓 AI 使用企業文件、歷史對話與外部工具。",
+        "example": "先理解 AI 需要外部資料才能回答公司內部問題，再進入 RAG、長期記憶與 MCP。"
+      },
+      {
+        "term": "Document",
+        "meaning": "知識庫要處理的原始文件單位，除了文字內容，也可以帶有來源、使用者與權限等描述資料。",
+        "prerequisites": ["AI"],
+        "example": "把產品規範讀成 Document，切分並向量化後，RAG 才能在提問時找回相關段落。"
+      },
+      {
+        "term": "RAG",
+        "meaning": "Retrieval-Augmented Generation 的縮寫，先從自己的資料找相關內容，再把內容交給模型回答。",
+        "prerequisites": ["AI", "Document"],
+        "example": "AI 回答退貨政策前，先從產品文件找出相關段落，降低憑空編造的風險。"
+      },
+      {
+        "term": "Embedding",
+        "meaning": "把文字轉成一串能表示語意的數字，讓電腦可以比較兩段文字是否意思接近。",
+        "prerequisites": ["Document"],
+        "example": "把客戶互動紀錄轉成 embedding 後，即使搜尋字詞不同，也可能找到語意相近的紀錄。"
+      },
+      {
+        "term": "ETL",
+        "meaning": "Extract、Transform、Load 的縮寫，意思是取出資料、整理資料，再放進目標系統。",
+        "prerequisites": ["Document"],
+        "example": "文件先被讀出並切成小段，接著轉成向量，最後寫入 PostgreSQL 的向量資料表。"
+      },
+      {
+        "term": "MCP",
+        "meaning": "Model Context Protocol 的縮寫，是讓 AI 用一致方式連接外部工具與資料來源的協定。",
+        "prerequisites": ["AI"],
+        "example": "同一個 AI 助理可以透過 MCP 連接行事曆或報表工具，而不必為每個工具重寫一套介面。"
+      },
+      {
+        "term": "Fine-Tuning",
+        "meaning": "用特定資料與範例進一步調整模型行為的方法，重點是改變模型的反應方式，不是即時查最新資料。",
+        "prerequisites": ["AI"],
+        "example": "需要固定輸出格式或語氣時才評估 Fine-Tuning；需要查公司文件時仍應先考慮 RAG。"
+      },
+      {
+        "term": "pgvector",
+        "meaning": "PostgreSQL 的向量資料擴充，讓資料庫能保存 Embedding 並依語意相似度搜尋。",
+        "prerequisites": ["Embedding"],
+        "example": "把產品文件的 Embedding 寫進 pgvector 後，RAG 才能找回與問題意思接近的段落。"
+      },
+      {
+        "term": "Vector Store",
+        "meaning": "保存向量、原文與相關欄位，並提供相似度檢索的資料儲存層。",
+        "prerequisites": ["pgvector"],
+        "example": "問退貨政策時，Vector Store 先找出相近文件，再把內容交給模型整理答案。"
+      },
+      {
+        "term": "Metadata",
+        "meaning": "附在文件或向量旁的描述資料，例如使用者、來源、權限與建立時間，可用來篩選檢索範圍。",
+        "prerequisites": ["Vector Store"],
+        "example": "用 Metadata 區分不同使用者的記憶，避免業務 A 的對話出現在業務 B 的回答裡。"
+      },
+      {
+        "term": "Semantic Search",
+        "meaning": "依文字的語意相近程度搜尋，而不是只比對完全相同的關鍵字。",
+        "prerequisites": ["Vector Store"],
+        "example": "使用者問「怎麼退貨」時，Semantic Search 也能找到文件中的「退貨流程」。"
+      },
+      {
+        "term": "Skills",
+        "meaning": "把 AI 執行某類工作的流程、規範與範本整理成可載入的知識模組，讓它不只會做也知道怎麼做。",
+        "prerequisites": ["MCP"],
+        "example": "把部署檢查清單包成 Skills 後，AI 需要部署時才能依固定順序逐項驗證。"
+      },
+      {
+        "term": "Async Write",
+        "meaning": "先回覆使用者，再在背景非同步保存資料的做法，避免寫入動作拖慢主要回應。",
+        "prerequisites": ["RAG"],
+        "example": "SSE 回答完成後用 Async Write 保存對話歷史，下一次查詢仍能找回記憶。"
+      },
+      {
+        "term": "Long-term Memory",
+        "meaning": "跨越單次對話與重新登入仍能使用的持久記憶，通常要經過整理、隔離與檢索。",
+        "prerequisites": ["RAG", "Vector Store"],
+        "example": "把使用者確認過的偏好寫進知識庫後，下一次對話可以透過 Long-term Memory 取回。"
+      },
+      {
+        "term": "Dual-path Retrieval",
+        "meaning": "同時查詢個人記憶與企業共同知識，再依相關性合併成模型上下文的檢索方式。",
+        "prerequisites": ["Semantic Search", "Long-term Memory"],
+        "example": "回答客戶問題時，一路查使用者自己的歷史，一路查公司產品文件，這就是 Dual-path Retrieval。"
+      },
+      {
+        "term": "MCP Server / Client",
+        "meaning": "MCP Server 提供工具與上下文能力，MCP Client 負責發出請求並接收結果，兩者用標準協定溝通。",
+        "prerequisites": ["MCP"],
+        "example": "CRM 的 AI 助理作為 MCP Client，向外部 MCP Server 請求行事曆或報表工具。"
+      }
+    ],
+    "u8": [
+      {
+        "term": "AI",
+        "meaning": "能理解輸入並產生文字或決策建議的模型能力；驗收時要把模型的不固定輸出與程式流程分開檢查。",
+        "example": "Demo 不只看 AI 回答是否順眼，也要驗證它是否拿到正確客戶資料、文件與工具結果。"
+      },
+      {
+        "term": "GOAP",
+        "meaning": "Goal-Oriented Action Planning 的縮寫，先看目標，再根據目前狀態安排可執行的動作順序。",
+        "prerequisites": ["AI", "LLM"],
+        "example": "Agent 的目標是完成客戶分析時，可以先取資料、再檢索知識，最後產生報告。"
+      },
+      {
+        "term": "Blackboard",
+        "meaning": "Agent 共用的狀態板，保存各步驟已知道的資料與產出，讓下一個動作接著工作。",
+        "prerequisites": ["GOAP"],
+        "example": "前一個 action 找到客戶資料後，把結果放到 Blackboard，後續摘要 action 就能讀取。"
+      },
+      {
+        "term": "E2E Test",
+        "meaning": "End-to-End Test 的縮寫，從使用者操作開始一路測到資料與畫面結果，驗證整條流程真的接得起來。",
+        "prerequisites": ["Integration Checklist"],
+        "example": "用瀏覽器登入、搜尋客戶、開啟 AI 對話並確認引用文件，這就是一個端到端案例。"
+      },
+      {
+        "term": "Demo Day",
+        "meaning": "展示成果與驗收的日子，重點是證明完整使用情境可運作，不是把每一行程式碼都講完。",
+        "example": "本節用固定展示路徑串起登入、客戶資料、AI 對話與 RAG 引用。"
+      },
+      {
+        "term": "Integration Checklist",
+        "meaning": "把資料庫、後端、前端與 AI 功能的整合檢查項目列成清單，逐層確認而不是同時亂改。",
+        "prerequisites": ["Seed Data"],
+        "example": "先確認資料庫 ready，再驗證 API，最後才進入瀏覽器與 AI 對話的 Integration Checklist。"
+      },
+      {
+        "term": "Seed Data",
+        "meaning": "為開發與測試預先準備的初始資料，讓每次驗收都有可重現的客戶與情境。",
+        "example": "用固定的 Seed Data 建立 APIM 與 GlobalMart，端到端測試才不會因資料消失而失效。"
+      },
+      {
+        "term": "Dashboard",
+        "meaning": "把重要指標、狀態與圖表集中在同一個畫面，讓使用者快速掌握系統或業務概況。",
+        "prerequisites": ["Observability"],
+        "example": "Demo Day 先登入 Dashboard 看本月指標，再進入客戶詳情與 AI 助理。"
+      },
+      {
+        "term": "Playwright",
+        "meaning": "可控制瀏覽器並驗證真實使用流程的自動化測試工具。",
+        "prerequisites": ["E2E Test"],
+        "example": "用 Playwright 從登入開始操作客戶搜尋與 AI 對話，確認畫面真的能完成整條流程。"
+      },
+      {
+        "term": "Layered Testing",
+        "meaning": "依照程式層次拆分測試，讓工具、提示詞、檢索與瀏覽器流程各自用適合的方式驗證。",
+        "prerequisites": ["E2E Test", "Playwright"],
+        "example": "先用單元測試驗證 @Tool，再用 RAG 檢索測試與 Playwright E2E 驗證完整流程。"
+      },
+      {
+        "term": "LLM",
+        "meaning": "Large Language Model 的縮寫，能理解與生成文字，但輸出可能受機率影響而不固定。",
+        "prerequisites": ["AI"],
+        "example": "測試 LLM 時不要只斷言整段文字完全相等，應驗證資料、格式與流程是否正確。"
+      },
+      {
+        "term": "Rate Limiting",
+        "meaning": "限制一段時間內可呼叫 API 的次數，避免濫用、成本失控或服務被流量壓垮。",
+        "prerequisites": ["LLM"],
+        "example": "上線檢查時確認 AI API 有 Rate Limiting，避免單一使用者大量消耗模型額度。"
+      },
+      {
+        "term": "Similarity Threshold",
+        "meaning": "相似度檢索接受結果的最低門檻，太低會混入不相關內容，太高則可能找不到答案。",
+        "prerequisites": ["LLM"],
+        "example": "調整 RAG 的 Similarity Threshold 後，要用已知問題確認回傳文件確實相關。"
+      },
+      {
+        "term": "Observability",
+        "meaning": "透過日誌、指標與追蹤資料理解系統正在做什麼、哪裡變慢或為何失敗的能力。",
+        "prerequisites": ["E2E Test"],
+        "example": "記錄 AI 呼叫延遲與 Token 消耗，才有足夠的 Observability 進行上線後排錯。"
+      }
+    ],
+    "u9": [
+      {
+        "term": "Network",
+        "meaning": "讓裝置與服務互相傳遞資料的連線環境；本章要分清楚本機、區域網路、外部網路與連接埠的差異。",
+        "example": "localhost 只代表本機可見，不代表手機 4G 或其他外部訪客也能連線。"
+      },
+      {
+        "term": "Docker",
+        "meaning": "封裝與啟動應用程式及其執行環境的容器工具；本章用它把前端、後端與資料庫組成可部署服務。",
+        "example": "先理解 Docker 負責執行服務，再理解 Dockerfile 建立映像、Compose 啟動多個服務。"
+      },
+      {
+        "term": "Reverse Tunnel",
+        "meaning": "反向隧道，讓內網機器主動向外建立連線，外部訪客的流量再沿這條連線回到內部服務。",
+        "prerequisites": ["Network"],
+        "example": "Cloudflare Tunnel 不必在家用路由器開入站 port，也能讓朋友看到本機的 AI CRM。"
+      },
+      {
+        "term": "Cloudflare Tunnel",
+        "meaning": "Cloudflare 提供的反向連線服務，讓內網服務透過外連通道取得可從外部使用的網址。",
+        "prerequisites": ["Reverse Tunnel"],
+        "example": "本節用 Cloudflare Tunnel 讓手機 4G 可以連到本機的 AI CRM，而不必直接暴露家用 IP。"
+      },
+      {
+        "term": "Quick Tunnel",
+        "meaning": "Cloudflare 提供的快速測試通道，不需帳號或自有網域，就能取得暫時的公開網址。",
+        "prerequisites": ["Cloudflare Tunnel"],
+        "example": "課堂 demo 可以先用 Quick Tunnel，快速確認外網真的能登入與使用系統。"
+      },
+      {
+        "term": "Named Tunnel",
+        "meaning": "綁定自有網域與設定的固定通道，適合長期使用或希望網址不變的服務。",
+        "prerequisites": ["Cloudflare Tunnel"],
+        "example": "作品集或正式服務可改用 Named Tunnel，讓使用者每次都進同一個網域。"
+      },
+      {
+        "term": "Dockerfile",
+        "meaning": "描述如何從基礎映像、程式碼與設定建立 Docker 映像的文字檔。",
+        "prerequisites": ["Docker"],
+        "example": "Dockerfile 先安裝依賴並編譯，再把可執行成果放到精簡的執行階段。"
+      },
+      {
+        "term": "Multi-stage Build",
+        "meaning": "多階段建置，先用完整工具編譯，再把成果搬到精簡的執行環境，避免把編譯工具一起交付。",
+        "prerequisites": ["Dockerfile"],
+        "example": "Maven 和原始碼留在建置階段，最後只把 Spring Boot jar 放進執行映像。"
+      },
+      {
+        "term": "Docker Compose",
+        "meaning": "用一份設定描述並啟動多個相互連接的容器，適合把前端、後端與資料庫一起管理。",
+        "prerequisites": ["Docker", "Dockerfile"],
+        "example": "用 Docker Compose 啟動四個服務後，再從外部裝置驗證登入與 AI 對話。"
+      },
+      {
+        "term": "Port Forwarding",
+        "meaning": "在路由器或防火牆把外部連接埠轉送到內部服務的傳統公開方式。",
+        "prerequisites": ["Network"],
+        "example": "相較於 Port Forwarding，Tunnel 不必直接開入站連接埠，設定與暴露面都較小。"
+      },
+      {
+        "term": "nginx",
+        "meaning": "常用的 Web 伺服器與反向代理，可提供前端靜態檔並把 API 請求轉給後端。",
+        "prerequisites": ["Docker Compose"],
+        "example": "Compose 中由 nginx 提供 React 畫面，再把 `/api` 請求代理到 Spring Boot。"
+      },
+      {
+        "term": "Cloudflare Containers",
+        "meaning": "Cloudflare 提供的容器執行能力，讓部分應用可以在 Cloudflare 的平台環境中執行。",
+        "prerequisites": ["Docker"],
+        "example": "本節先比較 Cloudflare Containers 與自架 Tunnel，再選適合課堂驗收的路線。"
+      },
+      {
+        "term": "CORS",
+        "meaning": "瀏覽器對跨來源請求的安全限制；前後端來源不同時，必須由後端明確允許。",
+        "prerequisites": ["Network"],
+        "example": "外部網址透過 Tunnel 呼叫 API 時，仍要確認 CORS 只允許預期的來源。"
+      }
+    ],
+    "u10": [
+      {
+        "term": "Docker",
+        "meaning": "把程式與執行環境封裝、啟動與搬運的容器工具；本章會用它把『在我電腦可以跑』變成可交付映像。",
+        "example": "Docker 讓後端、前端與它們需要的環境可以用相同方式在另一台機器啟動。"
+      },
+      {
+        "term": "Image",
+        "meaning": "Docker 映像是包含程式、依賴與執行環境的不可變交付物，可以在不同機器上用相同方式啟動。",
+        "prerequisites": ["Docker"],
+        "example": "後端建成 `ai-crm-backend:1.0.0` 後，後面搬到伺服器時搬的是這個映像，不是整個原始碼資料夾。"
+      },
+      {
+        "term": "Layer Cache",
+        "meaning": "Docker 把映像拆成一層一層並重用沒有變動的層，像整理箱子時只換真正改變的那一格。",
+        "prerequisites": ["Image"],
+        "example": "先複製 `pom.xml` 下載依賴，再複製原始碼，改一行 Java 時就不用重新下載全部套件。"
+      },
+      {
+        "term": ".dockerignore",
+        "meaning": "告訴 Docker 哪些檔案不要送進建置範圍的清單，可減少建置時間，也避免密碼或快取被打包。",
+        "prerequisites": ["Docker"],
+        "example": "把 `.env`、`.git`、`node_modules` 與 `target` 排除，映像只留下真正需要的內容。"
+      },
+      {
+        "term": "Tag",
+        "meaning": "映像的版本名稱；`latest` 會被覆蓋，明確版本號或 Git SHA 才能知道目前執行的是哪一版。",
+        "prerequisites": ["Image"],
+        "example": "用 `1.0.0` 建置並在 compose 引用，發現問題時才有機會準確退回上一版。"
+      },
+      {
+        "term": "Base Image",
+        "meaning": "Dockerfile 開始建置時使用的基礎映像，決定預先提供哪些作業系統、JDK 或執行環境。",
+        "prerequisites": ["Image"],
+        "example": "建置階段選 Maven 加 JDK 21 的 Base Image，執行階段則改用精簡 JRE 映像。"
+      },
+      {
+        "term": "JRE",
+        "meaning": "Java Runtime Environment 的縮寫，提供執行 Java 程式所需的環境，但不包含完整編譯工具。",
+        "prerequisites": ["Base Image"],
+        "example": "後端已經打包成 Jar 後，執行映像使用 JRE 就足夠，不必把完整 JDK 一起交付。"
+      },
+      {
+        "term": "Build Context",
+        "meaning": "執行 docker build 時送給 Docker daemon 的檔案範圍，內容越多，建置越慢且越難控制。",
+        "prerequisites": [".dockerignore"],
+        "example": "用 `.dockerignore` 排除 `node_modules`、`.git` 與 `.env`，縮小 Build Context。"
+      },
+      {
+        "term": "docker history",
+        "meaning": "查看 Docker 映像每一層由哪個指令產生、占用多少空間的檢查指令。",
+        "prerequisites": ["Image"],
+        "example": "重建後用 docker history 確認依賴層是否命中快取，以及哪一層造成映像變大。"
+      },
+      {
+        "term": "CACHED",
+        "meaning": "Docker 建置輸出中的快取命中訊息，表示該層可重用，不需要重新執行。",
+        "prerequisites": ["Layer Cache"],
+        "example": "只改一行 Java 後重建，若依賴下載層顯示 CACHED，就代表層快取策略有效。"
+      }
+    ],
+    "u11": [
+      {
+        "term": "Docker",
+        "meaning": "把程式、依賴與執行環境封裝成可搬運映像的容器工具；本章的更新與退版都是在切換 Docker 映像版本。",
+        "example": "先理解 Docker 映像是程式交付物，再理解 Registry、APP_VERSION 與 Rollback 如何協助部署。"
+      },
+      {
+        "term": "Docker Image",
+        "meaning": "包含程式、依賴與執行環境的不可變交付物；啟動容器時使用的是映像，不是伺服器上的原始碼資料夾。",
+        "prerequisites": ["Docker"],
+        "example": "更新只替換 Docker Image，資料庫 volume 與環境設定仍留在伺服器上。"
+      },
+      {
+        "term": "Git",
+        "meaning": "記錄程式碼修改歷史的版本控制工具；本章用它協助標記與搬運可辨識的映像版本。",
+        "example": "先用 Git tag 或提交紀錄標記目前程式版本，再把同一版本的 Docker 映像發布到 Registry。"
+      },
+      {
+        "term": "Registry",
+        "meaning": "集中存放 Docker 映像的倉庫，開發機可以 push，伺服器再 pull 同一個版本。",
+        "prerequisites": ["Docker Image"],
+        "example": "GHCR 是 GitHub 提供的 registry，能保存帶版本 tag 的前後端映像。"
+      },
+      {
+        "term": "GitHub",
+        "meaning": "提供 Git 遠端版本庫與協作功能的網站服務；本章會使用它的容器映像服務來保存與發布 Docker 映像。",
+        "prerequisites": ["Git"],
+        "example": "先理解 GitHub 是線上協作平台，再理解 GHCR 就會知道它是 GitHub 裡專門存放 Docker 映像的服務。"
+      },
+      {
+        "term": "save / load",
+        "meaning": "把映像匯出成檔案再載入另一台機器的搬運方式，不需要建置或連接 registry。",
+        "prerequisites": ["Docker Image"],
+        "example": "內網沒有對外連線時，可以用 `docker save` 產生 tar 檔，再用 `docker load` 還原。"
+      },
+      {
+        "term": ".env 注入",
+        "meaning": "把每個環境不同的設定在啟動時提供給程式，而不是寫死在映像或程式碼裡。",
+        "prerequisites": ["Docker Image"],
+        "example": "資料庫密碼與 `APP_VERSION` 放在伺服器的 `.env`，同一個映像就能在不同環境使用。"
+      },
+      {
+        "term": "Rollback",
+        "meaning": "退回上一個已知可用版本的動作，重點是保留舊映像，讓換版可以回頭。",
+        "prerequisites": ["APP_VERSION"],
+        "example": "新版出錯時把 `APP_VERSION` 改回舊 tag，再重新啟動 compose，不必重新建置。"
+      },
+      {
+        "term": "GHCR",
+        "meaning": "GitHub Container Registry 的縮寫，用來集中保存與發布 Docker 映像。",
+        "prerequisites": ["GitHub", "Registry"],
+        "example": "把帶版本 tag 的 AI CRM 映像 push 到 GHCR，伺服器再 pull 同一個版本。"
+      },
+      {
+        "term": "APP_VERSION",
+        "meaning": "用來集中指定整套服務映像版本的環境變數，更新或退版時只需替換這個值。",
+        "prerequisites": [".env 注入"],
+        "example": "把 APP_VERSION 從 `1.0.0` 改成 `1.1.0`，再重新啟動 compose 完成換版。"
+      },
+      {
+        "term": "Named Volume",
+        "meaning": "有固定名稱、獨立於容器生命週期的持久化資料卷，適合保存資料庫內容。",
+        "prerequisites": ["Docker"],
+        "example": "資料放在 Named Volume 後，換映像或退版不會把 PostgreSQL 的資料一起刪掉。"
+      },
+      {
+        "term": "Personal Access Token",
+        "meaning": "可代替帳號密碼登入 GitHub 服務的存取憑證，應只授予必要權限並妥善保存。",
+        "prerequisites": ["GitHub"],
+        "example": "登入 GHCR 時使用 Personal Access Token，完成後不要把 token 寫進 compose 或 Git。"
+      },
+      {
+        "term": "映像／設定／資料三分離",
+        "meaning": "把不可變的程式映像、各環境設定與持久化資料分開管理，讓換版不會覆蓋秘密或資料。",
+        "prerequisites": ["Docker Image", ".env 注入", "Named Volume", "Rollback"],
+        "example": "更新時只換映像 tag，`.env` 與 Named Volume 保持原地不動，這就是三分離。"
+      }
+    ],
+    "u12": [
+      {
+        "term": "Docker",
+        "meaning": "提供容器執行環境的工具；Docker Desktop 再把容器工具與本機 Kubernetes 叢集整合到桌面環境。",
+        "example": "先理解 Docker 負責容器，再理解 Docker Desktop 如何在本機提供 Kubernetes 練習環境。"
+      },
+      {
+        "term": "Kubernetes",
+        "meaning": "管理多個容器的系統，會依照你寫下的目標數量與設定，持續把實際環境調整到相同狀態。",
+        "prerequisites": ["Docker"],
+        "example": "本節使用 Docker Desktop 內建的單節點 Kubernetes，先用小規模環境理解叢集概念。"
+      },
+      {
+        "term": "Pod",
+        "meaning": "Kubernetes 中最小的部署單位，通常包含一個主要容器及其需要共享的網路與儲存設定。",
+        "prerequisites": ["Kubernetes"],
+        "example": "刪除一個 backend Pod 後，Deployment 會依照副本數重新建立它。"
+      },
+      {
+        "term": "Deployment",
+        "meaning": "描述應該跑哪個映像、要幾個副本與如何更新的設定，Kubernetes 會負責維持它。",
+        "prerequisites": ["Pod"],
+        "example": "把 backend 的副本數寫成 2，即使其中一個 Pod 被刪除，Deployment 也會補回來。"
+      },
+      {
+        "term": "Service",
+        "meaning": "給一群 Pod 一個穩定的門牌與流量入口；即使背後的 Pod 更換，其他服務仍可用同一個名稱連線。",
+        "prerequisites": ["Pod"],
+        "example": "前端透過 backend Service 找到後端，不必記住每個 Pod 會變動的 IP。"
+      },
+      {
+        "term": "ConfigMap · Secret",
+        "meaning": "Kubernetes 用來保存設定的兩種物件；ConfigMap 放一般設定，Secret 放敏感值，但 Secret 的 base64 不是加密。",
+        "prerequisites": ["Kubernetes", "Manifest"],
+        "example": "把環境名稱放進 ConfigMap，把資料庫密碼放進 Secret，兩者都不要把真正秘密提交到 Git。"
+      },
+      {
+        "term": "Docker Desktop",
+        "meaning": "在本機提供 Docker 引擎、容器工具與可選 Kubernetes 單節點叢集的桌面應用程式。",
+        "prerequisites": ["Docker"],
+        "example": "本節使用 Docker Desktop 內建的單節點 Kubernetes，先在本機練習部署與驗證。"
+      },
+      {
+        "term": "kubectl",
+        "meaning": "Kubernetes 的命令列工具，用來查看叢集資源、套用設定與追蹤部署狀態。",
+        "prerequisites": ["Kubernetes"],
+        "example": "用 kubectl get pods 查看 Pod，再用 kubectl logs 追查容器啟動問題。"
+      },
+      {
+        "term": "Manifest",
+        "meaning": "用 YAML 或 JSON 宣告 Kubernetes 物件目標狀態的設定檔。",
+        "prerequisites": ["Kubernetes"],
+        "example": "把 compose 的服務翻譯成 Manifest，Kubernetes 才知道要建立哪些 Deployment 與 Service。"
+      },
+      {
+        "term": "PersistentVolumeClaim",
+        "meaning": "Pod 向 Kubernetes 申請持久化儲存空間的物件，常縮寫為 PVC。",
+        "prerequisites": ["Pod"],
+        "example": "PostgreSQL 用 PersistentVolumeClaim 保存資料，Pod 重建後仍能接回原本的資料。"
+      },
+      {
+        "term": "Rolling Update",
+        "meaning": "逐步替換舊版本 Pod 的更新方式，讓服務在更新期間仍維持可用。",
+        "prerequisites": ["Deployment"],
+        "example": "修改映像 tag 後執行 Rolling Update，逐一換掉舊 Pod，再觀察服務是否穩定。"
+      },
+      {
+        "term": "Self-healing",
+        "meaning": "Kubernetes 發現實際狀態偏離宣告狀態時，自動補回或重啟資源的能力。",
+        "prerequisites": ["Deployment"],
+        "example": "手動刪掉 backend Pod 後，Self-healing 會依 Deployment 宣告重新補回副本。"
+      },
+      {
+        "term": "imagePullPolicy",
+        "meaning": "控制 Kubernetes 何時從 registry 拉取容器映像的設定，會影響本機映像是否能直接使用。",
+        "prerequisites": ["Deployment"],
+        "example": "本機練習使用 `IfNotPresent` 時，若映像已存在就不必每次重新拉取。"
+      },
+      {
+        "term": "Declarative Reconciliation",
+        "meaning": "宣告目標狀態後，由控制器持續比較現況並修正差異，直到兩者一致的運作方式。",
+        "prerequisites": ["Deployment", "Manifest"],
+        "example": "Manifest 宣告要跑兩個 backend 副本，Kubernetes 會透過 Declarative Reconciliation 維持這個數量。"
+      }
+    ]
+  },
+  "glossaryLearningOrder": {
+    "u1": ["Java", "JDK 21", "Maven", "Spring", "Spring Boot", "Spring Initializr", "Group / Artifact", "Jar", "Spring Web", "Spring Data JPA", "PostgreSQL Driver", "Flyway Migration", "BUILD SUCCESS", "Health Check", "Git", "GitHub", ".gitignore", "Monorepo"],
+    "u2": ["Spring", "Spring Boot", "HTTP", "Spring MVC", "Front Controller", "DispatcherServlet", "REST API", "DTO", "Bean Validation", "Controller", "Service", "IoC", "DI", "Stateless", "CRUD", "ResponseEntity", "Sales Funnel", "Lombok"],
+    "u3": ["SQL", "PostgreSQL", "Docker", "Docker Container", "Docker Compose", "Named Volume", "DataSource", "Flyway", "JPA", "ORM", "JPA Entity", "Query Method", "Specification", "ddl-auto", "@Transactional", "@Modifying", "JPA Auditing", "pgvector"],
+    "u4": ["Spring", "Spring Boot", "HTTP", "JSON", "Spring Security", "Authentication / Authorization", "JWT", "Security Filter Chain", "HTTP Status Code", "ProblemDetail", "OpenAPI", "Swagger UI", "@RestControllerAdvice", "AOP", "Spring Boot Actuator"],
+    "u5": ["JavaScript", "Node.js", "npm", "Vite", "React", "JSX", "Functional Component", "State", "Axios", "Axios Interceptor", "Vite Proxy", "CORS", "Hot Reload", "uiuxpromax"],
+    "u6": ["AI", "API", "Spring AI", "ChatClient", "SSE", "EventSource", "Tool Calling", "@Tool", "ToolCallback", "Groq", "API Key", "sessionId", "MessageChatMemoryAdvisor", "WebSocket", "Query Token"],
+    "u7": ["AI", "Document", "RAG", "Embedding", "ETL", "pgvector", "Vector Store", "Metadata", "Semantic Search", "MCP", "MCP Server / Client", "Skills", "Fine-Tuning", "Async Write", "Long-term Memory", "Dual-path Retrieval"],
+    "u8": ["AI", "LLM", "GOAP", "Blackboard", "Seed Data", "Integration Checklist", "E2E Test", "Playwright", "Layered Testing", "Similarity Threshold", "Rate Limiting", "Observability", "Dashboard", "Demo Day"],
+    "u9": ["Network", "Reverse Tunnel", "Cloudflare Tunnel", "Quick Tunnel", "Named Tunnel", "Port Forwarding", "Docker", "Dockerfile", "Multi-stage Build", "Docker Compose", "nginx", "CORS", "Cloudflare Containers"],
+    "u10": ["Docker", "Image", "Base Image", "JRE", "Layer Cache", ".dockerignore", "Build Context", "Tag", "docker history", "CACHED"],
+    "u11": ["Docker", "Docker Image", "Git", "GitHub", "Registry", "GHCR", "Personal Access Token", "save / load", ".env 注入", "APP_VERSION", "Named Volume", "Rollback", "映像／設定／資料三分離"],
+    "u12": ["Docker", "Docker Desktop", "Kubernetes", "Pod", "Deployment", "Service", "Manifest", "ConfigMap · Secret", "kubectl", "PersistentVolumeClaim", "Rolling Update", "Self-healing", "imagePullPolicy", "Declarative Reconciliation"]
+  },
+  "glossaryLearningPaths": {
+    "u1": ["執行基礎：Java → JDK 21 → Maven", "Spring 生態：Spring → Spring Boot → Spring Initializr → Spring Web／Spring Data JPA", "專案交付：Git → GitHub → .gitignore → Monorepo", "建置驗證：Jar → BUILD SUCCESS → Health Check"],
+    "u2": ["框架底座：Spring → Spring Boot → HTTP → Spring MVC", "請求分派：Front Controller → DispatcherServlet → Controller → Service", "API 契約：REST API → DTO → Bean Validation → ResponseEntity", "工程補充：IoC → DI → Stateless → CRUD → Sales Funnel → Lombok"],
+    "u3": ["資料基礎：SQL → PostgreSQL → DataSource", "環境與持久化：Docker → Docker Container → Docker Compose → Named Volume", "結構演進：Flyway → JPA → ORM → JPA Entity", "查詢與一致性：Query Method → Specification → ddl-auto → @Transactional → @Modifying → JPA Auditing → pgvector"],
+    "u4": ["框架底座：Spring → Spring Boot → HTTP → JSON", "安全鏈：Spring Security → Authentication / Authorization → JWT → Security Filter Chain", "錯誤與規格：HTTP Status Code → ProblemDetail → OpenAPI → Swagger UI → @RestControllerAdvice", "觀測補強：AOP → Spring Boot Actuator"],
+    "u5": ["語言與工具：JavaScript → Node.js → npm → Vite", "畫面組成：React → JSX → Functional Component → State", "前後端連線：Axios → Axios Interceptor → Vite Proxy → CORS", "開發體驗：Hot Reload → uiuxpromax"],
+    "u6": ["AI 呼叫底座：AI → API → Spring AI → ChatClient", "即時回應：SSE → EventSource", "可靠資料：Tool Calling → @Tool → ToolCallback", "模型與記憶：Groq → API Key → sessionId → MessageChatMemoryAdvisor", "通訊比較：WebSocket → Query Token"],
+    "u7": ["知識來源：AI → Document → RAG", "向量檢索：Embedding → ETL → pgvector → Vector Store → Metadata → Semantic Search", "擴充能力：MCP → MCP Server / Client → Skills → Fine-Tuning", "長期記憶：Async Write → Long-term Memory → Dual-path Retrieval"],
+    "u8": ["AI 執行：AI → LLM → GOAP → Blackboard", "可重現資料：Seed Data → Integration Checklist", "流程驗收：E2E Test → Playwright → Layered Testing", "上線品質：Similarity Threshold → Rate Limiting → Observability → Dashboard → Demo Day"],
+    "u9": ["網路模型：Network → Reverse Tunnel → Cloudflare Tunnel → Quick Tunnel／Named Tunnel → Port Forwarding", "容器部署：Docker → Dockerfile → Multi-stage Build → Docker Compose → nginx", "平台比較：CORS → Cloudflare Containers"],
+    "u10": ["容器交付：Docker → Image → Base Image → JRE", "建置效率：Layer Cache → .dockerignore → Build Context → Tag → docker history → CACHED"],
+    "u11": ["交付版本：Docker → Docker Image → Git → GitHub", "映像搬運：Registry → GHCR → Personal Access Token → save / load", "環境與回復：.env 注入 → APP_VERSION → Named Volume → Rollback → 映像／設定／資料三分離"],
+    "u12": ["容器到叢集：Docker → Docker Desktop → Kubernetes → Pod", "服務資源：Deployment → Service → Manifest → ConfigMap · Secret → kubectl", "可用性：PersistentVolumeClaim → Rolling Update → Self-healing → imagePullPolicy → Declarative Reconciliation"]
   },
   "appendix": {
     "terminology": [

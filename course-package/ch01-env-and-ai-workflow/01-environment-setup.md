@@ -1,10 +1,12 @@
 # 章節 1 單元 1｜環境準備
 
+> **播放順序｜請先播放 00 開場**：進入本單元前，先播放同目錄的 `00.mp4`（課程總覽、共用情境與影片／網站使用方式；約 4 分 26 秒），需要獨立音訊或字幕時使用 `00.mp3`、`00.srt`。播放完成後，再從本檔開始環境安裝。
+
 ## 單元定位
 
-本節要解決的問題：讓學員在課程一開始就把開發基線對齊——JDK 21、Maven 3.9+、Git、Node.js、Python 與 VS Code 全部裝好、驗證通過，避免後續章節被環境問題反覆打斷。這是整個課程的地基，也是第一次示範「把安裝工作交給 AI、自己只負責核對結果」的協作方式。
+本節要解決的問題：承接開場已說明的課程總覽與三家共用 AI CRM 情境，讓學員把開發基線對齊——JDK 21、Maven 3.9+、Git、Node.js、Python 與 VS Code 全部裝好、驗證通過，避免後續章節被環境問題反覆打斷。這是整個課程的地基，也是第一次示範「把安裝工作交給 AI、自己只負責核對結果」的協作方式。
 
-與前後節的銜接：本節是全課第一節；下一節（單元 2）會在這個已驗證的環境上，用 Spring Initializr 建立課程專案骨架。
+與前後節的銜接：本節承接非正式開場的課程總覽與共用情境；接著開始環境安裝。下一節（單元 2）會在這個已驗證的環境上，用 Spring Initializr 建立課程專案骨架。
 
 建議時長：25～35 分鐘（含實際安裝與驗證示範）。
 
@@ -19,12 +21,36 @@
 - **AI 助手** 適合做解釋、產生樣板、補測試與協助排錯
 - **Git** 是 AI Agent 開發工具的必要安裝；**Node.js 與 Python** 是 Skills 的必要腳本執行工具
 - **PowerShell 7+** 是本課程預設終端機環境
+- **IDE（Antigravity 或 VS Code 擇一）** 是唯一需要手動安裝的工具，其餘一律交給 AI Agent 安裝；**Java / Spring 擴充套件** 等 JDK 21 裝好後再裝
 
 只要 Java、Maven、VS Code 與 AI 協作方式一開始沒有對齊，後面所有章節都會被環境問題反覆打斷。這一節的目標，是讓你知道哪些工具是編輯器責任、哪些是執行環境責任，以及 AI 助手應該介入在哪一種工作。
 
+### 第一步：先手動安裝 IDE（Antigravity 或 VS Code 擇一）
+
+**為什麼這一步要自己動手？**
+
+本章後面所有工具（PowerShell 7、JDK 21、Maven、Git、Node.js、Python）都是「把提示詞貼給 AI Agent，讓它在終端機裡幫你安裝」。但在 AI Agent 本身還沒裝好之前，沒有人可以替你執行這些提示詞，所以 IDE 必須先由你手動完成。這是全課程唯一需要自己下載安裝檔的地方。
+
+**1. 安裝 IDE：Antigravity 或 VS Code 擇一，課程主要使用 Antigravity**
+
+兩者都是 VS Code 體系的編輯器，操作方式相同，只需要裝一個。課堂示範一律以 Antigravity 進行。
+
+- **選 Antigravity（建議）**：前往 [https://antigravity.google/](https://antigravity.google/) 下載並安裝 Antigravity IDE，以 Google 帳號登入。AI Agent 已內建，不必再裝其他東西
+- **選 VS Code**：前往 [https://code.visualstudio.com/](https://code.visualstudio.com/) 下載安裝，Windows 安裝時勾選「加入 PATH」與「以 Code 開啟」右鍵選單。VS Code 本身沒有 Agent，請再到擴充套件市集安裝 Claude Code 擴充套件並登入 Anthropic 帳號
+- 先不要裝 Java / Spring 擴充套件。它們要等 JDK 21 裝好之後再裝，才能一次抓到正確的 JDK，後面有專門一段說明
+
+**2. 確認 Agent 已就位**
+- 開啟任一空資料夾，在 Agent 對話框輸入「請執行 git --version 並告訴我結果」。看到它嘗試在終端機執行指令，就代表 Agent 已就位
+- 此時回報找不到 git 是正常的，下一段就會讓它自己安裝。終端機仍是舊版 Windows PowerShell 5.1 也沒關係，同樣交給下一段升級
+
+**3. 完成後你手上有什麼**
+- 一個 IDE：Antigravity 或 VS Code
+- 一個能替你執行指令的 AI Agent：Antigravity 內建，或 VS Code 中的 Claude Code
+- 接下來的每一項安裝，都只需要把下一段的提示詞貼給 Agent，然後核對它回報的驗證結果
+
 ### 需要安裝的工具
 
-本課程需要：PowerShell 7、JDK 21、Maven 3.9+、Git、Node.js（前端開發會用到，AI 也會用它撰寫自動化腳本）、Python（AI 會用它撰寫自動化腳本）與 VS Code（含 Java / Spring 擴充套件）。
+本課程需要：PowerShell 7、JDK 21、Maven 3.9+、Git、Node.js（前端開發會用到，AI 也會用它撰寫自動化腳本）、Python（AI 會用它撰寫自動化腳本）。IDE（Antigravity 或 VS Code）已在上一步手動裝好，以下工具全部交給 AI Agent 安裝；Java / Spring 擴充套件則等 JDK 裝好後再裝（見下一節）。
 
 **為什麼 Git、Node.js、Python 是必裝項目？**
 
@@ -37,12 +63,6 @@
 
 Windows 內建的 Windows PowerShell 只有 5.1 版，版本過舊——課程中的部分指令在 5.1 上會無法輸入或執行，錯誤訊息還會誤導排查方向。PowerShell 7 是跨平台的新版 shell，裝好後請一律用 `pwsh` 開啟，並把 VS Code 的預設終端機也改成 PowerShell 7。macOS 使用者可略過此項，直接使用內建終端機。
 
-**VS Code 必要擴充套件**
-
-- Extension Pack for Java
-- Spring Boot Extension Pack
-- 確認 Java 擴充套件已啟用內建 Lombok 支援
-
 **工具官方下載網址**（若不透過 AI Agent 或套件管理器安裝，也可直接前往官方網站下載安裝檔）
 
 - PowerShell 7：https://github.com/PowerShell/PowerShell/releases
@@ -53,6 +73,26 @@ Windows 內建的 Windows PowerShell 只有 5.1 版，版本過舊——課程�
 - Python 3：https://www.python.org/downloads/
 - VS Code：https://code.visualstudio.com/
 - Antigravity IDE：https://antigravity.google/
+
+### JDK 裝好之後：安裝 Java / Spring 擴充套件
+
+**為什麼要等 JDK 裝好才裝擴充套件？**
+
+Extension Pack for Java 啟動時會掃描系統的 JAVA_HOME 與 PATH 來決定專案使用的 JDK。JDK 21 先就位，擴充套件裝完就直接可用；反過來先裝套件，之後還得重開 IDE 讓它重新掃描，初學者常在這一步看到專案一片紅字就以為裝錯了。
+
+另外要知道：Java 擴充套件內建的 JRE 只用來啟動它自己的語言伺服器，**不會**替你的專案安裝 JDK。編譯與執行 Spring Boot 專案靠的是上一段由 AI 安裝並設定 JAVA_HOME 的 JDK 21，Maven 也依賴同一份設定。
+
+**安裝步驟**
+1. 確認上一段的 AI 安裝已完成，並且在新開的終端機執行 `java -version` 能看到 21
+2. 完全關閉再重新開啟 IDE（Antigravity 或 VS Code），讓它讀到新的 JAVA_HOME 與 PATH
+3. 開啟左側「擴充功能」面板（Ctrl + Shift + X），搜尋並安裝兩組擴充套件：**Extension Pack for Java** 與 **Spring Boot Extension Pack**
+4. 安裝後確認 Java 擴充套件已啟用內建 Lombok 支援
+
+**怎麼確認擴充套件抓到正確的 JDK**
+- 開啟命令面板（Ctrl + Shift + P）執行「Java: Configure Java Runtime」，Project JDKs 應列出 JDK 21 並標示為預設
+- 若列出的是其他版本或空白，代表 JAVA_HOME 沒設好或 IDE 沒重開，回上一段用 AI 重新檢查環境變數後再重開 IDE
+
+這兩組擴充套件會在後面建立 Spring Boot 專案時提供補全、導覽與除錯，是課程接下來每一章都會用到的基礎。
 
 ### 環境驗證命令
 
@@ -156,9 +196,31 @@ python --version   # 應顯示 Python 3.x.x
 我照驗證步驟做，但看到不對的結果（我會把畫面上的訊息貼給你）。常見原因是電腦上原本就裝了舊版本造成衝突。請依我貼的訊息判斷原因並幫我修正設定，讓工具都指向正確的新版本。
 ```
 
+## 逐步操作與驗收
+
+### 操作順序
+
+1. 開一個全新的 PowerShell 7 視窗，依序執行 `$PSVersionTable.PSVersion`、`java -version`、`mvn -version`、`git --version`、`node --version` 與 `python --version`；不要只截安裝程式畫面，要保留實際命令輸出。
+2. 看到 Maven 的輸出後，再確認其中的 `Java version` 是 21。若系統的 `java -version` 是 21、Maven 卻指向另一個 JDK，先記錄 `JAVA_HOME`、`Get-Command java`、`Get-Command mvn` 的結果，再處理 PATH 順序。
+3. 重新開啟 IDE（Antigravity 或 VS Code），在同一個終端機確認預設 shell 是 PowerShell 7，再安裝 Java、Spring Boot 與 YAML 語法支援；此時只驗證編輯體驗，不要先加入尚未用到的外掛。
+4. 把版本輸出貼給 AI，要求它只根據輸出判斷缺少的工具、版本不符與環境變數問題，並要求它列出每個判斷對應的證據。
+
+### 預期結果與證據
+
+- PowerShell 主版本至少為 7、Java 與 Maven 實際使用 Java 21；Git、Node.js、Python 皆能回應版本。
+- 交付 `environment-check.txt` 或終端機截圖，內容須含命令本身、完整輸出、執行日期與目前專案路徑。
+
+### 失敗分流
+
+- 出現「不是內部或外部命令」時，先用 `Get-Command <工具名> -All` 找實際路徑，再重新開終端機；不要直接把錯誤訊息刪掉。
+- PowerShell 仍是 5.1 時，啟動 `pwsh` 後重新執行全部檢查，並在報告中分開記錄兩個 shell 的結果。
+- JDK 與 Maven 不一致時，先修正 `JAVA_HOME` 或 PATH，再重跑 Maven；環境尚未一致前不得宣稱專案可建置。
+
 ## 口語稿
 
-好，剛才我們講完這門課怎麼上——影片帶你走一遍，網站讓你查一輩子，指令跟提示詞都不用抄。那我們現在正式開始第一節課。在我們寫下任何一行程式之前，我想先問你一個問題：你有沒有過這種經驗——興沖沖地想學一個新框架，結果光是裝環境就卡了一個晚上？Java 版本不對、環境變數沒設好、終端機說「不是內部或外部命令」，最後熱情就在這些訊息裡被磨光了。我帶課這麼多年，看過太多人不是被程式打敗，而是被環境打敗的。
+好，剛才的 00 開場影片已經先把整門課的路線、AI CRM 的三家共用客戶，以及影片和網站的分工講清楚了。現在我們正式進入第一個實作單元，開始準備環境。
+
+那我們現在正式開始第一節課。在我們寫下任何一行程式之前，我想先問你一個問題：你有沒有過這種經驗——興沖沖地想學一個新框架，結果光是裝環境就卡了一個晚上？Java 版本不對、環境變數沒設好、終端機說「不是內部或外部命令」，最後熱情就在這些訊息裡被磨光了。我帶課這麼多年，看過太多人不是被程式打敗，而是被環境打敗的。
 
 所以第一節課，我們不急著寫程式，我們先把地基打穩。這一節的重點只有一個觀念，叫做「對齊工具責任」。什麼意思？就是你要很清楚地知道：VS Code 負責的是編輯、導覽、除錯跟擴充整合；Java 跟 Maven 負責的是專案的編譯、依賴下載跟執行；而 AI 助手呢，它適合做解釋、產生樣板程式、補測試、還有幫你排錯。這三塊責任一開始就分清楚，後面兩天的課程才不會一直被環境問題打斷。另外提醒一下，本課程預設的終端機環境是 PowerShell 7+，我的示範機器是 Windows 11，如果你用 Mac 也沒關係，等一下你會看到，我們的提示詞會請 AI 自己換成對應的做法。
 
