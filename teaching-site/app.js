@@ -522,52 +522,57 @@ function svgEtlPipeline() {
  */
 function conceptVisual(heading) {
   if (!heading) return "";
-  /** 觀念標題 → PNG 檔名對應表（原行內 SVG 已轉為 PNG，可陸續替換為新圖） */
+  /** 觀念標題 → WebP 檔名對應表（保留可下載的教學圖片） */
   const conceptImageMap = {
     /* ── 既有技術概念圖 ── */
-    "環境準備重點": "concept-environment-prep.png",
-    "Spring MVC 的核心：請求如何流動": "concept-spring-mvc-flow.png",
-    "Spring MVC 核心架構": "concept-spring-mvc-flow.png",
-    "什麼是 REST API": "concept-rest-api.png",
-    "JPA 解決了什麼問題": "concept-jpa-mapping.png",
-    "JPA 核心概念與 Entity 設計": "concept-jpa-mapping.png",
-    "Flyway 的角色": "concept-flyway-strategy.png",
-    "AOP 概念圖解": "concept-aop.png",
-    "AOP 解決了什麼問題": "concept-aop.png",
-    "後端安全設定範例 (SecurityConfig.java)": "concept-security-chain.png",
-    "安全防護重點": "concept-security-chain.png",
-    "JWT 是什麼？三段式結構與無狀態認證": "concept-jwt-structure.png",
-    "開發端代理與後端 API 串接 (Vite Proxy)": "concept-vite-proxy.png",
-    "串流輸出為什麼重要": "concept-sse-stream.png",
-    "為什麼選擇 SSE (Server-Sent Events)": "concept-sse-stream.png",
-    "GOAP規劃": "concept-agent-goap.png",
-    "Embabel 智慧 Agent、GOAP 演算法與 Blackboard 機制": "concept-agent-goap.png",
-    "RAG 的基本想法": "rag_flow.png",
-    "RAG 核心概念": "rag_flow.png",
-    "ETL 三步驟：文件到向量庫": "etl_pipeline.png",
+    "環境準備重點": "concept-environment-prep.webp",
+    "Spring MVC 的核心：請求如何流動": "concept-spring-mvc-flow.webp",
+    "Spring MVC 核心架構": "concept-spring-mvc-flow.webp",
+    "什麼是 REST API": "concept-rest-api.webp",
+    "JPA 解決了什麼問題": "concept-jpa-mapping.webp",
+    "JPA 核心概念與 Entity 設計": "concept-jpa-mapping.webp",
+    "Flyway 的角色": "concept-flyway-strategy.webp",
+    "AOP 概念圖解": "concept-aop.webp",
+    "AOP 解決了什麼問題": "concept-aop.webp",
+    "後端安全設定範例 (SecurityConfig.java)": "concept-security-chain.webp",
+    "安全防護重點": "concept-security-chain.webp",
+    "JWT 是什麼？三段式結構與無狀態認證": "concept-jwt-structure.webp",
+    "開發端代理與後端 API 串接 (Vite Proxy)": "concept-vite-proxy.webp",
+    "串流輸出為什麼重要": "concept-sse-stream.webp",
+    "為什麼選擇 SSE (Server-Sent Events)": "concept-sse-stream.webp",
+    "RAG 的基本想法": "rag_flow.webp",
+    "RAG 核心概念": "rag_flow.webp",
+    "ETL 三步驟：文件到向量庫": "etl_pipeline.webp",
 
     /* ── AI CRM 情境圖（每章 1 張） ── */
-    "為什麼選 CRM 作為實作題目": "crm-u1-why-crm.png",
-    "CRM Domain Model 設計思維": "crm-u2-domain-model.png",
-    "CRM 資料模型如何對應 JPA Entity": "crm-u3-data-model.png",
-    "CRM 角色與權限模型": "crm-u4-security.png",
-    "CRM 工作台 UI 設計思維": "crm-u5-frontend.png",
-    "AI CRM 助理的商業價值": "crm-u6-ai-value.png",
-    "CRM 知識庫設計：哪些文件該向量化": "crm-u7-knowledge.png",
+    "為什麼選 CRM 作為實作題目": "crm-u1-why-crm.webp",
+    "CRM Domain Model 設計思維": "crm-u2-domain-model.webp",
+    "CRM 資料模型如何對應 JPA Entity": "crm-u3-data-model.webp",
+    "CRM 角色與權限模型": "crm-u4-security.webp",
+    "CRM 工作台 UI 設計思維": "crm-u5-frontend.webp",
+    "AI CRM 助理的商業價值": "crm-u6-ai-value.webp",
+    "CRM 知識庫設計：哪些文件該向量化": "crm-u7-knowledge.webp",
 
     /* ── 新增技術資訊圖表 ── */
-    "輸入驗證：為什麼不能信任前端傳來的資料": "concept-bean-validation.png",
-    "Controller / Service 怎麼分工": "concept-controller-service.png",
-    "為什麼資料庫要容器化": "concept-docker-postgres.png",
-    "@Transactional 核心規則": "concept-transactional.png",
-    "為什麼需要動態查詢": "concept-specification.png",
-    "為什麼需要 API 文件": "concept-openapi.png",
-    "統一錯誤回應設計": "concept-global-exception.png",
-    "ChatClient 核心概念": "concept-chatclient.png",
-    "工具呼叫核心概念": "concept-tool-calling.png",
-    "MCP 核心概念": "concept-mcp.png",
-    "為什麼需要對話歷史 RAG": "concept-conversation-memory.png",
+    "輸入驗證：為什麼不能信任前端傳來的資料": "concept-bean-validation.webp",
+    "Controller / Service 怎麼分工": "concept-controller-service.webp",
+    "為什麼資料庫要容器化": "concept-docker-postgres.webp",
+    "@Transactional 核心規則": "concept-transactional.webp",
+    "為什麼需要動態查詢": "concept-specification.webp",
+    "為什麼需要 API 文件": "concept-openapi.webp",
+    "統一錯誤回應設計": "concept-global-exception.webp",
+    "ChatClient 核心概念": "concept-chatclient.webp",
+    "工具呼叫核心概念": "concept-tool-calling.webp",
+    "MCP 核心概念": "concept-mcp.webp",
+    "為什麼需要對話歷史 RAG": "concept-conversation-memory.webp",
   };
+  /** GOAP 圖解沿用原本的 inline SVG，避免依賴不存在的額外光柵檔案。 */
+  const inlineVisualMap = {
+    "GOAP規劃": svgAgentGoap,
+    "Embabel 智慧 Agent、GOAP 演算法與 Blackboard 機制": svgAgentGoap
+  };
+  const inlineVisual = inlineVisualMap[heading.trim()];
+  if (inlineVisual) return inlineVisual();
   const filename = conceptImageMap[heading.trim()];
   if (!filename) return "";
   return `<img src="assets/illustrations/${filename}" class="concept-svg-illustration" alt="${heading}"/>`;
@@ -581,7 +586,7 @@ function conceptVisual(heading) {
 function renderHero(meta) {
   const techPills = ["Spring Boot 4", "React 19 + Vite", "Spring AI 2.0", "pgvector RAG", "MCP", "Demo Day"];
   return `<div class="hero-band"><section class="hero" id="top">
-    <div class="hero-media"><img src="assets/illustrations/cover.png" alt="AI CRM 課程全幅主視覺"/></div>
+    <div class="hero-media"><img src="assets/illustrations/cover.webp" alt="AI CRM 課程全幅主視覺"/></div>
     <div class="hero-overlay"><div class="hero-copy">
       <span class="eyebrow">${esc(meta.program)}</span>
       <h2>${esc(meta.title)}</h2>
@@ -642,13 +647,13 @@ function renderSharedCase(sharedCase) {
   if (!sharedCase) return "";
   /** 品牌 ID 與企業示意圖檔名的對應表 */
   const brandImageMap = {
-    brand1: "brand-apim.png",
-    brand2: "brand-globalmart.png",
-    brand3: "brand-apexfin.png"
+    brand1: "brand-apim.webp",
+    brand2: "brand-globalmart.webp",
+    brand3: "brand-apexfin.webp"
   };
   const brands = sharedCase.brands.map((brand) => {
     const rows = brand.rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${inlineMarkdown(v)}</td></tr>`).join("");
-    const brandImg = brandImageMap[brand.id] || "office.png";
+    const brandImg = brandImageMap[brand.id] || "office.webp";
     return `<article class="brand-card brand-card-split"><div class="brand-card-info"><small>${esc(brand.type)}</small><h4>${esc(brand.name)}</h4><table class="data-table"><tbody>${rows}</tbody></table></div><div class="brand-card-media"><img src="assets/illustrations/${brandImg}" alt="${esc(brand.name)} 企業示意圖"/></div></article>`;
   }).join("");
   const roles = sharedCase.roles.map(([name, brand, role, desc]) =>

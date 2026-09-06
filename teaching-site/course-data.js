@@ -8,8 +8,8 @@ window.COURSE = {
     "audience": "具備 Java 基礎，想建立全端 AI 應用之開發人員、後端工程師或全端工程師。",
     "totalHours": 32,
     "projectName": "AI CRM 智慧業務助理",
-    "heroImage": "cover.png",
-    "overviewImage": "office.png",
+    "heroImage": "cover.webp",
+    "overviewImage": "office.webp",
     "prerequisites": [
       "具備 Java 基礎語法與基本物件導向開發觀念",
       "具備基本 HTML/CSS/JavaScript 與前端框架概念",
@@ -303,19 +303,19 @@ window.COURSE = {
         ],
         "illustrations": [
           {
-            "name": "u1-1.png",
+            "name": "u1-1.webp",
             "kind": "hero",
             "alt": "Full-stack Monorepo",
             "spec": "Windows + Spring Boot + React 啟動骨架"
           },
           {
-            "name": "u1-2.png",
+            "name": "u1-2.webp",
             "kind": "diagram",
             "alt": "專案啟動路線",
             "spec": "流程圖：環境檢查 -> 後端骨架 -> 前端骨架 -> 連線驗證"
           },
           {
-            "name": "u1-3-term.png",
+            "name": "u1-3-term.webp",
             "kind": "term",
             "alt": "開發環境、專案骨架與 AI 協作流程 專業術語解釋",
             "spec": "Monorepo / Health Check / PowerShell / Zsh"
@@ -420,19 +420,19 @@ window.COURSE = {
         ],
         "illustrations": [
           {
-            "name": "u2-1.png",
+            "name": "u2-1.webp",
             "kind": "hero",
             "alt": "Spring MVC Domain API",
             "spec": "Controller / Service / DTO 邊界"
           },
           {
-            "name": "u2-2.png",
+            "name": "u2-2.webp",
             "kind": "diagram",
             "alt": "MVC 請求生命週期",
             "spec": "流程圖：HTTP Request -> Controller -> Service -> Response DTO"
           },
           {
-            "name": "u2-3-term.png",
+            "name": "u2-3-term.webp",
             "kind": "term",
             "alt": "Spring MVC、REST API 與 CRM Domain Modeling 專業術語解釋",
             "spec": "DispatcherServlet / DTO / Bean Validation"
@@ -589,19 +589,19 @@ window.COURSE = {
         ],
         "illustrations": [
           {
-            "name": "u3-1.png",
+            "name": "u3-1.webp",
             "kind": "hero",
             "alt": "PostgreSQL + JPA",
             "spec": "Flyway migration 與動態查詢"
           },
           {
-            "name": "u3-2.png",
+            "name": "u3-2.webp",
             "kind": "diagram",
             "alt": "資料持久化與搜尋",
             "spec": "流程圖：Migration -> Entity Mapping -> Repository -> Specification"
           },
           {
-            "name": "u3-3-term.png",
+            "name": "u3-3-term.webp",
             "kind": "term",
             "alt": "PostgreSQL、Flyway、JPA 與動態查詢 專業術語解釋",
             "spec": "Flyway / JPA Entity / Specification"
@@ -795,19 +795,19 @@ window.COURSE = {
         ],
         "illustrations": [
           {
-            "name": "u4-1.png",
+            "name": "u4-1.webp",
             "kind": "hero",
             "alt": "JWT Security Boundary",
             "spec": "登入、角色、OpenAPI 與 ProblemDetail"
           },
           {
-            "name": "u4-2.png",
+            "name": "u4-2.webp",
             "kind": "diagram",
             "alt": "安全請求管線",
             "spec": "流程圖：Login -> Token -> Filter Chain -> Protected API"
           },
           {
-            "name": "u4-3-term.png",
+            "name": "u4-3-term.webp",
             "kind": "term",
             "alt": "Spring Security、JWT、OpenAPI 與企業級錯誤處理 專業術語解釋",
             "spec": "JWT / Security Filter / ProblemDetail"
@@ -908,19 +908,19 @@ window.COURSE = {
         ],
         "illustrations": [
           {
-            "name": "u5-1.png",
+            "name": "u5-1.webp",
             "kind": "hero",
             "alt": "React CRM Workspace",
             "spec": "Dashboard、列表、看板與 API Client"
           },
           {
-            "name": "u5-2.png",
+            "name": "u5-2.webp",
             "kind": "diagram",
             "alt": "前端整合架構",
             "spec": "流程圖：Login UI -> API Client -> Dashboard -> Kanban"
           },
           {
-            "name": "u5-3-term.png",
+            "name": "u5-3-term.webp",
             "kind": "term",
             "alt": "React CRM 工作台與前後端整合 專業術語解釋",
             "spec": "Axios Interceptor / Skeleton State / Role-based UI"
@@ -1091,19 +1091,19 @@ window.COURSE = {
         ],
         "illustrations": [
           {
-            "name": "u6-1.png",
+            "name": "u6-1.webp",
             "kind": "hero",
             "alt": "Spring AI Streaming",
             "spec": "ChatClient、SSE 與 Tool Calling"
           },
           {
-            "name": "u6-2.png",
+            "name": "u6-2.webp",
             "kind": "diagram",
             "alt": "AI 助理資料調用",
             "spec": "流程圖：User Prompt -> ChatClient -> Tool Call -> Streaming UI"
           },
           {
-            "name": "u6-3-term.png",
+            "name": "u6-3-term.webp",
             "kind": "term",
             "alt": "Spring AI ChatClient、SSE 與 tool calling 專業術語解釋",
             "spec": "SSE / ChatClient / Tool Calling"
@@ -1244,19 +1244,19 @@ window.COURSE = {
         ],
         "illustrations": [
           {
-            "name": "u7-1.png",
+            "name": "u7-1.webp",
             "kind": "hero",
             "alt": "RAG + MCP Extension",
             "spec": "pgvector 知識庫與外部工具協定"
           },
           {
-            "name": "u7-2.png",
+            "name": "u7-2.webp",
             "kind": "diagram",
             "alt": "檢索增強生成管線",
             "spec": "流程圖：Chunk -> Embedding -> pgvector -> Citation"
           },
           {
-            "name": "u7-3-term.png",
+            "name": "u7-3-term.webp",
             "kind": "term",
             "alt": "RAG、pgvector、MCP 與知識庫擴充 專業術語解釋",
             "spec": "Embedding / RAG / MCP"
@@ -1338,19 +1338,19 @@ window.COURSE = {
         "materials": [],
         "illustrations": [
           {
-            "name": "u8-1.png",
+            "name": "u8-1.webp",
             "kind": "hero",
             "alt": "結訓專案整合與 Demo Day",
             "spec": "全端整合、測試策略與展示驗收"
           },
           {
-            "name": "u8-2.png",
+            "name": "u8-2.webp",
             "kind": "diagram",
             "alt": "端到端測試流程",
             "spec": "流程圖：登入 -> 客戶管理 -> AI 對話 -> RAG 查詢 -> 驗收"
           },
           {
-            "name": "u8-3-term.png",
+            "name": "u8-3-term.webp",
             "kind": "term",
             "alt": "結訓專案衝刺與 Demo Day 驗收 專業術語解釋",
             "spec": "E2E Testing / Checklist / Demo Day"

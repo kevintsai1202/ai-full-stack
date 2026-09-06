@@ -12,7 +12,7 @@ for (const l of lines) {
   if (l.includes("conceptImageMap")) { inMap = true; continue; }
   if (inMap && l.trim() === "};") break;
   if (inMap) {
-    const m = l.match(/:\s*"([^"]+\.png)"/);
+    const m = l.match(/:\s*"([^"]+\.(?:png|webp))"/);
     if (m) imgs.push(m[1]);
   }
 }

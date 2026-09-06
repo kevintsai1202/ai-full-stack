@@ -14,7 +14,7 @@ const outName = process.argv[3] || `${anchor}-capture.png`; // 輸出截圖檔�
 
 /** 極簡靜態檔案伺服器：只服務 teaching-site 目錄下的檔案 */
 function createServer() {
-  const mime = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png" };
+  const mime = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".webp": "image/webp" };
   return http.createServer(async (req, res) => {
     const urlPath = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
     const filePath = path.join(root, urlPath === "/" ? "index.html" : urlPath);

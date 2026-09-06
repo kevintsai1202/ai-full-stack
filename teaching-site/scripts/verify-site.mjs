@@ -39,7 +39,7 @@ async function main() {
     "styles.css",
     "course-data.js",
     "app.js",
-    "assets/illustrations/cover.png",
+    "assets/illustrations/cover.webp",
     "assets/illustrations/cover.svg"
   ];
 
