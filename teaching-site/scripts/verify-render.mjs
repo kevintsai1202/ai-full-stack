@@ -88,9 +88,37 @@ async function verifyProfile(browser, profile) {
   const title = await page.locator("#courseTitle").innerText();
   assert.match(title, /AI 賦能全端開發/, `${profile.id}: 課程標題未正確渲染`);
 
-  // 2. 驗證單元數量：8 個核心單元 + 1 個上線實戰延伸單元（u9）
+  // 2. 驗證單元數量：8 個核心單元 + 1 個上線實戰延伸單元（u9）+ 3 個延伸部署單元（u10~u12）
   const unitCount = await page.locator(".unit").count();
-  assert.equal(unitCount, 9, `${profile.id}: 渲染的單元數量錯誤 (預期為 9)`);
+  assert.equal(unitCount, 12, `${profile.id}: 渲染的單元數量錯誤 (預期為 12)`);
+
+  // 每個單元開頭都必須先呈現情境文字與對應圖片，讓學生先理解技術用途。
+  const scenarioCount = await page.locator(".unit-scenario").count();
+  assert.equal(scenarioCount, unitCount, `${profile.id}: 情境區未覆蓋所有單元`);
+  const scenarioImageCount = await page.locator(".unit-scenario img").count();
+  assert.equal(scenarioImageCount, unitCount, `${profile.id}: 情境圖片未覆蓋所有單元`);
+  const scenarioDescriptionCount = await page.locator(".unit-scenario-description").count();
+  assert.equal(scenarioDescriptionCount, unitCount, `${profile.id}: 情境說明未覆蓋所有單元`);
+  const scenarioBlocks = page.locator(".unit-scenario");
+  for (let i = 0; i < unitCount; i++) {
+    assert.ok(await scenarioBlocks.nth(i).locator(".unit-scenario-example").count() >= 2, `${profile.id}: 第 ${i + 1} 個情境缺少具體案例`);
+    assert.ok(await scenarioBlocks.nth(i).locator(".unit-scenario-technology-item").count() >= 2, `${profile.id}: 第 ${i + 1} 個情境缺少技術角色說明`);
+  }
+
+  // 每個小節都必須實際渲染名詞解釋區，避免資料存在但畫面沒有呈現。
+  const glossaryCount = await page.locator(".glossary-accordion").count();
+  assert.equal(glossaryCount, unitCount, `${profile.id}: 名詞解釋區數量未覆蓋所有單元`);
+  const glossaryPathCount = await page.locator(".glossary-learning-path").count();
+  assert.equal(glossaryPathCount, unitCount, `${profile.id}: 名詞學習路徑未覆蓋所有單元`);
+  // 名詞標題後直接呈現解釋內容，不再插入額外的意義標籤。
+  const glossaryMeaningLabels = await page.locator(".glossary-meaning strong").count();
+  assert.equal(glossaryMeaningLabels, 0, `${profile.id}: 名詞解釋不應插入額外標籤`);
+
+  // 課程開場影片必須真的出現在頁面上，並帶有可播放的來源與封面。
+  const video = page.locator(".course-video").first();
+  assert.equal(await video.count(), 1, `${profile.id}: 課程影片未渲染`);
+  assert.match(await video.getAttribute("poster"), /cover\.webp$/, `${profile.id}: 課程影片缺少封面`);
+  assert.match(await video.locator("source").getAttribute("src"), /00-course-orientation\.mp4$/, `${profile.id}: 課程影片來源錯誤`);
 
   // 3. 驗證所有頁面上的圖片皆加載成功 (寬度大於 0 且載入完成)
   const images = await page.locator("img");
@@ -109,8 +137,11 @@ async function verifyProfile(browser, profile) {
 
   // 5. 驗證搜尋功能 (搜尋 Embabel 應至少有一個單元符合)
   await page.locator("#searchInput").fill("Embabel");
-  const filteredUnits = await page.locator(".unit").count();
+  // 只計算未被搜尋隱藏的單元，避免隱藏卡片仍留在 DOM 時讓斷言空泛通過
+  const filteredUnits = await page.locator(".unit:not(.hidden-by-search)").count();
   assert.equal(filteredUnits >= 1, true, `${profile.id}: 搜尋 Embabel 沒有找到任何結果`);
+  // 搜尋時應在第一屏顯示搜尋摘要，讓使用者知道搜尋有作用
+  assert.equal(await page.locator("#searchSummary").count(), 1, `${profile.id}: 搜尋時未顯示搜尋摘要`);
   await page.locator("#searchInput").fill("");
 
   // 6. 驗證學習進度勾選是否成功保存至 localStorage (Reload 後應仍勾選)
@@ -119,6 +150,16 @@ async function verifyProfile(browser, profile) {
   await page.waitForSelector(".unit", { timeout: 10000 });
   const done = await page.locator(".check.done").first().count();
   assert.equal(done > 0, true, `${profile.id}: 進度勾選狀態在重新整理後丟失`);
+
+  // 6b. 驗證頂列收合（☰）：收合後搜尋框與「選單」按鈕不可見，reload 後狀態保留，再點一次還原
+  await page.locator("#topbarToggle").click();
+  assert.equal(await page.locator("#searchInput").isVisible(), false, `${profile.id}: 頂列收合後搜尋框仍可見`);
+  assert.equal(await page.locator("#sidebar-restore").isVisible(), false, `${profile.id}: 頂列收合後「選單」按鈕仍可見`);
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForSelector("#topbarToggle", { timeout: 10000 });
+  assert.equal(await page.locator("#searchInput").isVisible(), false, `${profile.id}: 頂列收合狀態在重新整理後丟失`);
+  await page.locator("#topbarToggle").click();
+  assert.equal(await page.locator("#searchInput").isVisible(), true, `${profile.id}: 頂列展開後搜尋框未還原`);
 
   // 7. 驗證複製提示詞按鈕的功能 (複製成功後文字應變更為「已複製」)
   await page.locator("[data-action='copy-prompt']").first().click();

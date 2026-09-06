@@ -62,6 +62,8 @@ function patchState(patch) {
 function applyTheme() {
   document.documentElement.setAttribute("data-theme", state.theme || "light");
   document.body.classList.toggle("sidebar-hidden", !!state.sidebarHidden);
+  // 頂列收合：只留 ☰ 按鈕，其餘頂列工具與「選單」按鈕隱藏（上課投影時避免遮擋）
+  document.body.classList.toggle("topbar-collapsed", !!state.topBarCollapsed);
 }
 
 /* ──────────────────────────────────────────────
@@ -605,13 +607,46 @@ function renderOverview(meta) {
   return `<section class="section glass-card" id="overview">
     <div class="section-header"><h3>課程總覽</h3><p>這門課不是零散技術拼盤，而是讓每個單元都接續前一個產出，最後完成可登入、可查資料、可引用知識庫、可追蹤 agent 決策的 AI CRM。</p></div>
     <div class="overview-lead"><h4>四天的主線是一套產品逐步長出來的路徑。</h4><p>前半段先把 Spring Boot、REST、JPA、Flyway、Security 與 React 工作台打穩；後半段把 Spring AI、SSE、tool calling、RAG 與 MCP 接回同一套 CRM domain，最後整合為結訓專案。每個章節都有明確產出與驗收方式。</p>
-      <div class="pill-row overview-pills">${meta.days.map((d) => `<span class="pill">${esc(d.date)} / ${d.hours}h</span>`).join("")}</div>
+      <div class="pill-row overview-pills">${meta.days.map((d) => `<span class="pill">${esc(d.date)}${d.hours ? ` / ${d.hours}h` : ""}</span>`).join("")}</div>
     </div>
     <div class="stat-grid">
       <article class="stat-card"><small>課程形式</small><strong>${esc(meta.format)}</strong><p>${esc(meta.location)}</p></article>
       <article class="stat-card"><small>授課時數</small><strong>${hours} 小時</strong><p>可拆成四天工作坊或線上章節節奏。</p></article>
       <article class="stat-card"><small>結訓專案</small><strong>AI CRM 智慧業務助理</strong><p>從登入、客戶資料、AI 聊天到 agent trace 完整跑通。</p></article>
       <article class="stat-card"><small>驗收方式</small><strong>本機 verify + 作業提交</strong><p>${esc(meta.completion[0])}</p></article>
+    </div>
+  </section>`;
+}
+
+/**
+ * 渲染課程開場影片，讓學員可直接在網站觀看課程路線與使用方式。
+ * @param {object} course 課程資料
+ * @returns {string} 影片區塊 HTML
+ */
+function renderCourseVideo(course) {
+  const video = course.courseVideo;
+  if (!video?.src) return "";
+
+  const topics = (video.topics || []).map((topic) => `<li>${esc(topic)}</li>`).join("");
+  return `<section class="section glass-card course-video-section" id="course-video">
+    <div class="section-header">
+      <h3>${esc(video.title || "課程影片")}</h3>
+      <p>${esc(video.description || "")}</p>
+    </div>
+    <div class="course-video-layout">
+      <div class="course-video-frame">
+        <video class="course-video" controls preload="none" poster="${esc(video.poster || "")}" aria-label="${esc(video.title || "課程影片")}">
+          <source src="${esc(video.src)}" type="video/mp4" />
+          你的瀏覽器不支援 HTML5 影片，請改用下方連結開啟影片
+        </video>
+        <div class="course-video-caption">${esc(video.duration || "可重複觀看")}</div>
+      </div>
+      <aside class="course-video-outline">
+        <span class="course-video-kicker">影片內容</span>
+        <h4>看完這支影片，你會知道</h4>
+        <ul>${topics}</ul>
+        <a class="course-video-fallback" href="${esc(video.src)}" target="_blank" rel="noopener">在新分頁開啟影片</a>
+      </aside>
     </div>
   </section>`;
 }
@@ -799,6 +834,59 @@ function renderConceptAccordion(unit) {
   return techHtml + crmHtml;
 }
 
+/** 依課程設定的學習路徑排列名詞，確保學生先看到基礎概念。 */
+function getOrderedGlossary(unit) {
+  const glossary = window.COURSE?.glossary?.[unit.id] || [];
+  const learningOrder = window.COURSE?.glossaryLearningOrder?.[unit.id];
+  if (!Array.isArray(learningOrder) || !learningOrder.length) return glossary;
+
+  const orderIndexes = new Map(learningOrder.map((term, index) => [term, index]));
+  return [...glossary].sort((left, right) => {
+    const leftIndex = orderIndexes.get(left.term) ?? Number.MAX_SAFE_INTEGER;
+    const rightIndex = orderIndexes.get(right.term) ?? Number.MAX_SAFE_INTEGER;
+    return leftIndex - rightIndex;
+  });
+}
+
+/** 渲染本章由基礎到進階的名詞閱讀路徑。 */
+function renderGlossaryLearningPaths(unit) {
+  const paths = window.COURSE?.glossaryLearningPaths?.[unit.id] || [];
+  if (!Array.isArray(paths) || !paths.length) return "";
+
+  return `<div class="glossary-learning-path">
+    <strong>本章閱讀路徑</strong>
+    <div class="glossary-learning-path-list">${paths.map((path) => `<span>${esc(path)}</span>`).join("")}</div>
+  </div>`;
+}
+
+/**
+ * 渲染單元的名詞解釋區，直接呈現專有名詞的定義與使用情境。
+ * @param {object} unit 課程單元資料
+ * @returns {string} 名詞解釋 HTML
+ */
+function renderGlossaryAccordion(unit) {
+  const glossary = getOrderedGlossary(unit);
+  if (!glossary.length) return "";
+  const learningPathsHtml = renderGlossaryLearningPaths(unit);
+
+  const cards = glossary.map((item) => `
+    <article class="glossary-card">
+      <h5 class="glossary-term">${esc(item.term)}</h5>
+      ${Array.isArray(item.prerequisites) && item.prerequisites.length ? `<p class="glossary-prerequisites"><strong>建議先理解</strong><span>${item.prerequisites.map((term) => esc(term)).join("、")}</span></p>` : ""}
+      <p class="glossary-meaning">${inlineMarkdown(item.meaning)}</p>
+      <p class="glossary-example"><strong>在本節怎麼用</strong>${inlineMarkdown(item.example)}</p>
+    </article>`).join("");
+
+  return `<details class="accordion-item glossary-accordion"${accordionOpen ? " open" : ""}>
+    <summary class="accordion-summary">名詞解釋：掌握本節術語</summary>
+    <div class="accordion-body">
+      <p class="glossary-intro">名詞會按照「基礎概念 → 工具 → 進階用法」排列；卡片標示「建議先理解」時，先讀前面的相關名詞，再回來看目前這個詞，會比較容易連起來。</p>
+      ${learningPathsHtml}
+      <div class="glossary-grid">${cards}</div>
+    </div>
+  </details>`;
+}
+
 /** 可複製的 AI 協作提示詞；kind 控制徽章樣式（build/verify/fix） */
 function renderPromptBox(title, note, text, key, kind) {
   const cls = kind === "verify" ? " is-verify" : (kind === "fix" ? " is-fix" : "");
@@ -878,6 +966,64 @@ function renderIllustrations(unit) {
   ).join("")}</div>`;
 }
 
+/** 目前是否處於搜尋模式（搜尋框有非空白內容） */
+function isSearching() {
+  return searchQuery.trim() !== "";
+}
+
+/**
+ * 判斷單元是否符合目前搜尋關鍵字。
+ * 比對範圍：標題、副標、心法、提示詞、情境敘述與名詞解釋。
+ * 回傳 searchText（供 data-search 屬性使用）與 matches（是否符合；未搜尋時一律為 true）。
+ */
+function matchUnitSearch(unit, platform) {
+  const titleText = translatePlatformText(unit.title, platform);
+  const subtitleText = translatePlatformText(unit.subtitle || unit.principle, platform);
+  const glossarySearchText = (window.COURSE?.glossary?.[unit.id] || [])
+    .map((item) => `${item.term} ${(item.prerequisites || []).join(" ")} ${item.meaning} ${item.example}`)
+    .join(" ");
+  const scenarioSearchText = unit.scenario
+    ? `${unit.scenario.title || ""} ${unit.scenario.description || ""} ${(unit.scenario.examples || []).map((item) => `${item.title || ""} ${item.description || ""}`).join(" ")} ${(unit.scenario.technologyRoles || []).map((item) => `${item.name || ""} ${item.role || ""}`).join(" ")}`
+    : "";
+  // 教材名稱與說明也納入比對（例如「Embabel」只出現在選修教材中）
+  const materialsSearchText = (unit.materials || []).map((item) => `${item.name || ""} ${item.desc || ""}`).join(" ");
+  const searchText = `${titleText} ${subtitleText} ${unit.prompt || ""} ${scenarioSearchText} ${glossarySearchText} ${materialsSearchText}`.toLowerCase();
+  const matches = !isSearching() || `${searchText} ${unit.principle || ""}`.toLowerCase().includes(searchQuery.trim().toLowerCase());
+  return { searchText, matches };
+}
+
+/** 取得符合目前搜尋的所有單元（含所屬日程） */
+function getMatchedUnits(course) {
+  const platform = state.platform || "windows";
+  return getAllUnits(course).filter(({ unit }) => matchUnitSearch(unit, platform).matches);
+}
+
+/**
+ * 搜尋結果摘要：搜尋時顯示於內容區最上方，讓使用者不必捲動就能看到搜尋有作用。
+ * 有結果時列出可點擊的單元連結；無結果時顯示提示與清除按鈕。
+ */
+function renderSearchSummary(course) {
+  if (!isSearching()) return "";
+  const matched = getMatchedUnits(course);
+  const platform = state.platform || "windows";
+  const keyword = esc(searchQuery.trim());
+  if (!matched.length) {
+    return `<section class="search-summary glass-card" id="searchSummary" aria-live="polite">
+      <p><strong>找不到符合「${keyword}」的單元</strong></p>
+      <p class="search-summary-hint">試試其他關鍵字，例如技術名稱（JWT、pgvector）、單元主題或 AI 提示詞內容。</p>
+      <button class="top-action-button" type="button" data-action="clear-search">清除搜尋</button>
+    </section>`;
+  }
+  const links = matched
+    .map(({ day, unit }) => `<a class="search-summary-link" href="#${esc(`${day.id}-${unit.id}`)}">${esc(translatePlatformText(unit.title, platform))}</a>`)
+    .join("");
+  return `<section class="search-summary glass-card" id="searchSummary" aria-live="polite">
+    <p><strong>找到 ${matched.length} 個符合「${keyword}」的單元</strong>，其餘內容已暫時隱藏。</p>
+    <div class="search-summary-links">${links}</div>
+    <button class="top-action-button" type="button" data-action="clear-search">清除搜尋</button>
+  </section>`;
+}
+
 /** 單一課程單元卡片 */
 function renderUnitCard(day, unit, index, taskState, platform) {
   const unitId = `${day.id}-${unit.id}`;
@@ -885,8 +1031,8 @@ function renderUnitCard(day, unit, index, taskState, platform) {
   const done = (unit.tasks || []).filter((t) => taskState[t.id]).length;
   const titleText = translatePlatformText(unit.title, platform);
   const subtitleText = translatePlatformText(unit.subtitle || unit.principle, platform);
-  const searchText = `${titleText} ${subtitleText} ${unit.prompt || ""}`.toLowerCase();
-  const hidden = searchQuery && !(`${searchText} ${unit.principle || ""}`.toLowerCase().includes(searchQuery.trim().toLowerCase()));
+  const { searchText, matches } = matchUnitSearch(unit, platform);
+  const hidden = !matches;
   const features = (unit.features || []).length ? `<div class="unit-feature-highlight"><span class="unit-feature-glyph">${unitGlyph(index)}</span><div class="unit-feature-body"><strong>本章將完成的功能</strong><div class="feature-chip-row">${unit.features.map((f) => `<span class="feature-chip">${featureCheckIcon()}${esc(f)}</span>`).join("")}</div></div></div>` : "";
   const principle = unit.principle ? `<div class="note"><strong>技術設計原則與核心心法</strong><p>${esc(translatePlatformText(unit.principle, platform))}</p></div>` : "";
   const goals = (unit.goals || []).map((g) => `<div class="goal-item">${esc(translatePlatformText(g, platform))}</div>`).join("");
@@ -897,16 +1043,71 @@ function renderUnitCard(day, unit, index, taskState, platform) {
     <h4 class="unit-title">${esc(titleText)}</h4>
     <p class="unit-summary">${esc(subtitleText)}</p>
     <div class="unit-meta-row"><span class="unit-meta-chip">${esc(unit.time)}</span><span class="unit-meta-chip unit-progress-pill">${done} / ${total} 完成</span></div>
+    ${renderScenario(unit)}
     ${features}
     ${renderIllustrations(unit)}
     ${principle}
     <div class="content-block"><h4>學習目標</h4><div class="goal-list">${goals}</div></div>
     <div class="accordion">
       ${renderConceptAccordion(unit)}
+      ${renderGlossaryAccordion(unit)}
       ${renderPromptAccordion(unit, platform)}
     </div>
     <section class="task-panel"><h4>本章學習進度</h4>${renderTaskList(unit.tasks || [], taskState, platform)}${materialsHtml}</section>
   </article>`;
+}
+
+/** 渲染單元開頭的情境說明與對應情境圖片 */
+function renderScenario(unit) {
+  const scenario = unit.scenario;
+  if (!scenario?.description || !scenario.image) return "";
+
+  const title = scenario.title || "本章情境";
+  const description = scenario.description;
+  const alt = scenario.alt || title;
+  const examplesHtml = renderScenarioExamples(scenario.examples);
+  const technologyRolesHtml = renderScenarioTechnologyRoles(scenario.technologyRoles);
+  return `<section class="unit-scenario" aria-labelledby="${esc(unit.id)}-scenario-title">
+    <div class="unit-scenario-copy">
+      <span class="unit-scenario-eyebrow">先看情境</span>
+      <h5 id="${esc(unit.id)}-scenario-title">${esc(title)}</h5>
+      <p class="unit-scenario-description">${esc(description)}</p>
+    </div>
+    <figure class="unit-scenario-figure">
+      <img src="assets/illustrations/${esc(scenario.image)}" alt="${esc(alt)}" />
+      <figcaption>${esc(alt)}</figcaption>
+    </figure>
+    <div class="unit-scenario-details">
+      ${examplesHtml}
+      ${technologyRolesHtml}
+    </div>
+  </section>`;
+}
+
+/** 渲染情境中的具體問題案例，先讓學生看見技術要解決的麻煩 */
+function renderScenarioExamples(examples) {
+  if (!Array.isArray(examples) || !examples.length) return "";
+  return `<div class="unit-scenario-examples">
+    <h6>你可能會遇到的狀況</h6>
+    <div class="unit-scenario-example-list">${examples.map((item) => `
+      <article class="unit-scenario-example">
+        <strong>${esc(item.title || "實務問題")}</strong>
+        <p>${esc(item.description || "")}</p>
+      </article>`).join("")}</div>
+  </div>`;
+}
+
+/** 渲染情境中的技術角色，將問題與本章套件的用途逐一對上 */
+function renderScenarioTechnologyRoles(roles) {
+  if (!Array.isArray(roles) || !roles.length) return "";
+  return `<div class="unit-scenario-technology">
+    <h6>本章技術扮演的角色</h6>
+    <div class="unit-scenario-technology-list">${roles.map((item) => `
+      <div class="unit-scenario-technology-item">
+        <strong>${esc(item.name || "技術套件")}</strong>
+        <span>${esc(item.role || "")}</span>
+      </div>`).join("")}</div>
+  </div>`;
 }
 
 /** 每日課程區塊 */
@@ -914,9 +1115,12 @@ function renderDayBlock(course, dayMeta) {
   const day = course[dayMeta.id];
   if (!day) return "";
   const allUnits = getAllUnits(course);
+  const platform = state.platform || "windows";
+  // 搜尋時若此日程沒有任何符合的單元，整個日程區塊（含標題）一併隱藏，避免留下空殼
+  if (isSearching() && !day.units.some((unit) => matchUnitSearch(unit, platform).matches)) return "";
   const units = day.units.map((unit) => {
     const index = allUnits.findIndex((item) => item.unit.id === unit.id);
-    return renderUnitCard(day, unit, index, state.tasks || {}, state.platform || "windows");
+    return renderUnitCard(day, unit, index, state.tasks || {}, platform);
   }).join("");
   return `<section class="day-block" id="${esc(day.id)}">
     <div class="day-header glass-card"><div class="day-header-grid"><div class="day-numeral">D${dayMeta.n}</div><div><span class="eyebrow">${esc(day.date)} / ${dayMeta.hours} 小時</span><h3>${esc(day.title)}</h3><p>${esc(day.learningGoal)}</p></div></div></div>
@@ -1016,6 +1220,9 @@ function renderApp() {
   // 清空提示詞暫存
   Object.keys(promptTextMap).forEach((k) => delete promptTextMap[k]);
 
+  // 搜尋模式：只呈現搜尋摘要與符合的單元，其餘區塊（主視覺、總覽、藍圖、測驗等）暫時隱藏
+  const searching = isSearching();
+
   const root = document.getElementById("root");
   root.innerHTML = `
     <button id="sidebar-restore" class="sidebar-restore-btn" type="button" data-action="restore-sidebar">選單</button>
@@ -1023,19 +1230,22 @@ function renderApp() {
       <input id="searchInput" class="search" type="search" placeholder="搜尋單元、觀念或 AI 提示詞..." value="${esc(searchQuery)}"/>
       <button id="expandAll" class="top-action-button" type="button" data-action="toggle-accordion">${accordionOpen ? "收合全部" : "展開全部"}</button>
       <button id="themeToggle" class="top-theme-toggle" type="button" data-action="toggle-theme">${state.theme === "dark" ? "切換淺色模式" : "切換深色模式"}</button>
+      <button id="topbarToggle" class="topbar-toggle" type="button" data-action="toggle-topbar" aria-label="${state.topBarCollapsed ? "展開頂列工具" : "收合頂列工具"}" title="${state.topBarCollapsed ? "展開頂列工具" : "收合頂列工具（上課投影時避免遮擋）"}">☰</button>
     </div>
     <div class="shell">
       ${renderSidebar(course)}
       <main class="main">
-        <div id="heroRoot">${renderHero(course.meta)}</div>
+        <div id="heroRoot">${searching ? "" : renderHero(course.meta)}</div>
         <div id="content" class="content">
-          ${renderOverview(course.meta)}
-          ${renderFeatureRoadmap(course)}
-          ${renderSharedCase(course.sharedCase)}
+          ${renderSearchSummary(course)}
+          ${searching ? "" : renderOverview(course.meta)}
+          ${searching ? "" : renderCourseVideo(course)}
+          ${searching ? "" : renderFeatureRoadmap(course)}
+          ${searching ? "" : renderSharedCase(course.sharedCase)}
           ${course.meta.days.map((dayMeta) => renderDayBlock(course, dayMeta)).join("")}
-          ${renderMaterialsOverview(course.materials)}
-          ${renderQuiz(course.quiz, state.quiz || {})}
-          ${renderSuperpowers(course.superpowers)}
+          ${searching ? "" : renderMaterialsOverview(course.materials)}
+          ${searching ? "" : renderQuiz(course.quiz, state.quiz || {})}
+          ${searching ? "" : renderSuperpowers(course.superpowers)}
           <footer class="site-footer">教學網站採用純 HTML + JS + CSS 呈現，課程資料仍由 course-data.js 驅動。</footer>
         </div>
       </main>
@@ -1106,6 +1316,18 @@ document.addEventListener("click", (e) => {
     case "toggle-accordion":
       accordionOpen = !accordionOpen;
       renderApp();
+      break;
+
+    case "toggle-topbar":
+      // 收合／展開頂列工具，狀態存入 localStorage 以便重新整理後維持
+      patchState((s) => ({ ...s, topBarCollapsed: !s.topBarCollapsed }));
+      break;
+
+    case "clear-search":
+      // 清除搜尋關鍵字並還原完整頁面
+      searchQuery = "";
+      renderApp();
+      document.getElementById("searchInput")?.focus();
       break;
 
     case "hide-sidebar":
