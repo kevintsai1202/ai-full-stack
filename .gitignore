@@ -60,6 +60,10 @@ run_command*.ps1
 # 產生的宣傳影片（大檔，依需要本機保留即可）
 videos/
 
+# 教學網站需要隨 GitHub Pages 發布的課程影片
+!teaching-site/assets/videos/
+!teaching-site/assets/videos/00-course-orientation.mp4
+
 # 驗證／宣傳過程截圖產物
 land-page/screenshots/promo-verify/
 teaching-site/data/render-verify/

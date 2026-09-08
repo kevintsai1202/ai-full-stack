@@ -1,7 +1,7 @@
 // 單元卡片截圖腳本：啟動本地靜態伺服器，捲動到指定單元並輸出 PNG 截圖。
 // 用途：視覺驗證單元渲染結果（例如解鎖徽章、插圖、版面），可重複執行。
 // 用法：node scripts/capture-unit.mjs [單元錨點id] [輸出檔名]
-//   例：node scripts/capture-unit.mjs day2-u9 u9-capture.png
+//   例：node scripts/capture-unit.mjs day3-u9 u9-capture.png
 import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const anchor = process.argv[2] || "day2-u9";      // 目標單元的錨點 id（day.id-unit.id）
+const anchor = process.argv[2] || "day3-u9";      // 目標單元的錨點 id（day.id-unit.id）
 const outName = process.argv[3] || `${anchor}-capture.png`; // 輸出截圖檔名
 
 /** 極簡靜態檔案伺服器：只服務 teaching-site 目錄下的檔案 */

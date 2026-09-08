@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img" aria-labelledby="u12-hero-title u12-hero-desc">
+  <title id="u12-hero-title">Unit 12｜Kubernetes 初體驗</title>
+  <desc id="u12-hero-desc">Docker Desktop 單節點叢集：宣告式收斂部署 AI CRM</desc>
+  <defs>
+    <linearGradient id="u12-hero-bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="52%" stop-color="#f5f3ff"/>
+      <stop offset="100%" stop-color="#eff6ff"/>
+    </linearGradient>
+    <filter id="u12-hero-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#0f172a" flood-opacity="0.16"/>
+    </filter>
+    <marker id="u12-hero-arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M2,2 L12,7 L2,12 Z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="675" rx="36" fill="url(#u12-hero-bg)"/>
+  <path d="M0 126 C220 40 335 120 520 62 C715 0 835 82 1200 26 L1200 0 L0 0 Z" fill="#7c3aed" opacity="0.1"/>
+  <circle cx="1030" cy="108" r="116" fill="#7c3aed" opacity="0.09"/>
+  <circle cx="112" cy="572" r="92" fill="#2563eb" opacity="0.08"/>
+  <text x="56" y="70" fill="#0f172a" font-size="34" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Unit 12｜Kubernetes 初體驗</text>
+  <text x="58" y="108" fill="#475569" font-size="18" font-weight="600" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Docker Desktop 內建單節點叢集・宣告式收斂・自癒與滾動更新</text>
+
+  <!-- 宣告 manifest -->
+  <g filter="url(#u12-hero-shadow)">
+    <rect x="64" y="180" width="330" height="300" rx="28" fill="#ffffff" stroke="#ddd6fe"/>
+    <rect x="64" y="180" width="330" height="60" rx="28" fill="#7c3aed"/>
+    <text x="96" y="218" fill="#ffffff" font-size="17" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">宣告：期望狀態 manifest</text>
+    <rect x="96" y="264" width="266" height="52" rx="14" fill="#f5f3ff" stroke="#ddd6fe"/>
+    <text x="116" y="296" fill="#7c3aed" font-size="15" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Deployment · replicas: 2</text>
+    <rect x="96" y="330" width="266" height="52" rx="14" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text x="116" y="362" fill="#2563eb" font-size="15" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">Service · 內部 DNS＋負載均衡</text>
+    <rect x="96" y="396" width="266" height="52" rx="14" fill="#fff7ed" stroke="#fed7aa"/>
+    <text x="116" y="428" fill="#d97706" font-size="15" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">ConfigMap / Secret / PVC</text>
+  </g>
+
+  <!-- kubectl apply 箭頭 -->
+  <path d="M402 330 C450 330 460 330 502 330" fill="none" stroke="#7c3aed" stroke-width="7" stroke-linecap="round" marker-end="url(#u12-hero-arrow)"/>
+  <text x="408" y="306" fill="#7c3aed" font-size="15" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">kubectl apply</text>
+
+  <!-- 叢集：現實收斂 -->
+  <g filter="url(#u12-hero-shadow)">
+    <rect x="520" y="180" width="616" height="300" rx="28" fill="#ffffff" stroke="#cbd5e1"/>
+    <rect x="520" y="180" width="616" height="60" rx="28" fill="#0f172a"/>
+    <text x="552" y="218" fill="#e2e8f0" font-size="17" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">docker-desktop 叢集 · 現實持續向宣告收斂</text>
+    <rect x="552" y="264" width="176" height="80" rx="16" fill="#ecfdf5" stroke="#bbf7d0"/>
+    <text x="572" y="296" fill="#16a34a" font-size="15" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">backend pod ×2</text>
+    <text x="572" y="324" fill="#64748b" font-size="13" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">刪一個→自動重生</text>
+    <rect x="744" y="264" width="176" height="80" rx="16" fill="#eff6ff" stroke="#bfdbfe"/>
+    <text x="764" y="296" fill="#2563eb" font-size="15" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">frontend pod</text>
+    <text x="764" y="324" fill="#64748b" font-size="13" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">port-forward 驗收</text>
+    <rect x="936" y="264" width="176" height="80" rx="16" fill="#f0fdfa" stroke="#99f6e4"/>
+    <text x="956" y="296" fill="#0891b2" font-size="15" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">postgres + PVC</text>
+    <text x="956" y="324" fill="#64748b" font-size="13" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">單副本練習用</text>
+    <rect x="552" y="368" width="560" height="88" rx="16" fill="#f5f3ff" stroke="#ddd6fe"/>
+    <text x="572" y="402" fill="#7c3aed" font-size="15" font-weight="800" font-family="system-ui, 'Microsoft JhengHei', sans-serif">滾動更新：set image → 新副本健康才殺舊的 → 不斷線</text>
+    <text x="572" y="432" fill="#64748b" font-size="14" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">出問題 rollout undo 一行退版 · 單節點學習環境，非生產叢集</text>
+  </g>
+
+  <!-- 底部流程 chips -->
+  <g transform="translate(88,548)">
+    <rect width="230" height="54" rx="27" fill="#ffffff" stroke="#7c3aed" stroke-width="2"/>
+    <circle cx="30" cy="27" r="10" fill="#7c3aed"/>
+    <text x="52" y="34" fill="#0f172a" font-size="17" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">啟用叢集</text>
+  </g>
+  <g transform="translate(358,548)">
+    <rect width="230" height="54" rx="27" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+    <circle cx="30" cy="27" r="10" fill="#2563eb"/>
+    <text x="52" y="34" fill="#0f172a" font-size="17" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">compose 翻譯</text>
+  </g>
+  <g transform="translate(628,548)">
+    <rect width="230" height="54" rx="27" fill="#ffffff" stroke="#16a34a" stroke-width="2"/>
+    <circle cx="30" cy="27" r="10" fill="#16a34a"/>
+    <text x="52" y="34" fill="#0f172a" font-size="17" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">自癒實驗</text>
+  </g>
+  <g transform="translate(898,548)">
+    <rect width="230" height="54" rx="27" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
+    <circle cx="30" cy="27" r="10" fill="#d97706"/>
+    <text x="52" y="34" fill="#0f172a" font-size="17" font-weight="700" font-family="system-ui, 'Microsoft JhengHei', sans-serif">滾動更新</text>
+  </g>
+</svg>

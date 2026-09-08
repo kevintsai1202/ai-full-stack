@@ -90,6 +90,10 @@ function translatePlatformText(text, platform) {
     .replace(/winget/g, "Homebrew（brew）")
     .replace(/Invoke-RestMethod/g, "curl")
     .replace(/test-crm-api\.ps1/g, "test-crm-api.sh")
+    // 提示詞裡要求 AI 產出的環境檢查與一鍵啟停腳本，macOS 版對應成 shell script
+    .replace(/check-env\.ps1/g, "check-env.sh")
+    .replace(/start-crm\.ps1/g, "start-crm.sh")
+    .replace(/stop-crm\.ps1/g, "stop-crm.sh")
     .replace(/verify-u3\.ps1/g, "verify-u3.sh")
     .replace(/verify-u4\.ps1/g, "verify-u4.sh");
 }

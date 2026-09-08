@@ -142,6 +142,51 @@ const unitSpecs = [
     ],
     flow: ["Compose 打包", "Tunnel 打洞", "外網驗收", "安全收尾"],
     colors: [palette.blue, palette.amber, palette.green, palette.violet]
+  },
+  {
+    // 延伸部署三部曲 1/3：Docker 映像打包（現行 SVG 為手寫版，重跑本腳本會降級，請勿整支重跑）
+    id: "u10",
+    heroTitle: "Docker 映像打包",
+    heroSubtitle: "多階段建置：原始碼進、有版本號映像出",
+    diagramTitle: "多階段建置與層快取流程",
+    terms: [
+      ["Image", "不可變的交付物：程式、依賴、執行環境一次封死，任何機器行為一致。"],
+      ["Layer Cache", "依賴與原始碼拆層，改一行程式碼的重建從幾分鐘縮到幾十秒。"],
+      [".dockerignore", "擋住不該進建置 context 的檔案，密碼絕不能進映像。"],
+      ["Tag", "latest 是浮動標籤；明確版本 tag 是之後一鍵退版的保險。"]
+    ],
+    flow: ["多階段建置", "快取與體檢", "版本 tag", "compose 驗證"],
+    colors: [palette.blue, palette.cyan, palette.amber, palette.green]
+  },
+  {
+    // 延伸部署三部曲 2/3：部署到 Docker 伺服器（現行 SVG 為手寫版，請勿整支重跑）
+    id: "u11",
+    heroTitle: "部署到 Docker 伺服器",
+    heroSubtitle: "映像、設定、資料三分離：從開發機搬到伺服器",
+    diagramTitle: "更新與退版流程",
+    terms: [
+      ["Registry", "映像集中倉庫（GHCR）：開發機 push、伺服器 pull，預設保持私有。"],
+      ["save / load", "把映像匯出成 tar 檔搬運，零依賴的內網部署與救援路線。"],
+      [".env 注入", "每環境一份、不進 git；APP_VERSION 一行控制整套版本。"],
+      ["Rollback", "改回舊 tag 重新拉起即退版；靠舊映像保留與 volume 分離。"]
+    ],
+    flow: ["映像搬運", "compose 上線", "外部驗收", "更新與退版"],
+    colors: [palette.amber, palette.green, palette.blue, palette.violet]
+  },
+  {
+    // 延伸部署三部曲 3/3：Docker Desktop 內建 k8s（現行 SVG 為手寫版，請勿整支重跑）
+    id: "u12",
+    heroTitle: "Kubernetes 初體驗",
+    heroSubtitle: "Docker Desktop 單節點叢集：宣告式收斂部署 AI CRM",
+    diagramTitle: "宣告式收斂與自癒流程",
+    terms: [
+      ["Deployment", "宣告副本數、映像與設定；k8s 讓現實維持宣告的樣子。"],
+      ["Service", "副本的穩定門牌：內部 DNS 不變，背後自動負載均衡。"],
+      ["ConfigMap · Secret", ".env 的 k8s 形態；Secret 是編碼不是加密，不進 git。"],
+      ["Rolling Update", "逐副本換版不斷線，rollout undo 一行退版。"]
+    ],
+    flow: ["啟用叢集", "compose 翻譯", "自癒實驗", "滾動更新"],
+    colors: [palette.violet, palette.blue, palette.green, palette.amber]
   }
 ];
 
