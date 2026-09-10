@@ -37,7 +37,11 @@ pre{background:#0f172a;color:#e2e8f0;padding:16px 20px;border-radius:8px;overflo
 code{font-family:Consolas,"Cascadia Code",monospace}p code{background:#f1f5f9;padding:1px 6px;border-radius:4px}
 table{border-collapse:collapse;width:100%;font-size:14px;margin:12px 0}th,td{border:1px solid #cbd5e1;padding:6px 10px;text-align:left;vertical-align:top}th{background:#e2e8f0}
 blockquote{border-left:4px solid #94a3b8;margin:0;padding:6px 16px;color:#475569;background:#f8fafc}
-hr{border:0;border-top:1px solid #cbd5e1;margin:36px 0}@media print{body{margin:0;max-width:none}pre{white-space:pre-wrap}}'''
+hr{border:0;border-top:1px solid #cbd5e1;margin:36px 0}
+.dl{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:18px 0 6px;padding:14px 18px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px}
+.dl a{display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:9px 18px;border-radius:6px;font-weight:700;font-size:15px;white-space:nowrap}
+.dl a:hover{background:#1d4ed8}.dl span{color:#1e40af;font-size:14px}
+@media print{body{margin:0;max-width:none}pre{white-space:pre-wrap}.dl{display:none}}'''
 
 
 def extract_title(md_text):
@@ -48,6 +52,26 @@ def extract_title(md_text):
     return '學員資料包'
 
 
+# 下載檔名：與 SRC 同名，部署時一併複製到同一層目錄，故用相對路徑即可
+DOWNLOAD_NAME = 'live-prompt-pack.md'
+
+
+def build_download_bar(md_text):
+    """產生標題下方的 Markdown 下載列。
+
+    加 download 屬性的原因：GitHub Pages 對 .md 回傳 text/markdown，
+    各瀏覽器處理不一（有的下載、有的直接顯示純文字），加了才有一致行為。
+    """
+    size_kb = round(len(md_text.encode('utf-8')) / 1024)
+    return (
+        '<div class="dl">'
+        f'<a href="{DOWNLOAD_NAME}" download>&#8681; 下載 Markdown 原始檔</a>'
+        f'<span>{DOWNLOAD_NAME}｜約 {size_kb} KB｜'
+        '整份可直接丟給 AI，也可只複製單段提示詞或範本使用</span>'
+        '</div>'
+    )
+
+
 def render(md_text):
     """把 Markdown 轉成完整的單檔 HTML 字串。"""
     body = markdown.markdown(
@@ -56,6 +80,9 @@ def render(md_text):
         output_format='xhtml',
     )
     title = extract_title(md_text)
+    # 注入下載列：緊接在主標題之後，讓學員一進頁面就看得到
+    if '</h1>' in body:
+        body = body.replace('</h1>', '</h1>' + build_download_bar(md_text), 1)
     return (
         '<!doctype html><html lang="zh-TW"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
