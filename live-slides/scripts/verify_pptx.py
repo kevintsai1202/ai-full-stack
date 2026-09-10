@@ -102,6 +102,44 @@ def main() -> int:
         print("  --   備援影片以 MP4 嵌入 — 原稿無影片，略過")
     check("未殘留 WebM", not [m for m in media if m.endswith(".webm")])
 
+    # 版面：所有圖形都要落在頁面內，內容太高被推出底部等於觀眾看不到
+    # 底部列固定貼齊頁底，不在檢查之列
+    slide_w, slide_h = prs.slide_width, prs.slide_height
+    bar_top = slide_h - int(slide_h * 46 / 900)
+    overflow = []
+    for index, slide in enumerate(slides, 1):
+        for shape in slide.shapes:
+            if shape.top is None or shape.height is None:
+                continue
+            if shape.top >= bar_top:
+                continue
+            if shape.top < 0 or shape.top + shape.height > bar_top + int(slide_h * 4 / 900):
+                overflow.append(index)
+                break
+    check("所有圖形都在頁面內", not overflow,
+          f"第 {overflow} 頁有圖形超出底部或頂端" if overflow else "")
+
+    # 字級：投影用簡報，內文不得低於 12pt（＝原稿 20px），底部列除外
+    tiny = {}
+    for index, slide in enumerate(slides, 1):
+        for shape in slide.shapes:
+            if not shape.has_text_frame or (shape.top is not None and shape.top >= bar_top):
+                continue
+            for para in shape.text_frame.paragraphs:
+                for run in para.runs:
+                    if run.text.strip() and run.font.size is not None and run.font.size.pt < 12:
+                        tiny.setdefault(index, set()).add(run.font.size.pt)
+    check("內文字級不低於 12pt", not tiny,
+          "；".join(f"第 {p} 頁 {sorted(s)}pt" for p, s in sorted(tiny.items())) if tiny else "")
+
+    # 原稿有 QR Code 的頁面（待機頁、掃碼加入頁），PPTX 該頁一定要有圖片
+    qr_pages = [i for i, m in enumerate(re.finditer(r'<section class="slide[^>]*>(.*?)</section>', html, re.S), 1)
+                if "exam-join-qr.png" in m.group(1)]
+    missing_qr = [p for p in qr_pages
+                  if not any(shape.shape_type == 13 for shape in list(slides)[p - 1].shapes)]
+    check("QR Code 頁含圖片", not missing_qr,
+          f"原稿第 {qr_pages} 頁有 QR，PPTX 第 {missing_qr} 頁缺圖" if missing_qr else f"第 {qr_pages} 頁")
+
     print()
     if failures:
         print(f"驗證失敗 {len(failures)} 項：{'、'.join(failures)}", file=sys.stderr)

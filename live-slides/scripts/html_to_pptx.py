@@ -1,7 +1,7 @@
 """
 live-slides/index.html → PPTX 原生投影片轉換器。
 
-把 46 頁的 HTML 直播簡報重建成「文字可編輯」的 PowerPoint 檔：
+把 HTML 直播簡報（頁數以 index.html 的 .slide 為準）重建成「文字可編輯」的 PowerPoint 檔：
 標題、條列、提示詞區塊、表格全部還原成原生 PPTX 文字框與圖形，
 截圖以圖片插入，data-note 講者備註寫進 PPTX 的備註頁。
 
@@ -81,8 +81,8 @@ FONT_MONO = "Consolas"             # 對應原稿的 Cascadia Code / Consolas
 
 # ── 版面常數（px，1600x900 座標系）──────────────────────
 DECK_W, DECK_H = 1600, 900
-PAD_TOP, PAD_BOTTOM, PAD_X = 56, 76, 72
-CONTENT_W = DECK_W - PAD_X * 2      # 1456
+PAD_TOP, PAD_BOTTOM, PAD_X = 52, 72, 96
+CONTENT_W = DECK_W - PAD_X * 2      # 1408
 CONTENT_H = DECK_H - PAD_TOP - PAD_BOTTOM
 BAR_H = 46                          # 底部列高度
 
@@ -315,18 +315,40 @@ class Block:
 
 
 # 各文字型別的 (字級px, 行高倍率, 下邊距px, 預設色)
+# 字級對照 index.html 的 CSS（2026-09 全頁 E2E 體檢後放大約 20%）再乘 0.9：
+# 正黑體在 PPTX 的實際字寬比瀏覽器的 Noto Sans TC 略寬，留一成餘裕避免折行溢出
 TEXT_STYLES = {
-    "h1": (64, 1.28, 20, C_TEXT),
-    "h1cover": (78, 1.28, 20, C_TEXT),
-    "h2": (52, 1.32, 28, C_WHITE),
-    "h3": (28, 1.40, 14, C_ACCENT),
-    "p": (21, 1.70, 14, C_TEXT),
-    "lead": (26, 1.70, 14, C_DIM),
-    "small": (17, 1.70, 14, C_DIM),
-    "big": (42, 1.55, 14, C_TEXT),
-    "sub": (26, 1.70, 14, C_DIM),
-    "by": (20, 1.70, 14, C_DIM),   # .cover .by 另有 margin-top:46px，於 _text_block 補上
+    "h1": (61, 1.28, 20, C_TEXT),        # CSS 68
+    "h1cover": (70, 1.28, 20, C_TEXT),   # CSS 78
+    "h2": (50, 1.32, 28, C_WHITE),       # CSS 56
+    "h3": (34, 1.40, 16, C_ACCENT),      # CSS 38
+    "p": (27, 1.70, 14, C_TEXT),         # CSS 30
+    "lead": (31, 1.70, 14, C_DIM),       # CSS 34
+    "small": (22, 1.70, 14, C_DIM),      # CSS 24
+    "big": (43, 1.55, 14, C_TEXT),       # CSS 48
+    "sub": (31, 1.70, 14, C_DIM),        # CSS 34
+    "by": (23, 1.70, 14, C_DIM),         # CSS 26；.cover .by 另有 margin-top:46px，於 _text_block 補上
 }
+
+# 目前正在轉換的投影片 class（dense / roomy 等頁級樣式修飾），由 render_slide 設定
+SLIDE_CLASSES: set = set()
+
+# 各元件字級（CSS × 0.9），集中在這裡方便跟 index.html 對照
+FS_PRE, FS_PRE_ROOMY = 22, 26            # pre 25 / .roomy pre 29
+FS_KP, FS_KP_DENSE = 22, 20              # .kp 24 / .dense .kp 22
+FS_LINE, FS_LINE_DENSE = 28, 23          # .line 31 / .dense .line 26
+FS_TABLE, FS_TABLE_COMPACT = 22, 21      # table 25 / table.compact 23
+FS_BADGE = 21                            # .badge 23
+BADGE_H = 40                             # padding 5*2 + 字高
+FS_CAPTION = 22                          # figcaption 25
+FS_MAP_NO, FS_MAP_NAME, FS_MAP_WHAT = 20, 29, 21   # .map 22 / 32 / 23
+MAP_H = 206                              # .station padding 28*2 + 三行文字
+
+
+def inline_font_px(node: "Node") -> float | None:
+    """讀出 inline style 的 font-size（原稿少數地方直接寫在 style 上），同樣乘 0.9。"""
+    match = re.search(r"font-size:\s*(\d+)px", node.style)
+    return round(float(match.group(1)) * 0.9) if match else None
 
 H2_UNDERLINE_H = 7      # h2::after 底線條高
 H2_UNDERLINE_PAD = 16   # h2 的 padding-bottom
@@ -374,13 +396,24 @@ def build_blocks(slide: Node) -> list[Block]:
             blocks.append(_map_block(child))
         elif tag == "div" and "job-ad-row" in cls:
             blocks.append(_job_ad_block(child))
+        elif tag == "div" and "display:flex" in child.style.replace(" ", ""):
+            blocks.append(_flex_row_block(child))
 
+    # 原稿 CSS：pre + .lead { text-align:center }——提示詞下方的金句置中
+    for prev, block in zip(blocks, blocks[1:]):
+        if prev.kind == "pre" and block.kind == "text" and block.data.get("style") == "lead":
+            block.data["center"] = True
     return blocks
 
 
 def _text_block(kind: str, node: Node, override_color=None) -> Block:
     """建立一般文字區塊並完成高度量測。"""
     font_px, line_ratio, margin_b, color = TEXT_STYLES[kind]
+    if kind == "lead" and "dense" in SLIDE_CLASSES:
+        font_px = 26                                   # .dense .lead 29 × 0.9
+    override = inline_font_px(node)
+    if override:
+        font_px = override
     in_kp = node.has("kp")
     lines = strip_lead_space(inline_segs(node, in_kp=in_kp))
 
@@ -419,9 +452,20 @@ def _p_blocks(node: Node) -> list[Block]:
     rest = rest.strip("　 \n")
 
     out: list[Block] = []
+    # badge 後面接一小段文字（例如「加入碼　L5XML8」）：原稿是同一列，這裡也排同一列
+    if badges and rest and len(rest) <= 12 and not node.has("kp"):
+        strongs = node.find_all("strong")
+        text_px = (inline_font_px(strongs[0]) if strongs else None) or TEXT_STYLES["p"][0]
+        block = Block("badgetext", badge=_badge_data(badges[0]), text=rest,
+                      text_px=text_px, bold=bool(strongs),
+                      color=C_WARN if strongs else C_TEXT)
+        block.h = max(BADGE_H, text_px * 1.2)
+        block.margin_top = style_margin_top(node)
+        block.margin_bottom = 14
+        return [block]
     if badges:
         block = Block("badge", **_badge_data(badges[0]))
-        block.h = 34            # padding 5px*2 + 16px 字 ≈ 34px
+        block.h = BADGE_H
         block.margin_top = style_margin_top(node)
         block.margin_bottom = 14
         out.append(block)
@@ -448,11 +492,12 @@ def _p_blocks(node: Node) -> list[Block]:
 def _kp_block(node: Node) -> Block:
     """知識點小卡：深底 + 左側 accent 粗邊。"""
     lines = strip_lead_space(inline_segs(node, in_kp=True))
+    font_px = FS_KP_DENSE if "dense" in SLIDE_CLASSES else FS_KP
     inner_w = (CONTENT_W - 20 - 20 - 5) * SAFE_W   # padding 14px 20px + border-left 5px
-    rows = wrap_count(lines, 18, inner_w)
-    block = Block("kp", lines=lines)
-    block.h = 14 * 2 + rows * 18 * 1.65
-    block.margin_top = 24
+    rows = wrap_count(lines, font_px, inner_w)
+    block = Block("kp", lines=lines, font_px=font_px)
+    block.h = 14 * 2 + rows * font_px * 1.6
+    block.margin_top = 14 if "dense" in SLIDE_CLASSES else 24
     block.margin_bottom = 0
     return block
 
@@ -460,10 +505,11 @@ def _kp_block(node: Node) -> Block:
 def _pre_block(node: Node) -> Block:
     """提示詞 / 指令區塊。"""
     lines = inline_segs(node, in_pre=True)
+    font_px = FS_PRE_ROOMY if "roomy" in SLIDE_CLASSES else FS_PRE
     inner_w = (CONTENT_W - 24 * 2) * SAFE_W
-    rows = wrap_count(lines, 17, inner_w, mono=True)
-    block = Block("pre", lines=lines)
-    block.h = 20 * 2 + rows * 17 * 1.65
+    rows = wrap_count(lines, font_px, inner_w, mono=True)
+    block = Block("pre", lines=lines, font_px=font_px)
+    block.h = 20 * 2 + rows * font_px * 1.6
     block.margin_bottom = 14
     return block
 
@@ -477,17 +523,19 @@ def _figure_block(node: Node) -> Block:
 
     src = imgs[0].attrs.get("src", "")
     path = SLIDES_DIR / src
-    max_h = 594.0                                   # max-height: 66vh
-    if "max-height:40vh" in imgs[0].style:
-        max_h = 360.0
+    max_h = 594.0                                   # figure img { max-height: 594px }
+    style = imgs[0].style.replace(" ", "")
+    match = re.search(r"max-height:(\d+)px", style)
+    if match:
+        max_h = float(match.group(1))
     with Image.open(path) as im:
         iw, ih = im.size
     scale = min(CONTENT_W / iw, max_h / ih, 1.0)
     w, h = iw * scale, ih * scale
 
     cap_lines = strip_lead_space(inline_segs(caps[0])) if caps else []
-    cap_rows = wrap_count(cap_lines, 18, CONTENT_W) if cap_lines else 0
-    cap_h = (12 + cap_rows * 18 * 1.7) if cap_lines else 0
+    cap_rows = wrap_count(cap_lines, FS_CAPTION, CONTENT_W) if cap_lines else 0
+    cap_h = (12 + cap_rows * FS_CAPTION * 1.7) if cap_lines else 0
 
     block = Block("figure", path=str(path), w=w, h_img=h, cap_lines=cap_lines)
     block.h = h + cap_h
@@ -530,9 +578,12 @@ def _pair_block(node: Node) -> Block:
         lines = strip_lead_space(inline_segs(line_node))
         rows.append({"lines": lines, "border": border, "color": color, "bold": bold})
 
-    block = Block("pair", rows=rows, gap=18)
-    block.margin_top = 18
-    block.margin_bottom = 18
+    dense = "dense" in SLIDE_CLASSES
+    block = Block("pair", rows=rows, gap=12 if dense else 18,
+                  font_px=FS_LINE_DENSE if dense else FS_LINE,
+                  pad_y=14 if dense else 20)
+    block.margin_top = 12 if dense else 18
+    block.margin_bottom = 12 if dense else 18
     return block
 
 
@@ -550,9 +601,9 @@ def _map_block(node: Node) -> Block:
                 "on": st.has("on") or node.has("all"),
             })
     block = Block("map", stations=stations)
-    block.h = 148
-    block.margin_top = 26
-    block.margin_bottom = 26
+    block.h = MAP_H
+    block.margin_top = 28
+    block.margin_bottom = 28
     return block
 
 
@@ -622,17 +673,21 @@ def _table_block(node: Node) -> Block:
     remain = 100.0 - sum(header_widths)
     header_widths = [w if w else remain for w in header_widths]
 
+    compact = node.has("compact")
+    font_px = FS_TABLE_COMPACT if compact else FS_TABLE
+    pad_x, pad_y = (14, 8) if compact else (16, 12)
     # 逐列估高：取該列中最高的儲存格
     heights = []
     for cells in rows:
         tallest = 0.0
         for cell, pct in zip(cells, header_widths):
-            inner = CONTENT_W * pct / 100 - 16 * 2
-            rows_n = wrap_count([[Seg(cell["text"])]], 19, inner)
-            tallest = max(tallest, 12 * 2 + rows_n * 19 * 1.6)
-        heights.append(max(tallest, 46))
+            inner = CONTENT_W * pct / 100 - pad_x * 2
+            rows_n = wrap_count([[Seg(cell["text"])]], font_px, inner)
+            tallest = max(tallest, pad_y * 2 + rows_n * font_px * 1.6)
+        heights.append(max(tallest, pad_y * 2 + font_px * 1.6))
 
-    block = Block("table", rows=rows, widths=header_widths, heights=heights)
+    block = Block("table", rows=rows, widths=header_widths, heights=heights,
+                  font_px=font_px, pad_x=pad_x, pad_y=pad_y)
     block.h = sum(heights)
     block.margin_bottom = 0
     return block
@@ -641,10 +696,11 @@ def _table_block(node: Node) -> Block:
 def measure_pair(block: Block) -> float:
     """pair 區塊高度：每張卡片獨立折行後加總，再加卡間距。"""
     total = 0.0
-    inner_w = (CONTENT_W - 24 * 2 - 6) * SAFE_W
+    inner_w = (CONTENT_W - 26 * 2 - 6) * SAFE_W
+    font_px, pad_y = block.data["font_px"], block.data["pad_y"]
     for row in block.data["rows"]:
-        rows_n = wrap_count(row["lines"], 24, inner_w)
-        row["h"] = 20 * 2 + rows_n * 24 * 1.7
+        rows_n = wrap_count(row["lines"], font_px, inner_w)
+        row["h"] = pad_y * 2 + rows_n * font_px * 1.7
         total += row["h"]
     if block.data["rows"]:
         total += block.data["gap"] * (len(block.data["rows"]) - 1)
@@ -753,10 +809,29 @@ def render_block(slide, block: Block, top: float) -> float:
         width = badge_width(data["text"])
         bg, fg = BADGE_COLORS[data["variant"]]
         left = PAD_X + (CONTENT_W - width) / 2 if data.get("center") else PAD_X
-        add_rect(slide, left, top, width, 34, bg, radius=17)
-        add_textbox(slide, left, top + 7, width, 22, [[Seg(data["text"])]],
-                    16, fg, line_ratio=1.0, bold=True, center=True)
+        add_rect(slide, left, top, width, BADGE_H, bg, radius=BADGE_H / 2)
+        add_textbox(slide, left, top + 8, width, BADGE_H - 14, [[Seg(data["text"])]],
+                    FS_BADGE, fg, line_ratio=1.0, bold=True, center=True)
         return block.h
+
+    if kind == "badgetext":
+        # badge + 短文字同一列（加入碼那類），整列依頁面置中或靠左
+        b_w = badge_width(data["badge"]["text"])
+        t_w = text_width([Seg(data["text"])], data["text_px"]) * 1.35 + 24   # letter-spacing 補償
+        total_w = b_w + 24 + t_w
+        left = PAD_X + (CONTENT_W - total_w) / 2 if data.get("center") else PAD_X
+        bg, fg = BADGE_COLORS[data["badge"]["variant"]]
+        b_top = top + (block.h - BADGE_H) / 2
+        add_rect(slide, left, b_top, b_w, BADGE_H, bg, radius=BADGE_H / 2)
+        add_textbox(slide, left, b_top + 8, b_w, BADGE_H - 14, [[Seg(data["badge"]["text"])]],
+                    FS_BADGE, fg, line_ratio=1.0, bold=True, center=True)
+        add_textbox(slide, left + b_w + 24, top, t_w, block.h,
+                    [[Seg(data["text"])]], data["text_px"], data["color"],
+                    line_ratio=1.2, bold=data["bold"], anchor=MSO_ANCHOR.MIDDLE)
+        return block.h
+
+    if kind == "flexrow":
+        return render_flexrow(slide, block, top)
 
     if kind == "pair":
         return render_pair(slide, block, PAD_X, top, CONTENT_W)
@@ -768,7 +843,7 @@ def render_block(slide, block: Block, top: float) -> float:
         add_rect(slide, PAD_X, top, CONTENT_W, block.h, C_PRE_BG,
                  line=C_BORDER, radius=10)
         add_textbox(slide, PAD_X + 24, top + 20, CONTENT_W - 48, block.h - 40,
-                    data["lines"], 17, C_PRE_TEXT, line_ratio=1.65, mono=True)
+                    data["lines"], data["font_px"], C_PRE_TEXT, line_ratio=1.6, mono=True)
         return block.h
 
     if kind == "kp":
@@ -777,7 +852,7 @@ def render_block(slide, block: Block, top: float) -> float:
         add_rect(slide, PAD_X, top, 5, block.h, C_ACCENT,
                  shape=MSO_SHAPE.RECTANGLE)
         add_textbox(slide, PAD_X + 25, top + 14, CONTENT_W - 50, block.h - 28,
-                    data["lines"], 18, C_DIM, line_ratio=1.65,
+                    data["lines"], data["font_px"], C_DIM, line_ratio=1.6,
                     anchor=MSO_ANCHOR.MIDDLE)
         return block.h
 
@@ -788,7 +863,7 @@ def render_block(slide, block: Block, top: float) -> float:
         if data["cap_lines"]:
             add_textbox(slide, PAD_X, top + data["h_img"] + 12, CONTENT_W,
                         block.h - data["h_img"] - 12, data["cap_lines"],
-                        18, C_DIM, center=True)
+                        FS_CAPTION, C_DIM, center=True)
         return block.h
 
     if kind == "video":
@@ -816,8 +891,82 @@ def text_width(segs: list[Seg], font_px: float) -> float:
 
 
 def badge_width(text: str) -> float:
-    """badge 寬度 = 文字寬 + 左右 padding 14px。"""
-    return text_width([Seg(text)], 16) + 28
+    """badge 寬度 = 文字寬 + 左右 padding 16px。"""
+    return text_width([Seg(text)], FS_BADGE) + 32
+
+
+# ── flex 列（掃碼加入頁：左 QR、右文字欄）──────────────
+class _column_width:
+    """暫時把版面寬度改成某一欄，讓文字量測與渲染沿用同一套函式。"""
+
+    def __init__(self, left: float, width: float):
+        self.left, self.width = left, width
+
+    def __enter__(self):
+        global PAD_X, CONTENT_W
+        self.saved = (PAD_X, CONTENT_W)
+        PAD_X, CONTENT_W = self.left, self.width
+
+    def __exit__(self, *exc):
+        global PAD_X, CONTENT_W
+        PAD_X, CONTENT_W = self.saved
+
+
+def _flex_row_block(node: Node) -> Block:
+    """<div style="display:flex">：一張圖 + 一欄文字（原稿只有掃碼加入頁用到）。"""
+    img = next((c for c in node.children if isinstance(c, Node) and c.tag == "img"), None)
+    column = next((c for c in node.children if isinstance(c, Node) and c.tag == "div"), None)
+    gap = 48.0
+    match = re.search(r"gap:\s*(\d+)px", node.style)
+    if match:
+        gap = float(match.group(1))
+
+    picture = None
+    if img is not None:
+        path = SLIDES_DIR / img.attrs.get("src", "")
+        with Image.open(path) as im:
+            iw, ih = im.size
+        height = 252.0
+        match = re.search(r"(?<!max-)height:(\d+)px", img.style.replace(" ", ""))
+        if match:
+            height = float(match.group(1))
+        picture = {"path": str(path), "w": iw * height / ih, "h": height}
+
+    col_left = PAD_X + (picture["w"] + gap if picture else 0)
+    col_w = CONTENT_W - (picture["w"] + gap if picture else 0)
+    col_blocks: list[Block] = []
+    if column is not None:
+        with _column_width(col_left, col_w):
+            for child in column.children:
+                if isinstance(child, Node) and child.tag == "p":
+                    col_blocks.extend(_p_blocks(child))
+    for b in col_blocks:
+        b.data["center"] = False
+    col_h = sum(b.h + b.margin_top + b.margin_bottom for b in col_blocks)
+    col_h -= col_blocks[-1].margin_bottom if col_blocks else 0
+
+    block = Block("flexrow", picture=picture, blocks=col_blocks,
+                  col_left=col_left, col_w=col_w, col_h=col_h)
+    block.h = max(picture["h"] if picture else 0, col_h)
+    block.margin_top = style_margin_top(node)
+    block.margin_bottom = 14
+    return block
+
+
+def render_flexrow(slide, block: Block, top: float) -> float:
+    """畫 flex 列：圖靠左、文字欄靠右，兩者各自垂直置中。"""
+    data = block.data
+    picture = data["picture"]
+    if picture:
+        slide.shapes.add_picture(picture["path"], px(PAD_X), px(top + (block.h - picture["h"]) / 2),
+                                 px(picture["w"]), px(picture["h"]))
+    y = top + (block.h - data["col_h"]) / 2
+    with _column_width(data["col_left"], data["col_w"]):
+        for b in data["blocks"]:
+            y += b.margin_top
+            y += render_block(slide, b, y)
+            y += b.margin_bottom
+    return block.h
 
 
 def render_pair(slide, block: Block, left: float, top: float, width: float) -> float:
@@ -827,8 +976,9 @@ def render_pair(slide, block: Block, left: float, top: float, width: float) -> f
         add_rect(slide, left, y, width, row["h"], C_PANEL, radius=12)
         add_rect(slide, left, y, 6, row["h"], row["border"],
                  shape=MSO_SHAPE.RECTANGLE)
-        add_textbox(slide, left + 30, y + 20, width - 54, row["h"] - 40,
-                    row["lines"], 24, row["color"], bold=row["bold"],
+        pad_y = block.data["pad_y"]
+        add_textbox(slide, left + 32, y + pad_y, width - 58, row["h"] - pad_y * 2,
+                    row["lines"], block.data["font_px"], row["color"], bold=row["bold"],
                     anchor=MSO_ANCHOR.MIDDLE)
         y += row["h"] + block.data["gap"]
     return block.h
@@ -838,7 +988,7 @@ def render_map(slide, block: Block, top: float) -> float:
     """畫車站流程圖：等寬卡片，中間夾箭頭。"""
     stations = block.data["stations"]
     count = len(stations)
-    arrow_w, gap = 26.0, 12.0
+    arrow_w, gap = 34.0, 14.0
     total_gap = gap * (count - 1) * 2 + arrow_w * (count - 1)
     card_w = (CONTENT_W - total_gap) / count
     height = block.h
@@ -854,20 +1004,20 @@ def render_map(slide, block: Block, top: float) -> float:
         name_color = C_TEXT if on else RGBColor(0x6E, 0x7B, 0x9B)
         what_color = C_DIM if on else RGBColor(0x5A, 0x66, 0x84)
 
-        add_textbox(slide, x + 8, top + 18, card_w - 16, 20,
-                    [[Seg(station["no"])]], 14, no_color,
+        add_textbox(slide, x + 8, top + 26, card_w - 16, 30,
+                    [[Seg(station["no"])]], FS_MAP_NO, no_color,
                     line_ratio=1.4, center=True)
-        add_textbox(slide, x + 8, top + 42, card_w - 16, 32,
-                    [[Seg(station["name"])]], 21, name_color,
+        add_textbox(slide, x + 8, top + 60, card_w - 16, 44,
+                    [[Seg(station["name"])]], FS_MAP_NAME, name_color,
                     line_ratio=1.4, bold=True, center=True)
         what_lines = [[Seg(part)] for part in station["what"].split("\n")]
-        add_textbox(slide, x + 8, top + 80, card_w - 16, 50,
-                    what_lines, 15, what_color, line_ratio=1.55, center=True)
+        add_textbox(slide, x + 8, top + 112, card_w - 16, 72,
+                    what_lines, FS_MAP_WHAT, what_color, line_ratio=1.5, center=True)
 
         x += card_w
         if index < count - 1:
-            add_textbox(slide, x + gap, top + height / 2 - 20, arrow_w, 34,
-                        [[Seg("→")]], 26, C_BORDER, line_ratio=1.2, center=True)
+            add_textbox(slide, x + gap, top + height / 2 - 24, arrow_w, 44,
+                        [[Seg("→")]], 34, C_BORDER, line_ratio=1.2, center=True)
             x += gap * 2 + arrow_w
     return height
 
@@ -881,11 +1031,11 @@ def render_jobad(slide, block: Block, top: float) -> float:
 
     pair = block.data["pair"]
     # 左欄較窄，pair 高度需依左欄寬度重新量測
-    inner = (left_w - 24 * 2 - 6) * SAFE_W
+    inner = (left_w - 26 * 2 - 6) * SAFE_W
     total = 0.0
     for row in pair.data["rows"]:
-        rows_n = wrap_count(row["lines"], 24, inner)
-        row["h"] = 20 * 2 + rows_n * 24 * 1.7
+        rows_n = wrap_count(row["lines"], pair.data["font_px"], inner)
+        row["h"] = pair.data["pad_y"] * 2 + rows_n * pair.data["font_px"] * 1.7
         total += row["h"]
     total += pair.data["gap"] * (len(pair.data["rows"]) - 1)
     pair.h = total
@@ -897,7 +1047,7 @@ def render_jobad(slide, block: Block, top: float) -> float:
                                  px(proof["w"]), px(proof["h"]))
         if proof["cap"]:
             add_textbox(slide, PAD_X + left_w + gap, top + proof["h"] + 8,
-                        right_w, 24, [[Seg(proof["cap"])]], 14, C_DIM,
+                        right_w, 32, [[Seg(proof["cap"])]], 20, C_DIM,
                         center=True)
         return max(total, proof["h"] + 32)
     return total
@@ -922,16 +1072,16 @@ def render_table(slide, block: Block, top: float):
             cell = table.cell(r_index, c_index)
             cell.fill.solid()
             cell.fill.fore_color.rgb = C_TH_BG if cell_data["header"] else C_BG
-            cell.margin_left = cell.margin_right = px(16)
-            cell.margin_top = cell.margin_bottom = px(12)
+            cell.margin_left = cell.margin_right = px(block.data["pad_x"])
+            cell.margin_top = cell.margin_bottom = px(block.data["pad_y"])
             cell.vertical_anchor = MSO_ANCHOR.TOP
             frame = cell.text_frame
             frame.word_wrap = True
             para = frame.paragraphs[0]
-            para.line_spacing = Pt(round(19 * 1.6 * 0.6, 2))
+            para.line_spacing = Pt(round(block.data["font_px"] * 1.6 * 0.6, 2))
             run = para.add_run()
             run.text = cell_data["text"]
-            set_font(run, 19, cell_data["color"], cell_data["bold"])
+            set_font(run, block.data["font_px"], cell_data["color"], cell_data["bold"])
 
 
 # ═══════════════════════════════════════════════════════
@@ -948,6 +1098,8 @@ def render_slide(prs, slide_node: Node, index: int, total: int):
     background.fill.fore_color.rgb = C_BG
 
     is_center = slide_node.has("center") or slide_node.has("cover")
+    SLIDE_CLASSES.clear()
+    SLIDE_CLASSES.update(slide_node.classes)
     blocks = build_blocks(slide_node)
 
     # 第一趟：量測（pair / jobad 需要延後計算）
@@ -956,11 +1108,11 @@ def render_slide(prs, slide_node: Node, index: int, total: int):
             block.h = measure_pair(block)
         elif block.kind == "jobad":
             pair = block.data["pair"]
-            inner_left = (CONTENT_W * 0.70 - 24 * 2 - 6) * SAFE_W
+            inner_left = (CONTENT_W * 0.70 - 26 * 2 - 6) * SAFE_W
             total_h = 0.0
             for row in pair.data["rows"]:
-                rows_n = wrap_count(row["lines"], 24, inner_left)
-                row["h"] = 20 * 2 + rows_n * 24 * 1.7
+                rows_n = wrap_count(row["lines"], pair.data["font_px"], inner_left)
+                row["h"] = pair.data["pad_y"] * 2 + rows_n * pair.data["font_px"] * 1.7
                 total_h += row["h"]
             total_h += pair.data["gap"] * (len(pair.data["rows"]) - 1)
             proof = block.data["proof"]

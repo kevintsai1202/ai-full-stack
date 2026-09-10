@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="620" viewBox="0 0 1400 620" role="img" aria-labelledby="title desc">
+  <title id="title">一次執行，兩份資產</title>
+  <desc id="desc">E2E 給機器回歸，截圖與說明給人操作</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0d1728"/><stop offset="1" stop-color="#182b48"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000000" flood-opacity=".28"/></filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,0 L12,6 L0,12 z" fill="#8bb8ff"/></marker>
+  </defs>
+  <rect width="1400" height="620" rx="28" fill="url(#bg)"/>
+  <text x="700" y="52" fill="#ffffff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="32" font-weight="750" text-anchor="middle"><tspan x="700" dy="0">一次執行，兩份資產</tspan></text>
+  <text x="700" y="96" fill="#a7bad7" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="18" font-weight="400" text-anchor="middle"><tspan x="700" dy="0">E2E 給機器回歸，截圖與說明給人操作</tspan></text>
+  
+  <g filter="url(#shadow)"><rect x="75" y="220" width="220" height="90" rx="45" fill="#173e45" stroke="#42cfa0" stroke-width="3"/><text x="185" y="265" fill="#effff8" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="23" font-weight="700" text-anchor="middle"><tspan x="185" dy="0">使用者流程</tspan></text></g>
+  <path d="M295 265 L385 265" fill="none" stroke="#8bb8ff" stroke-width="4" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><rect x="385" y="195" width="250" height="130" rx="14" fill="#213653" stroke="#4f8cff" stroke-width="3"/><text x="510" y="244" fill="#f2f7ff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="24" font-weight="700" text-anchor="middle"><tspan x="510" dy="0">Playwright</tspan><tspan x="510" dy="34">可重跑腳本</tspan></text></g>
+  <path d="M635 265 L725 265" fill="none" stroke="#8bb8ff" stroke-width="4" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><rect x="725" y="195" width="250" height="130" rx="14" fill="#213653" stroke="#4f8cff" stroke-width="3"/><text x="850" y="244" fill="#f2f7ff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="24" font-weight="700" text-anchor="middle"><tspan x="850" dy="0">執行與斷言</tspan><tspan x="850" dy="34">留下 trace</tspan></text></g>
+  <path d="M850 325 L850 430" fill="none" stroke="#8bb8ff" stroke-width="4" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><rect x="730" y="430" width="240" height="80" rx="40" fill="#173e45" stroke="#42cfa0" stroke-width="3"/><text x="850" y="470" fill="#effff8" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="23" font-weight="700" text-anchor="middle"><tspan x="850" dy="0">步驟截圖</tspan></text></g>
+  <path d="M975 470 L1070 470" fill="none" stroke="#8bb8ff" stroke-width="4" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><polygon points="1098,425 1302,425 1330,470 1302,515 1098,515 1070,470" fill="#432c55" stroke="#d986e8" stroke-width="3"/><text x="1200" y="455" fill="#fff0ff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="23" font-weight="700" text-anchor="middle"><tspan x="1200" dy="0">Markdown</tspan><tspan x="1200" dy="32">SOP</tspan></text></g>
+  <text x="700" y="375" fill="#d9e7ff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="22" font-weight="600" text-anchor="middle"><tspan x="700" dy="0">流程改變 → 測試重跑 → 圖片與 SOP 同步更新</tspan></text>
+  <g transform="translate(58 548)">
+    <rect x="0" y="0" width="18" height="18" rx="5" fill="#213653" stroke="#4f8cff" stroke-width="2"/><text x="28" y="15" fill="#a7bad7" font-size="16">Action</text>
+    <rect x="110" y="0" width="52" height="18" rx="9" fill="#173e45" stroke="#42cfa0" stroke-width="2"/><text x="174" y="15" fill="#a7bad7" font-size="16">狀態／資料</text>
+    <polygon points="300,9 312,0 324,9 312,18" fill="#4a3821" stroke="#f3b45c" stroke-width="2"/><text x="336" y="15" fill="#a7bad7" font-size="16">判斷</text>
+    <polygon points="405,0 445,0 457,9 445,18 405,18 393,9" fill="#432c55" stroke="#d986e8" stroke-width="2"/><text x="469" y="15" fill="#a7bad7" font-size="16">交付</text>
+  </g></svg>

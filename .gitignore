@@ -88,6 +88,10 @@ AI Full Stack 宣傳動畫.zip
 # 學員名單（姓名／Email／電話），本 repo 為 public，嚴禁提交
 survey-backend/Dify 學員.xlsx
 
+# 直播課中測驗題庫（含 correctOptionOrder 正確答案），本 repo 為 public，提交等於公開答案
+live-slides/exam/
+live-slides/course-content/materials/quiz-answer-key.md
+
 # 指令誤輸入產生的暫存檔
 $null
 389，Failures

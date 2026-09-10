@@ -33,10 +33,15 @@ jobs:
         shell: bash
         run: |
           # 將兩個靜態入口組合成同一個 Pages artifact，避免公開整個 repository。
-          mkdir -p ./_site/live-slides/assets
+          mkdir -p ./_site/live-slides/assets ./_site/live-slides/handout
           cp -R ./teaching-site/. ./_site/
           cp ./live-slides/index.html ./_site/live-slides/index.html
           cp -R ./live-slides/assets/. ./_site/live-slides/assets/
+          # 學員資料包：以 index.html 提供短網址 /live-slides/handout/，
+          # 同時保留原檔名與 Markdown 原始檔供學員直接複製提示詞。
+          cp ./live-slides/handout/live-prompt-pack.html ./_site/live-slides/handout/index.html
+          cp ./live-slides/handout/live-prompt-pack.html ./_site/live-slides/handout/live-prompt-pack.html
+          cp ./live-slides/handout/live-prompt-pack.md ./_site/live-slides/handout/live-prompt-pack.md
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

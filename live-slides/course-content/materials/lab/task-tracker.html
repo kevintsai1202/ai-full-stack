@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>任務依賴驗收 Lab</title>
+  <style>
+    /* 使用簡單高對比樣式，讓 Playwright 以使用者可見文字驗證，而不是依賴框架細節。 */
+    :root { color-scheme: dark; font-family: "Segoe UI", "Microsoft JhengHei", sans-serif; }
+    body { max-width: 900px; margin: 0 auto; padding: 32px; background: #101827; color: #e5edf7; }
+    article { margin: 16px 0; padding: 20px; border: 1px solid #34435e; border-radius: 12px; background: #17243a; }
+    article.blocked { border-color: #ef8c6b; }
+    article.done { border-color: #62d09b; opacity: .82; }
+    button { padding: 8px 14px; border: 0; border-radius: 8px; cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .45; }
+    .status { font-weight: 700; letter-spacing: .04em; }
+    .meta { color: #aebdd1; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>任務依賴驗收 Lab</h1>
+    <p id="progress">完成進度：0%</p>
+    <p id="next-task">下一步：尚未計算</p>
+    <section id="tasks" aria-label="任務清單"></section>
+  </main>
+  <script type="module">
+    import { completeTask, completionRatio, getNextTask, getTaskView } from './task-rules.js';
+
+    // 使用固定 fixture，讓每次 E2E 都從同一個狀態開始。
+    let tasks = [
+      { id: 1, title: '定義任務資料', priority: 1, createdAt: '2026-08-09T09:00:00+08:00', status: 'TODO', dependsOnTaskId: null },
+      { id: 2, title: '建立阻塞狀態呈現', priority: 1, createdAt: '2026-08-09T09:01:00+08:00', status: 'TODO', dependsOnTaskId: 1 },
+    ];
+
+    /** 將目前狀態渲染成可供使用者操作與測試的畫面。 */
+    function render() {
+      const container = document.querySelector('#tasks');
+      container.replaceChildren();
+      tasks.forEach((task) => {
+        const view = getTaskView(task, tasks);
+        const card = document.createElement('article');
+        card.dataset.testid = `task-${task.id}`;
+        if (view.displayStatus === 'BLOCKED') card.classList.add('blocked');
+        if (view.displayStatus === 'DONE') card.classList.add('done');
+        card.innerHTML = `
+          <h2>${task.title}</h2>
+          <p class="meta">任務 #${task.id} · 優先級 ${task.priority}</p>
+          <p class="status">狀態：${view.displayStatus}</p>
+          <button type="button" ${view.canComplete ? '' : 'disabled'}>標記完成</button>
+        `;
+        card.querySelector('button').addEventListener('click', () => {
+          tasks = completeTask(tasks, task.id);
+          render();
+        });
+        container.append(card);
+      });
+      document.querySelector('#progress').textContent = `完成進度：${Math.round(completionRatio(tasks) * 100)}%`;
+      const next = getNextTask(tasks);
+      document.querySelector('#next-task').textContent = `下一步：${next ? next.title : '全部完成'}`;
+    }
+
+    render();
+  </script>
+</body>
+</html>

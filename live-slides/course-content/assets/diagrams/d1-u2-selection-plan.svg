@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="620" viewBox="0 0 1400 620" role="img" aria-labelledby="title desc">
+  <title id="title">設計期三段式</title>
+  <desc id="desc">先選型、再計畫、最後才實作；每段都有可審查輸出</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0d1728"/><stop offset="1" stop-color="#182b48"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000000" flood-opacity=".28"/></filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,0 L12,6 L0,12 z" fill="#8bb8ff"/></marker>
+  </defs>
+  <rect width="1400" height="620" rx="28" fill="url(#bg)"/>
+  <text x="700" y="52" fill="#ffffff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="32" font-weight="750" text-anchor="middle"><tspan x="700" dy="0">設計期三段式</tspan></text>
+  <text x="700" y="96" fill="#a7bad7" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="18" font-weight="400" text-anchor="middle"><tspan x="700" dy="0">先選型、再計畫、最後才實作；每段都有可審查輸出</tspan></text>
+  
+  <g filter="url(#shadow)"><rect x="80" y="210" width="220" height="90" rx="45" fill="#173e45" stroke="#42cfa0" stroke-width="3"/><text x="190" y="255" fill="#effff8" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="23" font-weight="700" text-anchor="middle"><tspan x="190" dy="0">需求＋限制</tspan></text></g>
+  <path d="M300 255 L370 255" fill="none" stroke="#8bb8ff" stroke-width="4" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><rect x="370" y="190" width="260" height="130" rx="14" fill="#213653" stroke="#4f8cff" stroke-width="3"/><text x="500" y="239" fill="#f2f7ff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="24" font-weight="700" text-anchor="middle"><tspan x="500" dy="0">選型分析</tspan><tspan x="500" dy="34">比較 2–4 方案</tspan></text></g>
+  <path d="M630 255 L700 255" fill="none" stroke="#8bb8ff" stroke-width="4" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><rect x="700" y="190" width="260" height="130" rx="14" fill="#213653" stroke="#4f8cff" stroke-width="3"/><text x="830" y="239" fill="#f2f7ff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="24" font-weight="700" text-anchor="middle"><tspan x="830" dy="0">開發計畫</tspan><tspan x="830" dy="34">里程碑＋驗收</tspan></text></g>
+  <path d="M960 255 L1030 255" fill="none" stroke="#8bb8ff" stroke-width="4" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><rect x="1030" y="190" width="260" height="130" rx="14" fill="#213653" stroke="#4f8cff" stroke-width="3"/><text x="1160" y="239" fill="#f2f7ff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="24" font-weight="700" text-anchor="middle"><tspan x="1160" dy="0">第一階段</tspan><tspan x="1160" dy="34">最小實作</tspan></text></g>
+  <path d="M1160 320 L1160 425" fill="none" stroke="#8bb8ff" stroke-width="4" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><polygon points="1038,425 1282,425 1310,470 1282,515 1038,515 1010,470" fill="#432c55" stroke="#d986e8" stroke-width="3"/><text x="1160" y="455" fill="#fff0ff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="23" font-weight="700" text-anchor="middle"><tspan x="1160" dy="0">可驗收</tspan><tspan x="1160" dy="32">實作切片</tspan></text></g>
+  <text x="700" y="390" fill="#d9e7ff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="22" font-weight="600" text-anchor="middle"><tspan x="700" dy="0">推薦必須附上有效邊界：條件變了，推薦也要能變</tspan></text>
+  <g transform="translate(58 548)">
+    <rect x="0" y="0" width="18" height="18" rx="5" fill="#213653" stroke="#4f8cff" stroke-width="2"/><text x="28" y="15" fill="#a7bad7" font-size="16">Action</text>
+    <rect x="110" y="0" width="52" height="18" rx="9" fill="#173e45" stroke="#42cfa0" stroke-width="2"/><text x="174" y="15" fill="#a7bad7" font-size="16">狀態／資料</text>
+    <polygon points="300,9 312,0 324,9 312,18" fill="#4a3821" stroke="#f3b45c" stroke-width="2"/><text x="336" y="15" fill="#a7bad7" font-size="16">判斷</text>
+    <polygon points="405,0 445,0 457,9 445,18 405,18 393,9" fill="#432c55" stroke="#d986e8" stroke-width="2"/><text x="469" y="15" fill="#a7bad7" font-size="16">交付</text>
+  </g></svg>

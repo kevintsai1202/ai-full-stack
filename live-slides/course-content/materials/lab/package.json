@@ -1,0 +1,11 @@
+{
+  "name": "auditable-ai-coding-lab",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:unit": "node --test task-rules.test.js",
+    "test:red": "node --test task-rules-red.test.js",
+    "test:e2e": "playwright test task-tracker.spec.js",
+    "audit": "npm audit --json"
+  }
+}

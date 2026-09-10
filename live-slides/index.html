@@ -35,7 +35,8 @@ body {
   display: none;
   position: fixed;
   inset: 0;
-  padding: 56px 72px 76px;
+  /* 左右留白加寬：內容不貼邊，投影時視覺重心靠中 */
+  padding: 52px 96px 72px;
   flex-direction: column;
   justify-content: center;
   animation: fade .18s ease-out;
@@ -43,9 +44,12 @@ body {
 .slide.active { display: flex; }
 @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-h1 { font-size: 64px; font-weight: 900; line-height: 1.28; margin-bottom: 20px; }
+/* 字級基準（2026-09 全頁 E2E 體檢後整體放大約 20%）：
+   1600 寬放映下內文不低於 24px，教室後排才看得到；
+   驗證門檻見 teaching-site/scripts/audit-slides.mjs 的 MIN_FONT_PX */
+h1 { font-size: 68px; font-weight: 900; line-height: 1.28; margin-bottom: 20px; }
 /* 主標加大加粗＋accent 漸層底線條：投影時觀眾第一眼要能鎖定本頁主題 */
-h2 { font-size: 52px; font-weight: 900; margin-bottom: 28px; color: #fff;
+h2 { font-size: 56px; font-weight: 900; margin-bottom: 28px; color: #fff;
      line-height: 1.32; position: relative; padding-bottom: 16px; letter-spacing: .01em; }
 h2::after { content: ""; position: absolute; left: 0; bottom: 0; width: 96px; height: 7px;
             border-radius: 4px; background: linear-gradient(90deg, var(--accent), transparent); }
@@ -53,37 +57,53 @@ h2::after { content: ""; position: absolute; left: 0; bottom: 0; width: 96px; he
 .center h2 { padding-bottom: 18px; }
 .center h2::after { left: 50%; transform: translateX(-50%);
                     background: linear-gradient(90deg, transparent, var(--accent), transparent); }
-h3 { font-size: 28px; font-weight: 800; margin-bottom: 14px; color: var(--accent); }
-p  { font-size: 21px; margin-bottom: 14px; }
-.lead { font-size: 26px; color: var(--dim); }
-.small { font-size: 17px; color: var(--dim); }
+h3 { font-size: 38px; font-weight: 800; margin-bottom: 16px; color: var(--accent); }
+p  { font-size: 30px; margin-bottom: 14px; }
+.lead { font-size: 34px; color: var(--dim); }
+.small { font-size: 24px; color: var(--dim); }
 strong { color: var(--warn); }
 em { font-style: normal; color: var(--accent); }
 
 /* ── 封面 ───────────────────────────────────────────── */
 .cover { text-align: center; align-items: center; }
 .cover h1 { font-size: 78px; }
-.cover .sub { font-size: 26px; color: var(--dim); margin-top: 10px; }
-.cover .by { margin-top: 46px; font-size: 20px; color: var(--dim); }
+.cover .sub { font-size: 34px; color: var(--dim); margin-top: 10px; }
+.cover .by { margin-top: 46px; font-size: 26px; color: var(--dim); }
 
 /* ── 生命週期地圖 ───────────────────────────────────── */
-.map { display: flex; align-items: stretch; gap: 12px; margin: 26px 0; }
+.map { display: flex; align-items: stretch; gap: 14px; margin: 28px 0; }
 .map .station {
-  flex: 1; padding: 18px 16px; text-align: center;
-  background: var(--panel); border: 2px solid var(--border); border-radius: 12px;
+  flex: 1; padding: 28px 16px; text-align: center;
+  background: var(--panel); border: 2px solid var(--border); border-radius: 14px;
   opacity: .38; transition: all .25s;
 }
-.map .station .no { font-size: 14px; color: var(--dim); letter-spacing: .1em; }
-.map .station .name { font-size: 21px; font-weight: 600; margin: 4px 0 6px; }
-.map .station .what { font-size: 15px; color: var(--dim); }
+.map .station .no { font-size: 22px; color: var(--dim); letter-spacing: .1em; }
+.map .station .name { font-size: 32px; font-weight: 700; margin: 6px 0 8px; }
+.map .station .what { font-size: 23px; color: var(--dim); line-height: 1.5; }
 .map .station.on { opacity: 1; border-color: var(--accent); background: #1b2542; transform: translateY(-4px); }
-.map .arrow { align-self: center; color: var(--border); font-size: 26px; }
+.map .arrow { align-self: center; color: var(--border); font-size: 34px; }
 .map.all .station { opacity: 1; }
+
+/* ── 分站頁進場動畫：該站卡片從暗淡狀態放大浮起 ──
+   投影片從 display:none 切到顯示時 keyframe 會重新播放，
+   所以每次翻到分站頁都會再演一次；.map.all（總覽頁）四站皆亮、不演。
+   放大後留 1.12 倍（fill-mode: both），並拉高 z-index 讓它壓在箭頭與相鄰卡片之上 */
+.slide.active .map:not(.all) .station.on {
+  position: relative; z-index: 1;
+  animation: stationPop .7s cubic-bezier(.22, 1.2, .36, 1) .25s both;
+  box-shadow: 0 18px 48px rgba(124, 184, 255, .28);
+}
+@keyframes stationPop {
+  from { opacity: .38; transform: scale(1) translateY(0); border-color: var(--border); background: var(--panel); box-shadow: none; }
+  to   { opacity: 1;   transform: scale(1.12) translateY(-6px); border-color: var(--accent); background: #1b2542; }
+}
+/* 分站頁的地圖上下多留白，放大後的卡片不會頂到標題 */
+.slide.active .map:not(.all) { margin: 44px 0 36px; }
 
 /* ── 句型對比 ───────────────────────────────────────── */
 .pair { display: grid; gap: 18px; margin: 18px 0; }
 .line {
-  padding: 20px 24px; border-radius: 12px; font-size: 24px;
+  padding: 20px 26px; border-radius: 12px; font-size: 31px;
   background: var(--panel); border-left: 6px solid var(--border);
 }
 .line.no  { border-left-color: var(--bad);  color: #ffb4ae; }
@@ -94,30 +114,48 @@ em { font-style: normal; color: var(--accent); }
 pre {
   background: #060a16; border: 1px solid var(--border); border-radius: 10px;
   padding: 20px 24px; font-family: "Cascadia Code", Consolas, monospace;
-  font-size: 17px; line-height: 1.65; color: #cbd5e1; overflow: auto;
-  white-space: pre-wrap; max-height: 62vh;
+  font-size: 25px; line-height: 1.6; color: #cbd5e1; overflow: auto;
+  white-space: pre-wrap; max-height: 576px;
 }
 pre .hl { color: var(--warn); font-weight: 700; }
+/* 提示詞區塊下方的一句金句：置中，讓整頁重心回到中間，不要孤懸左下 */
+pre + .lead { text-align: center; margin-top: 28px !important; }
 
+/* ── 內容特別密的頁（職缺頁）：整頁字級微降，寧可小一級也不能被切掉 ── */
+.dense .line { font-size: 26px; padding: 14px 22px; }
+.dense .pair { gap: 12px; margin: 12px 0; }
+.dense .lead { font-size: 29px; }
+.dense .kp { font-size: 22px; margin-top: 14px; padding: 12px 18px; }
+.dense h2 { margin-bottom: 20px; }
+
+/* ── 內容特別少的提示詞頁：提示詞放大一級，補滿版面 ── */
+.roomy pre { font-size: 29px; padding: 26px 30px; }
+.roomy .small { font-size: 27px; }
+
+/* 注意：整份投影片以 1600×900 為設計基準並用 zoom 等比縮放（見底部 fitToViewport），
+   vh 單位在 zoom 下不會跟著縮，所以所有高度上限一律用 px（1vh 等值 9px），不要再寫 vh */
 /* ── 截圖 ───────────────────────────────────────────── */
 figure { text-align: center; }
 figure img {
-  max-width: 100%; max-height: 66vh; border-radius: 10px;
+  max-width: 100%; max-height: 594px; border-radius: 10px;
   border: 1px solid var(--border); background: #fff;
 }
-figure figcaption { margin-top: 12px; font-size: 18px; color: var(--dim); }
+figure figcaption { margin-top: 12px; font-size: 25px; color: var(--dim); }
 
 /* ── 表格 ───────────────────────────────────────────── */
-table { width: 100%; border-collapse: collapse; font-size: 19px; }
-th, td { border: 1px solid var(--border); padding: 12px 16px; text-align: left; vertical-align: top; }
+table { width: 100%; border-collapse: collapse; font-size: 25px; }
+th, td { border: 1px solid var(--border); padding: 13px 16px; text-align: left; vertical-align: top; }
+/* 列數多的表（九單元表）：字級不縮、只縮列距，才塞得進一頁 */
+table.compact { font-size: 23px; }
+table.compact th, table.compact td { padding: 8px 14px; }
 th { background: #1b2542; color: #fff; }
 td.no  { color: #ffb4ae; }
 td.yes { color: #bbf7d0; font-weight: 600; }
 
 /* ── 標記 ───────────────────────────────────────────── */
 .badge {
-  display: inline-block; padding: 5px 14px; border-radius: 999px;
-  font-size: 16px; font-weight: 700; letter-spacing: .04em;
+  display: inline-block; padding: 5px 16px; border-radius: 999px;
+  font-size: 23px; font-weight: 700; letter-spacing: .04em;
 }
 .badge.live  { background: #7f1d1d; color: #fecaca; }
 .badge.quiz  { background: #1e3a8a; color: #bfdbfe; }
@@ -132,18 +170,18 @@ td.yes { color: #bbf7d0; font-weight: 600; }
 .job-ad-proof img { width: 100%; height: auto; max-height: 380px; object-fit: contain;
                     border: 1px solid var(--border); border-radius: 10px;
                     background: #fff; opacity: .92; }
-.job-ad-proof figcaption { font-size: 14px; color: var(--dim); text-align: center; }
+.job-ad-proof figcaption { font-size: 22px; color: var(--dim); text-align: center; }
 
 /* ── 知識點小卡：嵌在頁面底部的理論補充，講者可 10 秒帶過 ── */
 .kp {
   margin-top: 24px; padding: 14px 20px;
   background: #101a36; border: 1px solid var(--border); border-left: 5px solid var(--accent);
-  border-radius: 10px; font-size: 18px; line-height: 1.65; color: var(--dim);
+  border-radius: 10px; font-size: 24px; line-height: 1.6; color: var(--dim);
 }
 .kp b { color: var(--accent); }
 
 .center { text-align: center; align-items: center; }
-.big { font-size: 42px; font-weight: 800; line-height: 1.55; }
+.big { font-size: 48px; font-weight: 800; line-height: 1.55; }
 
 /* ── 底部列 ─────────────────────────────────────────── */
 .bar {
@@ -156,7 +194,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
 
 /* ── 講者備註（按 N 開關）───────────────────────────── */
 .notes {
-  position: fixed; left: 0; right: 0; bottom: 46px; max-height: 42vh; overflow: auto;
+  position: fixed; left: 0; right: 0; bottom: 46px; max-height: 378px; overflow: auto;
   padding: 18px 28px; background: #1a1207; border-top: 2px solid var(--warn);
   color: #fde68a; font-size: 17px; line-height: 1.7; display: none;
 }
@@ -167,6 +205,17 @@ td.yes { color: #bbf7d0; font-weight: 600; }
 <body>
 
 <!-- 1 封面 -->
+<!-- 0 待機頁：直播開始前停在這張，讓早到的人先掃碼加入 EXAM。不計入逐字稿 P1–P51 編號。 -->
+<section class="slide center" data-station="待機" data-note="直播開始前停在這張。開播後唸一句：「先掃這個 QR 或到 exam.zeabur.app 輸入加入碼 L5XML8，等一下每一段結束會出一題。」然後按 → 進封面。QR 由 scripts/make_exam_qr.py 產生，換碼要同步改這頁與 P8 的加入碼文字。">
+  <h2>直播即將開始，先掃碼加入</h2>
+  <figure style="margin-top:10px">
+    <img src="assets/exam-join-qr.png" alt="EXAM 測驗加入 QR code" style="max-height:360px;border-radius:14px">
+  </figure>
+  <p class="big" style="margin-top:18px">exam.zeabur.app</p>
+  <p style="margin-top:10px"><span class="badge time">加入碼</span>　<strong style="font-size:48px;letter-spacing:.18em">L5XML8</strong></p>
+  <p class="small" style="margin-top:12px">每一段結束出一題．留 Email 可收到今天所有提示詞全文＋SOP 範本＋資安稽核清單</p>
+</section>
+
 <section class="slide cover" data-station="開場" data-note="開場白：今天不談模型、不談工具比較，只談一件事——你怎麼問。">
   <h1>別再問 AI「能不能做」</h1>
   <p class="sub">讓 AI 交出可審查產物的四個提問轉換</p>
@@ -174,7 +223,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
 </section>
 
 <!-- 2 市場證據：半導體大廠職缺（open loop 鉤子） -->
-<section class="slide" data-station="開場" data-note="真實職缺（台積電）當開場鉤子。重點唸「資歷需求」那行：熟悉 AI Coding 工具寫在門檻裡、不在加分欄。加分欄的 Harness/Loop Engineering 先不解釋——留懸念：「這兩個詞是什麼？聽完今天你就會。」等 Agentic Coding 流程頁再回收。90 秒內講完。">
+<section class="slide dense" data-station="開場" data-note="真實職缺（台積電）當開場鉤子。重點唸「資歷需求」那行：熟悉 AI Coding 工具寫在門檻裡、不在加分欄。加分欄的 Harness/Loop Engineering 先不解釋——留懸念：「這兩個詞是什麼？聽完今天你就會。」等 Agentic Coding 流程頁再回收。90 秒內講完。">
   <h2>開場前，先看一張真的職缺</h2>
   <div class="job-ad-row">
     <div class="pair">
@@ -258,8 +307,16 @@ td.yes { color: #bbf7d0; font-weight: 600; }
 <!-- 5 掃碼 -->
 <section class="slide center" data-station="開場" data-note="唸出對價：「留 Email 的話，今天所有提示詞全文、SOP 範本、資安稽核清單，我整包寄給你。」Q0 開出來後不解說，只說「這張圖等一下收尾會再出現一次」。">
   <h2>先掃碼加入</h2>
-  <p class="lead">每一段結束我出一題<br>留 Email，今天所有提示詞全文＋SOP 範本＋資安稽核清單，我整包寄給你</p>
-  <p style="margin-top:30px"><span class="badge quiz">Q0 暖身題</span></p>
+  <!-- 測驗加入資訊：QR Code 由 scripts/make_exam_qr.py 產生，加入碼換了要同步改這裡 -->
+  <div style="display:flex;align-items:center;justify-content:center;gap:48px;margin-top:6px">
+    <img src="assets/exam-join-qr.png" alt="EXAM 測驗加入 QR code" style="height:252px;border-radius:12px">
+    <div style="text-align:left">
+      <p class="big" style="margin:0;font-size:40px">exam.zeabur.app</p>
+      <p style="margin:8px 0 0"><span class="badge time">加入碼</span>　<strong style="font-size:46px;letter-spacing:.16em">L5XML8</strong></p>
+      <p class="lead" style="margin-top:12px;font-size:28px">每一段結束我出一題<br>留 Email，今天所有提示詞全文＋SOP 範本＋資安稽核清單，我整包寄給你</p>
+    </div>
+  </div>
+  <p style="margin-top:14px"><span class="badge quiz">Q0 暖身題</span></p>
   <p class="big" style="margin-top:16px">你現在最常用哪一句問 AI 幫你寫程式？</p>
   <p class="lead">A.「幫我寫一個 XXX」　B.「這個能不能做？」<br>C.「幫我看看有沒有問題」　D. 我會先請它分析、寫計畫，才動手</p>
 </section>
@@ -298,7 +355,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
 2. <span class="hl">難易度分級</span>：把需求拆成子項目，每項標 S / M / L 並說明理由
 3. <span class="hl">風險與未知數</span>：哪些地方我現在無法確定，可能會爆的點在哪
 4. 前置資源：需要的環境、帳號、授權、資料、外部服務
-5. <span class="hl">建議驗證順序</span>：哪一塊該先做 spike 驗證，為什麼
+5. <span class="hl">建議驗證順序</span>：哪一塊最不確定，該先用半天做個丟棄式小原型（spike）證明走得通，為什麼是它
 
 最後請標出：<span class="hl">你對這份評估最沒把握的三件事。</span></pre>
 </section>
@@ -342,7 +399,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   <div class="pair">
     <div class="line no"><span class="tag">❌</span>幫我用 React 寫一個報修系統</div>
     <div class="line yes"><span class="tag">①</span>先做選型分析（列候選、優缺點、適用情境、推薦與理由）</div>
-    <div class="line yes"><span class="tag">②</span>再寫開發計畫（模組、里程碑、驗收標準）<strong>先不要寫程式碼</strong></div>
+    <div class="line yes"><span class="tag">②</span>再寫開發計畫（模組、里程碑、驗收標準，每階段用 TDD）<strong>先不要寫程式碼</strong></div>
     <div class="line yes"><span class="tag">③</span>才照計畫實作第一階段</div>
   </div>
 </section>
@@ -368,16 +425,17 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   </figure>
 </section>
 
-<section class="slide" data-station="站 2 設計期" data-note="「先不要寫程式碼」這句話很重要。開發計畫是便宜的中間產物：計畫改一行，程式碼改一天。">
+<section class="slide" data-station="站 2 設計期" data-note="「先不要寫程式碼」這句話很重要。開發計畫是便宜的中間產物：計畫改一行，程式碼改一天。第四項是關鍵：寫計畫時就要求用 TDD 排，驗收標準直接變成測試案例清單，站 3 的紅燈就是從這張清單來的。">
   <h3>②　開發計畫</h3>
   <pre>採用【選定方案】。請寫一份開發計畫：
 1. 模組拆解：每個模組的職責與相依關係
 2. 里程碑：分幾個階段，每階段的產出是什麼
 3. <span class="hl">每階段的驗收標準：怎樣算做完（要可驗證，不要「功能正常」這種寫法）</span>
-4. 風險點與對應的先行驗證
+4. <span class="hl">每階段用 TDD 進行：把該階段的驗收標準直接寫成測試案例清單（測試名稱＝驗收標準），實作順序是先讓測試紅、再做到綠</span>
+5. 風險點與對應的先行驗證
 
 <span class="hl">先不要寫程式碼。</span></pre>
-  <p class="lead" style="margin-top:20px">計畫改一行，程式碼改一天。</p>
+  <p class="lead" style="margin-top:16px">計畫改一行，程式碼改一天。驗收標準寫成測試，站 3 就不用重新想。</p>
 </section>
 
 <section class="slide" data-station="站 2 設計期" data-note="注意驗收標準的寫法：每一條都是可以打勾的判準，不是「功能正常」。這批標準等一下會直接變成測試。">
@@ -444,8 +502,8 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   </figure>
 </section>
 
-<section class="slide" data-station="站 3 開發驗收" data-note="LIVE：先手動點一下（15 秒），完成前置任務 → 紅底消失、下一步建議自動跳動。然後說「這個流程我不想每次都手動點」。">
-  <h3>3-2　完工後 E2E　<span class="badge live">LIVE 15 秒</span></h3>
+<section class="slide" data-station="站 3 開發驗收" data-note="不做現場操作。口頭帶過情境：「完成前置任務 → 紅底消失、下一步建議自動跳動。這個流程我不想每次都手動點。」下一頁直接播錄影。">
+  <h3>3-2　完工後 E2E</h3>
   <pre>用 Playwright 幫我寫 e2e 測試腳本，涵蓋這幾條使用者流程：
 【流程 1】【流程 2】【流程 3】
 
@@ -456,16 +514,10 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   <p class="lead" style="margin-top:18px">一次性指令跑完就沒了。腳本是資產。</p>
 </section>
 
-<section class="slide center" data-station="站 3 開發驗收" data-note="LIVE：跑 npx playwright test，約 6 秒，瀏覽器自己開、自己填、自己點。備援：預錄影片。跑完切下一張。">
-  <p><span class="badge live">LIVE 6 秒</span></p>
-  <h2>讓它自己跑一次</h2>
-  <pre style="text-align:left">PS&gt; npx playwright test</pre>
-  <p class="lead" style="margin-top:20px">備援：若當場失敗，直接播預錄影片，不要現場除錯</p>
-</section>
-
-<section class="slide center" data-station="站 3 開發驗收" data-note="★ 備援頁：只有 live 失敗時才走到這裡。進入本頁影片會自動從頭播放。正常情況直接跳過（按兩次 →）。">
-  <p><span class="badge live">備援影片</span></p>
-  <video src="assets/live-demo.webm" muted controls playsinline style="max-height:66vh;border-radius:10px;border:1px solid var(--border)"></video>
+<section class="slide center" data-station="站 3 開發驗收" data-note="★ 錄影展示：進入本頁影片會自動從頭播放（約 6 秒）。旁白跟著畫面講：瀏覽器自己開、自己填、自己點——相依阻塞 → 完成前置 → 阻塞自動解除、下一步建議跳動。播完切下一張。">
+  <h2>讓它自己跑一次　<span class="badge time">錄影展示</span></h2>
+  <pre style="text-align:left;display:inline-block">PS&gt; npx playwright test</pre>
+  <video src="assets/live-demo.webm" muted controls playsinline style="max-height:468px;margin-top:14px;border-radius:10px;border:1px solid var(--border)"></video>
   <p class="small" style="margin-top:12px">相依阻塞 → 完成前置 → 阻塞自動解除、進度前進、下一步建議跳動</p>
 </section>
 
@@ -476,7 +528,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   </figure>
 </section>
 
-<section class="slide" data-station="站 3 開發驗收" data-note="這一招最有「哇」感：測試腳本順便產出了教育訓練文件。同一次執行，一份給機器看（回歸測試），一份給人看（SOP）。而且 SOP 永遠跟程式同步，因為它是從實際跑過的畫面生出來的。">
+<section class="slide roomy" data-station="站 3 開發驗收" data-note="這一招最有「哇」感：測試腳本順便產出了教育訓練文件。同一次執行，一份給機器看（回歸測試），一份給人看（SOP）。而且 SOP 永遠跟程式同步，因為它是從實際跑過的畫面生出來的。">
   <h3>3-3　把截圖變成文件</h3>
   <pre>在 e2e 腳本的每個關鍵步驟後加上截圖，存到 e2e/screenshots/ 並依步驟編號命名。
 跑完後，<span class="hl">用這批截圖幫我產出一份操作 SOP 文件</span>：
@@ -489,6 +541,24 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   <figure>
     <img src="assets/08b-generated-sop-step06.png" alt="自動生成的 SOP">
     <figcaption>沒有人手寫這份文件——它是測試跑完自己長出來的</figcaption>
+  </figure>
+</section>
+
+<!-- 3-3 補充 ①：E2E 截圖直接標紅框——UX 稽核腳本把問題畫在畫面上（取自實際專案） -->
+<section class="slide" data-station="站 3 開發驗收" data-note="加碼兩頁，各 30 秒。第一頁：稽核不是只出一份文字報告——走查腳本截完圖，再用一支小腳本把問題「畫」在截圖上：紅框圈住位置、編號＋問題代碼＋一句說明。這是我另一個專案的真實稽核輸出：會議頁的 M-1 唯一動作是外連樣式、G-2 空狀態沒有下一步按鈕。圖上有編號，報告文字就能對得回來。下一頁看修完的樣子。">
+  <h2>E2E 截圖直接標紅框：問題畫在畫面上</h2>
+  <figure>
+    <img src="assets/14-e2e-ui-audit-annotated.png" alt="UX 稽核截圖：紅框標出問題位置與編號">
+    <figcaption>走查腳本截圖後，稽核腳本把紅框、編號與問題代碼直接畫上去——文字報告對得回畫面</figcaption>
+  </figure>
+</section>
+
+<!-- 3-3 補充：E2E 截圖的第三種用途——UI 修正前後比對（取自實際專案 UX 稽核） -->
+<section class="slide" data-station="站 3 開發驗收" data-note="第二頁：上一頁紅框 G-2 修掉之後長這樣。同一支走查腳本，修正前跑一次、修正後再跑一次，兩張截圖並排就是 UI 差異證據。這是我另一個專案 UX 稽核的真實輸出：會議頁空狀態原本只有一句灰字，稽核說沒有下一步；修完重跑，右邊多了「建立預約連結」主按鈕。不用看程式碼 diff，畫面自己說話。30 秒帶過。">
+  <h2>E2E 截圖還有第三種用法：修正前後比對</h2>
+  <figure>
+    <img src="assets/13-e2e-ui-compare.png" alt="E2E 截圖前後比對：會議空狀態加入主按鈕">
+    <figcaption>同一支腳本跑兩次——左 Before、右 After。UI 改了什麼，畫面自己說話，不用讀 diff</figcaption>
   </figure>
 </section>
 
@@ -522,7 +592,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   <p class="kp">💡 <b>知識點｜基準式稽核（Baseline audit）</b>：有清單才有覆蓋率——「沒命中也要說明為什麼不適用」把稽核從「挑幾個講」變成「逐項全查」，報告才可以被審查。</p>
 </section>
 
-<section class="slide" data-station="站 4 上線前" data-note="關鍵在最後一句——逼它交出覆蓋率，而不是只挑幾個好講的講。清單版本要講：OWASP 2025 版新增 A03 供應鏈、A10 例外處理，SSRF 併進 A01。用 2021 版問會漏掉兩塊。">
+<section class="slide roomy" data-station="站 4 上線前" data-note="關鍵在最後一句——逼它交出覆蓋率，而不是只挑幾個好講的講。清單版本要講：OWASP 2025 版新增 A03 供應鏈、A10 例外處理，SSRF 併進 A01。用 2021 版問會漏掉兩塊。">
   <h3>第一層　我寫的程式碼</h3>
   <pre>對照 <span class="hl">OWASP Top 10:2025</span> 與 <span class="hl">CWE Top 25（2025 版）</span>逐項檢查這份程式碼，
 輸出表格：分類代號、是否命中、程式位置、風險等級、修補建議。
@@ -549,7 +619,7 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   <pre>列出本專案所有相依套件與版本，逐一查有無已知 CVE，
 標出 CVSS 分數、影響說明與建議升級版本，依風險排序。</pre>
   <figure style="margin-top:18px">
-    <img src="assets/10-dependency-audit.png" alt="相依套件稽核" style="max-height:40vh">
+    <img src="assets/10-dependency-audit.png" alt="相依套件稽核" style="max-height:360px">
     <figcaption>0 漏洞，但 5 個直接相依帶進 106 個套件——這只是「今天乾淨」</figcaption>
   </figure>
 </section>
@@ -577,7 +647,6 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   <h2>還記得開場那一題嗎</h2>
   <p class="big" style="margin-top:20px">A.「幫我寫一個 XXX」<br>B.「這個能不能做？」<br>C.「幫我看看有沒有問題」</p>
   <p class="lead" style="margin-top:26px">這三句話，正好就是今天要換掉的三句</p>
-  <p class="small" style="margin-top:18px">（切到 EXAM 畫面顯示 Q0 統計）</p>
 </section>
 
 <section class="slide" data-station="收尾" data-note="這張讓觀眾截圖。停久一點，說「這張可以拍」。">
@@ -585,17 +654,82 @@ td.yes { color: #bbf7d0; font-weight: 600; }
   <table>
     <tr><th style="width:14%">階段</th><th style="width:24%">❌ 別這樣問</th><th style="width:34%">✅ 這樣問</th><th>你會拿到的產物</th></tr>
     <tr><td>想法期</td><td class="no">這個能不能做？</td><td class="yes">做一份可行性評估報告，含難易度分級、風險、驗證順序</td><td>可進會議、可被打槍的評估文件</td></tr>
-    <tr><td>設計期</td><td class="no">幫我寫一個 X</td><td class="yes">先選型分析 → 再開發計畫 → 才實作</td><td>選型比較表 + 里程碑與驗收標準</td></tr>
+    <tr><td>設計期</td><td class="no">幫我寫一個 X</td><td class="yes">先選型分析 → 再開發計畫（每階段用 TDD） → 才實作</td><td>選型比較表 + 里程碑與驗收標準（＝測試案例清單）</td></tr>
     <tr><td>開發驗收</td><td class="no">幫我測試有沒有問題</td><td class="yes">TDD 紅綠重構 → Playwright 腳本 → 截圖生 SOP</td><td>回歸測試資產 + 操作手冊</td></tr>
     <tr><td>上線前</td><td class="no">幫我看有沒有漏洞</td><td class="yes">對照 OWASP／CWE 逐項稽核，含未命中原因</td><td>有覆蓋率的稽核表</td></tr>
   </table>
 </section>
 
-<section class="slide center" data-station="收尾" data-note="主張回扣。然後課程一句話輕輕帶過，不做促銷。開 Q5 離場題。進 Q&A。">
+<section class="slide center" data-station="收尾" data-note="主張回扣。這頁不顯示 Q5 文字，講完直接在 EXAM 開 Q5 離場題（開著就好，散場前填）。接著進課程介紹段（約 10 分鐘），最後才是 Q&A。">
   <p class="big">這四招的共通點只有一個<br><br><strong>你要求了一份別人可以審查的東西</strong></p>
   <p class="lead" style="margin-top:34px">把「一句話回答」換成「可審查產物」</p>
-  <p style="margin-top:40px"><span class="badge quiz">Q5 離場題</span>　今天四站，你最想馬上用的是哪一個？</p>
-  <p class="small">（開著就好，散場前填，我照你選的寄對應的東西給你）</p>
+</section>
+
+<!-- ══════════ 課程介紹（約 10 分鐘）══════════ -->
+<section class="slide center" data-station="課程介紹" data-note="過場，30 秒。語氣：不是廣告時間，是「今天講的東西有完整版」。今天四站示範的是提問方法，課程做的是把這套方法用在一個真的產品上，從第一行程式寫到上線。">
+  <p class="lead">今天的四招，其實是節錄自一門完整的課</p>
+  <h2 style="margin-top:18px">AI 賦能全端開發<br>從零打造企業級智慧應用</h2>
+  <p class="lead" style="margin-top:14px">Hahow 線上課　·　用同一套 AI 提問方法<br>從第一行程式寫到<em>正式上線</em></p>
+</section>
+
+<section class="slide" data-station="課程介紹" data-note="2 分鐘。重點：不是聊天機器人 demo，是一條完整產品線。每一章的產出都是下一章的地基，學完手上留下的是一套可展示、可上線的系統。AI 只負責摘要、分類、建議；金額、權限這些硬資料全部由 Java domain service 提供——這就是「企業級」跟「demo」的差別。">
+  <h2>你會做出什麼：AI CRM 智慧業務助理</h2>
+  <div class="pair">
+    <div class="line yes"><span class="tag">✅</span>可登入、有角色權限的企業級 CRM（客戶、商機、互動紀錄）</div>
+    <div class="line yes"><span class="tag">✅</span>打開客戶頁面，AI 自動整理：活躍度、風險訊號、下一步建議</div>
+    <div class="line yes"><span class="tag">✅</span>RAG 知識庫——AI 的建議會<em>引用</em>產品文件與銷售話術，不憑空回答</div>
+    <div class="line yes"><span class="tag">✅</span>Tool calling 讀取真實 CRM 資料——金額、訂單由資料庫說了算</div>
+  </div>
+  <div class="kp"><b>跟聊天機器人 demo 的差別</b>：AI 只負責摘要與建議，所有金額、權限、訂單都由 Java domain service 提供——這是可上線的系統，不是玩具。</div>
+</section>
+
+<section class="slide" data-station="課程介紹" data-note="2.5 分鐘。不逐條唸，用手勢分三段講：1-5 是全端地基（後端、資料庫、安全、前端），6-7 是 AI 能力（ChatClient、RAG、MCP），8-9 是驗收與上線。強調 Unit 9：大多數課停在 localhost，這門課教你真的讓外網連進來。">
+  <h2>九個單元：一條產品線，不是零散範例</h2>
+  <table class="compact">
+    <tr><th style="width:12%">單元</th><th style="width:48%">主題</th><th>核心產出</th></tr>
+    <tr><td>1</td><td>開發環境、專案骨架與 AI 協作流程</td><td>可啟動的 full-stack monorepo</td></tr>
+    <tr><td>2</td><td>Spring MVC、REST API 與 CRM Domain Modeling</td><td>客戶與互動紀錄 API</td></tr>
+    <tr><td>3</td><td>PostgreSQL、Flyway、JPA 與動態查詢</td><td>CRM 資料庫與查詢服務</td></tr>
+    <tr><td>4</td><td>Spring Security、JWT、OpenAPI 與錯誤處理</td><td>安全可測的後端 API</td></tr>
+    <tr><td>5</td><td>React CRM 工作台與前後端整合</td><td>可登入的 CRM UI</td></tr>
+    <tr><td>6</td><td>Spring AI ChatClient、SSE 與 tool calling</td><td>AI CRM 助理聊天室</td></tr>
+    <tr><td>7</td><td>RAG、pgvector、MCP 與知識庫擴充</td><td>可引用文件的 AI 建議</td></tr>
+    <tr><td>8</td><td>結訓專案衝刺與 Demo Day 驗收</td><td>可展示的完整 AI CRM</td></tr>
+    <tr><td>9</td><td>延伸：Cloudflare Tunnel 上線實戰</td><td><em>外網可連</em>的正式上線系統</td></tr>
+  </table>
+</section>
+
+<section class="slide" data-station="課程介紹" data-note="1.5 分鐘。兩個重點：① 技術棧是 2026 年的最新基準，不是教舊版；② 今天四站的提問方法，課程每一章都在用——可行性、選型、TDD、稽核不是口號，是每章的固定工序。">
+  <h2>技術棧：用現在進行式的版本</h2>
+  <table>
+    <tr><th style="width:24%">類別</th><th>課程採用</th></tr>
+    <tr><td>後端</td><td>Java 21 · Spring Boot 4.0 · Spring MVC · Spring Data JPA</td></tr>
+    <tr><td>資料庫</td><td>PostgreSQL + pgvector · Flyway migration</td></tr>
+    <tr><td>安全</td><td>Spring Security + JWT · SpringDoc OpenAPI</td></tr>
+    <tr><td>AI</td><td>Spring AI 2.0 · RAG · Tool Calling · MCP</td></tr>
+    <tr><td>前端</td><td>React + TypeScript + Vite</td></tr>
+    <tr><td>開發環境</td><td>Windows + PowerShell 7+ · AI Agent 協作流程</td></tr>
+  </table>
+  <div class="kp"><b>跟今天直播的關係</b>：可行性評估、選型分析、TDD、資安稽核——這四招在課程裡不是口號，是每一章的固定工序。</div>
+</section>
+
+<section class="slide" data-station="課程介紹" data-note="1.5 分鐘。重點講最後一條：沒程式經驗也能上——教學會帶基礎概念，而且今天整場示範的就是「用提示詞做出東西」，課程把這件事做完整。對到觀眾的自我認同：從零基礎到會寫 API 但沒做過完整產品的人都適合。">
+  <h2>這門課適合誰</h2>
+  <div class="pair">
+    <div class="line yes"><span class="tag">✅</span>有 Java 基礎，想把 Spring Boot、React 與 AI 串成完整產品</div>
+    <div class="line yes"><span class="tag">✅</span>會寫 REST API，但還不熟企業級分層、權限、遷移與前後端整合</div>
+    <div class="line yes"><span class="tag">✅</span>想讓 Spring AI 與 RAG 真的落地，而不是只做聊天機器人 demo</div>
+    <div class="line yes"><span class="tag">✅</span>沒程式經驗也 OK——教學中會帶你了解基礎概念，<em>透過提示詞也能做出東西</em></div>
+  </div>
+</section>
+
+<section class="slide center" data-station="課程介紹" data-note="★ 停留最久的一張，至少 60 秒讓大家掃碼、截圖。唸出網址 hahow.in/cr/ai-full-stack。講完才進 Q&A。">
+  <h2>課程連結</h2>
+  <figure style="margin-top:10px">
+    <img src="assets/hahow-course-qr.png" alt="Hahow 課程頁 QR code" style="max-height:342px">
+  </figure>
+  <p class="big" style="margin-top:22px">hahow.in/cr/ai-full-stack</p>
+  <p class="small" style="margin-top:16px">掃碼或輸入網址進課程頁</p>
 </section>
 
 <section class="slide center cover" data-station="Q&A" data-note="Q&A 10 分鐘。備料：想看現場修資安問題？現在做給你看。模型差異？這四招與模型無關。">
@@ -680,10 +814,27 @@ document.addEventListener('keydown', (event) => {
 });
 
 // 點擊畫面右半往前、左半往後，方便用簡報筆或觸控操作
+// 用 html 元素的實際寬度判斷左右半，套用縮放後 clientX 與 innerWidth 的座標系可能不同
 document.addEventListener('click', (event) => {
   if (event.target.closest('.notes')) return;
-  show(current + (event.clientX > window.innerWidth / 2 ? 1 : -1));
+  const half = document.documentElement.getBoundingClientRect().width / 2;
+  show(current + (event.clientX > half ? 1 : -1));
 });
+
+/**
+ * 依視窗大小等比縮放整份投影片。
+ * 版面所有尺寸都以 1600×900 為設計基準（px 固定值），
+ * 視窗比基準小（筆電 100% 顯示、瀏覽器沒全螢幕）就縮小，投影機 1920×1080 則放大，
+ * 保證任何視窗下看到的都是驗證過的那一張版面，不會有內容被切掉。
+ */
+const DESIGN_WIDTH = 1600;
+const DESIGN_HEIGHT = 900;
+function fitToViewport() {
+  const scale = Math.min(window.innerWidth / DESIGN_WIDTH, window.innerHeight / DESIGN_HEIGHT);
+  document.documentElement.style.zoom = String(scale);
+}
+window.addEventListener('resize', fitToViewport);
+fitToViewport();
 
 show(Number(location.hash.slice(1)) - 1 || 0);
 </script>

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="620" viewBox="0 0 1400 620" role="img" aria-labelledby="title desc">
+  <title id="title">把「功能正常」改成可驗收條件</title>
+  <desc id="desc">驗收句型：當……，執行……，應該……</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0d1728"/><stop offset="1" stop-color="#182b48"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000000" flood-opacity=".28"/></filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,0 L12,6 L0,12 z" fill="#8bb8ff"/></marker>
+  </defs>
+  <rect width="1400" height="620" rx="28" fill="url(#bg)"/>
+  <text x="700" y="52" fill="#ffffff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="32" font-weight="750" text-anchor="middle"><tspan x="700" dy="0">把「功能正常」改成可驗收條件</tspan></text>
+  <text x="700" y="96" fill="#a7bad7" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="18" font-weight="400" text-anchor="middle"><tspan x="700" dy="0">驗收句型：當……，執行……，應該……</tspan></text>
+  
+  <g filter="url(#shadow)"><rect x="80" y="205" width="220" height="90" rx="45" fill="#173e45" stroke="#42cfa0" stroke-width="3"/><text x="190" y="235" fill="#effff8" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="23" font-weight="700" text-anchor="middle"><tspan x="190" dy="0">當</tspan><tspan x="190" dy="32">輸入狀態</tspan></text></g>
+  <path d="M300 250 L390 250" fill="none" stroke="#8bb8ff" stroke-width="4" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><rect x="390" y="190" width="230" height="120" rx="14" fill="#213653" stroke="#4f8cff" stroke-width="3"/><text x="505" y="234" fill="#f2f7ff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="24" font-weight="700" text-anchor="middle"><tspan x="505" dy="0">執行</tspan><tspan x="505" dy="34">使用者動作</tspan></text></g>
+  <path d="M620 250 L710 250" fill="none" stroke="#8bb8ff" stroke-width="4" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><polygon points="800,185 890,250 800,315 710,250" fill="#4a3821" stroke="#f3b45c" stroke-width="3"/><text x="800" y="235" fill="#fff7e8" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="22" font-weight="700" text-anchor="middle"><tspan x="800" dy="0">結果</tspan><tspan x="800" dy="30">可觀察？</tspan></text></g>
+  <path d="M890 250 L990 250" fill="none" stroke="#8bb8ff" stroke-width="4" marker-end="url(#arrow)"/><text x="940" y="238" fill="#b9cdf0" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="17" font-weight="600" text-anchor="middle"><tspan x="940" dy="0">是</tspan></text>
+  <g filter="url(#shadow)"><polygon points="1018,205 1252,205 1280,250 1252,295 1018,295 990,250" fill="#432c55" stroke="#d986e8" stroke-width="3"/><text x="1135" y="235" fill="#fff0ff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="23" font-weight="700" text-anchor="middle"><tspan x="1135" dy="0">留下證據</tspan><tspan x="1135" dy="32">測試／截圖</tspan></text></g>
+  <path d="M800 315 L800 425" fill="none" stroke="#8bb8ff" stroke-width="4" marker-end="url(#arrow)"/><text x="800" y="358" fill="#b9cdf0" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="17" font-weight="600" text-anchor="middle"><tspan x="800" dy="0">否</tspan></text>
+  <g filter="url(#shadow)"><rect x="650" y="425" width="300" height="85" rx="14" fill="#213653" stroke="#4f8cff" stroke-width="3"/><text x="800" y="467.5" fill="#f2f7ff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="24" font-weight="700" text-anchor="middle"><tspan x="800" dy="0">改寫驗收句子</tspan></text></g>
+  <text x="700" y="370" fill="#d9e7ff" font-family="Microsoft JhengHei, Noto Sans TC, Segoe UI, sans-serif" font-size="22" font-weight="600" text-anchor="middle"><tspan x="700" dy="0">「功能正常」不能直接打勾；輸入、動作、結果要能被第三人重做</tspan></text>
+  <g transform="translate(58 548)">
+    <rect x="0" y="0" width="18" height="18" rx="5" fill="#213653" stroke="#4f8cff" stroke-width="2"/><text x="28" y="15" fill="#a7bad7" font-size="16">Action</text>
+    <rect x="110" y="0" width="52" height="18" rx="9" fill="#173e45" stroke="#42cfa0" stroke-width="2"/><text x="174" y="15" fill="#a7bad7" font-size="16">狀態／資料</text>
+    <polygon points="300,9 312,0 324,9 312,18" fill="#4a3821" stroke="#f3b45c" stroke-width="2"/><text x="336" y="15" fill="#a7bad7" font-size="16">判斷</text>
+    <polygon points="405,0 445,0 457,9 445,18 405,18 393,9" fill="#432c55" stroke="#d986e8" stroke-width="2"/><text x="469" y="15" fill="#a7bad7" font-size="16">交付</text>
+  </g></svg>
