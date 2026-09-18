@@ -49,6 +49,12 @@
     "type": "MD",
     "name": "Embabel_黑板機制與GOAP動作規劃指南",
     "desc": "（選修附錄）Embabel GOAP 演算法原理與 Blackboard 機制。Embabel 2.0 穩定後可升級為正式單元。"
+  },
+  {
+    "id": "mat9",
+    "type": "MD",
+    "name": "CRM_角色權限矩陣與RBAC實作規格",
+    "desc": "三角色（SALES／MANAGER／ADMIN）功能權限矩陣、資料可視範圍與驗收案例，可整份附給 AI Agent 當實作規格。"
   }
 ]
 ```

@@ -486,8 +486,8 @@ window.COURSE = {
         "promptMac": "請接續 Unit 1。本章我們設計 CRM 的核心資料：客戶、聯絡人、往來紀錄與生意機會。理解原理後，依序使用下方提示詞請 AI 協助你從簡單的記憶體暫存版暖身，做到一套完整的客戶關係資料，最後用驗證提示詞核對。本章提示詞已把欄位、端點與驗收條件寫進去，請整段複製給 AI Agent，不要只貼前半段。",
         "prompts": [
           { "title": "① 暖身：先做一個簡單的客戶資料功能", "kind": "build", "note": "資料先暫存在程式裡；客戶欄位現在就固定，之後不再改", "text": "請幫我做一個簡單版的客戶資料功能來練手：可以看全部客戶、看某一個客戶（如果找不到要回 404 並明確告訴我）、以及新增客戶（成功回 201）。資料先暫時存在程式裡就好，還不用接資料庫。客戶欄位現在就固定下來，之後不再改：name（公司名）、email、phone（台灣手機 09 開頭共 10 碼）、taxId（8 碼統一編號）、industry（產業）、ownerName（負責業務）、status（ACTIVE 合作中 / INACTIVE 停止往來 / LEVERAGED 重點經營）、contractStartDate、contractEndDate、renewalDueDate。輸入要用 @Valid 檢查，Controller 只做收發、邏輯放 Service、請求與回應用 record DTO，不要直接回傳內部物件。請加上函式級別的繁體中文註解。做完後我要能實際呼叫這些功能拿到結果。" },
-          { "title": "② 設計成完整的 CRM 客戶關係資料", "kind": "build", "note": "客戶 / 聯絡人 / 往來紀錄 / 生意機會，欄位與狀態值都固定", "text": "請把它擴充成一套完整的「客戶關係管理(CRM)」資料，四種東西與它們的關係如下（一個客戶可以有多位聯絡人、多筆往來紀錄、多個生意機會）：\n- 客戶 Customer：沿用暖身版欄位。\n- 聯絡人 Contact：name、title（職稱）、email。\n- 往來紀錄 Interaction：type（PHONE / MEETING / EMAIL / SUPPORT_TICKET）、occurredAt（發生時間）、content（內容）。\n- 生意機會 Opportunity：name、stage（QUALIFICATION 資格評估 / PROPOSAL 提案 / NEGOTIATION 議價 / CLOSED_WON 成交 / CLOSED_LOST 失敗）、amount（金額）、expectedCloseDate、type（NEW_BUSINESS 新業務 / RENEWAL 續約）。\n每種都要能新增和查詢；查單一客戶時要一次把他的聯絡人、往來紀錄、生意機會都帶回來；生意機會要能單獨更新階段。所有 DTO 集中放在一個 Dtos 檔案裡，錯誤一律回 Spring 內建的 ProblemDetail 格式。請加繁體中文註解。" },
-          { "title": "✅ 驗證 — 測試這些功能都正常", "kind": "verify", "note": "並整理成我之後可以重跑的腳本", "text": "請幫我測試新增客戶、幫客戶新增聯絡人與往來紀錄、新增生意機會、更新生意機會階段、以及查詢單一客戶（要看到底下的三種資料）都能正常運作，也要測一個找不到客戶回 404、一個欄位不合法回 400 的案例。把測試步驟整理成 scripts/test-crm-api.ps1（PowerShell 7，用 Invoke-RestMethod），讓我之後可以直接重跑。" }
+          { "title": "② 設計成完整的 CRM 客戶關係資料", "kind": "build", "note": "客戶 / 聯絡人 / 往來紀錄 / 生意機會，欄位與狀態值都固定", "text": "請把它擴充成一套完整的「客戶關係管理(CRM)」資料，四種東西與它們的關係如下（一個客戶可以有多位聯絡人、多筆往來紀錄、多個生意機會）：\n- 客戶 Customer：沿用暖身版欄位。\n- 聯絡人 Contact：name、title（職稱）、email。\n- 往來紀錄 Interaction：type（PHONE / MEETING / EMAIL / SUPPORT_TICKET）、occurredAt（發生時間）、content（內容）。\n- 生意機會 Opportunity：name、stage（QUALIFICATION 資格評估 / PROPOSAL 提案 / NEGOTIATION 議價 / CLOSED_WON 成交 / CLOSED_LOST 失敗）、amount（金額）、expectedCloseDate、type（NEW_BUSINESS 新業務 / RENEWAL 續約）。\n每種都要能新增和查詢；查單一客戶時要一次把他的聯絡人、往來紀錄、生意機會都帶回來；生意機會要能單獨更新階段。客戶還要能修改（PUT /api/customers/{id}，同樣走 @Valid 驗證）與刪除（DELETE /api/customers/{id}，成功回 204，底下的聯絡人、往來紀錄、生意機會一併刪除），這兩個端點第四章會用來示範權限控管。所有 DTO 集中放在一個 Dtos 檔案裡，錯誤一律回 Spring 內建的 ProblemDetail 格式。請加繁體中文註解。" },
+          { "title": "✅ 驗證 — 測試這些功能都正常", "kind": "verify", "note": "並整理成我之後可以重跑的腳本", "text": "請幫我測試新增客戶、幫客戶新增聯絡人與往來紀錄、新增生意機會、更新生意機會階段、修改與刪除客戶（刪除後再查應該回 404），以及查詢單一客戶（要看到底下的三種資料）都能正常運作，也要測一個找不到客戶回 404、一個欄位不合法回 400 的案例。把測試步驟整理成 scripts/test-crm-api.ps1（PowerShell 7，用 Invoke-RestMethod），讓我之後可以直接重跑。" },
         ],
         "tasks": [
           {
@@ -590,6 +590,11 @@ window.COURSE = {
         ],
         "principle": "持久層的心法在於版本管理與關聯設計。Flyway 保證了資料庫結構的可追溯性，而 JPA Mapping 則需注意延遲載入 (Lazy Load) 與 N+1 查詢問題，動態查詢則透過 Specification 保持代碼優雅與靈活。",
         "concepts": [
+          {
+            "heading": "下載與安裝 Docker Desktop",
+            "group": "Docker 與 PostgreSQL 容器化",
+            "body": "開始建立容器化資料庫之前，本機需要先安裝好 Docker Desktop。\n\n**下載網址**：[Docker Desktop 官方下載頁面](https://www.docker.com/products/docker-desktop/)\n\n**安裝步驟**：\n1. 開啟上方網址，依作業系統選擇下載版本（Windows / Mac / Linux）\n2. 下載完成後執行安裝檔，全程使用預設選項即可\n3. Windows 安裝完成後，依提示重新啟動電腦\n4. 開啟 Docker Desktop，等待左下角狀態顯示綠色的「Engine running」\n5. 開啟終端機執行 `docker run hello-world`，看到 `Hello from Docker!` 訊息即代表安裝成功\n\n下圖為官方下載頁面實際畫面，可對照確認下載按鈕位置。"
+          },
           {
             "heading": "為什麼資料庫要容器化",
             "group": "Docker 與 PostgreSQL 容器化",
@@ -736,6 +741,12 @@ window.COURSE = {
             "kind": "term",
             "alt": "PostgreSQL、Flyway、JPA 與動態查詢 專業術語解釋",
             "spec": "Flyway / JPA Entity / Specification"
+          },
+          {
+            "name": "u3-4-docker-desktop-download.png",
+            "kind": "screenshot",
+            "alt": "Docker Desktop 官方下載頁面",
+            "spec": "docker.com 官方下載頁面實際截圖，含「Download Docker Desktop」下載按鈕位置"
           }
         ]
       },
@@ -788,6 +799,10 @@ window.COURSE = {
           "善用 @Slf4j 建立有語意的結構化日誌，透過 application.yml 設定 Log層級，再用 Spring Actuator 在不重啟應用的情況下動態調整。"
         ],
         "goals": [
+          "理解 Spring Security 的 Authentication（認證）與 Authorization（授權）核心概念",
+          "學會以 AI 輔助建立 JWT 過濾器並在 Token 內寫入使用者角色（ADMIN／MANAGER／SALES）",
+          "以權限表定義 SALES／MANAGER／ADMIN 的功能範圍，實作角色基礎存取控制（RBAC）與資料可視範圍過濾",
+          "保護 Swagger API 文件，限定僅能透過認證身分存取",
           "理解 OpenAPI 規範與 Swagger UI 的關係",
           "加入 springdoc-openapi 並確認 Swagger UI 可正常存取",
           "用標註豐富 Controller 的 API 說明",
@@ -803,96 +818,96 @@ window.COURSE = {
           "理解 AOP 解決的問題與核心詞彙",
           "知道 Spring AOP 用 Proxy 實現，並了解其限制",
           "能辨識哪些 Spring 功能背後使用了 AOP",
-          "知道在什麼情況下才需要直接撰寫 AOP",
-          "理解 Spring Security 的 Authentication（認證）與 Authorization（授權）核心概念",
-          "學會以 AI 輔助建立 JWT 過濾器並在 Token 內寫入使用者角色（ADMIN/USER）",
-          "實作角色基礎存取控制（RBAC），客戶資料查詢 API 供業務人員使用，客戶資料刪除 API 僅限管理員",
-          "保護 Swagger API 文件，限定僅能透過認證身分存取"
+          "知道在什麼情況下才需要直接撰寫 AOP"
         ],
         "principle": "企業級後端的防線在於安全與一致性。Spring Security 與 JWT filter 組成了堅實的驗證防禦，全域錯誤處理 RFC 7807 則給予前端可預期的錯誤 JSON 結構，結合 Swagger 實現規格即文件。",
         "concepts": [
           {
-            "heading": "為什麼需要 API 文件",
-            "group": "OpenAPI 文件自動生成",
-            "body": "後端 API 一旦超過 5 個端點，沒有文件的開發協作就開始痛苦：前端不知道要傳什麼格式、測試人員要翻程式碼才知道有哪些欄位、新人要花大量時間猜 request body 結構。\n\nOpenAPI 規範（前身是 Swagger）定義了一套描述 REST API 的標準格式，springdoc-openapi 能自動從 Spring MVC 的 Controller 掃描產生 OpenAPI 文件，並提供互動式 UI 讓人直接從瀏覽器呼叫 API。\n\n- 自動掃描：不需要手寫文件，從 Controller 標註推導\n- Swagger UI：瀏覽器直接測試每個端點，看到 request / response 格式\n- 機器可讀格式：前端工具可從 `/v3/api-docs` 取得 JSON 格式規格，自動產生 API client"
-          },
-          {
-            "heading": "OpenAPI 標註與 AI 提示詞",
-            "group": "OpenAPI 文件自動生成",
-            "body": "不加標註時 Swagger UI 只能從方法簽章推導基本資訊。用 `@Operation`、`@Parameter`、`@ApiResponse` 補充說明後，文件立即更完整，前端閱讀效率大幅提升。\n\n**CustomerController.java — 加入 OpenAPI 標註 (java)**\n```java\n@RestController\n@RequestMapping(\"/api/customers\")\n@Tag(name = \"客戶管理\", description = \"客戶的新增、查詢、修改與刪除\")\npublic class CustomerController {\n\n    @Operation(\n        summary = \"查詢所有客戶\",\n        description = \"回傳完整客戶清單，可加 keyword 參數進行模糊搜尋\"\n// ... 完整程式碼請參考課程 GitHub 專案 ...\n    }\n}\n```\n\n---\n\n**AI 提示詞練習**\n\n試著用以下提示詞讓 AI 助手幫你完善 API 文件標註：\n\n- 「請幫我在 CustomerController 的所有端點加上 @Operation 說明，並補充每個可能的 HTTP 狀態碼對應的 @ApiResponse 標註。」\n- 「如何讓 Swagger UI 只在 dev profile 啟用，在 prod profile 自動關閉？請修改 application.yml 與 OpenApiConfig。」"
-          },
-          {
-            "heading": "統一錯誤回應設計",
-            "group": "全域例外處理",
-            "body": "**沒有全域例外處理的問題**\n\n沒有統一例外處理時，Spring Boot 預設的錯誤回應格式混雜了 Tomcat 訊息與 Java 堆疊資訊，前端無法依賴固定結構解析錯誤。更糟的是，不同端點可能回傳完全不同格式的錯誤，增加前端的防禦成本。\n\n`@RestControllerAdvice` 讓你在一個地方定義所有例外的處理方式：每種例外對應一個方法，統一回傳相同結構的 JSON，Controller 本身完全不需要 try-catch。\n\n- 例外處理集中在一個類別，不散落各個 Controller\n- 回傳格式統一，前端只需解析一種結構\n- Controller 保持乾淨，只做「請求分派」這一件事\n\n---\n\n**建立統一的 ErrorResponse 格式**\n\n先定義所有錯誤回應共用的資料結構。使用 Java Record 讓程式碼簡潔，Jackson 自動序列化為 JSON。\n\n**ErrorResponse.java (java)**\n```java\n/**\n * 統一的 API 錯誤回應格式\n * 所有例外處理方法都回傳此格式，讓前端只需解析一種結構\n */\npublic record ErrorResponse(\n    int status,          // HTTP 狀態碼\n    String error,        // 錯誤類型（如 \"Not Found\"）\n    String message,      // 人類可讀的錯誤說明\n    String path,         // 發生錯誤的 API 路徑\n    LocalDateTime timestamp  // 錯誤發生時間\n) {\n    /** 快速建立標準錯誤回應的工廠方法 */\n    public static ErrorResponse of(HttpStatus status, String message, String path) {\n        return new ErrorResponse(\n            status.value(),\n            status.getReasonPhrase(),\n            message,\n            path,\n            LocalDateTime.now()\n        );\n    }\n}\n```"
-          },
-          {
-            "heading": "ProblemDetail 與錯誤回應對照",
-            "group": "全域例外處理",
-            "body": "**ProblemDetail：Spring Boot 3 內建標準格式**\n\nSpring Boot 3+ 採用 RFC 9457 的 `ProblemDetail` 作為標準錯誤格式，Spring Boot 4 延續支援並推薦使用。不需要自訂 `ErrorResponse`，可直接在 `GlobalExceptionHandler` 回傳 `ProblemDetail` 物件，格式已符合業界標準。\n\n- `ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, \"客戶不存在\")` → 直接建立標準格式物件\n- 可透過 `problemDetail.setProperty(\"extra\", value)` 加入自訂欄位\n- 在 `application.yml` 加上 `spring.mvc.problemdetails.enabled: true` 可讓 Spring 預設用此格式回傳驗證錯誤\n\n---\n\n**例外處理回應對照**\n\n以下是三種例外情境對應的實際 JSON 回應，前端可依 `status` 欄位決定顯示方式。\n\n**各類例外的回應格式 (json)**\n```json\n// GET /api/customers/999 → 客戶不存在\n{\n  \"status\": 404,\n  \"error\": \"Not Found\",\n  \"message\": \"客戶 不存在：id = 999\",\n  \"path\": \"/api/customers/999\",\n  \"timestamp\": \"2026-06-08T10:30:00\"\n}\n\n// POST /api/customers → 驗證失敗\n{\n  \"status\": 400,\n  \"error\": \"Bad Request\",\n  \"message\": \"輸入資料驗證失敗\",\n  \"errors\": [\"name：客戶名稱不可為空\", \"level：等級必須為 VIP、General 或 New\"],\n  \"path\": \"/api/customers\"\n}\n\n// 任何未預期錯誤\n{\n  \"status\": 500,\n  \"error\": \"Internal Server Error\",\n  \"message\": \"伺服器發生錯誤，請稍後再試\",\n  \"path\": \"/api/customers\"\n}\n```"
-          },
-          {
-            "heading": "Log 核心觀念與最佳實踐",
-            "group": "Log 日誌管理",
-            "body": "**Spring Boot 預設 Log 機制**\n\nSpring Boot 預設使用 Logback 作為 Log 框架，並透過 SLF4J 提供統一的 API 介面。不需要任何設定就能使用，只要依賴 `spring-boot-starter`（幾乎所有 Starter 都已包含）就自動啟用。\n\n預設 Log 格式包含時間戳記、層級、執行緒、類別名稱與訊息。開發時輸出到 console，可另外設定輸出到檔案。\n\n- `ERROR` → 系統發生嚴重錯誤，需要立即處理\n- `WARN` → 可能有問題，但系統還能運作\n- `INFO` → 正常業務流程的關鍵節點（預設顯示層級）\n- `DEBUG` → 詳細的執行資訊，開發除錯使用\n- `TRACE` → 最詳細層級，通常只在框架內部使用\n\n---\n\n**Log 最佳實踐**\n\n- **INFO**：記錄業務關鍵節點（誰建立了什麼、誰觸發了什麼操作），足以在不看程式碼的情況下理解系統在做什麼\n- **WARN**：可以自動恢復或降級的異常情境（如 retry、fallback），需要關注但不需要立即處理\n- **ERROR**：需要人工介入的問題，搭配 `log.error(\"...\", ex)` 記錄完整 stack trace\n- **避免在 Log 記錄密碼、Token、信用卡號**：即使是 DEBUG 層級，log 檔可能被備份或轉發到第三方\n- **用 `{}` 佔位符而非字串拼接**：`log.debug(\"id={}\", id)` 在 DEBUG 層級關閉時不建立字串，效能更好"
-          },
-          {
-            "heading": "@Slf4j 與結構化 Log 寫法",
-            "group": "Log 日誌管理",
-            "body": "Lombok 的 `@Slf4j` 自動注入 `log` 物件，省去手動宣告 Logger 的樣板程式碼。Log 訊息用 `{}` 佔位符取代字串拼接，避免不必要的字串建立開銷，也讓訊息格式更清楚。\n\n**CustomerService.java — @Slf4j 使用範例 (java)**\n```java\n@Slf4j   // Lombok：自動注入 private static final Logger log = ...\n@Service\npublic class CustomerService {\n\n    public Customer saveCustomer(Customer customer) {\n        log.info(\"新增客戶：name={}, level={}, email={}\", customer.getName(), customer.getLevel(), customer.getEmail());\n\n        Customer saved = customerRepository.save(customer);\n// ... 完整程式碼請參考課程 GitHub 專案 ...\n    // log.debug(\"查詢條件：\" + filterRequest);\n}\n```"
-          },
-          {
-            "heading": "AOP 解決了什麼問題",
-            "group": "AOP 面向切面",
-            "body": "寫後端程式時，有一類邏輯天生就不屬於任何單一業務模組，卻又需要出現在幾乎每個地方——交易控制、效能計時、權限驗證、Log 記錄。如果把這些邏輯都寫在每個 Service 方法裡，程式碼會充滿重複，而且修改一次規則要動到幾十個地方。\n\nAOP（Aspect-Oriented Programming，面向切面程式設計）的核心想法是：把這類「橫切關注點（Cross-cutting Concern）」從業務邏輯中抽離出來，統一定義在一個地方，再宣告「在哪些方法的哪個時間點套用」。業務程式碼保持乾淨，橫切邏輯只寫一次。\n\n- **交易管理**：每個寫入操作都需要 begin / commit / rollback，不該散落各 Service\n- **Log 記錄**：記錄方法進入、結束、耗時，不該每個方法都手寫\n- **輸入驗證**：呼叫 Service 前驗證參數，不該在每個方法頭部重複 if-else\n- **權限檢查**：確認使用者有沒有權限呼叫這個方法，屬於安全層而非業務層"
-          },
-          {
-            "heading": "AOP 核心詞彙與實現方式",
-            "group": "AOP 面向切面",
-            "body": "**Spring AOP 五大核心詞彙**\n\n理解 AOP 只需要掌握五個詞彙，其餘的都是這五個概念的組合。\n\n- **Join Point（連接點）**：程式執行中可以被攔截的時間點，Spring AOP 的 Join Point 就是「方法被呼叫的瞬間」\n- **Pointcut（切入點）**：用來篩選「哪些 Join Point 要套用 Advice」的規則，通常用 execution 表達式描述，例如「所有 Service 套件下的 public 方法」\n- **Advice（增強/通知）**：在 Join Point 要執行的動作，分成 Before（方法前）、After（方法後）、Around（包覆方法前後）、AfterReturning（成功回傳後）、AfterThrowing（拋出例外後）五種\n- **Aspect（切面）**：把 Pointcut 與 Advice 組合在一起的模組，就像「交易管理切面」= 所有 Service 方法（Pointcut）+ 自動 commit/rollback（Advice）\n- **Weaving（織入）**：把 Aspect 應用到目標物件的過程；Spring AOP 在執行期（Runtime）透過 Proxy 物件完成織入，不修改原始類別的 bytecode\n\n---\n\n**AOP 概念圖解**\n\n上半部展示橫切關注點如何切穿所有 Service，下半部展示 Spring 用 Proxy 在執行期攔截方法的原理。\n\n---\n\n**Spring AOP 的實現方式：Proxy**\n\nSpring AOP 不修改你的程式碼，而是在執行期替目標 Bean 建立一個「代理物件（Proxy）」。每次你呼叫 `@Autowired` 注入的 Bean 方法，實際上是呼叫 Proxy，Proxy 先執行 Advice（如開啟交易），再呼叫你的真實方法，最後再執行 Advice（如 commit）。\n\nSpring 根據情況選擇兩種 Proxy 實作：介面存在時用 JDK 動態 Proxy（速度快），無介面時用 CGLIB（繼承方式建立子類別 Proxy）。"
-          },
-          {
-            "heading": "為什麼很少直接寫 AOP",
-            "group": "AOP 面向切面",
-            "body": "**很少直接寫 AOP 的原因**\n\nSpring 已經把最常用的橫切需求都封裝成標註（Annotation）了。你用 `@Transactional` 就等於在 Service 方法外包了一個 Around Advice，用 `@Valid` 就等於在 Controller 方法前放了一個 Before Advice，根本不需要自己寫 `@Aspect`。\n\n**直接撰寫 AOP 的時機**通常只有兩種：一是需求無法用現有標註表達（例如對所有方法計時、統一寫入稽核 Log）；二是為公司內部框架提供可重用的橫切能力。一般業務開發幾乎不需要接觸 `@Aspect`。\n\n- `@Transactional` → Spring 幫你寫好的交易 AOP，不需要自己包 Around Advice\n- `@Valid` / `@Validated` → Spring 幫你寫好的驗證 AOP，不需要自己在方法頭部驗參數\n- `@RestControllerAdvice` → Spring MVC 幫你寫好的例外攔截，不需要自己包 AfterThrowing\n- `@EnableJpaAuditing` → JPA 幫你寫好的 @PrePersist / @PreUpdate 攔截，不需要自己設 Listener\n- `spring-boot-starter-actuator` → Spring 幫你寫好的管理端點，不需要自己做 Health Check AOP\n\n---\n\n**Day 1 哪些功能背後用了 AOP**\n\n回顧第一天學過的所有功能，以下整理哪些地方在背後使用了 AOP 或相同設計概念，以及對應的 Spring 元件。"
-          },
-          {
             "heading": "安全防護重點",
             "group": "Spring Security 與 JWT 認證",
-            "body": "在生產環境中，API 不能是完全公開的。本章將引入 Spring Security 與 JWT (JSON Web Token)，為我們的 REST API 建立安全防護底盤。\n\n我們將實作「無狀態 (Stateless)」認證：使用者透過 `/api/auth/login` 登入成功後取得 JWT，後續請求都必須在 Header 攜帶此 Token 進行驗證。此外，我們將簡單區分角色：「管理員 (ADMIN)」與「一般用戶 (USER)」，以實作更精細的權限控管。\n\n- Authentication 認證：確認「你是誰」（透過帳號密碼登入並簽發 JWT）\n- Authorization 授權：確認「你能做什麼」（例如管理員能刪除客戶資料，業務人員只能查詢與編輯）\n- 無狀態認證：伺服器不儲存 Session，每次請求均由 JWT 驗證身分與角色"
+            "body": "在生產環境中，API 不能是完全公開的。本章將引入 Spring Security 與 JWT (JSON Web Token)，為我們的 REST API 建立安全防護底盤。\n\n我們將實作「無狀態 (Stateless)」認證：使用者透過 `/api/auth/login` 登入成功後取得 JWT，後續請求都必須在 Header 攜帶此 Token 進行驗證。此外，我們將簡單區分角色：「管理員 (ADMIN)」與「一般用戶 (USER)」，以實作更精細的權限控管。\n\n- Authentication 認證：確認「你是誰」（透過帳號密碼登入並簽發 JWT）\n- Authorization 授權：確認「你能做什麼」（例如管理員能刪除客戶資料，業務人員只能查詢與編輯）\n- 無狀態認證：伺服器不儲存 Session，每次請求均由 JWT 驗證身分與角色",
           },
           {
             "heading": "JWT 是什麼？三段式結構與無狀態認證",
             "group": "Spring Security 與 JWT 認證",
-            "body": "JWT（JSON Web Token）是一段「自帶簽章、可被任何服務獨立驗證」的字串，這正是它能做到無狀態認證的關鍵。\n\n**三段式結構（用 . 分隔）**\n\n一個 JWT 長得像 `xxxxx.yyyyy.zzzzz`，由三段以 Base64 編碼組成：\n\n- Header（標頭）：宣告簽章演算法（例如 HS256）與型別。\n- Payload（負載）：放使用者資訊與宣告（Claims），例如帳號、角色（ADMIN / USER）、簽發時間與過期時間（exp）。\n- Signature（簽章）：用只有伺服器知道的密鑰，對前兩段做簽章；任何人改動 Header 或 Payload，簽章就會對不起來。\n\n**為什麼能「無狀態」**\n\n傳統 Session 認證要伺服器記住每個登入者（存在記憶體或資料庫）。JWT 把身分與角色直接寫進 Token 並簽章，伺服器收到後只需用密鑰驗證簽章有效且未過期，就能信任裡面的資訊，不必查任何儲存。好處是水平擴充容易（多台伺服器不需共享 Session）；代價是 Token 一旦簽發，到期前較難即時撤銷。\n\n**典型流程**\n\n1. 使用者用帳密呼叫 `/api/auth/login`。\n2. 伺服器驗證成功後，把帳號與角色寫進 Payload、用密鑰簽章，回傳 JWT。\n3. 前端把 JWT 存起來（例如 localStorage），之後每次請求在 `Authorization: Bearer <token>` 標頭帶上。\n4. 伺服器的安全過濾器驗證簽章與效期、解析出角色，再決定這個請求能否存取該 API。\n\n**安全提醒**\n\n- Payload 只是 Base64 編碼、不是加密，任何人都能解開閱讀，絕對不要放密碼或機密資料。\n- 務必設定合理的過期時間（exp），並把簽章密鑰當成機密（從環境變數讀，不要寫死在程式碼）。"
+            "body": "JWT（JSON Web Token）是一段「自帶簽章、可被任何服務獨立驗證」的字串，這正是它能做到無狀態認證的關鍵。\n\n**三段式結構（用 . 分隔）**\n\n一個 JWT 長得像 `xxxxx.yyyyy.zzzzz`，由三段以 Base64 編碼組成：\n\n- Header（標頭）：宣告簽章演算法（例如 HS256）與型別。\n- Payload（負載）：放使用者資訊與宣告（Claims），例如帳號、角色（ADMIN / USER）、簽發時間與過期時間（exp）。\n- Signature（簽章）：用只有伺服器知道的密鑰，對前兩段做簽章；任何人改動 Header 或 Payload，簽章就會對不起來。\n\n**為什麼能「無狀態」**\n\n傳統 Session 認證要伺服器記住每個登入者（存在記憶體或資料庫）。JWT 把身分與角色直接寫進 Token 並簽章，伺服器收到後只需用密鑰驗證簽章有效且未過期，就能信任裡面的資訊，不必查任何儲存。好處是水平擴充容易（多台伺服器不需共享 Session）；代價是 Token 一旦簽發，到期前較難即時撤銷。\n\n**典型流程**\n\n1. 使用者用帳密呼叫 `/api/auth/login`。\n2. 伺服器驗證成功後，把帳號與角色寫進 Payload、用密鑰簽章，回傳 JWT。\n3. 前端把 JWT 存起來（例如 localStorage），之後每次請求在 `Authorization: Bearer <token>` 標頭帶上。\n4. 伺服器的安全過濾器驗證簽章與效期、解析出角色，再決定這個請求能否存取該 API。\n\n**安全提醒**\n\n- Payload 只是 Base64 編碼、不是加密，任何人都能解開閱讀，絕對不要放密碼或機密資料。\n- 務必設定合理的過期時間（exp），並把簽章密鑰當成機密（從環境變數讀，不要寫死在程式碼）。",
           },
           {
             "heading": "Spring Security 中的 JWT 實作組成",
             "group": "Spring Security 與 JWT 認證",
-            "body": "理解 JWT 概念後，來看在 Spring Security 裡要把它跑起來需要哪幾個零件。實際細節交給 AI 產生即可，這裡先建立整體心智模型，方便你核對 AI 的產物。\n\n**1. JWT 工具（簽發與解析）**\n\n用業界常見的 `io.jsonwebtoken`（jjwt）套件，負責「用密鑰把角色等資訊簽成 Token」以及「驗證簽章、解析出 Claims」。密鑰是機密，從環境變數讀、不要寫死。\n\n**2. 登入端點（簽發 Token）**\n\n`POST /api/auth/login` 收帳密 → 驗證成功後，把帳號與角色（ADMIN / USER）寫進 Payload、簽發 JWT 回傳前端。這是整條認證鏈唯一「免 Token 就能存取」的入口。\n\n**3. JWT 驗證過濾器（每個請求驗章）**\n\n一個自訂過濾器攔截每個進來的請求，從 `Authorization: Bearer <token>` 取出 Token、驗章與效期，成功就把使用者身分與角色放進 Spring Security 的 SecurityContext，後續授權判斷才有依據。\n\n**4. 安全設定鏈（SecurityFilterChain）**\n\n集中設定整體規則：關閉 Session 改用無狀態（STATELESS）、放行登入與 Swagger 文件、其餘 API 一律需驗證，並把上面的 JWT 過濾器掛進過濾器鏈。\n\n**5. 角色授權（誰能做什麼）**\n\n在敏感操作上做角色限制，例如刪除客戶必須 ADMIN，查詢/編輯則一般登入身分即可。可用方法層級（如 @PreAuthorize）或在安全設定鏈裡依路由限制。\n\n對照這五個零件，就能檢查 AI 生成的程式是否齊全：少了過濾器會「帶了 Token 卻仍被擋」，少了無狀態設定會「莫名其妙產生 Session」，少了角色限制則「一般使用者也刪得掉資料」。"
+            "body": "理解 JWT 概念後，來看在 Spring Security 裡要把它跑起來需要哪幾個零件。實際細節交給 AI 產生即可，這裡先建立整體心智模型，方便你核對 AI 的產物。\n\n**1. JWT 工具（簽發與解析）**\n\n用業界常見的 `io.jsonwebtoken`（jjwt）套件，負責「用密鑰把角色等資訊簽成 Token」以及「驗證簽章、解析出 Claims」。密鑰是機密，從環境變數讀、不要寫死。\n\n**2. 登入端點（簽發 Token）**\n\n`POST /api/auth/login` 收帳密 → 驗證成功後，把帳號與角色（ADMIN / USER）寫進 Payload、簽發 JWT 回傳前端。這是整條認證鏈唯一「免 Token 就能存取」的入口。\n\n**3. JWT 驗證過濾器（每個請求驗章）**\n\n一個自訂過濾器攔截每個進來的請求，從 `Authorization: Bearer <token>` 取出 Token、驗章與效期，成功就把使用者身分與角色放進 Spring Security 的 SecurityContext，後續授權判斷才有依據。\n\n**4. 安全設定鏈（SecurityFilterChain）**\n\n集中設定整體規則：關閉 Session 改用無狀態（STATELESS）、放行登入與 Swagger 文件、其餘 API 一律需驗證，並把上面的 JWT 過濾器掛進過濾器鏈。\n\n**5. 角色授權（誰能做什麼）**\n\n在敏感操作上做角色限制，例如刪除客戶必須 ADMIN，查詢/編輯則一般登入身分即可。可用方法層級（如 @PreAuthorize）或在安全設定鏈裡依路由限制。\n\n對照這五個零件，就能檢查 AI 生成的程式是否齊全：少了過濾器會「帶了 Token 卻仍被擋」，少了無狀態設定會「莫名其妙產生 Session」，少了角色限制則「一般使用者也刪得掉資料」。",
           },
           {
             "heading": "AI Agent 提示詞 — Security 與 JWT 實作",
             "group": "Spring Security 與 JWT 認證",
-            "body": "**請 AI Agent 幫你安裝 Security 與 JWT 依賴**\n\n在 `pom.xml` 中引入 Spring Security Starter 與 JWT 套件。我們使用目前主流且穩定的 `io.jsonwebtoken` (jjwt) 套件來進行 Token 的簽署與解析。\n\n**pom.xml 依賴配置 (xml)**\n```xml\n<!-- Spring Security Starter -->\n<dependency>\n    <groupId>org.springframework.boot</groupId>\n    <artifactId>spring-boot-starter-security</artifactId>\n</dependency>\n\n<!-- JWT (jjwt) 相關依賴 -->\n<dependency>\n    <groupId>io.jsonwebtoken</groupId>\n    <artifactId>jjwt-api</artifactId>\n    <version>0.13.0</version>\n</dependency>\n<dependency>\n    <groupId>io.jsonwebtoken</groupId>\n    <artifactId>jjwt-impl</artifactId>\n    <version>0.13.0</version>\n    <scope>runtime</scope>\n</dependency>\n<dependency>\n    <groupId>io.jsonwebtoken</groupId>\n    <artifactId>jjwt-jackson</artifactId>\n    <version>0.13.0</version>\n    <scope>runtime</scope>\n</dependency>\n```\n\n---\n\n**AI Agent 提示詞 — 身分驗證與角色授權實作**\n\n將以下提示詞複製給 AI Agent，讓它幫你生成完整的安全驗證配置。此提示詞特別強調了角色定義。\n\n- 在 JWT 內寫入使用者角色（簡單區分管理員 ADMIN 與用戶 USER）\n- 限制客戶資料刪除 API 僅限管理員角色存取，客戶資料查詢 API 需登入身分即可\n- 保護 Swagger UI 與 OpenAPI 網頁與端點，需登入才能瀏覽\n\n**AI Agent 提示詞 (text)**\n```text\n請在現有專案中，使用 Spring Security 與 JWT 實作安全防護與登入驗證功能：\n1. 引入 spring-boot-starter-security 與 jjwt 0.13.x（jjwt-api、jjwt-impl、jjwt-jackson），限制除了 /api/auth/login 與 /api/health 之外，其餘所有的 API 都需要攜帶 Authorization: Bearer <JWT> 才能存取；無狀態（SessionCreationPolicy.STATELESS），未登入回 401、權限不足回 403，格式都用 ProblemDetail。\n2. 用 Flyway 新增 app_users 表（username、password_hash、display_name、role、enabled），密碼用 BCrypt；啟動時若無帳號就建立三個示範帳號：sales（SALES 業務）、manager（MANAGER 主管）、admin（ADMIN 管理員），密碼都是 password123。\n3. 實作 POST /api/auth/login：傳入帳號密碼，成功回傳 token 與使用者資訊（id、username、displayName、role）。JWT 的 claims 要有 sub、uid、role、exp，有效期 8 小時；簽章密鑰從環境變數 APP_SECURITY_JWT_SECRET 讀取，長度不足 32 字元就拒絕啟動，不可寫死在程式碼。\n4. 實作角色權限控制：DELETE /api/customers/** 只有 ADMIN 能執行；/api/manager/** 只有 MANAGER 與 ADMIN；/api/admin/** 只有 ADMIN；其餘查詢與編輯功能只需已登入。規則集中寫在 SecurityConfig 的 requestMatchers。\n5. 保護我們的 API 文件（Swagger UI 網頁與相關端點），設定必須在登入驗證並攜帶 JWT Token 後才能正常瀏覽與測試，並在 OpenAPI 設定宣告 bearerAuth 讓 Authorize 按鈕可用。\n請加上繁體中文函式級別註解。\n```"
+            "body": "**先確認依賴**\n\n`pom.xml` 需要 `spring-boot-starter-security`，以及 jjwt 0.13.x 的三個 artifact：`jjwt-api`（編譯期）、`jjwt-impl` 與 `jjwt-jackson`（執行期）。完整的依賴片段、`app_users` 欄位、Token 與密鑰規格、端點角色規則，都整理在下方附的講義 **《JWT_架構與認證流程設計》**，可直接預覽或下載。\n\n---\n\n**AI Agent 提示詞 — 身分驗證與角色授權**\n\n提示詞本身不用寫得落落長。把講義附上去，人只要講清楚「要什麼」，規格細節讓 AI 去讀文件——這也是實務上比較好維護的做法：規格改了只要改文件，不必重寫提示詞。\n\n**AI Agent 提示詞 (text)**\n```text\n請用 Spring Security + JWT（jjwt 0.13.x）幫這個專案加上登入與權限控管，規格照附上的《JWT_架構與認證流程設計.md》做：\n- 除了登入與健康檢查，其餘 API 都要帶 Bearer token，無狀態；401／403 都回 ProblemDetail\n- POST /api/auth/login 回傳 token 與使用者資訊，token 帶角色、8 小時到期，密鑰讀環境變數\n- 三個示範帳號與端點角色規則照講義的表格，規則集中寫在 SecurityConfig\n- Swagger UI 要登入後才能瀏覽，並宣告 bearerAuth\n請加繁體中文註解。\n```",
+            "attachments": [{"name":"JWT_架構與認證流程設計","type":"MD","label":"講義：JWT 架構與認證流程設計","desc":"完整 pom.xml 依賴、app_users 欄位與示範帳號、Token 與密鑰規格、端點角色規則。"}]
+          },
+          {
+            "heading": "為什麼需要 API 文件",
+            "group": "OpenAPI 文件自動生成",
+            "body": "後端 API 一旦超過 5 個端點，沒有文件的開發協作就開始痛苦：前端不知道要傳什麼格式、測試人員要翻程式碼才知道有哪些欄位、新人要花大量時間猜 request body 結構。\n\nOpenAPI 規範（前身是 Swagger）定義了一套描述 REST API 的標準格式，springdoc-openapi 能自動從 Spring MVC 的 Controller 掃描產生 OpenAPI 文件，並提供互動式 UI 讓人直接從瀏覽器呼叫 API。\n\n- 自動掃描：不需要手寫文件，從 Controller 標註推導\n- Swagger UI：瀏覽器直接測試每個端點，看到 request / response 格式\n- 機器可讀格式：前端工具可從 `/v3/api-docs` 取得 JSON 格式規格，自動產生 API client",
+          },
+          {
+            "heading": "OpenAPI 標註與 AI 提示詞",
+            "group": "OpenAPI 文件自動生成",
+            "body": "不加標註時 Swagger UI 只能從方法簽章推導基本資訊。用 `@Operation`、`@Parameter`、`@ApiResponse` 補充說明後，文件立即更完整，前端閱讀效率大幅提升。\n\n**CustomerController.java — 加入 OpenAPI 標註 (java)**\n```java\n@RestController\n@RequestMapping(\"/api/customers\")\n@Tag(name = \"客戶管理\", description = \"客戶的新增、查詢、修改與刪除\")\npublic class CustomerController {\n\n    @Operation(\n        summary = \"查詢所有客戶\",\n        description = \"回傳完整客戶清單，可加 keyword 參數進行模糊搜尋\"\n// ... 完整程式碼請參考課程 GitHub 專案 ...\n    }\n}\n```\n\n---\n\n**AI 提示詞練習**\n\n試著用以下提示詞讓 AI 助手幫你完善 API 文件標註：\n\n- 「請幫我在 CustomerController 的所有端點加上 @Operation 說明，並補充每個可能的 HTTP 狀態碼對應的 @ApiResponse 標註。」\n- 「如何讓 Swagger UI 只在 dev profile 啟用，在 prod profile 自動關閉？請修改 application.yml 與 OpenApiConfig。」",
           },
           {
             "heading": "Swagger 網頁驗證步驟（推薦）",
-            "group": "Spring Security 與 JWT 認證",
-            "body": "後端啟動後，我們可以透過 Swagger UI 網頁進行 API 測試，視覺化地驗證登入、JWT 簽發與角色基礎授權控制（RBAC）是否正常運作。\n\n<div style=\"margin-top: 16px;\"><ul style=\"list-style-type: decimal; margin-left: 20px; margin-bottom: 16px; line-height: 1.8;\"><li style=\"margin-bottom: 6px;\"><strong>開啟 Swagger 網頁</strong>：在瀏覽器中輸入 <a href=\"http://localhost:8080/swagger-ui/index.html\" target=\"_blank\" class=\"accent-link\">http://localhost:8080/swagger-ui/index.html</a>。</li><li style=\"margin-bottom: 6px;\"><strong>安全登入 (HTTP Basic)</strong>：由於設定了安全防護，瀏覽器會彈出登入對話框。請輸入管理員帳密（帳號：<code>admin</code>，密碼：<code>password123</code>）完成登入。</li><li style=\"margin-bottom: 6px;\"><strong>取得 JWT Token</strong>：展開 <code>POST /api/auth/login</code>，點選 <strong>Try it out</strong>，傳入使用者資料（如：<code>{\"username\": \"sales\", \"password\": \"password123\"}</code>）執行並複製回傳的 token。</li><li style=\"margin-bottom: 6px;\"><strong>點擊 Authorize 帶入 Token</strong>：回到頁面最上方點選 <strong>Authorize</strong> 按鈕，在 <code>BearerAuth</code> 欄位填入剛剛複製的 JWT Token，點擊 Authorize 啟用。</li><li style=\"margin-bottom: 6px;\"><strong>驗證角色存取控制 (RBAC)</strong>：在授權為 <code>sales</code>（SALES 角色）狀態下呼叫刪除客戶 API，預期應收到 <strong>403 Forbidden</strong>；以同樣方式更換為 <code>admin</code> 的 Token 後呼叫則應成功回傳 <strong>204 No Content</strong>。</li></ul></div>"
+            "group": "OpenAPI 文件自動生成",
+            "body": "後端啟動後，我們可以透過 Swagger UI 網頁進行 API 測試，視覺化地驗證登入、JWT 簽發與角色基礎授權控制（RBAC）是否正常運作。\n\n<div style=\"margin-top: 16px;\"><ul style=\"list-style-type: decimal; margin-left: 20px; margin-bottom: 16px; line-height: 1.8;\"><li style=\"margin-bottom: 6px;\"><strong>開啟 Swagger 網頁</strong>：在瀏覽器中輸入 <a href=\"http://localhost:8080/swagger-ui/index.html\" target=\"_blank\" class=\"accent-link\">http://localhost:8080/swagger-ui/index.html</a>。</li><li style=\"margin-bottom: 6px;\"><strong>安全登入 (HTTP Basic)</strong>：由於設定了安全防護，瀏覽器會彈出登入對話框。請輸入管理員帳密（帳號：<code>admin</code>，密碼：<code>password123</code>）完成登入。</li><li style=\"margin-bottom: 6px;\"><strong>取得 JWT Token</strong>：展開 <code>POST /api/auth/login</code>，點選 <strong>Try it out</strong>，傳入使用者資料（如：<code>{\"username\": \"sales\", \"password\": \"password123\"}</code>）執行並複製回傳的 token。</li><li style=\"margin-bottom: 6px;\"><strong>點擊 Authorize 帶入 Token</strong>：回到頁面最上方點選 <strong>Authorize</strong> 按鈕，在 <code>BearerAuth</code> 欄位填入剛剛複製的 JWT Token，點擊 Authorize 啟用。</li><li style=\"margin-bottom: 6px;\"><strong>驗證角色存取控制 (RBAC)</strong>：在授權為 <code>sales</code>（SALES 角色）狀態下呼叫刪除客戶 API，預期應收到 <strong>403 Forbidden</strong>；以同樣方式更換為 <code>admin</code> 的 Token 後呼叫則應成功回傳 <strong>204 No Content</strong>。</li></ul></div>",
+          },
+          {
+            "heading": "統一錯誤回應設計",
+            "group": "全域例外處理",
+            "body": "**沒有全域例外處理的問題**\n\n沒有統一例外處理時，Spring Boot 預設的錯誤回應格式混雜了 Tomcat 訊息與 Java 堆疊資訊，前端無法依賴固定結構解析錯誤。更糟的是，不同端點可能回傳完全不同格式的錯誤，增加前端的防禦成本。\n\n`@RestControllerAdvice` 讓你在一個地方定義所有例外的處理方式：每種例外對應一個方法，統一回傳相同結構的 JSON，Controller 本身完全不需要 try-catch。\n\n- 例外處理集中在一個類別，不散落各個 Controller\n- 回傳格式統一，前端只需解析一種結構\n- Controller 保持乾淨，只做「請求分派」這一件事\n\n---\n\n**建立統一的 ErrorResponse 格式**\n\n先定義所有錯誤回應共用的資料結構。使用 Java Record 讓程式碼簡潔，Jackson 自動序列化為 JSON。\n\n**ErrorResponse.java (java)**\n```java\n/**\n * 統一的 API 錯誤回應格式\n * 所有例外處理方法都回傳此格式，讓前端只需解析一種結構\n */\npublic record ErrorResponse(\n    int status,          // HTTP 狀態碼\n    String error,        // 錯誤類型（如 \"Not Found\"）\n    String message,      // 人類可讀的錯誤說明\n    String path,         // 發生錯誤的 API 路徑\n    LocalDateTime timestamp  // 錯誤發生時間\n) {\n    /** 快速建立標準錯誤回應的工廠方法 */\n    public static ErrorResponse of(HttpStatus status, String message, String path) {\n        return new ErrorResponse(\n            status.value(),\n            status.getReasonPhrase(),\n            message,\n            path,\n            LocalDateTime.now()\n        );\n    }\n}\n```",
+          },
+          {
+            "heading": "ProblemDetail 與錯誤回應對照",
+            "group": "全域例外處理",
+            "body": "**ProblemDetail：Spring Boot 3 內建標準格式**\n\nSpring Boot 3+ 採用 RFC 9457 的 `ProblemDetail` 作為標準錯誤格式，Spring Boot 4 延續支援並推薦使用。不需要自訂 `ErrorResponse`，可直接在 `GlobalExceptionHandler` 回傳 `ProblemDetail` 物件，格式已符合業界標準。\n\n- `ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, \"客戶不存在\")` → 直接建立標準格式物件\n- 可透過 `problemDetail.setProperty(\"extra\", value)` 加入自訂欄位\n- 在 `application.yml` 加上 `spring.mvc.problemdetails.enabled: true` 可讓 Spring 預設用此格式回傳驗證錯誤\n\n---\n\n**例外處理回應對照**\n\n以下是三種例外情境對應的實際 JSON 回應，前端可依 `status` 欄位決定顯示方式。\n\n**各類例外的回應格式 (json)**\n```json\n// GET /api/customers/999 → 客戶不存在\n{\n  \"status\": 404,\n  \"error\": \"Not Found\",\n  \"message\": \"客戶 不存在：id = 999\",\n  \"path\": \"/api/customers/999\",\n  \"timestamp\": \"2026-06-08T10:30:00\"\n}\n\n// POST /api/customers → 驗證失敗\n{\n  \"status\": 400,\n  \"error\": \"Bad Request\",\n  \"message\": \"輸入資料驗證失敗\",\n  \"errors\": [\"name：客戶名稱不可為空\", \"level：等級必須為 VIP、General 或 New\"],\n  \"path\": \"/api/customers\"\n}\n\n// 任何未預期錯誤\n{\n  \"status\": 500,\n  \"error\": \"Internal Server Error\",\n  \"message\": \"伺服器發生錯誤，請稍後再試\",\n  \"path\": \"/api/customers\"\n}\n```",
+          },
+          {
+            "heading": "Log 核心觀念與最佳實踐",
+            "group": "Log 日誌管理",
+            "body": "**Spring Boot 預設 Log 機制**\n\nSpring Boot 預設使用 Logback 作為 Log 框架，並透過 SLF4J 提供統一的 API 介面。不需要任何設定就能使用，只要依賴 `spring-boot-starter`（幾乎所有 Starter 都已包含）就自動啟用。\n\n預設 Log 格式包含時間戳記、層級、執行緒、類別名稱與訊息。開發時輸出到 console，可另外設定輸出到檔案。\n\n- `ERROR` → 系統發生嚴重錯誤，需要立即處理\n- `WARN` → 可能有問題，但系統還能運作\n- `INFO` → 正常業務流程的關鍵節點（預設顯示層級）\n- `DEBUG` → 詳細的執行資訊，開發除錯使用\n- `TRACE` → 最詳細層級，通常只在框架內部使用\n\n---\n\n**Log 最佳實踐**\n\n- **INFO**：記錄業務關鍵節點（誰建立了什麼、誰觸發了什麼操作），足以在不看程式碼的情況下理解系統在做什麼\n- **WARN**：可以自動恢復或降級的異常情境（如 retry、fallback），需要關注但不需要立即處理\n- **ERROR**：需要人工介入的問題，搭配 `log.error(\"...\", ex)` 記錄完整 stack trace\n- **避免在 Log 記錄密碼、Token、信用卡號**：即使是 DEBUG 層級，log 檔可能被備份或轉發到第三方\n- **用 `{}` 佔位符而非字串拼接**：`log.debug(\"id={}\", id)` 在 DEBUG 層級關閉時不建立字串，效能更好",
+          },
+          {
+            "heading": "@Slf4j 與結構化 Log 寫法",
+            "group": "Log 日誌管理",
+            "body": "Lombok 的 `@Slf4j` 自動注入 `log` 物件，省去手動宣告 Logger 的樣板程式碼。Log 訊息用 `{}` 佔位符取代字串拼接，避免不必要的字串建立開銷，也讓訊息格式更清楚。\n\n**CustomerService.java — @Slf4j 使用範例 (java)**\n```java\n@Slf4j   // Lombok：自動注入 private static final Logger log = ...\n@Service\npublic class CustomerService {\n\n    public Customer saveCustomer(Customer customer) {\n        log.info(\"新增客戶：name={}, level={}, email={}\", customer.getName(), customer.getLevel(), customer.getEmail());\n\n        Customer saved = customerRepository.save(customer);\n// ... 完整程式碼請參考課程 GitHub 專案 ...\n    // log.debug(\"查詢條件：\" + filterRequest);\n}\n```",
+          },
+          {
+            "heading": "AOP 解決了什麼問題",
+            "group": "AOP 面向切面",
+            "body": "寫後端程式時，有一類邏輯天生就不屬於任何單一業務模組，卻又需要出現在幾乎每個地方——交易控制、效能計時、權限驗證、Log 記錄。如果把這些邏輯都寫在每個 Service 方法裡，程式碼會充滿重複，而且修改一次規則要動到幾十個地方。\n\nAOP（Aspect-Oriented Programming，面向切面程式設計）的核心想法是：把這類「橫切關注點（Cross-cutting Concern）」從業務邏輯中抽離出來，統一定義在一個地方，再宣告「在哪些方法的哪個時間點套用」。業務程式碼保持乾淨，橫切邏輯只寫一次。\n\n- **交易管理**：每個寫入操作都需要 begin / commit / rollback，不該散落各 Service\n- **Log 記錄**：記錄方法進入、結束、耗時，不該每個方法都手寫\n- **輸入驗證**：呼叫 Service 前驗證參數，不該在每個方法頭部重複 if-else\n- **權限檢查**：確認使用者有沒有權限呼叫這個方法，屬於安全層而非業務層",
+          },
+          {
+            "heading": "AOP 核心詞彙與實現方式",
+            "group": "AOP 面向切面",
+            "body": "**Spring AOP 五大核心詞彙**\n\n理解 AOP 只需要掌握五個詞彙，其餘的都是這五個概念的組合。\n\n- **Join Point（連接點）**：程式執行中可以被攔截的時間點，Spring AOP 的 Join Point 就是「方法被呼叫的瞬間」\n- **Pointcut（切入點）**：用來篩選「哪些 Join Point 要套用 Advice」的規則，通常用 execution 表達式描述，例如「所有 Service 套件下的 public 方法」\n- **Advice（增強/通知）**：在 Join Point 要執行的動作，分成 Before（方法前）、After（方法後）、Around（包覆方法前後）、AfterReturning（成功回傳後）、AfterThrowing（拋出例外後）五種\n- **Aspect（切面）**：把 Pointcut 與 Advice 組合在一起的模組，就像「交易管理切面」= 所有 Service 方法（Pointcut）+ 自動 commit/rollback（Advice）\n- **Weaving（織入）**：把 Aspect 應用到目標物件的過程；Spring AOP 在執行期（Runtime）透過 Proxy 物件完成織入，不修改原始類別的 bytecode\n\n---\n\n**AOP 概念圖解**\n\n上半部展示橫切關注點如何切穿所有 Service，下半部展示 Spring 用 Proxy 在執行期攔截方法的原理。\n\n---\n\n**Spring AOP 的實現方式：Proxy**\n\nSpring AOP 不修改你的程式碼，而是在執行期替目標 Bean 建立一個「代理物件（Proxy）」。每次你呼叫 `@Autowired` 注入的 Bean 方法，實際上是呼叫 Proxy，Proxy 先執行 Advice（如開啟交易），再呼叫你的真實方法，最後再執行 Advice（如 commit）。\n\nSpring 根據情況選擇兩種 Proxy 實作：介面存在時用 JDK 動態 Proxy（速度快），無介面時用 CGLIB（繼承方式建立子類別 Proxy）。",
+          },
+          {
+            "heading": "為什麼很少直接寫 AOP",
+            "group": "AOP 面向切面",
+            "body": "**很少直接寫 AOP 的原因**\n\nSpring 已經把最常用的橫切需求都封裝成標註（Annotation）了。你用 `@Transactional` 就等於在 Service 方法外包了一個 Around Advice，用 `@Valid` 就等於在 Controller 方法前放了一個 Before Advice，根本不需要自己寫 `@Aspect`。\n\n**直接撰寫 AOP 的時機**通常只有兩種：一是需求無法用現有標註表達（例如對所有方法計時、統一寫入稽核 Log）；二是為公司內部框架提供可重用的橫切能力。一般業務開發幾乎不需要接觸 `@Aspect`。\n\n- `@Transactional` → Spring 幫你寫好的交易 AOP，不需要自己包 Around Advice\n- `@Valid` / `@Validated` → Spring 幫你寫好的驗證 AOP，不需要自己在方法頭部驗參數\n- `@RestControllerAdvice` → Spring MVC 幫你寫好的例外攔截，不需要自己包 AfterThrowing\n- `@EnableJpaAuditing` → JPA 幫你寫好的 @PrePersist / @PreUpdate 攔截，不需要自己設 Listener\n- `spring-boot-starter-actuator` → Spring 幫你寫好的管理端點，不需要自己做 Health Check AOP\n\n---\n\n**Day 1 哪些功能背後用了 AOP**\n\n回顧第一天學過的所有功能，以下整理哪些地方在背後使用了 AOP 或相同設計概念，以及對應的 Spring 元件。",
           },
           {
             "heading": "CRM 角色與權限模型",
             "group": "CRM 安全設計",
-            "body": "AI CRM 系統的角色設計反映真實企業的組織層級：\n\n**ROLE_SALES（業務人員）**\n- 可查看/編輯自己負責的客戶、商機與互動紀錄\n- 可使用 AI 助理進行客戶分析與行動建議\n- 不可查看其他業務人員的客戶資料\n\n**ROLE_MANAGER（業務主管）**\n- 可查看團隊內所有業務人員的客戶與商機\n- 可查看團隊的銷售報表與 AI 預測分析\n- 可指派任務給業務人員\n\n**ROLE_ADMIN（系統管理員）**\n- 可管理使用者帳號、角色與權限\n- 可管理 RAG 知識庫（上傳/刪除產品文件、銷售話術）\n- 可查看系統日誌與 AI 使用統計\n\n**權限控制實作要點**\n- API 層：用 `@PreAuthorize` 標註控制端點存取\n- 資料層：用 Specification 自動加入 `salesRepId` 過濾條件\n- AI 層：工具呼叫自動注入當前使用者的權限範圍，確保 AI 不會洩露跨業務的客戶資料"
+            "body": "AI CRM 的權限設計不該散落在各個 Controller 的 if-else 裡。正確做法是先把「誰、能對什麼功能、做到什麼程度」畫成一張權限表，再把這張表當成唯一規格，交給 AI 產生對應的 Security 設定與資料過濾邏輯。\n\n三個角色對應真實企業的組織層級：**SALES**（業務人員，只顧自己的客戶）、**MANAGER**（業務主管，看得到整個團隊）、**ADMIN**（系統管理員，管知識庫、系統設定與全公司資料）。\n\n---\n\n**功能權限矩陣**\n\n| 功能面向 | 代表端點 | SALES 業務 | MANAGER 主管 | ADMIN 管理員 |\n|---|---|---|---|---|\n| 客戶查詢 | `GET /api/customers` | 🔸 限本人負責 | 🔸 限團隊成員 | ✅ 全部 |\n| 客戶新增／編輯 | `POST /api/customers`、`PUT /api/customers/{id}` | 🔸 限本人負責 | 🔸 限團隊成員 | ✅ 全部 |\n| 客戶刪除 | `DELETE /api/customers/{id}` | ❌ | ❌ | ✅ |\n| 商機與互動紀錄 | `/api/opportunities/**` | 🔸 限本人負責 | 🔸 限團隊成員 | ✅ 全部 |\n| 團隊報表與儀表板 | `GET /api/manager/analytics` | ❌ | ✅ 團隊範圍 | ✅ 全公司 |\n| 待辦任務（自己的） | `/api/tasks/**` | ✅ 僅自己的 | ✅ 僅自己的 | ✅ |\n| 指派任務給他人 | `POST /api/manager/tasks` | ❌ | ✅ 限部屬 | ✅ |\n| AI 助理對話 | `GET /api/ai/stream` | ✅ 但資料範圍受限 | ✅ 但資料範圍受限 | ✅ |\n| RAG 知識庫管理 | `/api/rag/**` | ❌ | ❌ | ✅ |\n| API 文件與系統監控 | `/swagger-ui/**`、`/actuator/**` | ❌ | ❌ | ✅ |\n\n圖例：✅ 可存取全部資料｜🔸 可存取但自動套用資料範圍過濾｜❌ 直接回 403 Forbidden\n\n---\n\n**資料可視範圍（🔸 的實際判定）**\n\n同樣是 `GET /api/customers`，三種角色拿到的資料筆數不同。這一層不能靠端點規則擋，必須在查詢時自動補上過濾條件。\n\n| 角色 | 判定依據 | 自動加上的查詢條件 |\n|---|---|---|\n| SALES | `customer.owner_id` | `owner_id = 當前登入者 id` |\n| MANAGER | `app_user.manager_id` | `owner_id IN (自己 + 直屬部屬的 id)` |\n| ADMIN | — | 不加任何條件 |\n\n---\n\n**三層防線，缺一不可**\n\n- **端點層**：`SecurityConfig` 的 `requestMatchers` 或 `@PreAuthorize` 擋掉整條路徑，對應表格中的 ❌\n- **資料層**：用 Specification 動態補上 `owner_id` 條件，對應表格中的 🔸；少了這層，SALES 只要換個 id 就能查到別人的客戶\n- **AI 工具層**：Tool Calling 執行時注入當前使用者的權限範圍，否則 AI 會很樂意幫使用者讀出他無權看到的資料\n- 前端隱藏按鈕**不算防線**，只是體驗優化；後端沒擋就等於沒擋\n\n---\n\n**先讓 AI 盤點路徑、產生空表，再由你決定權限**\n\n權限表不該由 AI 決定——「誰能做什麼」是業務決策，AI 只負責盤點現況。實際流程分三步：\n\n1. **AI 盤點**：用提示詞⓪ 讓 AI 掃描專案所有 Controller，列出目前真正存在的端點，產生一張只有列頭與圖例的空權限表\n2. **你來填表**：依角色定位逐格填入 ✅／🔸／❌；標 🔸 的列還要在「資料可視範圍」表寫出自動補上的查詢條件\n3. **對照講義**：填完與講義 **《CRM_角色權限矩陣與RBAC實作規格》** 的參考答案比對，看看哪一格想法不同、為什麼；驗收案例以講義版本為準\n\n講義矩陣包含團隊報表、待辦任務、AI 助理、RAG 知識庫等後續單元才會實作的端點，本章只實作提示詞⓪ 盤點出來的列，其餘先預留。\n\n**提示詞⓪ — 盤點路徑、產生空權限表 (text)**\n```text\n請掃描這個專案所有 Controller 與 SecurityConfig，盤點目前實際存在的 API 端點（含 /swagger-ui/**、/actuator/**），不要臆測尚未實作的功能。\n依盤點結果產生一張 Markdown 空權限表，直接輸出讓我填寫：\n- 欄位：功能面向、代表端點、SALES 業務、MANAGER 主管、ADMIN 管理員；三個角色欄位一律留空\n- 表下方附圖例：✅ 可存取全部資料｜🔸 可存取但自動套用資料範圍過濾｜❌ 直接回 403 Forbidden\n- 另附一張「資料可視範圍」空表（欄位：角色、判定依據、自動加上的查詢條件），讓我填 🔸 的實際規則\n只要輸出表格，先不要寫任何程式。\n```\n\n**提示詞 — 依填好的權限表產生 RBAC 程式 (text)**\n```text\n請依照我填好的權限表實作角色權限控制；圖例、資料可視範圍與 404／403 規則見附上的《CRM_角色權限矩陣與RBAC實作規格.md》第三、四節。權限表是唯一規格，不要自行放寬：\n- 用 Flyway 補欄位：app_users.manager_id、customers 與 opportunities 的 owner_id\n- 表中標「❌」的用 SecurityConfig 的 requestMatchers 擋掉\n- 標「🔸」的在資料層用 Specification 自動補 owner_id，Service 查詢一律套用\n- 單筆資料不在可視範圍回 404 而非 403；日後 AI 的 @Tool 方法也要走同一套 Specification\n- 依講義第六節中與本章端點相關的驗收案例寫整合測試\n完成後請列出權限表每一列由哪段程式實現。請加繁體中文註解。\n```",
+            "attachments": [{"name":"CRM_角色權限矩陣與RBAC實作規格","type":"MD","label":"講義：CRM 角色權限矩陣與 RBAC 實作規格","desc":"功能權限矩陣、資料可視範圍、三層防線與 11 個驗收案例，可直接附給 AI Agent。"}]
           }
         ],
-        "prompt": "請接續 Unit 3。本章我們把專案升級到企業級：加上登入與權限控管、做一份能直接測試功能的線上操作說明頁、並讓出錯時回傳看得懂的訊息。理解原理後，依序使用下方提示詞請 AI 協助完成，最後在操作說明頁上驗證權限流程。本章提示詞已把欄位、端點與驗收條件寫進去，請整段複製給 AI Agent，不要只貼前半段。",
-        "promptMac": "請接續 Unit 3。本章我們把專案升級到企業級：加上登入與權限控管、做一份能直接測試功能的線上操作說明頁、並讓出錯時回傳看得懂的訊息。理解原理後，依序使用下方提示詞請 AI 協助完成，最後在操作說明頁上驗證權限流程。本章提示詞已把欄位、端點與驗收條件寫進去，請整段複製給 AI Agent，不要只貼前半段。",
+        "prompt": "請接續 Unit 3。本章我們把專案升級到企業級：加上登入與權限控管、產生可直接測試的 API 文件（Swagger UI）、讓出錯時回傳看得懂的訊息，並補上查得到原因的日誌與健康檢查。理解原理後，依序使用下方提示詞請 AI 協助完成，最後開啟 Swagger UI 確認成果。本章提示詞只寫重點，詳細規格放在兩份講義裡，請連同講義一起附給 AI Agent。",
+        "promptMac": "請接續 Unit 3。本章我們把專案升級到企業級：加上登入與權限控管、產生可直接測試的 API 文件（Swagger UI）、讓出錯時回傳看得懂的訊息，並補上查得到原因的日誌與健康檢查。理解原理後，依序使用下方提示詞請 AI 協助完成，最後開啟 Swagger UI 確認成果。本章提示詞只寫重點，詳細規格放在兩份講義裡，請連同講義一起附給 AI Agent。",
         "prompts": [
-          { "title": "① 加上登入與權限控管", "kind": "build", "note": "SALES / MANAGER / ADMIN 三角色，示範帳號 sales、manager、admin", "text": "請幫這套系統加上登入功能：沒登入的人不能使用（回 401）、要登入後才能看資料。角色分三種：SALES（業務，看和改客戶資料）、MANAGER（主管，另外可以看團隊分析）、ADMIN（管理員，只有他能刪除客戶與管理帳號）。做法：\n- 用 Spring Security 加 JWT（jjwt 0.13.x）；POST /api/auth/login 傳帳號密碼，成功回 token 與使用者資訊（id、username、displayName、role）；token 裡要帶角色，有效期 8 小時，之後每個 API 都用 Authorization: Bearer 驗證，無狀態（不用 Session）。\n- 密碼用 BCrypt 存在 app_users 表（用 Flyway 新增），啟動時建立三個示範帳號：sales、manager、admin，密碼都是 password123。\n- JWT 密鑰從環境變數 APP_SECURITY_JWT_SECRET 讀取，長度不足 32 字元就拒絕啟動；不要把密鑰寫在程式碼裡。\n- 權限不足回 403，錯誤格式沿用 ProblemDetail。\n請加繁體中文註解。完成後我要能驗證：用 sales 登入後查得到客戶，但刪客戶會被擋下來；換成 admin 才刪得掉。" },
-          { "title": "② 做一份線上操作說明頁，並統一錯誤訊息", "kind": "build", "note": "springdoc-openapi 3.x＋ProblemDetail 統一錯誤格式", "text": "請幫我做一份「線上的 API 操作說明頁」（用支援 Spring Boot 4 的 springdoc-openapi 3.x，Swagger UI 在 /swagger-ui.html），讓我能直接在上面看到有哪些功能、並直接測試它們；每個客戶端點都要有中文的 @Operation 說明與可能的狀態碼，並設定 bearerAuth 讓我能按 Authorize 貼上 token。另外，當操作出錯時（資料填錯回 400、找不到回 404、沒登入回 401、沒權限回 403），都要回給我格式一致、看得懂的 ProblemDetail 錯誤訊息（title、status、detail、instance），欄位驗證失敗時 detail 要逐欄列出哪裡錯，而不是一堆看不懂的程式錯誤。這個說明頁一樣要登入後才能使用。請加繁體中文註解。" },
-          { "title": "✅ 驗證 — 在操作說明頁跑一次權限流程", "kind": "verify", "note": "一般使用者刪客戶應被擋、管理員應成功", "text": "請帶我在那個線上操作說明頁上驗證權限：先用 sales 登入拿到 token 並按 Authorize 貼上，接著用 sales 的身分試著刪客戶（應該回 403，而且是 ProblemDetail 格式），再換成 admin 重試（應該回 204）；再試一次不帶 token 呼叫客戶 API（應該回 401）、查一個不存在的客戶（應該回 404）。確認權限控管和錯誤訊息都跟預期一樣，並把這四個案例加進 scripts/test-crm-api.ps1。" }
+          { "title": "⓪ 盤點路徑、產生空權限表", "kind": "build", "note": "AI 只盤點現況，權限由你決定；填完再對照講義《CRM 角色權限矩陣與 RBAC 實作規格》", "text": "請掃描這個專案所有 Controller 與 SecurityConfig，盤點目前實際存在的 API 端點（含 /swagger-ui/**、/actuator/**），不要臆測尚未實作的功能。\n依盤點結果產生一張 Markdown 空權限表，直接輸出讓我填寫：\n- 欄位：功能面向、代表端點、SALES 業務、MANAGER 主管、ADMIN 管理員；三個角色欄位一律留空\n- 表下方附圖例：✅ 可存取全部資料｜🔸 可存取但自動套用資料範圍過濾｜❌ 直接回 403 Forbidden\n- 另附一張「資料可視範圍」空表（欄位：角色、判定依據、自動加上的查詢條件），讓我填 🔸 的實際規則\n只要輸出表格，先不要寫任何程式。" },
+          { "title": "① 加上登入與權限控管", "kind": "build", "note": "規格見講義《JWT 架構與認證流程設計》＋你在⓪填好的權限表；圖例與資料範圍規則見《CRM 角色權限矩陣與 RBAC 實作規格》", "text": "請幫這套系統加上登入與權限控管，規格照附上的《JWT_架構與認證流程設計.md》與我填好的權限表（圖例、資料可視範圍與 404／403 規則見《CRM_角色權限矩陣與RBAC實作規格.md》）：\n- Spring Security + JWT（jjwt 0.13.x）；除了登入與健康檢查，其餘 API 都要帶 Bearer token，無狀態；401／403 回 ProblemDetail\n- POST /api/auth/login 回傳 token 與使用者資訊；token 帶角色、8 小時到期，密鑰讀環境變數\n- 用 Flyway 建 app_users 與三個示範帳號（sales／manager／admin），密碼用 BCrypt\n- 把客戶原本的 ownerName（字串）換成 owner_id 外鍵指向 app_users，用 Flyway 依名字把既有種子資料掛到對應帳號，查詢與回應仍要看得到負責業務的名字\n- 角色規則照我填的權限表：標「❌」的擋在 SecurityConfig，標「🔸」的在資料層用 Specification 自動補 owner_id\n請加繁體中文註解。完成後我要能驗證：sales 只看得到自己的客戶、刪客戶被 403 擋下，換 admin 才刪得掉。" },
+          { "title": "② 產生 API 文件，並統一錯誤訊息", "kind": "build", "note": "springdoc-openapi 3.x（Swagger UI）＋ProblemDetail 統一錯誤格式", "text": "請用 springdoc-openapi 3.x（支援 Spring Boot 4）幫這個專案產生 API 文件，Swagger UI 放在 /swagger-ui.html：\n- 每個客戶端點都要有中文的 @Operation 說明與可能的狀態碼，並宣告 bearerAuth 讓我能按 Authorize 貼上 token\n- 錯誤一律回 ProblemDetail（title、status、detail、instance）：填錯 400、找不到 404、未登入 401、沒權限 403\n- 欄位驗證失敗時 detail 要逐欄說明哪裡錯，不要丟原始程式錯誤\n- Swagger UI 一樣要登入後才能使用\n請加繁體中文註解。" },
+          { "title": "③ 加上日誌與健康檢查", "kind": "build", "note": "@Slf4j 結構化日誌＋Actuator 動態調整層級", "text": "請幫這個專案補上可觀測性，讓出問題時查得到原因：\n- Service 用 Lombok 的 @Slf4j，在新增、修改、刪除客戶與登入成功／失敗時各留一筆有語意的 Log（INFO 記正常流程、WARN 記被擋下的操作），訊息要帶得出是哪個使用者對哪筆資料做了什麼，但不可以印出密碼、token 或完整統編\n- 在 application.yml 設定各套件的 Log 層級，本專案套件用 DEBUG、框架用 INFO\n- 加入 spring-boot-starter-actuator，開放 health 與 loggers 兩個端點（都要登入且限 ADMIN），讓我能用 PATCH /actuator/loggers 不重啟就調整層級\n請加繁體中文註解，並告訴我怎麼驗證：呼叫一次刪除客戶後，能在 Log 看到對應紀錄。" },
+          { "title": "✅ 驗證 — 開啟 API 文件頁確認", "kind": "verify", "note": "打得開、看得到中文說明、能用 Authorize 試打", "text": "請告訴我怎麼確認前面兩步都成功了：啟動後開啟 http://localhost:8080/swagger-ui/index.html，登入後應該看到客戶相關端點與中文說明，按 Authorize 貼上 token 後能直接試打一次查詢客戶。如果打不開或是空的，請幫我判斷是依賴、路徑還是 Security 設定的問題。" },
         ],
         "tasks": [
           {
@@ -950,16 +965,16 @@ window.COURSE = {
         ],
         "materials": [
           {
-            "id": "mat4",
-            "type": "MD",
-            "name": "pgvector_環境安裝與向量檢索指令說明",
-            "desc": "向量資料庫基礎概念、SQL 向量距離計算及 pgvector 索引優化指令。"
-          },
-          {
             "id": "mat5",
             "type": "MD",
             "name": "JWT_架構與認證流程設計",
             "desc": "Spring Security 整合 JWT 簽發、驗證與 Filter Chain 保護 API 的完整流程架構。"
+          },
+          {
+            "id": "mat9",
+            "type": "MD",
+            "name": "CRM_角色權限矩陣與RBAC實作規格",
+            "desc": "三角色（SALES／MANAGER／ADMIN）功能權限矩陣、資料可視範圍與驗收案例，可整份附給 AI Agent 當實作規格。"
           }
         ],
         "illustrations": [
@@ -1082,9 +1097,9 @@ window.COURSE = {
         "prompts": [
           { "title": "① 做出網頁畫面的外觀骨架", "kind": "build", "note": "Vite 最新版＋React 19，先把側欄、路由與視覺骨架架好", "text": "請幫我做出這套系統的網頁畫面外觀：在 frontend 資料夾用最新的 Vite（npm create vite@latest，React 19 範本）建專案，vite.config.js 把 /api 開頭的請求代理到 http://localhost:8080。畫面要有現代感的設計（漸層的標題列、卡片式的區塊、載入時有骨架屏過場動畫），先把整體版面骨架架好：左側是導覽側欄（總覽、客戶、生意機會、AI 助手、團隊分析、我的工作台）、右側是內容區，並用 react-router 規劃 /login、/dashboard、/customers、/customers/:id、/team、/my-work 這幾條路由，內容之後再填。請加繁體中文註解，完成後告訴我怎麼打開來看。" },
           { "title": "② 讓網頁接上後端並記住登入", "kind": "build", "note": "axios 攔截器自動帶 token，401 自動回登入頁", "text": "請幫網頁接上後端：做一個登入頁呼叫 POST /api/auth/login，登入成功後把 token 與使用者資訊存在瀏覽器（localStorage），之後每次呼叫 API 都用 axios 攔截器自動帶上 Authorization: Bearer；用一個 AuthContext 讓所有頁面都知道目前登入的人與角色；沒登入的人開任何頁面都導回 /login；如果 API 回 401（登入過期），就自動清掉 token 並把我導回登入頁重新登入。側欄的「團隊分析」只有 MANAGER 與 ADMIN 看得到。請加繁體中文註解。" },
-          { "title": "③ 做出 CRM 的核心頁面並接上真實資料", "kind": "build", "note": "登入 / 總覽 / 客戶清單 / 客戶詳情 / 生意機會看板", "text": "請做出 CRM 的幾個主要頁面，並接上後端的真實資料：登入頁；總覽儀表板（先放幾張重要數字卡片：客戶數、進行中生意機會數與總金額、本月新增往來數，資料來自 GET /api/dashboard/summary）；客戶清單（可以用關鍵字、產業、狀態、負責業務搜尋與篩選，有分頁，接 GET /api/customers 的 items 分頁格式）；客戶詳情（網址用 /customers/:id，分頁切換看聯絡人 / 往來紀錄 / 生意機會，可在頁上新增聯絡人與往來紀錄）；以及生意機會看板（依 QUALIFICATION → PROPOSAL → NEGOTIATION → CLOSED_WON / CLOSED_LOST 分欄排列，拖拉卡片就呼叫更新階段的 API，失敗要退回原欄）。沒登入要導回登入頁，載入中 / 載入失敗 / 沒有資料時都要有清楚的畫面。後端缺的端點請一併補上。請加繁體中文註解。" },
-          { "title": "④ 把總覽儀表板做成有分析價值的圖表", "kind": "build", "note": "多張經營圖表，點下去能看背後明細", "text": "請把總覽儀表板做得更有分析價值，後端新增 GET /api/dashboard/reports 一次算好、前端加上這幾張圖表：生意機會在各階段的漏斗圖、未來六個月的營收預測（依 expectedCloseDate 與金額）、各產業的營收分布、客戶風險高低的分布、90 天內快到期該續約的客戶、業務的績效排行榜（成交金額與客戶數）、以及最近的往來活動。而且每一張圖我點下去，都要透過 GET /api/dashboard/drilldown 看到背後具體是哪些客戶或哪些生意（用一個彈出視窗列出來，可以再點進客戶詳情）。數字全部由後端算，前端不要自己加總。請加繁體中文註解。" },
-          { "title": "⑤ 加上「該優先追哪些客戶」的分群", "kind": "build", "note": "依互動近況、頻率、金額自動分級貼標", "text": "請在儀表板加一個「該優先追哪些客戶」的功能（RFM 分群）：後端新增 GET /api/dashboard/rfm，依照三個面向幫每個客戶各打 1～5 分——「多久沒聯絡了」（最近一次往來距今天數，越近分越高）、「平常往來頻不頻繁」（近 90 天往來次數）、「生意金額大不大」（進行中與已成交的生意金額總和）。然後依分數組合貼上分群標籤：三項都高是「重點客戶」、最近有聯絡但金額還小是「有潛力」、金額大但很久沒聯絡是「需要喚醒」、其餘是「需關注」，讓我一眼就知道該先追誰。前端做成一張可排序的表，顯示三個分數與標籤。請加繁體中文註解。" },
+          { "title": "③ 做出 CRM 的核心頁面並接上真實資料", "kind": "build", "note": "登入 / 總覽 / 客戶清單 / 客戶詳情 / 生意機會看板（含後端 /api/dashboard/summary 等端點）", "text": "請做出 CRM 的幾個主要頁面，並接上後端的真實資料：登入頁；總覽儀表板（先放幾張重要數字卡片：客戶數、進行中生意機會數與總金額、本月新增往來數，資料來自 GET /api/dashboard/summary）；客戶清單（可以用關鍵字、產業、狀態、負責業務搜尋與篩選，有分頁，接 GET /api/customers 的 items 分頁格式）；客戶詳情（網址用 /customers/:id，分頁切換看聯絡人 / 往來紀錄 / 生意機會，可在頁上新增聯絡人與往來紀錄）；以及生意機會看板（依 QUALIFICATION → PROPOSAL → NEGOTIATION → CLOSED_WON / CLOSED_LOST 分欄排列，拖拉卡片就呼叫更新階段的 API，失敗要退回原欄）。沒登入要導回登入頁，載入中 / 載入失敗 / 沒有資料時都要有清楚的畫面。後端缺的端點請一併補上。請加繁體中文註解。" },
+          { "title": "④ 把總覽儀表板做成有分析價值的圖表", "kind": "build", "note": "多張經營圖表，點下去能看背後明細（含後端 /api/dashboard/reports、/drilldown）", "text": "請把總覽儀表板做得更有分析價值，後端新增 GET /api/dashboard/reports 一次算好、前端加上這幾張圖表：生意機會在各階段的漏斗圖、未來六個月的營收預測（依 expectedCloseDate 與金額）、各產業的營收分布、客戶風險高低的分布、90 天內快到期該續約的客戶、業務的績效排行榜（成交金額與客戶數）、以及最近的往來活動。而且每一張圖我點下去，都要透過 GET /api/dashboard/drilldown 看到背後具體是哪些客戶或哪些生意（用一個彈出視窗列出來，可以再點進客戶詳情）。數字全部由後端算，前端不要自己加總。請加繁體中文註解。" },
+          { "title": "⑤ 加上「該優先追哪些客戶」的分群", "kind": "build", "note": "依互動近況、頻率、金額自動分級貼標（含後端 /api/dashboard/rfm）", "text": "請在儀表板加一個「該優先追哪些客戶」的功能（RFM 分群）：後端新增 GET /api/dashboard/rfm，依照三個面向幫每個客戶各打 1～5 分——「多久沒聯絡了」（最近一次往來距今天數，越近分越高）、「平常往來頻不頻繁」（近 90 天往來次數）、「生意金額大不大」（進行中與已成交的生意金額總和）。然後依分數組合貼上分群標籤：三項都高是「重點客戶」、最近有聯絡但金額還小是「有潛力」、金額大但很久沒聯絡是「需要喚醒」、其餘是「需關注」，讓我一眼就知道該先追誰。前端做成一張可排序的表，顯示三個分數與標籤。請加繁體中文註解。" },
           { "title": "✅ 驗證 — 各頁面與圖表都是真實資料", "kind": "verify", "note": "點圖表能下鑽、登出/過期會回登入頁", "text": "請幫我做一次完整確認：用 sales 帳號登入後，總覽的數字、各張分析圖表、客戶清單和詳情顯示的都是後端來的真實資料（拿亞太智能製造的生意機會金額 1,200,000 跟畫面對一次）；點圖表能看到背後的明細；客戶分群標籤有正常顯示（鼎峰金融科技應該是「需要喚醒」）；用 sales 登入看不到團隊分析、換 manager 看得到；登出或登入過期會回到登入頁。請把這個流程寫成 Playwright 腳本放在 frontend/e2e/，讓我之後可以重跑。" }
         ],
         "tasks": [
@@ -1472,7 +1487,7 @@ window.COURSE = {
         "promptMac": "請接續 Unit 6。本章我們做兩件高價值的事：一是給主管的團隊分析與 AI 診斷、全公司整體評估，以及每位業務專屬的工作台；二是建立可上傳文件、會標出參考來源的 RAG 知識庫，並把歷史對話與建議也納入長期記憶，讓 AI 越用越聰明（MCP 外部工具列為選修）。理解原理後，依序使用下方提示詞請 AI 協助完成，最後驗證團隊分析與知識庫都正常。本章提示詞已把欄位、端點與驗收條件寫進去，請整段複製給 AI Agent，不要只貼前半段。",
         "prompts": [
           { "title": "① 給主管看的「團隊分析」與 AI 診斷", "kind": "build", "note": "只有主管/管理員看得到", "text": "請加一個給主管看的「團隊分析」畫面（前端路由 /team，後端 GET /api/manager/analytics，只有 MANAGER 與 ADMIN 能呼叫，其他角色回 403）：列出每一個業務的表現——負責幾個客戶、進行中與已成交的生意金額、手上有幾個 HIGH 風險客戶、負責客戶的平均情緒分數。然後我點某一個業務，呼叫 POST /api/manager/insights/owner（SSE 串流），AI 要根據這些統計數字與他的客戶摘要，給出針對他的診斷建議：哪裡做得好、有哪些客戶要特別注意、建議他優先去關心誰；也要有一個「整個團隊」的診斷。診斷結果存進 ai_call_log 並快取，同一天再點不用重算。請加繁體中文註解。" },
-          { "title": "② 給每個業務的「我的工作台」", "kind": "build", "note": "一進來就知道今天該做什麼", "text": "請給每一個業務一個「我的工作台」頁面（前端路由 /my-work，後端 GET /api/workspace/recommendation 只回登入者自己負責的客戶）：集中顯示跟他自己有關的事情——指派給我的 HIGH / MEDIUM 風險客戶、30 天內要續約的客戶、最近有負面情緒或流失訊號的往來、還有還沒有任何往來紀錄的潛在客戶，每一項都附一句程式產生的建議行動（例如「已 45 天未聯絡，建議本週電話拜訪」），並可以一鍵跳到客戶詳情，讓我一進來就知道今天該優先處理什麼。請加繁體中文註解。" },
+          { "title": "② 給每個業務的「我的工作台」", "kind": "build", "note": "一進來就知道今天該做什麼；建議行動可一鍵建成待辦", "text": "請給每一個業務一個「我的工作台」頁面（前端路由 /my-work，後端 GET /api/workspace/recommendation 只回登入者自己負責的客戶）：集中顯示跟他自己有關的事情——指派給我的 HIGH / MEDIUM 風險客戶、30 天內要續約的客戶、最近有負面情緒或流失訊號的往來、還有還沒有任何往來紀錄的潛在客戶，每一項都附一句程式產生的建議行動（例如「已 45 天未聯絡，建議本週電話拜訪」），並可以一鍵跳到客戶詳情，讓我一進來就知道今天該優先處理什麼。另外補一個「待辦任務」功能：用 Flyway 新增 tasks 表（標題、說明、負責人、客戶、到期日、狀態 OPEN／DONE、來源 MANUAL／AI），提供 POST /api/tasks 建立、GET /api/tasks 查自己的、PATCH /api/tasks/{id} 完成；MANAGER 與 ADMIN 可以指派任務給部屬（POST /api/manager/tasks），SALES 只能建立與完成自己的。工作台上每一條建議行動都能一鍵建成待辦，AI 給的行動建議也能直接採納成待辦（來源記 AI）。請加繁體中文註解。" },
           { "title": "③ 全公司整體評估與 AI 紀錄查詢", "kind": "build", "note": "一次看完所有客戶的總體健康度", "text": "請加兩個功能：第一，「全公司整體評估」（GET /api/ai/portfolio/assessment，SSE 串流，MANAGER 與 ADMIN 可用）——後端先統計所有客戶的風險等級分布、進行中生意總額、近 30 天情緒趨勢、續約到期清單，讓 AI 根據這些數字給我一份整體的健康度與風險摘要，讓主管掌握全局，結果放在儀表板上。第二，把 AI 給過的每一次評估和對話都能回頭查：GET /api/ai/customers/{id}/calls 看某客戶的 AI 歷史、GET /api/ai/usage 看全站用量統計（各類型呼叫次數與 token），前端在客戶詳情頁加一個「AI 歷史紀錄」視窗，每一筆可以按「採納」或「拒絕」並留一句備註（存 ai_feedback 表），知道之前 AI 說過什麼、我們怎麼處理。請加繁體中文註解。" },
           { "title": "④ 建立可上傳文件的 RAG 知識庫（重點）", "kind": "build", "note": "pgvector VectorStore＋QuestionAnswerAdvisor，回答附引用來源", "text": "請幫我建立一個「知識庫」：加入 spring-ai-starter-vector-store-pgvector，向量存在 PostgreSQL 的 pgvector 裡；embedding 用 Voyage AI（環境變數 VOYAGE_API_KEY，模型 voyage-4-lite）。我可以上傳公司的文件（POST /api/rag/upload，只有 ADMIN 可用，接受 .txt 與 .md，用 TextReader 讀取、TokenTextSplitter 切段，metadata 記 type=knowledge_doc、title、docType（PRODUCT 產品 / POLICY 條款 / PLAYBOOK 話術）、上傳時間），也能列出與刪除文件。之後當我在聊天室問相關問題時，AI 要先用 QuestionAnswerAdvisor 去這些文件裡找出最相關的段落（取前 3 筆），根據文件內容來回答，而不是自由發揮亂講；回答時也要告訴我「這是參考哪一份文件」，前端把引用來源顯示在訊息下方；找不到相關段落時要說「知識庫沒有相關內容」。完成後我上傳一份『客戶服務規範』，再問相關問題，AI 就會依文件內容回答。請加繁體中文註解。" },
           { "title": "⑤ 讓 AI 把歷史對話和建議也記進知識庫（重點）", "kind": "build", "note": "對話結果向量化背景寫入，雙路檢索，可用語意搜尋回頭分析", "text": "請幫 AI 助手加上「長期記憶」：每一次對話結束時（SSE 串流 doOnComplete），把使用者的問題、AI 的回答，以及 AI 給過的評估建議，組成一份 Document 向量化存進同一個 pgvector（metadata 記 type=chat_history、sessionId、登入者、客戶 id、時間），用 CompletableFuture.runAsync 在背景寫入，不要拖慢回覆速度。這樣下次我再問問題時，AI 會同時查兩路——知識文件取前 3 筆、我自己的歷史對話取前 2 筆（用 filterExpression 只取自己的）——合併當作參考，就算是開一段全新的對話，也記得我先前說過的偏好和客戶的脈絡。另外提供 GET /api/ai/history/search?q=…（可加 customerId 篩選）讓我之後能用語意搜尋翻出相關的歷史對話與建議來做分析，前端在「AI 歷史紀錄」視窗加一個搜尋框接它。請加繁體中文註解。" },
@@ -1518,6 +1533,12 @@ window.COURSE = {
           }
         ],
         "materials": [
+          {
+            "id": "mat4",
+            "type": "MD",
+            "name": "pgvector_環境安裝與向量檢索指令說明",
+            "desc": "向量資料庫基礎概念、SQL 向量距離計算及 pgvector 索引優化指令。"
+          },
           {
             "id": "mat8",
             "type": "MD",
@@ -2297,6 +2318,12 @@ window.COURSE = {
       "type": "MD",
       "name": "Embabel_黑板機制與GOAP動作規劃指南",
       "desc": "（選修附錄）Embabel GOAP 演算法原理與 Blackboard 機制。Embabel 2.0 穩定後可升級為正式單元。"
+    },
+    {
+      "id": "mat9",
+      "type": "MD",
+      "name": "CRM_角色權限矩陣與RBAC實作規格",
+      "desc": "三角色（SALES／MANAGER／ADMIN）功能權限矩陣、資料可視範圍與驗收案例，可整份附給 AI Agent 當實作規格。"
     }
   ],
   "quiz": [

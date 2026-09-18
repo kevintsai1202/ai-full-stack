@@ -4,10 +4,10 @@
 [
   {
     "id": "q1",
-    "q": "在 Spring Boot 4.0.x 中，為了支援向量資料庫 pgvector 的 vector 欄位，我們在 Docker Compose 中應該使用哪一個映像檔？",
+    "q": "在 Spring Boot 4.1.x 中，為了支援向量資料庫 pgvector 的 vector 欄位，我們在 Docker Compose 中應該使用哪一個映像檔？",
     "options": [
-      "postgres:16",
-      "pgvector/pgvector:pg16",
+      "postgres:18",
+      "pgvector/pgvector:pg18",
       "mysql:8",
       "redis:latest"
     ],

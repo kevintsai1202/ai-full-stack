@@ -40,7 +40,7 @@ JWT 是一段「自帶簽章、可被任何服務獨立驗證」的字串，長�
 
 對照這五個零件即可檢查 AI 生成是否齊全：少了過濾器會「帶了 Token 卻仍被擋」，少了無狀態設定會「莫名其妙產生 Session」，少了角色限制則「一般使用者也刪得掉資料」。
 
-依賴部分：`spring-boot-starter-security` ＋ jjwt 三件組（`jjwt-api`、`jjwt-impl`、`jjwt-jackson`，0.12.5，後兩者 scope 為 runtime）。
+依賴部分：`spring-boot-starter-security` ＋ jjwt 三件組（`jjwt-api`、`jjwt-impl`、`jjwt-jackson`，0.13.0，後兩者 scope 為 runtime）。
 
 ## 示範與提示詞
 
@@ -48,25 +48,63 @@ JWT 是一段「自帶簽章、可被任何服務獨立驗證」的字串，長�
 
 ```text
 請在現有專案中，使用 Spring Security 與 JWT 實作安全防護與登入驗證功能：
-1. 引入安全防護套件（Spring Security）與 JWT 依賴，限制除了登入相關的 API 之外，其餘所有的 API 都需要攜帶 JWT Token 進行驗證才能存取。
-2. 實作一個登入 API（例如 POST /api/auth/login），供使用者傳入帳號密碼進行身分驗證。登入成功後，請在 JWT Token 中寫入使用者的角色（簡單區分「管理員 ADMIN」與「一般用戶 USER」），並將 Token 回傳給前端。
-3. 實作角色權限控制：限制客戶資料刪除 API 必須具備「管理員 ADMIN」角色才能執行，而一般查詢與編輯功能則僅需「用戶 USER」或已登入身分即可。
-4. 保護我們的 API 文件（Swagger UI 網頁與相關端點），設定必須在登入驗證並攜帶 JWT Token 後才能正常瀏覽與測試。
+1. 引入 spring-boot-starter-security 與 jjwt 0.13.x（jjwt-api、jjwt-impl、jjwt-jackson），限制除了 /api/auth/login 與 /api/health 之外，其餘所有的 API 都需要攜帶 Authorization: Bearer <JWT> 才能存取；無狀態（SessionCreationPolicy.STATELESS），未登入回 401、權限不足回 403，格式都用 ProblemDetail。
+2. 用 Flyway 新增 app_users 表（username、password_hash、display_name、role、enabled），密碼用 BCrypt；啟動時若無帳號就建立三個示範帳號：sales（SALES 業務）、manager（MANAGER 主管）、admin（ADMIN 管理員），密碼都是 password123。
+3. 實作 POST /api/auth/login：傳入帳號密碼，成功回傳 token 與使用者資訊（id、username、displayName、role）。JWT 的 claims 要有 sub、uid、role、exp，有效期 8 小時；簽章密鑰從環境變數 APP_SECURITY_JWT_SECRET 讀取，長度不足 32 字元就拒絕啟動，不可寫死在程式碼。
+4. 實作角色權限控制：DELETE /api/customers/** 只有 ADMIN 能執行；/api/manager/** 只有 MANAGER 與 ADMIN；/api/admin/** 只有 ADMIN；其餘查詢與編輯功能只需已登入。規則集中寫在 SecurityConfig 的 requestMatchers。
+5. 保護我們的 API 文件（Swagger UI 網頁與相關端點），設定必須在登入驗證並攜帶 JWT Token 後才能正常瀏覽與測試，並在 OpenAPI 設定宣告 bearerAuth 讓 Authorize 按鈕可用。
+請加上繁體中文函式級別註解。
 ```
 
-面向一般使用者的說法（本章 prompts「① 加上登入與權限控管」）：
+面向一般使用者的說法分兩步。先用本章 prompts「⓪ 盤點路徑、產生空權限表」讓 AI 只盤點現況、由學員自己決定權限（填完再對照講義《CRM_角色權限矩陣與RBAC實作規格》的參考答案）：
 
 ```text
-請幫這套系統加上登入功能：沒登入的人不能使用、要登入後才能看資料。而且要分權限——分成「一般使用者」和「管理員」兩種，只有管理員可以刪除客戶。請加中文註解。完成後我要能驗證：用一般帳號登入後查得到客戶，但刪客戶會被擋下來；換成管理員才刪得掉。
+請掃描這個專案所有 Controller 與 SecurityConfig，盤點目前實際存在的 API 端點（含 /swagger-ui/**、/actuator/**），不要臆測尚未實作的功能。
+依盤點結果產生一張 Markdown 空權限表，直接輸出讓我填寫：
+- 欄位：功能面向、代表端點、SALES 業務、MANAGER 主管、ADMIN 管理員；三個角色欄位一律留空
+- 表下方附圖例：✅ 可存取全部資料｜🔸 可存取但自動套用資料範圍過濾｜❌ 直接回 403 Forbidden
+- 另附一張「資料可視範圍」空表（欄位：角色、判定依據、自動加上的查詢條件），讓我填 🔸 的實際規則
+只要輸出表格，先不要寫任何程式。
+```
+
+接著才是「① 加上登入與權限控管」，規格改為引用學員填好的權限表：
+
+```text
+請幫這套系統加上登入與權限控管，規格照附上的《JWT_架構與認證流程設計.md》與我填好的權限表（圖例、資料可視範圍與 404／403 規則見《CRM_角色權限矩陣與RBAC實作規格.md》）：
+- Spring Security + JWT（jjwt 0.13.x）；除了登入與健康檢查，其餘 API 都要帶 Bearer token，無狀態；401／403 回 ProblemDetail
+- POST /api/auth/login 回傳 token 與使用者資訊；token 帶角色、8 小時到期，密鑰讀環境變數
+- 用 Flyway 建 app_users 與三個示範帳號（sales／manager／admin），密碼用 BCrypt
+- 把客戶原本的 ownerName（字串）換成 owner_id 外鍵指向 app_users，用 Flyway 依名字把既有種子資料掛到對應帳號，查詢與回應仍要看得到負責業務的名字
+- 角色規則照我填的權限表：標「❌」的擋在 SecurityConfig，標「🔸」的在資料層用 Specification 自動補 owner_id
+請加繁體中文註解。完成後我要能驗證：sales 只看得到自己的客戶、刪客戶被 403 擋下，換 admin 才刪得掉。
 ```
 
 **Swagger 網頁驗證步驟（推薦）**：
 
 1. 開啟 `http://localhost:8080/swagger-ui/index.html`。
-2. 安全登入（HTTP Basic）：瀏覽器彈出登入對話框，輸入管理員帳密（帳號 `admin`、密碼 `password`）。
-3. 取得 JWT：展開 `POST /api/auth/login`，Try it out 傳入 `{"username": "user", "password": "password"}`，複製回傳的 token。
+2. 安全登入（HTTP Basic）：瀏覽器彈出登入對話框，輸入管理員帳密（帳號 `admin`、密碼 `password123`）。
+3. 取得 JWT：展開 `POST /api/auth/login`，Try it out 傳入 `{"username": "sales", "password": "password123"}`，複製回傳的 token。
 4. 點頁面上方 **Authorize** 按鈕，在 `BearerAuth` 欄位貼上 JWT 並啟用。
-5. 驗證 RBAC：以 `user` 授權狀態呼叫刪除客戶 API，預期 **403 Forbidden**；換成 `admin` 的 Token 重呼叫，應成功回傳 **204 No Content**。
+5. 驗證 RBAC：以 `sales`（SALES 角色）授權狀態呼叫刪除客戶 API，預期 **403 Forbidden**；換成 `admin` 的 Token 重呼叫，應成功回傳 **204 No Content**。
+
+## 逐步操作與驗收
+
+### 驗證身份與保護請求
+
+1. 先畫出 login、簽發 token、帶 Bearer token 呼叫 API、過期與登出的流程；標出 token 由誰簽發、在哪裡驗證、哪些 endpoint 公開。
+2. 設定 SecurityFilterChain 與 JWT decoder/validator，明確列出 public path；用一個公開 endpoint 確認未登入可用，再用受保護 endpoint 確認未帶 token 回 401。
+3. 取得測試 token 後用 `Invoke-RestMethod -Headers @{ Authorization = "Bearer ..." }` 呼叫 API，依序測試有效 token、錯誤 token、過期 token 和有效身份但不足權限。
+4. 檢查 token claims、issuer、audience、expiry 與角色 mapping；不要只 decode base64 就把 token 當成已驗證。
+
+### 預期結果與證據
+
+- 公開路由、有效 token、401 與 403 行為清楚可重現；錯誤 response 不洩漏簽章或內部驗證細節。
+- 交付 auth flow 圖、Security 設定、四組 HTTP 結果、測試 token 的非敏感 claims 與 expiry 記錄。
+
+### 失敗分流與銜接
+
+- 所有請求都 401 時先查 filter、issuer、clock 與 header 格式；所有請求都通過時查 public matcher 是否過寬。
+- 下一單元會把角色權限落到 CRM 資源，先保存身份驗證已成功的 endpoint 證據。
 
 ## 口語稿
 

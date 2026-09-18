@@ -9,8 +9,8 @@
     "audience": "具備 Java 基礎，想建立全端 AI 應用之開發人員、後端工程師或全端工程師。",
     "totalHours": 32,
     "projectName": "AI CRM 智慧業務助理",
-    "heroImage": "cover.png",
-    "overviewImage": "office.png",
+    "heroImage": "cover.webp",
+    "overviewImage": "office.webp",
     "prerequisites": [
       "具備 Java 基礎語法與基本物件導向開發觀念",
       "具備基本 HTML/CSS/JavaScript 與前端框架概念",
@@ -79,6 +79,13 @@
         "hours": 16,
         "title": "Spring AI、企業級 RAG 與 React 全端整合",
         "date": "Day 3 ~ Day 4"
+      },
+      {
+        "id": "day3",
+        "n": 3,
+        "hours": 0,
+        "title": "延伸實戰：上線與部署",
+        "date": "延伸章"
       }
     ],
     "format": "混成學習 (Blended Learning)",
