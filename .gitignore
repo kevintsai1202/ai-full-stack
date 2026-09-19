@@ -112,3 +112,25 @@ live-slides/verify-output/
 # 側欄與投票驗證腳本的截圖輸出（可由 verify-sidebar-and-vote.mjs 重生成）
 survey-backend/scripts/verify-output/
 survey-backend/data/
+
+# 課程 TTS 音檔輸出（可由 course-package/scripts/generate-*-tts.mjs 重生成，逾 1GB）
+audio/
+
+# AI 生圖實驗輸出（封面／投影片草稿挑選用，最終採用版另存於各專案目錄）
+generated-images/
+
+# 錄影原檔與音質修復輸出（單檔逾 100MB，GitHub 會直接拒絕；本機保留即可）
+live-slides/*.mp4
+live-slides/*.mp3
+live-slides/audio-restore/
+course-package/**/*.mp4
+course-package/**/*.mp3
+
+# ASR 中間產物（切片音檔、原始辨識 JSON、比對暫存），字幕成品 .srt 仍納版控
+**/.asr-chunks/
+**/*.asr.json
+course-package/**/*.diff.txt
+
+# Python 位元碼與編輯備份檔
+**/__pycache__/
+*.bak
