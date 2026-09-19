@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>018 期實證：本機服務已上公網</title>
+  <style>
+    /* 深色終端機風格，呼應電子報「一條指令上公網」主題 */
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: #0f172a; color: #e2e8f0; padding: 1.5rem 0;
+      font-family: "Cascadia Code", Consolas, "Noto Sans TC", monospace;
+    }
+    .card {
+      max-width: 680px; padding: 2rem 2.5rem; border: 1px solid #334155; border-radius: 12px;
+      background: #1e293b; box-shadow: 0 8px 32px rgba(0,0,0,.4);
+    }
+    h1 { font-size: 1.35rem; color: #f8b400; margin-top: 0; }
+    h2 { font-size: 1rem; color: #38bdf8; margin: 1.4rem 0 .4rem; }
+    .ok { color: #4ade80; }
+    pre {
+      background: #0f172a; padding: .8rem 1rem; border-radius: 8px; overflow-x: auto;
+      font-size: .8rem; line-height: 1.5; margin: .4rem 0;
+    }
+    .hint { color: #94a3b8; font-size: .8rem; }
+    button {
+      background: #f8b400; color: #0f172a; border: 0; border-radius: 6px;
+      padding: .4rem .9rem; font-family: inherit; font-weight: 700; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🚇 電子報 018 期實證：Cloudflare Tunnel</h1>
+    <p>這個頁面由<strong>本機電腦</strong>提供，經 <code>cloudflared</code> 出站隧道發布到公網。</p>
+
+    <h2>① REST API（同源 fetch，無 CORS）</h2>
+    <pre id="api-result">呼叫 /api/hello 中…</pre>
+
+    <h2>② SSE 串流（打字機效果，驗證未被緩衝）</h2>
+    <button id="sse-btn">開始 SSE 串流</button>
+    <pre id="sse-result">尚未開始</pre>
+
+    <h2>③ WebSocket 雙向回聲</h2>
+    <button id="ws-btn">送出 WebSocket 訊息</button>
+    <pre id="ws-result">尚未連線</pre>
+
+    <h2>④ 最近收到的 Webhook</h2>
+    <pre id="wh-result">查詢 /api/webhook/latest 中…</pre>
+
+    <p class="hint">若各區塊都看到 cf-ray／即時逐筆更新，代表 REST、SSE、WS、Webhook 四種流量都成功穿過 Cloudflare 邊緣進入本機。</p>
+  </div>
+  <script>
+    // ① 用相對路徑呼叫同源 API，驗證電子報「天然消滅 CORS」的論點
+    fetch('/api/hello')
+      .then((res) => res.json())
+      .then((data) => {
+        const el = document.getElementById('api-result');
+        el.textContent = JSON.stringify(data, null, 2);
+        el.classList.add('ok');
+      })
+      .catch((err) => { document.getElementById('api-result').textContent = 'API 呼叫失敗：' + err; });
+
+    // ② SSE：逐事件追加顯示「到達時間」，若被緩衝會 5 筆同時出現
+    document.getElementById('sse-btn').addEventListener('click', () => {
+      const el = document.getElementById('sse-result');
+      el.textContent = '';
+      const es = new EventSource('/api/sse');
+      es.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        el.textContent += `#${data.seq} 伺服器送出 ${data.sentAt} → 瀏覽器收到 ${new Date().toISOString()}\n`;
+        el.classList.add('ok');
+        if (data.seq >= 5) es.close();
+      };
+      es.onerror = () => es.close();
+    });
+
+    // ③ WebSocket：對同源 /ws 建立 wss 連線並收回聲
+    document.getElementById('ws-btn').addEventListener('click', () => {
+      const el = document.getElementById('ws-result');
+      const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${scheme}://${location.host}/ws`);
+      ws.onopen = () => ws.send('哈囉，隧道另一端的本機！');
+      ws.onmessage = (event) => {
+        el.textContent = event.data;
+        el.classList.add('ok');
+        ws.close();
+      };
+      ws.onerror = () => { el.textContent = 'WebSocket 連線失敗'; };
+    });
+
+    // ④ 顯示最近收到的 Webhook 回調
+    fetch('/api/webhook/latest')
+      .then((res) => res.json())
+      .then((data) => { document.getElementById('wh-result').textContent = JSON.stringify(data, null, 2); })
+      .catch((err) => { document.getElementById('wh-result').textContent = '查詢失敗：' + err; });
+  </script>
+</body>
+</html>
