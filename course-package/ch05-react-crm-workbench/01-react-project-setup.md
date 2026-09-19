@@ -80,6 +80,25 @@ export default defineConfig({
 
 **驗證方式**：`npm run dev` 後瀏覽器打開 `http://localhost:5173` 能看到頁面骨架；對 `/api` 開頭的路徑發請求，確認 Vite 有把它代理到 8080 的後端。
 
+## 逐步操作與驗收
+
+### 建立並確認前端開發基線
+
+1. 先執行 `node --version`、`npm --version`，再以 `npx create-vite@latest frontend --template react` 建立專案；安裝依賴後用 `npm run dev` 啟動 5173。
+2. 打開 `vite.config.js`，把 `/api` proxy 指向 `http://localhost:8080`，以相對路徑呼叫後端；確認瀏覽器 Network 顯示請求由前端開發伺服器代理。
+3. 在 `src/App.jsx` 建立 Header、卡片容器、聊天占位區和 loading skeleton；先用固定資料確認版面，再接 API，避免同時除錯 CSS 和網路。
+4. 以 `npm run build` 驗證 production bundle，再記錄瀏覽器 Console、Network、Vite terminal 與實際畫面；若後端未啟動，分開標示 proxy connection refused。
+
+### 預期結果與證據
+
+- `http://localhost:5173` 能載入 React，修改檔案會 hot reload；`npm run build` 成功，proxy 設定和後端 port 可被說明。
+- 交付 package 版本、檔案樹、Vite 啟動輸出、build 輸出、proxy 請求與畫面截圖。
+
+### 失敗分流與銜接
+
+- `npm install` 失敗先保存 Node/npm 版本與第一個錯誤；proxy 502/拒絕連線先確認 Spring Boot 是否真的 listening。
+- 下一單元會修改 JSX 元件，先建立可回復的 frontend 基線，不要把 `node_modules` 納入交付。
+
 ## 口語稿
 
 歡迎來到第五章。先幫大家把進度對一下：前面四章，我們已經把 CRM 的後端整個做起來了——有 REST API、資料真的存進 PostgreSQL、還加上了 Spring Security 跟 JWT 的保護。功能上其實已經很完整，但你有沒有發現一件事？到目前為止，我們每次要驗證功能，都是打開 PowerShell 敲 Invoke-RestMethod，或是去 Swagger 頁面按按鈕。你想像一下，如果我把這套系統交給公司的業務同仁，跟他說「你要查客戶喔，先開終端機，打這一串指令」——他大概明天就離職了。所以這一章我們要做的事情很明確：幫這個後端裝上一張臉，打造一個業務人員真的能用的 CRM 工作台前端，然後把它接上我們前四章做好的、受 JWT 保護的後端。

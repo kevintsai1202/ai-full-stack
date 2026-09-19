@@ -49,8 +49,27 @@ public List<Customer> search(String name, Double maxPrice, Boolean inStock) {
 **口語化任務提示詞 — 把資料真正存進資料庫，並支援多條件搜尋［build］**
 
 ```text
-請把剛才暫存在程式裡的客戶資料，改成真正存進資料庫。另外客戶查詢要能「多個條件任意組合」——例如我可以只用產業篩、也可以產業加分級加關鍵字一起篩。請加中文註解。
+請把剛才暫存在程式裡的客戶資料，改成真正存進資料庫（Customer 等四個類別改成 JPA Entity，加 AuditableEntity 共用稽核欄位，Service 改注入 Repository，Controller 與 DTO 不變）。另外客戶查詢要能「多個條件任意組合」，用 Spring Data JPA 的 Specification 實作：條件有 keyword（公司名或 email 模糊比對）、industry、owner（負責業務）、status、renewalFrom / renewalTo（預計續約日區間），每個條件都可以不填；要有分頁 page（預設 0）與 size（預設 10），回傳格式固定為 items、page、size、totalElements、totalPages。請加繁體中文註解。
 ```
+
+## 逐步操作與驗收
+
+### 從固定方法走向可組合查詢
+
+1. 先列出 CRM 搜尋條件：關鍵字、狀態、負責人、建立日期、分頁與排序，為每個條件寫資料型別、空值行為與是否可組合。
+2. 對照 Query Method、JPQL、Specification 或 QueryDSL 的取捨，先以一個最小查詢實作，再逐項加入條件；每加一項就寫一組測試。
+3. 用空條件、單一條件、兩個 AND、日期邊界、無結果與大頁碼實際呼叫 endpoint，檢查結果數、總頁數、排序是否穩定。
+4. 打開 SQL log 或資料庫 explain，確認參數使用 binding 而非字串串接，並觀察索引是否有機會被使用；不要用只返回一筆資料的測試推論效能。
+
+### 預期結果與證據
+
+- 每個查詢條件都有測試和對應 SQL；空條件不會意外查全庫，分頁與排序結果可重現。
+- 交付查詢規格表、測試矩陣、HTTP 結果、SQL/explain 觀察與索引決策，並記錄尚未量測的效能風險。
+
+### 失敗分流與銜接
+
+- 條件互相覆蓋時先檢查 predicate 組合與 null 處理；結果順序不穩定時補上唯一 tie-breaker。
+- 下一單元會把查詢放回完整 CRM 資料模型，先保留本單元的可重現搜尋案例。
 
 ## 口語稿
 

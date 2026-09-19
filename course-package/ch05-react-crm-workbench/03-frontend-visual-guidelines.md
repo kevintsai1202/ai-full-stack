@@ -66,6 +66,25 @@
 
 **驗證方式**：頁面上能看到漸層 Header 與毛玻璃卡片；滑鼠懸停卡片會浮起；模擬資料載入中時出現 shimmer 骨架屏動畫。
 
+## 逐步操作與驗收
+
+### 以 Vanilla CSS 驗證視覺與三態
+
+1. 在 `src/index.css` 或 `App.css` 加入 `.glass-card`、`.gradient-header`、`.micro-interaction` 與 `.skeleton-shimmer`，先在一張測試卡上套用，逐項確認效果。
+2. 啟動 Vite 後檢查 Header 的漸層、卡片的 blur、hover 的 transform；開啟瀏覽器效能或 accessibility 工具，確認動畫不影響文字可讀性。
+3. 在元件中建立 loading、error、empty、success 四個狀態，分別顯示 skeleton、錯誤訊息、無資料提示與內容；不要只用一個 `isLoading` 真假值涵蓋所有狀態。
+4. 用窄螢幕和鍵盤操作檢查 overflow、focus、對比度與 `prefers-reduced-motion`；完成後執行 `npm run build`。
+
+### 預期結果與證據
+
+- 四種狀態皆能切換，視覺樣式在正常與窄螢幕可讀；hover、loading 動畫和 focus 不會遮住操作。
+- 交付 CSS diff、四態畫面截圖、可及性檢查筆記與 build 輸出；uiuxpromax 在此以 CSS 指引使用，不宣稱是 npm 套件。
+
+### 失敗分流與銜接
+
+- blur 不生效先查瀏覽器支援與背景透明度；卡片跳動先查 transition/transform；畫面一直 loading 先查狀態是否有 success/error 分支。
+- 下一單元會把這些樣式放入 CRM 工作流，先以元件級畫面確認視覺規則。
+
 ## 口語稿
 
 前兩節做完，我們的專案能跑、程式碼也看得懂了，但你打開畫面看一眼——白底黑字、方方正正，像是上個世紀的系統。你可能會說，能用就好啊？我要講一個很現實的事：這套 CRM 最終是要給業務同仁天天用的，第一眼的觀感直接決定他們願不願意買單。一個看起來廉價的系統，就算功能再強，使用者也會下意識地不信任它。所以這一節我們專門來處理「好看」這件事——一個優秀的 Web 應用不只要能跑，更要能 WOW 使用者。

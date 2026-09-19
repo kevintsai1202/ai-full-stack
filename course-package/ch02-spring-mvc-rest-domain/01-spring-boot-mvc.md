@@ -59,6 +59,25 @@ JSON 序列化 → 回傳給前端
 「為什麼 getById 回傳 ResponseEntity<Customer> 而不是直接回傳 Customer？兩種做法有什麼差別？」
 ```
 
+## 逐步操作與驗收
+
+### 從請求走到回應
+
+1. 先確認專案能以 `mvn clean compile` 建置，再執行 `mvn spring-boot:run`；啟動成功後不要急著改設定，先記下 port、profile 與啟動時間。
+2. 用 `Invoke-RestMethod http://localhost:8080/actuator/health` 或課程既定的健康檢查 endpoint 驗證服務真的可連線；若沒有 actuator，使用已存在的 GET endpoint，並保存 HTTP status 與 JSON。
+3. 對一個請求從 Controller、Service 到 Repository 逐層追蹤，指出哪一層負責 HTTP、哪一層負責商業規則、哪一層負責資料存取。不要用「Spring 會自動處理」跳過呼叫鏈。
+4. 故意送一個不存在的路徑，觀察 404；再送一個格式正確但資料不存在的請求，分辨路由錯誤與業務查無資料的差異。
+
+### 預期結果與證據
+
+- 服務能啟動，至少一個 GET endpoint 回傳預期狀態與 JSON；另有一筆 404 或錯誤案例可以說明。
+- 交付啟動輸出、請求命令、回應 body、Controller 到 Service 的追蹤筆記與目前專案結構。
+
+### 失敗分流與銜接
+
+- `mvn spring-boot:run` 失敗時先判斷是編譯、port 被占用、環境變數或資料庫連線，不要把所有錯誤都歸因於 MVC。
+- 下一單元會把可用的請求整理成 REST 契約；先保存實際 endpoint 和 response，避免設計內容脫離現在能執行的程式。
+
 ## 口語稿
 
 歡迎來到第二章。上一章我們把環境裝好了，專案骨架也建起來了，後端可以啟動、前端可以看到 API 的健康狀態。但你有沒有想過一個問題：當你在瀏覽器打一個網址，或者前端發一個請求給後端的時候，這個請求進到 Spring Boot 裡面，到底發生了什麼事？很多人寫了好幾年 Spring Boot，其實都答不出這題。而答不出這題的後果是什麼？就是出錯的時候不知道要去哪裡找問題——404 到底是路由沒對到，還是資料不存在？回傳的 JSON 格式怪怪的，是誰負責序列化的？這一節我們就把這條路徑一次走清楚。

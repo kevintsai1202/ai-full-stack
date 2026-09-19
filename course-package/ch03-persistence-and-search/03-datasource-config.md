@@ -28,14 +28,34 @@
 加入以下設定（若已存在請直接修改，不要重複）：
 1. datasource：連線到 localhost:5432/learn_spring，帳號 postgres，密碼 password
 2. flyway：enabled: true，baseline-on-migrate: true，腳本位置 classpath:db/migration
-3. jpa：ddl-auto: validate（由 Flyway 管理 Schema，JPA 只驗證結構）
-每個設定項目請加上中文註解說明用途。
+3. jpa：ddl-auto: validate（由 Flyway 管理 Schema，JPA 只驗證結構）、open-in-view: false
+4. spring.config.import: optional:file:.env[.properties]（之後的 API 金鑰都放專案根目錄的 .env，並加進 .gitignore）
+每個設定項目請加上繁體中文註解說明用途。
 
 【提示詞 2 — 驗證連線與 Flyway 遷移】
 設定完成後請幫我執行 mvn spring-boot:run，
 確認 log 中出現 Successfully applied N migration(s) 的訊息。
 若出現連線錯誤或 Flyway 失敗，請幫我找出原因並修正。
 ```
+
+## 逐步操作與驗收
+
+### 將應用程式連到正確資料庫
+
+1. 先把 URL、username、password、driver 與 profile 列成設定表，再在 `application.yml` 使用環境變數或 profile 參照；不要把真實密碼提交到 Git。
+2. 啟動 PostgreSQL 後，以 `docker compose ps` 和 psql 確認 host/port/database，再啟動 Spring Boot；比較啟動 log 中的 datasource 與設定表。
+3. 執行一個會查詢資料庫的 endpoint 或 repository test，確認應用程式真的能取得連線，而不是只因為 context 能啟動就算成功。
+4. 分別用 local profile 和測試 profile 啟動一次，確認兩者不會誤連 production；把實際生效的非敏感設定打印出來，秘密值以遮罩表示。
+
+### 預期結果與證據
+
+- 正確 profile 能連到預期 database，repository test 或 HTTP 查詢成功；錯誤帳密會明確失敗，不會靜默連到另一個環境。
+- 交付設定表、profile 啟動命令、連線成功輸出與失敗分流；不交付明文密碼。
+
+### 失敗分流
+
+- Connection refused 先查 container、port、host；authentication failed 查 user/password；database does not exist 查 DB 名稱，三者不要混為同一錯誤。
+- 下一單元會將 Java 類別映射到表，先保留這次連線證據作為 ORM 問題的對照基線。
 
 ## 口語稿
 

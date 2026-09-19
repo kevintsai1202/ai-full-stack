@@ -159,26 +159,48 @@ public class Customer extends BaseAuditEntity {
 **AI Agent 提示詞 — 為 Spring MVC 專案加入 JPA**
 
 ```text
-【步驟一：加入依賴】
-我在 1-2 建立了一個 Spring Boot 專案（只有 spring-boot-starter-web），
-請幫我在 pom.xml 加入以下依賴：
-- spring-boot-starter-data-jpa
-- postgresql
+【步驟一：確認依賴、打開資料庫設定】
+我在 1-2 建立了一個 Spring Boot 4.1.x 專案，pom.xml 已有 web、validation、data-jpa、postgresql、flyway 依賴，
+請幫我確認並補齊：
+- spring-boot-starter-data-jpa、spring-boot-starter-flyway 與 flyway-database-postgresql、postgresql（runtime）都在
 - lombok（若尚未加入）
+- 把第一章為了能啟動而排除的資料庫自動設定拿掉，改用 application.yml 的 datasource 設定
 
-【步驟二：升級 Customer 類別】
-我目前的 Customer.java 只是普通 POJO，
-請幫我加上 JPA 註解（@Entity、@Table、@Id、@GeneratedValue、@Column），
-並改用 Lombok 的 @Data、@NoArgsConstructor、@AllArgsConstructor 取代手寫 getter/setter。
+【步驟二：升級四個 Entity】
+我目前的 Customer、Contact、Interaction、Opportunity 只是普通 POJO，
+請幫我加上 JPA 註解（@Entity、@Table、@Id、@GeneratedValue、@Column、@Enumerated(EnumType.STRING)），
+關聯用 Customer 對三者的 @OneToMany（cascade ALL、orphanRemoval）與對應的 @ManyToOne，
+再抽一個 AuditableEntity（created_at、updated_at、created_by、updated_by，用 @EnableJpaAuditing 自動填）給四個 Entity 繼承，
+並改用 Lombok 的 @Getter、@Setter、@NoArgsConstructor 取代手寫 getter/setter（Entity 不要用 @Data，避免關聯欄位的 equals/hashCode 迴圈）。
+欄位名稱、enum 值必須與 Flyway V1 的資料表完全一致，讓 ddl-auto: validate 通過。
 
 【步驟三：建立 Repository 並更新 Service】
 請幫我：
-1. 建立 CustomerRepository.java，繼承 JpaRepository<Customer, Long>
+1. 建立 CustomerRepository.java，繼承 JpaRepository<Customer, Long> 與 JpaSpecificationExecutor<Customer>；Contact、Interaction、Opportunity 也各建一個 Repository
 2. 更新 CustomerService.java，把原本的 List<Customer> 換成注入 CustomerRepository，
-   讓 getAll、findById、save 方法改用資料庫操作
+   讓查詢、findById、save 方法改用資料庫操作；Controller 與 DTO 完全不動
 
-完成後請執行 mvn spring-boot:run，確認應用程式能啟動並成功連線資料庫。
+完成後請執行 mvn spring-boot:run，確認應用程式能啟動、Flyway 遷移成功並通過 validate。
 ```
+
+## 逐步操作與驗收
+
+### 建立可預期的 Entity 映射
+
+1. 先從 migration 反推 Entity：確認 `@Entity`、`@Table`、`@Id`、生成策略、欄位型別、nullable 與 unique constraint，不要讓 Hibernate 自動猜出與資料庫不同的結構。
+2. 逐一實作 Customer、Contact、Opportunity、Interaction 的欄位與關聯，特別檢查 `@ManyToOne` 的 owning side、lazy loading、cascade 與 orphan removal 是否真的符合生命週期。
+3. 用 repository test 建立、查詢、更新與刪除一筆資料，再重開 transaction 查回來，確認不是只在記憶體中成功；檢查 SQL log 是否出現非預期 N+1。
+4. Entity 和 API response 之間使用 DTO 或 mapper，實際序列化一筆含關聯的資料，確認不會循環 JSON 或暴露內部 audit 欄位。
+
+### 預期結果與證據
+
+- Entity metadata 與 migration 對得上，CRUD test 通過；關聯查詢有明確策略，JSON 輸出不含 lazy proxy 或循環結構。
+- 交付 Entity-to-table 對照表、repository test、SQL/查詢觀察與 DTO response 範例。
+
+### 失敗分流與銜接
+
+- schema-validation 失敗先比對欄位型別、長度、nullable 與表名；LazyInitializationException 則追查 transaction 邊界，不要直接改成 eager 全載入。
+- 下一單元會在 repository 上加入動態條件，先確認基本單筆 CRUD 的基線。
 
 ## 口語稿
 

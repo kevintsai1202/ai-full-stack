@@ -76,15 +76,17 @@ AI Agent 提示詞——建立 Spring MVC 示範專案（引自 u2 原文）：
 
 ```text
 【建立專案】
-我有一個 Spring Boot 專案，只有 spring-boot-starter-web 依賴。
-請幫我建立一個簡單的客戶 REST API（資料存在記憶體，不用資料庫）：
+我有一個 Spring Boot 4.1.x（Java 21）專案，pom.xml 已有 web、validation、data-jpa、postgresql、flyway 依賴，但資料庫還沒接上（資料庫自動設定先排除）。
+請幫我建立一個簡單的客戶 REST API（資料存在記憶體，先不用資料庫）：
 - GET /api/customers → 回傳全部客戶
-- GET /api/customers/{id} → 找不到回傳 404
-- POST /api/customers → 新增客戶，回傳 201
-請加上中文函式級別註解。
+- GET /api/customers/{id} → 找不到回傳 404（ProblemDetail 格式）
+- POST /api/customers → 新增客戶，回傳 201；欄位不合法回 400
+Customer 欄位現在就固定、之後不再改：name、email、phone（^09\d{8}$）、taxId（8 碼數字）、industry、ownerName、status（ACTIVE / INACTIVE / LEVERAGED）、contractStartDate、contractEndDate、renewalDueDate。
+請求與回應用 record DTO，集中放在 api/Dtos.java；Controller 只做 HTTP 收發，邏輯放 Service。
+請加上繁體中文函式級別註解。
 
 【驗證 API】
-專案啟動後（port 8080），請幫我用 PowerShell Invoke-RestMethod 測試上面三個端點是否正常回應。
+專案啟動後（port 8080），請幫我用 PowerShell Invoke-RestMethod 測試上面三個端點是否正常回應，並把指令整理成 scripts/test-crm-api.ps1。
 
 【排查錯誤】
 執行 mvn spring-boot:run 出現以下錯誤：
@@ -99,6 +101,25 @@ AI Agent 提示詞——建立 Spring MVC 示範專案（引自 u2 原文）：
 
 「請幫我在 CustomerController 加一個 DELETE /api/customers/{id} 端點，成功刪除回傳 204，找不到回傳 404。」
 ```
+
+## 逐步操作與驗收
+
+### 實際拆分並追蹤一條請求
+
+1. 先在檔案樹建立或確認 `controller`、`service`、`repository`、`dto` 與 `mapper` 的責任邊界；命名以 CRM 資源為主，例如 `CustomerController`。
+2. 讓 Controller 只接收 HTTP 請求、呼叫 Service、回傳 DTO；把狀態轉移、重複檢查與查詢條件放在 Service，不要在 endpoint 方法內直接操作 Entity。
+3. 從一個 POST 或 GET 開始設 breakpoint 或加入暫時性的結構化 log，依序記錄 request、service decision、repository query 與 response，再移除不必要的除錯輸出。
+4. 把同一個商業規則用單元測試固定下來，並用一次整合測試確認 Controller 到資料層的接線；測試失敗時先定位層級，再請 AI 提供局部修正。
+
+### 預期結果與證據
+
+- 檔案樹能看出責任分層；至少一條請求有呼叫鏈紀錄，Controller 沒有 SQL、Repository 沒有 HTTP response 建構。
+- 交付分層圖、測試名稱與輸出，以及一個說明「若修改商業規則應改哪一層」的 AI 審查紀錄。
+
+### 失敗分流
+
+- 若為了讓測試通過而把所有邏輯塞回 Controller，先退回檢查責任表；若循環依賴，檢查 Service 是否錯誤地注入 Controller。
+- 下一單元會在 DTO 邊界加入輸入驗證，先不要把不可信 JSON 直接傳進 Domain。
 
 ## 口語稿
 

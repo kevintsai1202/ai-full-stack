@@ -29,9 +29,23 @@
 - `java -version` 顯示 openjdk version "21.x.x"
 - `mvn -version` 顯示 Apache Maven 3.9.x，且其中 Java version 為 21
 - `git --version` 顯示 git version 2.x.x，且 `git config user.name` / `user.email` 已設定
-- 專案由 Spring Initializr 產生：Group `com.example`、Artifact `tutorial`、Java 21、Packaging Jar，依賴包含 Spring Web、Spring Data JPA、PostgreSQL Driver、Flyway Migration
+- 專案由 Spring Initializr 產生：Group `com.example`、Artifact `tutorial`、Java 21、Packaging Jar，依賴包含 Spring Web、Validation、Spring Data JPA、PostgreSQL Driver、Flyway Migration
 - `mvn clean compile` 結果為 `BUILD SUCCESS`
 - 首次啟動時資料庫連線失敗屬預期行為（尚未啟動 Docker），不影響驗收；重點是主程式可被 Maven 執行、類別掃描無錯誤
+
+## 逐步操作與驗收
+
+### 作業執行順序
+
+1. 先完成環境檢查並保存版本輸出，再建立 Spring Boot 專案；兩份證據要能看出是在同一台機器、同一個工作目錄完成。
+2. 執行 `mvn clean compile`，確認基線可以建置後，建立一個最小的健康檢查 endpoint 或依課程要求完成等價的可執行骨架。
+3. 用 AI 協作紀錄表完成一次「重述需求、最小 patch、閱讀 diff、執行驗證、回饋修正」流程，並把未解決問題單獨列出。
+4. 回看 CRM 案例地圖，選一個客戶流程寫成下一章可以實作的 API 需求，至少包含角色、輸入、輸出、錯誤情況與驗收證據。
+
+### 交付證據與退件條件
+
+- 交付環境檢查、專案目錄樹、`pom.xml`、建置輸出、AI 協作紀錄與 CRM 案例地圖；檔名不可只叫 `final`。
+- 若缺少 Java 21 的 Maven 證據、沒有實際建置輸出、只貼 AI 生成碼未做 diff 審查，或案例沒有可測試條件，作業視為未完成，先補證據再進入章節 2。
 
 ## 口語稿
 
@@ -43,7 +57,7 @@
 
 繳交物有三張截圖。第一張，環境驗證：終端機執行 java -version、mvn -version、git --version 的完整輸出。第二張，專案結構：VS Code 裡打開課程專案的目錄樹，要能看到 src/main/java、application.properties 跟 pom.xml。第三張，建置成功：mvn clean compile 的執行結果，畫面上要有 BUILD SUCCESS 這個字樣。
 
-驗收標準我一條一條講清楚，你交作業之前自己先對一次。Java 的版本必須是 21——不是 17、不是 8，就是 21。Maven 要是 3.9 以上，而且注意，mvn -version 輸出裡面那一行 Java version 也必須是 21，這是最多人漏看的地方；如果那一行不是 21，代表 Maven 指到了電腦裡另一顆舊的 JDK，請回去用排錯提示詞把它修正。Git 要能顯示版本，而且 user.name 跟 user.email 要設定完成。專案的設定要跟課程一致：Group 是 com.example、Artifact 是 tutorial、Java 21、Packaging 選 Jar，四個依賴——Spring Web、Spring Data JPA、PostgreSQL Driver、Flyway Migration——一個都不能少，因為後面的章節都靠它們。最後，mvn clean compile 必須是 BUILD SUCCESS。
+驗收標準我一條一條講清楚，你交作業之前自己先對一次。Java 的版本必須是 21——不是 17、不是 8，就是 21。Maven 要是 3.9 以上，而且注意，mvn -version 輸出裡面那一行 Java version 也必須是 21，這是最多人漏看的地方；如果那一行不是 21，代表 Maven 指到了電腦裡另一顆舊的 JDK，請回去用排錯提示詞把它修正。Git 要能顯示版本，而且 user.name 跟 user.email 要設定完成。專案的設定要跟課程一致：Group 是 com.example、Artifact 是 tutorial、Java 21、Packaging 選 Jar，五個依賴——Spring Web、Validation、Spring Data JPA、PostgreSQL Driver、Flyway Migration——一個都不能少，因為後面的章節都靠它們。最後，mvn clean compile 必須是 BUILD SUCCESS。
 
 還有一件事要特別交代，免得你白白緊張：如果你嘗試啟動應用程式，看到資料庫連線失敗的錯誤——這是正常的、預期中的行為。因為我們還沒有啟動 Docker、還沒有建資料庫，那是第三章的事。這份作業只驗收到「主程式可以被 Maven 執行、類別掃描沒有錯誤」這個程度。需要的話，可以先把 application.properties 裡的資料庫設定暫時留空。
 

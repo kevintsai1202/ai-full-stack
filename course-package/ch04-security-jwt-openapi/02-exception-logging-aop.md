@@ -95,13 +95,47 @@ Spring AOP 用 Proxy 實現：`@Autowired` 注入的其實是代理物件，Prox
 
 ## 示範與提示詞
 
-本節與單元 1 共用「② 做一份線上操作說明頁，並統一錯誤訊息」的提示詞，本節負責其中「統一錯誤訊息」的部分：
+本節與單元 1 共用「② 產生 API 文件，並統一錯誤訊息」的提示詞，本節負責其中「統一錯誤訊息」的部分：
 
 ```text
-請幫我做一份「線上的 API 操作說明頁」，讓我能直接在上面看到有哪些功能、並直接測試它們。另外，當操作出錯時（例如資料填錯、找不到、沒權限），都要回給我格式一致、看得懂的錯誤訊息，而不是一堆看不懂的程式錯誤。這個說明頁一樣要登入後才能使用。請加中文註解。
+請用 springdoc-openapi 3.x（支援 Spring Boot 4）幫這個專案產生 API 文件，Swagger UI 放在 /swagger-ui.html：
+- 每個客戶端點都要有中文的 @Operation 說明與可能的狀態碼，並宣告 bearerAuth 讓我能按 Authorize 貼上 token
+- 錯誤一律回 ProblemDetail（title、status、detail、instance）：填錯 400、找不到 404、未登入 401、沒權限 403
+- 欄位驗證失敗時 detail 要逐欄說明哪裡錯，不要丟原始程式錯誤
+- Swagger UI 一樣要登入後才能使用
+請加繁體中文註解。
+```
+
+日誌與健康檢查另有一段提示詞「③ 加上日誌與健康檢查」，對應本節的 log 部分：
+
+```text
+請幫這個專案補上可觀測性，讓出問題時查得到原因：
+- Service 用 Lombok 的 @Slf4j，在新增、修改、刪除客戶與登入成功／失敗時各留一筆有語意的 Log（INFO 記正常流程、WARN 記被擋下的操作），訊息要帶得出是哪個使用者對哪筆資料做了什麼，但不可以印出密碼、token 或完整統編
+- 在 application.yml 設定各套件的 Log 層級，本專案套件用 DEBUG、框架用 INFO
+- 加入 spring-boot-starter-actuator，開放 health 與 loggers 兩個端點（都要登入且限 ADMIN），讓我能用 PATCH /actuator/loggers 不重啟就調整層級
+請加繁體中文註解，並告訴我怎麼驗證：呼叫一次刪除客戶後，能在 Log 看到對應紀錄。
 ```
 
 驗證方式：在 Swagger UI 用不存在的 id 呼叫 `GET /api/customers/999`，應回 404 且是統一格式的 JSON；POST 一筆缺 name 的客戶，應回 400 並在 `errors` 陣列列出逐欄錯誤；再用 `PATCH /actuator/loggers` 把某套件層級調成 DEBUG，觀察 console 輸出立刻變多。
+
+## 逐步操作與驗收
+
+### 建立可追蹤且不洩漏資訊的錯誤流程
+
+1. 先定義錯誤 response：timestamp、status、code、message、path、traceId 與欄位 errors；分辨驗證、查無資料、衝突、未授權與未預期錯誤。
+2. 用 `@RestControllerAdvice` 統一映射例外，分別送出 400、404、409、401/403 與 500；實際呼叫每一類案例，確認 body 形狀一致。
+3. 在 request boundary 或 Service boundary 加入 AOP/Filter log，記錄 traceId、路由、耗時與結果；以錯誤案例確認密碼、JWT、Authorization header 與個資不會進 log。
+4. 用同一 traceId 從 HTTP response 追到 log，測試成功、業務錯誤和未預期例外三條路徑；不要用 `catch Exception` 後回傳 200。
+
+### 預期結果與證據
+
+- 相同錯誤在所有 endpoint 回傳一致格式；log 能依 traceId 找到請求，且敏感欄位已遮罩。
+- 交付錯誤對照表、四類 HTTP response、log 範例與敏感資料檢查結果。
+
+### 失敗分流與銜接
+
+- 錯誤變成 500 時先查例外映射順序；response 有 stack trace 時檢查 production profile 與 serializer。
+- 下一單元會把 401/403 和 JWT 驗證接上，先確定例外格式能讓前端區分登入失效與權限不足。
 
 ## 口語稿
 

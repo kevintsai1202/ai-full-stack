@@ -23,6 +23,20 @@
 4. 程式碼具備中文函式級別註解。
 5. 附上 PowerShell `Invoke-RestMethod` 的驗證結果（GET 與 POST 皆需實際呼叫成功）。
 
+## 逐步操作與驗收
+
+### 作業實作順序
+
+1. 先用契約表選定至少三個 endpoint，標出正常、缺欄位、查無資料與重複資料情境，再建立 Controller、Service、Repository 的最小實作。
+2. 用 request DTO 和 `@Valid` 擋住不合法輸入，實際發送至少四組 HTTP 請求；所有回應都保存 status、body 和執行時間。
+3. 將 Customer 與 Opportunity 的必要規則寫成測試，確認錯誤不會穿透到資料層；測試失敗時保存原始輸出和修正前後 diff。
+4. 以 AI 做一次 code review，要求它檢查分層、契約、錯誤格式、敏感資料與測試缺口，逐項回應是否採納及理由。
+
+### 完成條件
+
+- 交付 endpoint 契約、原始 HTTP 證據、測試輸出、分層檔案樹、Domain 規則表與 AI review 紀錄。
+- 缺少真實請求、只有 happy path、Controller 直接操作 Entity，或錯誤回應沒有欄位級訊息時，不算通過；先補測試與證據。
+
 ## 口語稿
 
 好，這一章的作業來了，題目叫「完成測試用 API」。我先把要做的三件事講清楚，再講我驗收的時候會看什麼。

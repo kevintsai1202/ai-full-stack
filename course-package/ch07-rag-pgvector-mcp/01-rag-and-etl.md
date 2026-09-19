@@ -65,19 +65,40 @@ public String uploadDocument(@RequestParam("file") MultipartFile file) {
 
 ```text
 請為專案加入 RAG 知識庫功能，使用 PostgreSQL pgvector 儲存向量：
-1. 在 pom.xml 加入 spring-ai-starter-vector-store-pgvector 依賴，並確認 application.yml 已設定 Voyage AI 的 embedding 端點（環境變數 VOYAGE_API_KEY）。
-2. 建立 RAGController，提供兩支 API：
-   - POST /api/rag/upload：接收上傳的文字檔，用 TextReader 讀取、TokenTextSplitter 切分成小段，最後用 vectorStore.accept() 向量化寫入資料庫
-   - GET /api/rag/query：掛上 QuestionAnswerAdvisor，讓 AI 先檢索相關文件片段再回答
-3. 程式碼需有中文函式註解。
-完成後請示範驗證流程：先上傳一份「客戶服務規範」文件，再提問「客戶服務規範是什麼？」，確認 AI 是根據文件內容回答，而不是自由發揮。
+1. 在 pom.xml 加入 spring-ai-starter-vector-store-pgvector 依賴，並在 application.yml 設定 Voyage AI 的 embedding 端點（模型 voyage-4-lite、環境變數 VOYAGE_API_KEY 放在 .env）；vector_store 表由 Spring AI 自動建立（initialize-schema: true）。
+2. 建立 RAGController，提供這幾支 API：
+   - POST /api/rag/upload（只有 ADMIN 可用）：接收上傳的 .txt / .md 文字檔與 docType（PRODUCT 產品 / POLICY 條款 / PLAYBOOK 話術），用 TextReader 讀取、TokenTextSplitter 切分成小段，每段 metadata 記 type=knowledge_doc、title（檔名）、docType、uploadedAt，最後用 vectorStore.accept() 向量化寫入資料庫
+   - GET /api/rag/documents 列出已上傳文件（依 title 彙整）、DELETE /api/rag/documents/{title} 刪除某份文件的所有片段（ADMIN）
+   - GET /api/rag/query：掛上 QuestionAnswerAdvisor（filterExpression 只取 type == 'knowledge_doc'，topK 3），讓 AI 先檢索相關文件片段再回答；回答要附上引用來源（title、docType、片段內容、相似度），找不到相關片段時回覆「知識庫沒有相關內容」
+3. 把同一組檢索也掛進聊天室的 ChatClient，前端在訊息下方顯示引用來源。
+4. 程式碼需有繁體中文函式註解。
+完成後請示範驗證流程：先用 admin 上傳一份「客戶服務規範」文件，再提問「客戶服務規範是什麼？」，確認 AI 是根據文件內容回答並列出來源，而不是自由發揮；再問一個文件裡沒有的問題，確認 AI 說找不到。
 ```
 
 **口語化任務提示詞 — 建立可上傳文件的 RAG 知識庫［build］**
 
 ```text
-請幫我建立一個「知識庫」：我可以上傳公司的文件（例如客戶服務規範、產品手冊、銷售話術範本）。之後當我問相關問題時，AI 要先去這些文件裡找出最相關的段落，根據文件內容來回答，而不是自由發揮亂講；回答時也要告訴我「這是參考哪一份文件」。完成後我上傳一份『客戶服務規範』，再問相關問題，AI 就會依文件內容回答。請加中文註解。
+請幫我建立一個「知識庫」：加入 spring-ai-starter-vector-store-pgvector，向量存在 PostgreSQL 的 pgvector 裡；embedding 用 Voyage AI（環境變數 VOYAGE_API_KEY，模型 voyage-4-lite）。我可以上傳公司的文件（POST /api/rag/upload，只有 ADMIN 可用，接受 .txt 與 .md，用 TextReader 讀取、TokenTextSplitter 切段，metadata 記 type=knowledge_doc、title、docType（PRODUCT 產品 / POLICY 條款 / PLAYBOOK 話術）、上傳時間），也能列出與刪除文件。之後當我在聊天室問相關問題時，AI 要先用 QuestionAnswerAdvisor 去這些文件裡找出最相關的段落（取前 3 筆），根據文件內容來回答，而不是自由發揮亂講；回答時也要告訴我「這是參考哪一份文件」，前端把引用來源顯示在訊息下方；找不到相關段落時要說「知識庫沒有相關內容」。完成後我上傳一份『客戶服務規範』，再問相關問題，AI 就會依文件內容回答。請加繁體中文註解。
 ```
+
+## 逐步操作與驗收
+
+### 建立可追溯的 RAG 管線
+
+1. 先選一份 CRM 產品或銷售文件，記錄來源 URL/檔名、版本、權限與更新時間；不要把未確認的內容直接送進知識庫。
+2. 執行 ETL：讀取文件、清理格式、依標題與長度切 chunk、保留 metadata，再呼叫 embedding provider；每一步保存輸入數量、輸出數量與錯誤。
+3. 將向量和 chunk 寫入 pgvector，查詢資料表中的 source、chunk index、embedding dimension 與 tenant/permission metadata；抽查原文是否能由 chunk 還原。
+4. 用三個已知答案問題測試 top-k 檢索，觀察相似度、來源與回答引用；再測一個知識庫沒有答案的問題，確認系統會說不知道而不是編造。
+
+### 預期結果與證據
+
+- 文件到 chunk、embedding、vector search、回答的鏈路可追蹤；已知問題找得到正確來源，未知問題被拒答或要求補資料。
+- 交付 ETL 統計、chunk/metadata 範例、pgvector 查詢、三題 retrieval 結果、引用回答與未知問題結果。
+
+### 失敗分流與銜接
+
+- embedding 400 先保存 provider response、輸入 UTF-8、dimension 和空 chunk 診斷；不要只刪除失敗資料重跑。
+- 查不到相關片段先分辨切分、embedding、索引、權限或 query 問題；下一單元會把外部工具和 skills 接入，仍須沿用這條證據鏈。
 
 ## 口語稿
 

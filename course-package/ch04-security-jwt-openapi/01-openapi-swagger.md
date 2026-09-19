@@ -50,13 +50,37 @@ public class CustomerController {
 
 > 「如何讓 Swagger UI 只在 dev profile 啟用，在 prod profile 自動關閉？請修改 application.yml 與 OpenApiConfig。」
 
-另外，本章 prompts 中的「② 做一份線上操作說明頁，並統一錯誤訊息」也涵蓋本節的目標（統一錯誤的部分在單元 2 完成）：
+另外，本章 prompts 中的「② 產生 API 文件，並統一錯誤訊息」也涵蓋本節的目標（統一錯誤的部分在單元 2 完成）：
 
 ```text
-請幫我做一份「線上的 API 操作說明頁」，讓我能直接在上面看到有哪些功能、並直接測試它們。另外，當操作出錯時（例如資料填錯、找不到、沒權限），都要回給我格式一致、看得懂的錯誤訊息，而不是一堆看不懂的程式錯誤。這個說明頁一樣要登入後才能使用。請加中文註解。
+請用 springdoc-openapi 3.x（支援 Spring Boot 4）幫這個專案產生 API 文件，Swagger UI 放在 /swagger-ui.html：
+- 每個客戶端點都要有中文的 @Operation 說明與可能的狀態碼，並宣告 bearerAuth 讓我能按 Authorize 貼上 token
+- 錯誤一律回 ProblemDetail（title、status、detail、instance）：填錯 400、找不到 404、未登入 401、沒權限 403
+- 欄位驗證失敗時 detail 要逐欄說明哪裡錯，不要丟原始程式錯誤
+- Swagger UI 一樣要登入後才能使用
+請加繁體中文註解。
 ```
 
 驗證方式：瀏覽器開 `http://localhost:8080/swagger-ui/index.html`，確認每個客戶端點都有中文說明、能直接 Try it out。
+
+## 逐步操作與驗收
+
+### 讓 API 契約可以被閱讀與執行
+
+1. 先確認 springdoc 或專案既定 OpenAPI 依賴版本，再啟動服務；不要只安裝 UI 而沒有產生規格文件的 endpoint。
+2. 開啟 `/v3/api-docs` 或專案實際設定的 JSON 規格，以及 `/swagger-ui/index.html`；保存兩者的 HTTP status 和畫面。
+3. 為 customers 的成功、驗證失敗、查無資料與授權失敗補上 operation summary、request schema、response schema、status code 與範例，讓文件和實際 Controller 一致。
+4. 從 Swagger UI 執行一個 GET 和一個 POST，再把同一請求用 `Invoke-RestMethod` 重現，對照文件、實際 request 與 response 的差異。
+
+### 預期結果與證據
+
+- OpenAPI JSON 可取得、Swagger UI 可載入，至少一組 CRUD endpoint 的文件與真實 HTTP 結果一致。
+- 交付規格 JSON、Swagger 截圖或網址、請求範例與差異修正紀錄；敏感 endpoint 要標記 auth requirement。
+
+### 失敗分流與銜接
+
+- 404 先查 context path 與 springdoc 設定；文件有 endpoint 但執行 500 時回到 Controller/例外處理，不要修改文件掩蓋程式錯誤。
+- 下一單元會統一錯誤回應和 log，先保留這次 API 契約作為驗收基準。
 
 ## 口語稿
 

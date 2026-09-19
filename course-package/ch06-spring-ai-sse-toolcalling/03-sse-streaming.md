@@ -33,7 +33,7 @@
 
 在 CRM 智慧工作台中，AI 回應不應只是死板的 Markdown 文字，更應該在適當時機，動態將對應的「客戶摘要卡片、商機卡片、建議行動卡片」嵌入到對話流中，提昇 UI/UX 質感。前端 `ChatRoom.jsx` 採用「自動偵測與條件渲染」機制：
 
-1. 串流偵測（detectAndAttachCards）：當前端 EventSource 接收到後端 AI 推播的字元片段時，將目前的完整對話內容（fullResponse）傳入進行關鍵字匹配。當匹配到客戶名稱（如台積電、聯發科），或涉及商機關鍵字且提及特定客戶時，自動在訊息物件中附加對應的 `cards` 資料。
+1. 串流偵測（detectAndAttachCards）：當前端 EventSource 接收到後端 AI 推播的字元片段時，將目前的完整對話內容（fullResponse）傳入進行關鍵字匹配。當匹配到客戶名稱（如亞太智能製造、環球零售巨擘），或涉及商機關鍵字且提及特定客戶時，自動在訊息物件中附加對應的 `cards` 資料。
 2. 條件渲染（renderCards）：React 渲染訊息列表時，若訊息物件含有 `cards` 屬性，則依 `cards.cardType` 分別渲染出 `<CustomerSummaryCard />`、`<OpportunityCard />` 或 `<ActionCard />`。
 
 ```javascript
@@ -56,8 +56,9 @@ const detectAndAttachCards = (text) => {
 
 ```text
 請在現有專案中完成以下前端與後端的串流對話安全升級：
-1. 由於原生的 EventSource 無法在 Header 中自訂 Token 進行驗證，請修改後端 `JwtAuthenticationFilter.java` 的 `parseJwt` 方法，使其除了支援從 `Authorization` 標頭讀取 Token 外，也支援從 URL 的 Query 參數（例如 `token`）中取得並驗證 Token。
-2. 在前端 `ChatRoom.jsx` 中，連接後端的 `/api/ai/stream` 串流對話介面。連線時，請從 `localStorage` 中讀取先前儲存的 JWT Token，並以網址參數形式帶入（例如 `/api/ai/stream?message=xxx&token=yyy`），以安全地建立 EventSource 串流對話連線。
+1. 由於原生的 EventSource 無法在 Header 中自訂 Token 進行驗證，請修改後端 `JwtAuthenticationFilter.java` 的 `parseJwt` 方法，使其除了支援從 `Authorization` 標頭讀取 Token 外，也支援從 URL 的 Query 參數（例如 `token`）中取得並驗證 Token；只有 `/api/ai/stream` 這條路徑接受網址參數的 Token。
+2. 在前端 `ChatRoom.jsx` 中，連接後端的 `/api/ai/stream` 串流對話介面。連線時，請從 `localStorage` 中讀取先前儲存的 JWT Token，並以網址參數形式帶入（例如 `/api/ai/stream?message=xxx&sessionId=zzz&token=yyy`），以安全地建立 EventSource 串流對話連線；sessionId 在第一次開聊天室時產生並存在 localStorage，「清除對話」時換一個新的。
+3. 聊天室放在客戶詳情頁的側欄（也能從導覽列打開），訊息逐字追加顯示，等待期間顯示骨架屏，串流錯誤或斷線要有可重試的提示；收到 AI 回覆後若內容提到某位客戶，附上該客戶的摘要卡片（名稱、風險等級、進行中生意金額）並可點進詳情頁。
 ```
 
 ### 口語化建置提示詞 ③｜在網頁上做出 AI 聊天室
@@ -65,8 +66,27 @@ const detectAndAttachCards = (text) => {
 > 即時打字效果，而且要確認是已登入的人
 
 ```text
-請在網頁上做一個 AI 聊天室，連上剛才的助手，要有訊息即時一個字一個字跳出來的效果。同時要確保只有「已經登入的人」才能使用這個聊天，外人不能亂用。請加中文註解。
+請在網頁上做一個 AI 聊天室（放在客戶詳情頁的側欄，也能從導覽列打開），連上剛才的助手，要有訊息即時一個字一個字跳出來的效果：前端用 EventSource 連 /api/ai/stream?message=…&sessionId=…&token=…，把 localStorage 的 JWT 用網址參數帶上；後端的 JwtAuthenticationFilter 除了 Authorization 標頭，也要能從 token 這個網址參數驗證，確保只有「已經登入的人」才能使用這個聊天，外人不能亂用。畫面要有送出中的骨架屏、錯誤提示、清除對話（清除時換一個新的 sessionId）。請加繁體中文註解。
 ```
+
+## 逐步操作與驗收
+
+### 讓對話逐段送到 React
+
+1. 先以非串流 endpoint 確認模型、記憶與工具都正常，再將後端改為 `text/event-stream`；不要同時引入前端卡片和 token 認證問題。
+2. 後端以 sessionId、message 與已驗證身份建立 stream，前端用 `EventSource` 逐段累加 state；確認完成、錯誤、關閉與重新連線都有處理。
+3. 因原生 EventSource 不支援自訂 Authorization header，若採 query token，必須使用 HTTPS、短效 token，並在 access log、proxy、browser history 做遮罩或避免記錄；更安全的替代方案要記錄取捨。
+4. 用一個會產生客戶摘要或商機的回答測試卡片偵測，確認卡片只來自已驗證資料，串流中途不會重複渲染；測試清除 session 和斷線重連。
+
+### 預期結果與證據
+
+- 瀏覽器能看到逐段文字，Network 顯示 `text/event-stream`；正常完成、模型錯誤、token 失效和斷線各有可辨識畫面。
+- 交付前後端 stream 程式碼、Network event、session/token 安全檢查、卡片結果與重新連線測試。
+
+### 失敗分流與銜接
+
+- 一次回完整文字時查後端是否真的使用 stream；瀏覽器 401 查 token 路徑與 filter；卡片錯誤先查偵測條件和資料來源。
+- 下一單元會以這條完整鏈路談商業價值，先保存真實串流證據與限制。
 
 ## 口語稿
 
@@ -78,7 +98,7 @@ const detectAndAttachCards = (text) => {
 
 我們現在來實作。把講義裡的提示詞交給 AI Agent，它會幫你改好後端過濾器、接好前端連線。接著看前端怎麼渲染：EventSource 每收到一個字元片段，就把它累加進 React 的 state，state 一變 React 就重新渲染——這就是打字機效果的全部原理，靠的就是狀態管理。另外別忘了 session 的前端管理：使用者按「清除對話」時，不是把訊息陣列清空就好，對話的 session 識別也要一起重建，不然舊記憶還掛在後端。
 
-做到這裡功能已經完整了，但我們可以再往質感推一步。CRM 智慧工作台的 AI 回應，不該只是死板的 Markdown 文字。我們在 ChatRoom.jsx 用「自動偵測與條件渲染」機制：串流過程中，detectAndAttachCards 函式拿目前累積的完整回應去做關鍵字匹配，比對到客戶名稱、像台積電或聯發科，或者提到商機相關字眼，就在訊息物件上附加 cards 資料；渲染訊息列表時，只要訊息帶有 cards 屬性，就依 cardType 渲染出客戶摘要卡片、商機卡片或建議行動卡片。你會看到 AI 講到台積電的商機時，對話流裡直接長出一張有金額、成交機率、銷售階段的漂亮卡片——這就是聊天介面跟智慧工作台的差別。
+做到這裡功能已經完整了，但我們可以再往質感推一步。CRM 智慧工作台的 AI 回應，不該只是死板的 Markdown 文字。我們在 ChatRoom.jsx 用「自動偵測與條件渲染」機制：串流過程中，detectAndAttachCards 函式拿目前累積的完整回應去做關鍵字匹配，比對到客戶名稱、像亞太智能製造或環球零售巨擘，或者提到商機相關字眼，就在訊息物件上附加 cards 資料；渲染訊息列表時，只要訊息帶有 cards 屬性，就依 cardType 渲染出客戶摘要卡片、商機卡片或建議行動卡片。你會看到 AI 講到亞太智能製造的生意機會時，對話流裡直接長出一張有金額、成交機率、銷售階段的漂亮卡片——這就是聊天介面跟智慧工作台的差別。
 
 驗證一下：登入後開聊天室，問「有哪些客戶」，你會看到文字逐字跳出、卡片自動出現，而且卡片上的數字跟資料庫一致；登出或不帶 Token 直接打 stream 網址，會被擋下來。數字由工具算、文字由模型寫，現在再加一句：體驗由串流撐。
 

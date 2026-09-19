@@ -27,7 +27,7 @@ Spring Initializr 是 Spring 官方提供的專案產生器，負責生成標準
 ```text
 Project      : Maven
 Language     : Java
-Spring Boot  : 4.0.x
+Spring Boot  : 4.1.x
 Group        : com.example
 Artifact     : tutorial
 Packaging    : Jar
@@ -66,10 +66,10 @@ mvn clean compile
 
 ### ② 建立專案的資料夾骨架［build］
 
-> 一個放後端、一個放之後要做的網頁畫面
+> backend / frontend 兩個資料夾，Spring Boot 4.1.x 空專案帶 /api/health
 
 ```text
-請幫我建立這個課程專案的資料夾結構：一個資料夾放「後端程式」、另一個資料夾放「之後要做的網頁畫面」，並開始做版本控制。後端先給我一個最簡單、空的、但能跑起來的程式就好。完成後我要能把這個後端空專案實際啟動起來，確認一切就緒。
+請幫我建立這個課程專案的資料夾結構：一個 backend 資料夾放「後端程式」、一個 frontend 資料夾放「之後要做的網頁畫面」，並在根目錄開始做版本控制（.gitignore 要排除 target/、node_modules/ 與 .env）。後端先給我一個最簡單、空的、但能跑起來的 Spring Boot 程式就好：用 Spring Initializr 產生，最新的 Spring Boot 4.1.x、Java 21、Maven、Jar，Group 用 com.example、Artifact 用 tutorial，依賴選 Spring Web、Validation、Spring Data JPA、PostgreSQL Driver、Flyway Migration 這五項（資料庫第三章才會接上，所以先在設定檔把資料庫相關的自動設定排除，讓專案現在就能啟動），並提供一個 GET /api/health 回傳 {"status":"UP"} 的端點。完成後我要能把這個後端空專案實際啟動起來（port 8080），用瀏覽器或 PowerShell 打 /api/health 確認一切就緒。
 ```
 
 ### ✅ 驗證 — 環境與骨架就緒［verify］
@@ -77,7 +77,7 @@ mvn clean compile
 > 確認工具版本與後端能啟動
 
 ```text
-請幫我逐一確認開發環境都就緒：檢查剛才裝的那幾個工具版本是否正確，並確認後端的空專案能成功啟動。如果有任何一項不對，請直接幫我修好。
+請幫我逐一確認開發環境都就緒：執行 check-env.ps1，檢查 Java 21、Maven（其中的 Java version 也要是 21）、Git、Node.js、Docker 的版本都正確；再啟動後端空專案，用 Invoke-RestMethod http://localhost:8080/api/health 確認回 {"status":"UP"}。如果有任何一項不對，請直接幫我修好，並把修了什麼告訴我。
 ```
 
 ### 🔧 排錯 — 裝錯版本或啟動失敗［fix］
@@ -87,6 +87,26 @@ mvn clean compile
 ```text
 我照驗證步驟做，但看到不對的結果（我會把畫面上的訊息貼給你）。常見原因是電腦上原本就裝了舊版本造成衝突。請依我貼的訊息判斷原因並幫我修正設定，讓工具都指向正確的新版本。
 ```
+
+## 逐步操作與驗收
+
+### 操作順序
+
+1. 打開 Spring Initializr，固定選擇 Spring Boot 4.1.x、Java 21、Maven、Jar，以及 Web、Validation、Data JPA、PostgreSQL、Flyway 五項依賴；把選擇畫面或下載的 `pom.xml` 保存下來。
+2. 將專案解壓縮到不含空白與特殊字元的工作目錄，先用 VS Code 開啟根目錄，再檢查 `pom.xml`、`src/main/java`、`src/main/resources` 與 `src/test/java` 是否存在。
+3. 在根目錄執行 `mvn clean compile`。先等到 `BUILD SUCCESS`，再開始新增 package、controller 或資料庫設定；編譯失敗時保留第一個錯誤，不要一次貼整份雜訊給 AI。
+4. 執行 `git init`、`git status --short`，確認只有預期的專案檔被追蹤，並建立第一個可回復的基線提交或至少保存 status 輸出。
+
+### 預期結果與證據
+
+- `pom.xml` 的 Java 版本、groupId、artifactId 與依賴和需求一致；`mvn clean compile` 顯示成功。
+- 交付目錄樹、`pom.xml`、建置輸出與 `git status --short`。若尚未啟動資料庫，不應把資料庫連線錯誤誤判成 Maven 編譯失敗。
+
+### 失敗分流與銜接
+
+- Initializr 下載失敗時，保存瀏覽器錯誤與選項，改用已下載的 starter zip，不要自行更換 Spring Boot 大版本。
+- 找不到 `mvn` 或 Java 版本不符時，回到上一單元的環境報告；專案結構正確不代表執行環境正確。
+- 下一單元會用這個乾淨基線測試 AI 協作，因此先不要把 IDE 快取、`target` 或個人密鑰納入交付。
 
 ## 口語稿
 

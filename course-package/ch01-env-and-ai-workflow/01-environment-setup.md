@@ -174,10 +174,10 @@ python --version   # 應顯示 Python 3.x.x
 
 ### ① 用 AI 把開發環境準備好［build］
 
-> 把安裝設定交給 AI，自己只負責核對結果
+> Java、Maven、Git、Node、Docker 一次裝好，產出 check-env.ps1 自己核對
 
 ```text
-我要開始學寫程式，請幫我把電腦準備好：裝好寫 Java 程式需要的工具（Java 本身、用來建置專案的工具、還有版本控制工具），並幫我設定到「打開一個新的終端機視窗就能直接使用」。我用的是 Windows 11（如果是 Mac 請改用對應的做法）。完成後請告訴我怎麼一一確認都裝好了。
+我要開始學寫程式，請幫我把電腦準備好：裝好寫 Java 程式需要的工具（Java 21、用來建置專案的 Maven、版本控制工具 Git），再裝前端會用到的 Node.js LTS，以及之後跑資料庫要用的 Docker Desktop。全部設定到「打開一個新的終端機視窗就能直接使用」。我用的是 Windows 11，請用 PowerShell 7 操作（如果是 Mac 請改用對應的做法）。完成後請寫一支 check-env.ps1 放在專案根目錄，逐項印出每個工具的版本讓我一次核對，並告訴我怎麼執行它。
 ```
 
 ### ✅ 驗證 — 環境與骨架就緒［verify］
@@ -185,7 +185,7 @@ python --version   # 應顯示 Python 3.x.x
 > 確認工具版本與後端能啟動
 
 ```text
-請幫我逐一確認開發環境都就緒：檢查剛才裝的那幾個工具版本是否正確，並確認後端的空專案能成功啟動。如果有任何一項不對，請直接幫我修好。
+請幫我逐一確認開發環境都就緒：執行 check-env.ps1，檢查 Java 21、Maven（其中的 Java version 也要是 21）、Git、Node.js、Docker 的版本都正確；再啟動後端空專案，用 Invoke-RestMethod http://localhost:8080/api/health 確認回 {"status":"UP"}。如果有任何一項不對，請直接幫我修好，並把修了什麼告訴我。
 ```
 
 ### 🔧 排錯 — 裝錯版本或啟動失敗［fix］

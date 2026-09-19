@@ -27,6 +27,20 @@
 - 頁面上能看到漸層 Header 與毛玻璃卡片，懸停卡片有微動畫，載入區塊有骨架屏 shimmer 動畫。
 - 元件與樣式具備中文註解。
 
+## 逐步操作與驗收
+
+### 作業執行順序
+
+1. 建立 Vite React 專案，保存 Node/npm、`npm run dev` 與 `npm run build` 證據；確認 proxy 指向正確 Spring Boot port。
+2. 用 JSX 建立可拆分的 Layout、Header、列表與卡片，至少處理 success、loading、error、empty 四態，並通過 hot reload 與 build。
+3. 接上真實登入與 CRM API，以 Axios interceptor 帶 JWT；用測試帳號完成客戶列表和詳情，保存 Network request/response。
+4. 檢查 401、空資料、API 失敗、窄螢幕與鍵盤 focus，再請 AI review 元件責任、假資料、secret 和 accessibility。
+
+### 完成條件
+
+- 交付前端檔案樹、啟動/build 輸出、頁面流程、真實 API 證據、三態畫面與 review 紀錄。
+- 只截靜態畫面、仍使用 hard-coded CRM 數字、沒有 401 分流或 build 失敗時，作業不算完成。
+
 ## 口語稿
 
 這一章的作業來了，題目是「完成前端基本架構」。內容就是把我們這幾節課做過的事情，在你自己的機器上完整走一遍，總共四個任務，我一個一個交代清楚。

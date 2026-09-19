@@ -58,11 +58,13 @@ Host: localhost:8080
 Content-Type: application/json    ← Header：告知伺服器 Body 格式
 
 {                                  ← Body：實際資料（JSON）
-  "name": "台積電",
-  "level": "VIP",
-  "email": "contact@tsmc.com",
-  "notes": "半導體龍頭，高價值潛在客戶",
-  "status": "Active"
+  "name": "亞太智能製造",
+  "email": "contact@apim.example",
+  "phone": "0912345678",
+  "taxId": "12345678",
+  "industry": "智慧工廠與工業物聯網",
+  "ownerName": "sales",
+  "status": "ACTIVE"
 }
 
 ── HTTP Response（Spring Boot 回傳）─────────────
@@ -71,7 +73,7 @@ Content-Type: application/json    ← Header
 
 {                                  ← Body：建立完成的資料（含 ID）
   "id": 7,
-  "name": "台積電",
+  "name": "亞太智能製造",
   ...
 }
 ```
@@ -121,8 +123,27 @@ Content-Type: application/json    ← Header
 本節搭配的暖身實作提示詞（引自 u2 提示詞 ①）：
 
 ```text
-請幫我做一個簡單版的客戶資料功能來練手：可以看全部客戶、看某一個客戶（如果找不到要明確告訴我）、以及新增客戶。資料先暫時存在程式裡就好，還不用接資料庫。請加上中文註解。做完後我要能實際呼叫這些功能拿到結果。
+請幫我做一個簡單版的客戶資料功能來練手：可以看全部客戶、看某一個客戶（如果找不到要回 404 並明確告訴我）、以及新增客戶（成功回 201）。資料先暫時存在程式裡就好，還不用接資料庫。客戶欄位現在就固定下來，之後不再改：name（公司名）、email、phone（台灣手機 09 開頭共 10 碼）、taxId（8 碼統一編號）、industry（產業）、ownerName（負責業務）、status（ACTIVE 合作中 / INACTIVE 停止往來 / LEVERAGED 重點經營）、contractStartDate、contractEndDate、renewalDueDate。輸入要用 @Valid 檢查，Controller 只做收發、邏輯放 Service、請求與回應用 record DTO，不要直接回傳內部物件。請加上函式級別的繁體中文註解。做完後我要能實際呼叫這些功能拿到結果。
 ```
+
+## 逐步操作與驗收
+
+### 把需求寫成可測試的 REST 契約
+
+1. 先選一個 CRM 資源，例如 customers，寫出集合與單筆 URL、HTTP method、輸入 JSON、成功狀態、錯誤狀態與權限前提；先寫契約再寫 Controller。
+2. 用 `GET /api/customers`、`GET /api/customers/{id}`、`POST /api/customers`、`PATCH /api/customers/{id}` 與 `DELETE /api/customers/{id}` 檢查 URL 是否表達資源，而不是動詞堆疊。
+3. 用 `Invoke-RestMethod` 或 curl 實際呼叫至少一個成功、一次查無資料、一次格式錯誤與一次重複資料案例，記錄 status、headers 與 response body。
+4. 將 JSON 欄位命名、日期格式、分頁與排序規則寫入 API 文件；若暫時不支援某功能，明確標示為未實作，不能讓前端自行猜測。
+
+### 預期結果與證據
+
+- 交付一張 endpoint 契約表和四組真實 HTTP 證據；同一個錯誤情況在不同 endpoint 使用一致的格式。
+- 能解釋 200、201、204、400、404 與 409 在本專案各代表什麼，並指出前端會如何處理。
+
+### 失敗分流與銜接
+
+- 回應狀態和 body 不一致時，先檢查 Controller 的 response mapping，再看例外處理；不要只改前端顯示文字。
+- 契約確認後才進入分層實作，後續 DTO 與 validation 都以這張表為單一檢查基準。
 
 ## 口語稿
 

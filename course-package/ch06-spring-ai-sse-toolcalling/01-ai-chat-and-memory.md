@@ -70,25 +70,45 @@ spring:
 ### AI Agent 提示詞 — 建立 ChatClient 對話入口
 
 ```text
-請在現有的 Spring Boot CRM 專案中加入 AI 對話功能
+請在現有的 Spring Boot CRM 專案中加入 AI 對話功能（Spring AI 2.0.x，spring-ai-starter-model-openai）：
 
-1. 請在現有的 Spring Boot CRM 專案中加入 AI 對話功能
-2. 設定 Groq 的 base-url，模型用 openai/gpt-oss-120b，API Key 為 "xxxxxxx"。
-3. 系統提示詞：「你是一個親切的 CRM 智慧助手」。
-4. 使用 SSE串流回覆的API，並掛上記憶，以 sessionId 參數隔離不同使用者的對話記憶。
+1. 設定 Groq 的 OpenAI 相容端點：base-url https://api.groq.com/openai，模型 openai/gpt-oss-120b；API Key 從環境變數 GROQ_API_KEY（放在 .env）讀取，不要寫死在程式碼中。
+2. 系統提示詞：「你是一個親切的 CRM 智慧助手，只根據系統提供的資料回答，資料不足就明說，不要編造金額或日期。」
+3. 提供 SSE 串流回覆的 API（GET /api/ai/stream，參數 message、sessionId），並用 MessageChatMemoryAdvisor 掛上記憶，以 sessionId 隔離不同使用者的對話記憶；sessionId 要綁定登入者（Principal），別人帶了也用不到。
+4. 每一次呼叫都寫一筆 ai_call_log（用 Flyway 新增：呼叫類型、客戶 id、模型、prompt/completion token 數、回答摘要、建立時間），之後要拿來查 AI 歷史。
+5. 程式碼需有繁體中文函式級別註解。
 ```
 
 ### 口語化建置提示詞 ①｜加上一個會聊天的 AI 智慧助手
 
-> 回答即時逐字跳出，不同人的對話分開記住
+> Groq 端點、SSE 逐字串流、sessionId 記憶、每次呼叫記 ai_call_log
 
 ```text
-請幫這套系統加上一個 AI 智慧助手，讓我可以用「聊天」的方式問跟客戶有關的問題。回答要像打字一樣一個字一個字即時跳出來，而且不同使用者的對話要各自分開記住、不會混在一起。（串接 AI 用的金鑰請放在設定裡讀取，不要寫死在程式碼中。）請加中文註解。
+請幫這套系統加上一個 AI 智慧助手（Spring AI 2.0.x 的 ChatClient），讓我可以用「聊天」的方式問跟客戶有關的問題。模型端點走 Groq 的 OpenAI 相容 API（base-url https://api.groq.com/openai，模型 openai/gpt-oss-120b），金鑰從環境變數 GROQ_API_KEY 讀取，不要寫死在程式碼中。系統提示詞：「你是一個親切的 CRM 智慧助手，只根據系統提供的資料回答，資料不足就明說，不要編造金額或日期」。回答要像打字一樣一個字一個字即時跳出來（SSE 串流，端點 GET /api/ai/stream），而且不同使用者的對話要各自分開記住、不會混在一起（用 MessageChatMemoryAdvisor，記憶 key 用 sessionId，並以登入者身分綁定 sessionId，別人不能用別人的）。每一次呼叫都要記一筆 ai_call_log（呼叫類型、客戶、模型、token 用量、回答摘要、時間），之後第七章要拿來查歷史。請加繁體中文註解。
 ```
+
+## 逐步操作與驗收
+
+### 先讓 AI 對話可控地運作
+
+1. 先確認模型 base URL、model name 與 API key 來源，使用 PowerShell `$env:GROQ_API_KEY` 等環境變數注入；啟動時只打印 provider/model，不打印 key。
+2. 建立 `ChatClient` 的 system prompt，明確規定 CRM 助理的角色、資料不足時要說不知道、不得捏造數字，以及回覆格式；先用一輪單句問題驗證。
+3. 為 request 建立 `sessionId`，用同一 session 先說明客戶，再追問「剛才的客戶是誰」；換另一個 session 重問，確認上下文隔離，並測試清除記憶。
+4. 檢查 advisor 的順序與記憶儲存內容，使用測試資料驗證跨使用者不會讀到彼此對話；把 model error、timeout、空回應分開記錄。
+
+### 預期結果與證據
+
+- 模型能回答基本問題，第二輪能記得同 session 的上下文，另一 session 不會污染；秘密值不出現在 log。
+- 交付設定（秘密遮罩）、system prompt、兩個 session 的對話 transcript、memory clear 結果與錯誤案例。
+
+### 失敗分流與銜接
+
+- 401/404 先查 provider URL、model 與 key；回答不穩定先檢查 prompt 和實際輸入，不要直接提高 temperature。
+- 下一單元會讓 ChatClient 呼叫 CRM tools；先建立不查資料庫時也能測試的對話基線。
 
 ## 口語稿
 
-歡迎來到第六章，這一章可以說是整門課的分水嶺。先問你一個問題：如果只是寫一支程式去呼叫 ChatGPT 的 API，把回答印出來，這樣算不算「AI 應用」？老實說，那只是一個聊天玩具。它聊得再流暢，你問它「台積電這個客戶最近的商機金額是多少」，它只會一本正經地編一個數字給你，因為它根本看不到你資料庫裡的東西。企業要的不是會聊天的玩具，而是能讀企業真實數據、講的每個數字都有憑有據的助理。所以這一章的核心口訣，我會反覆講到你耳朵長繭：「數字由工具算、文字由模型寫，查無資料不亂答」。這條信任邊界，就是聊天玩具跟企業級 AI 應用的分界線。
+歡迎來到第六章，這一章可以說是整門課的分水嶺。先問你一個問題：如果只是寫一支程式去呼叫 ChatGPT 的 API，把回答印出來，這樣算不算「AI 應用」？老實說，那只是一個聊天玩具。它聊得再流暢，你問它「亞太智能製造這個客戶最近的生意機會金額是多少」，它只會一本正經地編一個數字給你，因為它根本看不到你資料庫裡的東西。企業要的不是會聊天的玩具，而是能讀企業真實數據、講的每個數字都有憑有據的助理。所以這一章的核心口訣，我會反覆講到你耳朵長繭：「數字由工具算、文字由模型寫，查無資料不亂答」。這條信任邊界，就是聊天玩具跟企業級 AI 應用的分界線。
 
 回顧一下我們走到哪裡了。前五章，你已經有一套可以登入的全端 CRM：後端有 REST API、資料落在 PostgreSQL、有 JWT 權限控管，前端有 React 工作台可以查客戶。這一節，我們要把 AI 真正接進這套系統，第一步就是建立對話入口。
 

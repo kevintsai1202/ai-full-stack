@@ -25,7 +25,7 @@ MCP 可以想成 AI 世界的標準插座。當系統中有多個模型平台、
 - ③ AI 判斷需要查客戶，透過已建立的 SSE 連線，向 MCP Server（port 8080）發送 getCustomers 工具呼叫請求
 - ④ MCP Server 執行 `CustomerTools.getCustomers("")` → 查詢 PostgreSQL → 回傳客戶 JSON
 - ⑤ MCP Client 收到工具執行結果，AI 組合成自然語言回答
-- ⑥ 使用者收到：「目前共有 5 筆客戶：1. 台積電（VIP）...」
+- ⑥ 使用者收到：「目前共有 4 筆客戶：1. 亞太智能製造（ACTIVE、風險 LOW）...」
 
 ### MCP 適用場景與選型：domain tool / RAG / MCP
 
@@ -56,7 +56,7 @@ Skills（Agent Skills）是 Anthropic 於 2025 年提出的開放標準：把某
 
 Skills 是 Claude、Claude Code 等 AI 客戶端原生支援的標準，但 Spring AI 核心框架尚未內建 Skills 概念。在 Spring Boot 應用中要讓 AI 具備 Skills 能力，目前的推薦做法是引用 Spring AI Community（Spring AI 官方社群組織）維護的 spring-ai-agent-utils 套件——它把 Claude Code 風格的 Agent 工具與 Skills 機制帶進 Java 應用。
 
-版本注意：spring-ai-agent-utils 0.9.0 要求 Spring AI 2.0.0-RC1 以上、Java 17+、Spring Boot 3.x / 4.x。本課程專案使用 Spring AI 2.0.0-M8，導入前需先把 Spring AI 升到 RC1 以上版本。
+版本注意：spring-ai-agent-utils 0.9.0 要求 Spring AI 2.0.0-RC1 以上、Java 17+、Spring Boot 3.x / 4.x。本課程專案使用 Spring AI 2.0.x 正式版（GA），已符合前置條件；導入前仍要打開 pom.xml 確認 spring-ai-bom 不是舊的里程碑版。
 
 - 路線一（推薦）：引用 spring-ai-agent-utils 的 SkillsTool，以 Markdown + YAML frontmatter 定義可重用知識模組
 - 路線二：自行實作最小核心——掃描 skills/ 目錄、解析 SKILL.md、把描述注入 system prompt（原理與套件相同）
@@ -67,8 +67,27 @@ Skills 是 Claude、Claude Code 等 AI 客戶端原生支援的標準，但 Spri
 **口語化任務提示詞 —（選修）讓 AI 接上外部工具［build］**
 
 ```text
-（這題是進階選修，行有餘力再做）請讓 AI 助手能接上一些外部工具，例如：幫忙安排行事曆、產生 Email 草稿、匯出生意報表（先用模擬的版本就好）。讓 AI 在對話中除了查公司內部資料，也能順手幫我做這些跨系統的小事。請加中文註解。
+（這題是進階選修，行有餘力再做）請讓 AI 助手能接上一些外部工具：用 Spring AI 的 MCP Client 連一個自己寫的 MCP Server（放在另一個 Spring Boot 專案，port 8081），提供三個工具——幫忙安排行事曆、產生 Email 草稿、匯出生意報表（先用模擬的版本就好，寫到 log 或回傳假資料）。讓 AI 在對話中除了查公司內部資料，也能順手幫我做這些跨系統的小事；會改變外部狀態的動作要先產生草稿讓我確認，不能自動送出。請加繁體中文註解。
 ```
+
+## 逐步操作與驗收
+
+### 以 MCP 和 Skills 擴充能力邊界
+
+1. 先列出 MCP server、tool name、輸入 schema、輸出 schema、權限、timeout、是否唯讀與資料來源；把外部工具當成不可信邊界。
+2. 逐一執行工具的 metadata/health 檢查，再用一個安全的測試資料查詢；任何寫入、刪除、發信或部署能力都先用 dry-run 或 mock。
+3. 讀取 skill 的規則後，將它轉成可執行的檢查表；確認版本、環境、路徑和 secrets 要求，並把 skill instruction 與專案規格衝突的地方標記出來。
+4. 讓 AI 先說明將呼叫哪個工具、帶哪些參數、預期副作用，再執行；工具錯誤、timeout、schema mismatch 和權限拒絕都要能回到可理解的結果。
+
+### 預期結果與證據
+
+- 每個 MCP/skill 都有能力目錄和權限邊界，至少一個唯讀工具可成功、一個危險操作被 dry-run 或拒絕。
+- 交付 tool catalog、schema/health 結果、AI tool trace、版本檢查與安全測試；不以工具名稱存在取代實際可用性證明。
+
+### 失敗分流與銜接
+
+- tool not found 先查 server 狀態、版本與命名；schema 錯誤保存原始 request/response；外部服務無法連線時標示未驗證，不假設成功。
+- 下一單元會討論把對話整理成長期記憶，先確認外部工具的資料是否允許保存。
 
 ## 口語稿
 
@@ -82,6 +101,6 @@ MCP，Model Context Protocol，我最推薦的理解方式是「AI 世界的標�
 
 接著講另一個常常跟 MCP 一起被提起的東西：Skills。Skills 是 Anthropic 在 2025 年提出的開放標準，做法是把某個領域的程序性知識——操作流程、規範、範本、輔助腳本——打包成一個資料夾，核心是一份 SKILL.md。它聰明的地方在於漸進式載入：AI 平時只看到每個 Skill 的一行描述，判斷跟當前任務相關時，才把完整內容載進來，所以你可以掛上大量的專業知識而不會撐爆上下文。跟 MCP 怎麼區分？一句話：MCP 擴充的是「能力與資料」，讓 AI 查得到、做得到；Skills 擴充的是「知識與流程」，讓 AI 做得對、有章法。兩者是互補，實務上常見的組合是 Skill 裡的流程指示 AI 在某個步驟去呼叫 MCP 工具。
 
-那 Spring Boot 應用怎麼加 Skills？Spring AI 核心目前還沒內建這個概念，推薦做法是用 Spring AI 官方社群維護的 spring-ai-agent-utils 套件。這裡有個版本地雷要先講：0.9.0 版要求 Spring AI 2.0.0-RC1 以上，而我們專案目前用的是 M8，導入前要先升版。如果你不想引套件，也可以自己實作最小核心——掃描 skills 目錄、解析 SKILL.md、把描述注入 system prompt，原理跟套件一模一樣。而且 Skill 檔案就是純 Markdown，跟平台無關，同一份可以在 Claude Code 和你的 Spring Boot 應用之間共用。
+那 Spring Boot 應用怎麼加 Skills？Spring AI 核心目前還沒內建這個概念，推薦做法是用 Spring AI 官方社群維護的 spring-ai-agent-utils 套件。這裡有個版本前提要先講：0.9.0 版要求 Spring AI 2.0.0-RC1 以上，我們專案用的是 2.0.x 正式版，已經符合，但導入前還是要打開 pom.xml 確認不是舊的里程碑版。如果你不想引套件，也可以自己實作最小核心——掃描 skills 目錄、解析 SKILL.md、把描述注入 system prompt，原理跟套件一模一樣。而且 Skill 檔案就是純 Markdown，跟平台無關，同一份可以在 Claude Code 和你的 Spring Boot 應用之間共用。
 
 最後提醒，這一節的實作是進階選修，提示詞裡也寫明了外部工具先用模擬版就好，行有餘力再接真的。總結一下：MCP 是 AI 接外部工具的標準插座，Skills 是打包工作流程的知識模組，選型口訣是——自家資料用 domain tool、文件知識用 RAG、跨系統與共用才上 MCP。下一節我們回到 RAG 的延伸戰場：讓 AI 把對話歷史也記進向量庫，擁有跨對話的長期記憶。

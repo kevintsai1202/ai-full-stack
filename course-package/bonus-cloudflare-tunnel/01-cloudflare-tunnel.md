@@ -203,6 +203,26 @@ Named Tunnel 的前置條件是**網域必須掛在 Cloudflare DNS**（Cloudflar
 我照步驟做但遇到問題（我會把錯誤訊息貼給你）。常見狀況有：後端容器啟動時連不上資料庫、前端打得開但 API 都失敗、打洞服務啟動了但外部網址打不開。請依我貼的訊息判斷是啟動順序、容器網路名稱、反向代理設定還是通道設定的問題，並直接幫我修正。
 ```
 
+## 逐步操作與驗收
+
+### 從本機 Demo 到外部可重播服務
+
+1. 先建立部署前檢查表：Docker、前端 build、後端 jar、PostgreSQL volume、`.env`/`.gitignore`、JWT secret、AI key、healthcheck 與 rollback 方式；敏感值只用環境變數。
+2. 依序建置 backend/frontend multi-stage image，執行 `docker compose config` 檢查展開設定，再用 `docker compose up -d` 和 `docker compose ps` 確認 postgres、backend、frontend 已 ready。
+3. 從同一台機器用瀏覽器或 curl 驗證 frontend、`/api`、登入、資料庫讀取與 AI 對話；容器全停再啟，確認 named volume 保留資料。
+4. 以 Quick Tunnel 做短期測試，從不在同一 Wi-Fi 的手機或外部網路開公開 URL，完成登入、查客戶、AI 對話；記錄 URL、時間與外部裝置結果。
+5. 上線前檢查 CORS、secret、管理介面、公開 Swagger、log 中的 token、rate limit 與停止 Tunnel 的撤銷方式；Quick Tunnel 只當 demo，不把隨機網址當正式 SLA。
+
+### 預期結果與證據
+
+- 容器健康、前端與後端同源、外部裝置能完成登入和 AI 對話，重啟後資料仍在；所有秘密沒有進 Git 或公開 log。
+- 交付 compose config（秘密遮罩）、image/build log、health/HTTP 證據、重啟前後查詢、外部裝置測試與 rollback/撤銷紀錄。
+
+### 失敗分流
+
+- backend 起不來先查 postgres health、環境變數與 migration；frontend 502 查 nginx `/api` proxy 和 backend service name；Tunnel 連不上查 cloudflared log 與 compose network。
+- 外部可連但登入失敗時分開檢查 CORS、cookie/JWT、公開 URL 與後端信任設定；不要為了快速通過而公開管理端點或關閉驗證。
+
 ## 口語稿
 
 嗨，歡迎來到這個特別的單元。先說一件開心的事：這一章是課程達到一百人解鎖的加碼單元，能夠錄這一集，完全是因為大家的支持，真的謝謝你們。那既然是加碼，我就要帶你做一件最有成就感的事——把你的 AI CRM 真正推上網路。

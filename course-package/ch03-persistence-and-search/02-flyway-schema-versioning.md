@@ -63,8 +63,32 @@ Flyway 與 `ddl-auto` 都能管理 Schema，但定位完全不同。本課程選
 **口語化任務提示詞 — 用有版本管理的方式建立資料表［build］**
 
 ```text
-請把「建立資料表」這件事改成有版本管理的方式（這樣以後修改資料表結構時才追蹤得到、不會亂掉）。先把客戶、聯絡人、往來紀錄、生意機會這幾張表建起來，並放一些示範資料進去。完成後啟動時，我要看得到這些資料表有成功建立。
+請把「建立資料表」這件事改成用 Flyway 做版本管理（以後修改資料表結構時才追蹤得到、不會亂掉）。V1__init_schema.sql 建立 customers、contacts、interactions、opportunities 四張表，欄位就用第二章定好的那些，每張表都加上 created_at、updated_at、created_by、updated_by 四個稽核欄位，以及 customer_id 外鍵與常用索引。V2__insert_seed_data.sql 放入課程情境的示範資料：
+- 亞太智能製造 (APIM)：智慧工廠與工業物聯網產業、ACTIVE、合約至 2027-12-31；聯絡人 林志明（採購總監）；生意機會「生產線 AI 預測維護模組」1,200,000、NEGOTIATION、NEW_BUSINESS；近 30 天有 3 筆正面的會議、Email、電話往來。
+- 環球零售巨擘 (GlobalMart)：跨國連鎖量販與電商產業、ACTIVE、合約 2026-09-30 到期；聯絡人 陳美玲（技術經理）；生意機會「智能客服與推薦系統」850,000、PROPOSAL、RENEWAL；往來有一筆未解決的系統效能客訴（SUPPORT_TICKET）與一封提到「預算凍結、正在比較競品」的 Email。
+- 鼎峰金融科技 (ApexFin)：財富管理與數位信貸產業、ACTIVE、合約 2026-05-15 已過期；聯絡人 張大衛（營運副總）；生意機會「信用風控與合規 AI 助理」600,000、QUALIFICATION、RENEWAL；最近一次往來在 60 天以前。
+- 再加一家只有基本資料、沒有聯絡人也沒有往來與生意機會的新客戶，之後用來測「資料不足」的情境。
+完成後啟動時，我要看得到這些資料表有成功建立、示範資料有進去。
 ```
+
+## 逐步操作與驗收
+
+### 讓 Schema 變更可追蹤
+
+1. 在 `src/main/resources/db/migration` 建立 `V1__init.sql`，內容只放目前確定的基線表；檔名版本、兩個底線與描述要符合 Flyway 規則。
+2. 啟動應用程式或執行 migration，查看 log 和 `flyway_schema_history`，確認 V1 只執行一次且 checksum 被記錄。
+3. 新增 `V2__add_customer_status.sql` 做一個可說明的欄位變更，再重跑 migration，驗證資料表結構、既有資料與 history 都正確。
+4. 故意修改已套用的 V1，觀察 checksum mismatch；把錯誤保存後用新的 V3 修正，不要在共用環境直接改舊 migration。
+
+### 預期結果與證據
+
+- 新環境從空資料庫可依序套用 V1、V2；已有資料庫只新增尚未執行的版本，history 能對應每個檔案。
+- 交付 migration 檔案、執行 log、history 查詢、V2 前後 schema 差異與 checksum 錯誤的處理紀錄。
+
+### 失敗分流與銜接
+
+- migration 失敗先定位 SQL 行與資料庫狀態，確認 transaction 是否回滾；不要刪除 history 來掩蓋問題。
+- 下一單元會把 application.yml 指向同一個 schema，先確認欄位名稱、型別與 nullability 已固定。
 
 ## 口語稿
 

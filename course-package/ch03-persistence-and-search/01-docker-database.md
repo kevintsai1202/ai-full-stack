@@ -6,6 +6,22 @@
 
 ## 教學素材
 
+### 下載與安裝 Docker Desktop
+
+開始建立容器化資料庫之前，本機需要先安裝好 Docker Desktop。
+
+**下載網址**：[Docker Desktop 官方下載頁面](https://www.docker.com/products/docker-desktop/)
+
+**安裝步驟**：
+
+1. 開啟上方網址，依作業系統選擇下載版本（Windows / Mac / Linux）
+2. 下載完成後執行安裝檔，全程使用預設選項即可
+3. Windows 安裝完成後，依提示重新啟動電腦
+4. 開啟 Docker Desktop，等待左下角狀態顯示綠色的「Engine running」
+5. 開啟終端機執行 `docker run hello-world`，看到 `Hello from Docker!` 訊息即代表安裝成功
+
+（下圖為官方下載頁面實際畫面，可對照確認下載按鈕位置，對應教學網站 Unit 3 插圖 `u3-4-docker-desktop-download.png`）
+
 ### 為什麼資料庫要容器化
 
 教學專案最怕的是每位學員本機資料庫版本不同、初始化內容不同、安裝方式也不同。Docker 的價值在於把這些差異壓到最低，讓資料庫可以被快速重建與共享。
@@ -54,8 +70,27 @@ docker logs 顯示：
 **口語化任務提示詞 — 準備一個正式的資料庫［build］**
 
 ```text
-請幫我準備一個正式的資料庫來存這些客戶資料，並設定成「資料不會因為重開而消失」。另外，之後我會想做「讓 AI 找出相似內容」的功能，所以資料庫請幫我選一個支援這種相似搜尋的。完成後我要能確認資料庫有正常啟動。每個設定請加中文說明。
+請幫我準備一個正式的資料庫來存這些客戶資料：在專案根目錄建立 docker-compose.yml，用最新的 pgvector/pgvector:pg18 映像（PostgreSQL 18 加上向量擴充，之後做「讓 AI 找出相似內容」會用到），資料庫名稱 learn_spring、帳號 postgres、密碼 password、本機 5432 對應容器 5432，並用具名卷（named volume）設定成「資料不會因為重開而消失」。完成後幫我啟動容器，用 docker ps 確認狀態是 Up。每個設定請加繁體中文說明。
 ```
+
+## 逐步操作與驗收
+
+### 建立可重現的 PostgreSQL
+
+1. 先檢查 Docker Desktop 或 Docker Engine 正常，再閱讀 `compose.yaml`；確認 image、container name、port、database、user、password 與 volume 各自的用途，不要把密碼直接寫進公開檔案。
+2. 在含有 compose 檔的目錄執行 `docker compose up -d`，接著用 `docker compose ps` 確認狀態，再用 `docker compose logs --tail=100 postgres` 檢查資料庫是否真的 ready。
+3. 以 `docker exec` 進入 PostgreSQL 執行資料庫清單和 schema 查詢，確認資料庫名稱和使用者權限；再重啟 container，驗證 volume 能保留資料。
+4. 故意以錯誤 port 或資料庫名稱連線一次，保存錯誤並說明它和應用程式設定的對應，不要只看 container 顯示 Up 就宣稱完成。
+
+### 預期結果與證據
+
+- `docker compose ps` 顯示資料庫 running/healthy，log 出現可接受連線的訊息，psql 能登入正確 database。
+- 交付 compose 檢查表、`ps`、log、psql 查詢與重啟前後的資料保留證據；密碼以遮罩或環境變數形式保存。
+
+### 失敗分流與銜接
+
+- port 被占用時先用 `docker ps` 和 `Get-NetTCPConnection` 找衝突，不要隨意改應用程式 port；改動後要同步記錄。
+- 下一單元會用 Flyway 建 schema，先確定資料庫容器穩定且連線資訊已被明確保存。
 
 ## 口語稿
 
