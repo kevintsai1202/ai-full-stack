@@ -1577,6 +1577,13 @@ body.topbar-collapsed .sidebar-restore-btn {
 }
 
 /* 講義內文的 Markdown 表格：外層 wrap 負責窄螢幕橫向捲動，避免撐破版面 */
+/* 內文水平分隔線：用於概念段落之間的視覺切分 */
+.content-hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 18px 0;
+}
+
 .content-table-wrap {
   overflow-x: auto;
   margin: 14px 0;
@@ -1777,6 +1784,43 @@ body.topbar-collapsed .sidebar-restore-btn {
 .check.done span {
   color: var(--muted);
   text-decoration: line-through;
+}
+
+/* 概念附件：提示詞下方的講義預覽與下載列 */
+.concept-attachments {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 4px;
+}
+
+.attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in oklab, var(--accent-soft) 45%, var(--surface-2));
+}
+
+.attachment-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.attachment-download {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.attachment-download:hover {
+  filter: brightness(1.08);
 }
 
 .material-tag {

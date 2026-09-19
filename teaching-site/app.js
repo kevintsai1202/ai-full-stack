@@ -186,6 +186,9 @@ function parseMarkdown(mdText) {
     const trimmed = line.trim();
     if (!trimmed) { flushList(); continue; }
 
+    // 水平分隔線：獨立成行的 --- / *** / ___ 轉成 <hr>（表格分隔行含 | 不會被誤判）
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) { flushList(); parts.push('<hr class="content-hr"/>'); continue; }
+
     // Markdown 管道表格：偵測「表頭行 + 分隔行(|---|---|)」開頭的連續表格區塊，轉成 HTML <table>
     const isTableRow = (s) => s.trim().startsWith("|") && s.includes("|");
     const isDivider = (s) => { const t = s.trim(); return t.includes("|") && t.includes("-") && /^[\s|:-]+$/.test(t); };
@@ -728,7 +731,20 @@ function renderConcept(concept) {
 
   const noteHtml = concept.note ? `<div class="note">${inlineMarkdown(concept.note)}</div>` : "";
 
-  return `<article class="concept">${concept.heading ? `<h5 class="concept-heading">${esc(concept.heading)}</h5>` : ""}${content}${kvHtml}${tableHtml}${noteHtml}</article>`;
+  // 概念附件：把提示詞引用的講義直接放在該段落下方，免得學員得捲到單元最底部才找得到
+  let attachmentHtml = "";
+  if (concept.attachments?.length) {
+    attachmentHtml = `<div class="concept-attachments">${concept.attachments.map((att) => {
+      const type = att.type || "MD";
+      const ext = type.toLowerCase();
+      const file = `materials/${att.name}.${ext}`;                  // 相對路徑，子路徑部署（GitHub Pages）才不會失效
+      const isMd = ext === "md";
+      const previewAttrs = isMd ? ` data-action="preview-material" data-material-name="${esc(att.name)}" data-material-type="${esc(type)}"` : "";
+      return `<div class="attachment-row"><span class="material-tag">${esc(type)}</span><div class="attachment-main"><a class="material-name" href="${esc(file)}"${previewAttrs}>${esc(att.label || att.name)}</a>${att.desc ? `<div class="material-desc">${esc(att.desc)}</div>` : ""}</div><a class="attachment-download" href="${esc(file)}" download="${esc(att.name)}.${esc(ext)}">下載</a></div>`;
+    }).join("")}</div>`;
+  }
+
+  return `<article class="concept">${concept.heading ? `<h5 class="concept-heading">${esc(concept.heading)}</h5>` : ""}${content}${kvHtml}${tableHtml}${attachmentHtml}${noteHtml}</article>`;
 }
 
 /**
