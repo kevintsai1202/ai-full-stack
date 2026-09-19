@@ -6,17 +6,20 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const srcFile = path.join(root, 'teaching-site', 'course-data.js');
 const outDir = path.join(root, 'course-package', '_source');
 
-// 讀取並解析 course-data.js（去掉 window.COURSE = 前綴與結尾分號）
-const raw = fs.readFileSync(srcFile, 'utf8')
-  .replace(/^window\.COURSE\s*=\s*/, '')
-  .replace(/;\s*$/, '');
-const course = JSON.parse(raw);
+// 讀取並解析 course-data.js：檔案是 `window.COURSE = {...};` 的 JS 物件字面值，
+// 內含尾逗號（JS 合法、JSON 不合法），所以比照網站本身的載入方式，在隔離的 vm 沙箱中
+// 執行這份本地資料檔取得物件，而不是 JSON.parse（會在第一個尾逗號炸掉）。
+const raw = fs.readFileSync(srcFile, 'utf8');
+const sandbox = { window: {} };
+vm.runInNewContext(raw, sandbox, { filename: srcFile });
+const course = sandbox.window.COURSE;
 
 fs.mkdirSync(outDir, { recursive: true });
 
