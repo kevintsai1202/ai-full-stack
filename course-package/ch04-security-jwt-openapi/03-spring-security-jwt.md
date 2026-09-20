@@ -49,8 +49,8 @@ JWT 是一段「自帶簽章、可被任何服務獨立驗證」的字串，長�
 ```text
 請在現有專案中，使用 Spring Security 與 JWT 實作安全防護與登入驗證功能：
 1. 引入 spring-boot-starter-security 與 jjwt 0.13.x（jjwt-api、jjwt-impl、jjwt-jackson），限制除了 /api/auth/login 與 /api/health 之外，其餘所有的 API 都需要攜帶 Authorization: Bearer <JWT> 才能存取；無狀態（SessionCreationPolicy.STATELESS），未登入回 401、權限不足回 403，格式都用 ProblemDetail。
-2. 用 Flyway 新增 app_users 表（username、password_hash、display_name、role、enabled），密碼用 BCrypt；啟動時若無帳號就建立三個示範帳號：sales（SALES 業務）、manager（MANAGER 主管）、admin（ADMIN 管理員），密碼都是 password123。
-3. 實作 POST /api/auth/login：傳入帳號密碼，成功回傳 token 與使用者資訊（id、username、displayName、role）。JWT 的 claims 要有 sub、uid、role、exp，有效期 8 小時；簽章密鑰從環境變數 APP_SECURITY_JWT_SECRET 讀取，長度不足 32 字元就拒絕啟動，不可寫死在程式碼。
+2. 用 Flyway 新增 app_users 表（username、password_hash、display_name、role、enabled），密碼用 BCrypt；啟動時若無帳號就建立四個示範帳號：sales 與 sales2（SALES 業務）、manager（MANAGER 主管，兩位業務都歸他管）、admin（ADMIN 管理員），密碼都是 password123；要記得住「誰是誰的主管」。
+3. 實作 POST /api/auth/login：傳入帳號密碼，成功回傳 token 與使用者資訊（id、username、displayName、role）。登入後我要能查「我是誰、我的角色、我的主管是誰」；主管和管理員還要能列出所有使用者和他們的角色，這樣指派客戶或測試時才找得到人的編號。JWT 的 claims 要有 sub、uid、role、exp，有效期 8 小時；簽章密鑰從環境變數 APP_SECURITY_JWT_SECRET 讀取，長度不足 32 字元就拒絕啟動，不可寫死在程式碼。
 4. 實作角色權限控制：DELETE /api/customers/** 只有 ADMIN 能執行；/api/manager/** 只有 MANAGER 與 ADMIN；/api/admin/** 只有 ADMIN；其餘查詢與編輯功能只需已登入。規則集中寫在 SecurityConfig 的 requestMatchers。
 5. 保護我們的 API 文件（Swagger UI 網頁與相關端點），設定必須在登入驗證並攜帶 JWT Token 後才能正常瀏覽與測試，並在 OpenAPI 設定宣告 bearerAuth 讓 Authorize 按鈕可用。
 請加上繁體中文函式級別註解。
@@ -64,7 +64,7 @@ JWT 是一段「自帶簽章、可被任何服務獨立驗證」的字串，長�
 - 欄位：功能面向、代表端點、SALES 業務、MANAGER 主管、ADMIN 管理員；三個角色欄位一律留空
 - 表下方附圖例：✅ 可存取全部資料｜🔸 可存取但自動套用資料範圍過濾｜❌ 直接回 403 Forbidden
 - 另附一張「資料可視範圍」空表（欄位：角色、判定依據、自動加上的查詢條件），讓我填 🔸 的實際規則
-只要輸出表格，先不要寫任何程式。
+盤點完請對照附上的《CRM_角色權限矩陣與RBAC實作規格.md》第二節，另外列一張「講義上有、但我們專案還沒做出來的功能」清單，讓我決定要先補還是先預留。只要輸出表格與清單，先不要寫任何程式。
 ```
 
 接著才是「① 加上登入與權限控管」，規格改為引用學員填好的權限表：
@@ -73,10 +73,11 @@ JWT 是一段「自帶簽章、可被任何服務獨立驗證」的字串，長�
 請幫這套系統加上登入與權限控管，規格照附上的《JWT_架構與認證流程設計.md》與我填好的權限表（圖例、資料可視範圍與 404／403 規則見《CRM_角色權限矩陣與RBAC實作規格.md》）：
 - Spring Security + JWT（jjwt 0.13.x）；除了登入與健康檢查，其餘 API 都要帶 Bearer token，無狀態；401／403 回 ProblemDetail
 - POST /api/auth/login 回傳 token 與使用者資訊；token 帶角色、8 小時到期，密鑰讀環境變數
-- 用 Flyway 建 app_users 與三個示範帳號（sales／manager／admin），密碼用 BCrypt
-- 把客戶原本的 ownerName（字串）換成 owner_id 外鍵指向 app_users，用 Flyway 依名字把既有種子資料掛到對應帳號，查詢與回應仍要看得到負責業務的名字
+- 用 Flyway 建 app_users 與四個示範帳號：兩位業務 sales 與 sales2、一位主管 manager（兩位業務都歸他管）、一位管理員 admin，密碼都是 password123、用 BCrypt；要記得住「誰是誰的主管」
+- 客戶與生意機會原本只記了「負責業務的名字」，請改成真正對應到帳號，並把既有的示範資料掛好：亞太智能製造、環球零售巨擘歸 sales，鼎峰金融科技和那家資料不足的新客戶歸 sales2；查出來仍要看得到負責業務的名字。新增或編輯客戶、生意機會時可以指定負責業務，不指定就是目前登入的人
+- 登入後我要能查「我是誰、我的角色、我的主管是誰」；主管和管理員還要能列出所有使用者和他們的角色，這樣指派客戶或測試時才找得到人的編號
 - 角色規則照我填的權限表：標「❌」的擋在 SecurityConfig，標「🔸」的在資料層用 Specification 自動補 owner_id
-請加繁體中文註解。完成後我要能驗證：sales 只看得到自己的客戶、刪客戶被 403 擋下，換 admin 才刪得掉。
+請加繁體中文註解。完成後我要能驗證：sales 只看得到自己的客戶，查 sales2 的客戶回 404；manager 看得到兩位業務的客戶；sales 刪客戶被 403 擋下，換 admin 才刪得掉。
 ```
 
 **Swagger 網頁驗證步驟（推薦）**：

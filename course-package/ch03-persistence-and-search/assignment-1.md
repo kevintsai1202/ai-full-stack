@@ -18,7 +18,7 @@
 **驗收標準**（可直接用以下驗證提示詞交給 AI Agent 檢查）：
 
 ```text
-請幫我確認資料確實存進了資料庫：新增一筆客戶後查得到；用 industry 加 keyword 兩個條件一起搜尋，結果與分頁欄位都正確；把專案重開後，那筆資料還在；而且重開時沒有發生「重複建表」之類的錯誤（Flyway 不重複套用、ddl-auto 的 validate 通過）。順便把這幾個檢查加進 scripts/test-crm-api.ps1。
+請幫我確認資料確實存進了資料庫：新增一筆客戶後查得到；用 industry 加 keyword 兩個條件一起搜尋，結果與分頁欄位都正確；用階段篩機會、用日期區間篩往來紀錄各查一次，分頁欄位正確；把專案重開後，那筆資料還在；而且重開時沒有發生「重複建表」之類的錯誤（Flyway 不重複套用、ddl-auto 的 validate 通過）。順便把這幾個檢查加進 scripts/test-crm-api.ps1。
 ```
 
 - `docker ps` 中 PostgreSQL 容器狀態為 `Up`

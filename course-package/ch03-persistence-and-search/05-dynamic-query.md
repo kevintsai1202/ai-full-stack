@@ -49,7 +49,7 @@ public List<Customer> search(String name, Double maxPrice, Boolean inStock) {
 **口語化任務提示詞 — 把資料真正存進資料庫，並支援多條件搜尋［build］**
 
 ```text
-請把剛才暫存在程式裡的客戶資料，改成真正存進資料庫（Customer 等四個類別改成 JPA Entity，加 AuditableEntity 共用稽核欄位，Service 改注入 Repository，Controller 與 DTO 不變）。另外客戶查詢要能「多個條件任意組合」，用 Spring Data JPA 的 Specification 實作：條件有 keyword（公司名或 email 模糊比對）、industry、owner（負責業務）、status、renewalFrom / renewalTo（預計續約日區間），每個條件都可以不填；要有分頁 page（預設 0）與 size（預設 10），回傳格式固定為 items、page、size、totalElements、totalPages。請加繁體中文註解。
+請把剛才暫存在程式裡的客戶資料，改成真正存進資料庫（Customer 等四個類別改成 JPA Entity，加 AuditableEntity 共用稽核欄位，Service 改注入 Repository，Controller 與 DTO 不變）。另外客戶查詢要能「多個條件任意組合」：條件有 keyword（公司名或 email 模糊比對）、industry、owner（負責業務）、status、renewalFrom / renewalTo（預計續約日區間），每個條件都可以不填；要有分頁 page（預設 0）與 size（預設 10），回傳格式固定為 items、page、size、totalElements、totalPages。全公司的生意機會清單和往來紀錄清單也要比照辦理：機會可以用客戶、階段、類型、負責業務、預計成交日區間任意組合來查，往來紀錄可以用客戶、類型、發生時間區間來查，分頁格式和客戶一樣。三種查詢請用同一種做法實作，之後我還會再加「只能看自己負責的」這類條件，希望到時候只要改一個地方。請加繁體中文註解。
 ```
 
 ## 逐步操作與驗收

@@ -6,7 +6,7 @@
 
 | 角色代碼 | 中文名稱 | 定位 | 示範帳號 |
 |---|---|---|---|
-| `SALES` | 業務人員 | 只處理自己負責的客戶與商機 | `sales` |
+| `SALES` | 業務人員 | 只處理自己負責的客戶與商機 | `sales`、`sales2` |
 | `MANAGER` | 業務主管 | 看得到整個團隊的資料與報表 | `manager` |
 | `ADMIN` | 系統管理員 | 管知識庫、系統設定與全公司資料 | `admin` |
 
@@ -19,6 +19,7 @@
 | 客戶查詢 | `GET /api/customers` | 🔸 限本人負責 | 🔸 限團隊成員 | ✅ 全部 |
 | 客戶新增／編輯 | `POST /api/customers`、`PUT /api/customers/{id}` | 🔸 限本人負責 | 🔸 限團隊成員 | ✅ 全部 |
 | 客戶刪除 | `DELETE /api/customers/{id}` | ❌ | ❌ | ✅ |
+| 使用者查詢 | `GET /api/auth/me`、`GET /api/users` | ✅ 只有 me | ✅ users 限部屬 | ✅ |
 | 商機與互動紀錄 | `/api/opportunities/**` | 🔸 限本人負責 | 🔸 限團隊成員 | ✅ 全部 |
 | 團隊報表與儀表板 | `GET /api/manager/analytics` | ❌ | ✅ 團隊範圍 | ✅ 全公司 |
 | 待辦任務（自己的） | `POST`、`GET /api/tasks`、`PATCH /api/tasks/{id}` | ✅ 僅自己的 | ✅ 僅自己的 | ✅ |
@@ -63,11 +64,13 @@
 
 | 資料表 | 欄位 | 說明 |
 |---|---|---|
-| `app_users` | `manager_id` | 自我參照外鍵，指向直屬主管；`sales` 帳號應指向 `manager` 帳號 |
-| `customers` | `owner_id` | 負責業務的使用者 id，需建索引；由第二章的 `ownerName` 字串轉換而來，migration 要依名字把既有資料掛到對應帳號 |
+| `app_users` | `manager_id` | 自我參照外鍵，指向直屬主管；`sales`、`sales2` 皆指向 `manager` |
+| `customers` | `owner_id` | 負責業務的使用者 id，需建索引；由第二章的 `ownerName` 字串轉換而來，migration 要依名字把既有資料掛到對應帳號：亞太智能製造、環球零售巨擘掛 `sales`，鼎峰金融科技與資料不足的新客戶掛 `sales2` |
 | `opportunities` | `owner_id` | 負責業務的使用者 id，需建索引 |
 
 以上異動一律透過 Flyway migration 新增，不使用 `ddl-auto` 自動建表。
+
+**身分查詢端點**：`GET /api/auth/me` 回目前登入者的 `id`、`username`、`displayName`、`role`、`managerId`；`GET /api/users` 回所有使用者的同樣欄位，限 MANAGER（只回自己與部屬）與 ADMIN。新增／編輯客戶與商機可帶 `ownerId`，不帶則為目前登入者。
 
 ## 六、驗收案例
 
@@ -78,9 +81,10 @@
 | 1 | 未登入 | `GET /api/customers` | 401，ProblemDetail 格式 |
 | 2 | `sales` | `GET /api/customers` | 200，且只含 `owner_id` 等於自己的資料 |
 | 3 | `sales` | `DELETE /api/customers/{id}` | 403，ProblemDetail 格式 |
-| 4 | `sales` | `GET /api/customers/{別人的客戶 id}` | 404（不是 403） |
+| 4 | `sales` | `GET /api/customers/{sales2 的客戶 id}` | 404（不是 403） |
 | 5 | `sales` | `GET /api/manager/analytics` | 403 |
-| 6 | `manager` | `GET /api/customers` | 200，含自己與直屬部屬的資料 |
+| 6 | `manager` | `GET /api/customers` | 200，含 `sales` 與 `sales2` 兩人的資料 |
+| 6a | `sales` | `GET /api/users` | 403；`manager` 呼叫則 200 且含兩位部屬 |
 | 7 | `manager` | `GET /api/manager/analytics` | 200，範圍限團隊 |
 | 8 | `manager` | `POST /api/rag/upload` | 403（知識庫僅 ADMIN） |
 | 9 | `admin` | `DELETE /api/customers/{id}` | 204 |

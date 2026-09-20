@@ -59,7 +59,7 @@ Token 的簽署與解析使用目前主流且穩定的 `io.jsonwebtoken`（jjwt�
 
 ## app_users 資料表與示範帳號
 
-以 Flyway migration 新增 `app_users` 表，密碼一律以 BCrypt 雜湊儲存，啟動時若無帳號就建立三個示範帳號。
+以 Flyway migration 新增 `app_users` 表，密碼一律以 BCrypt 雜湊儲存，啟動時若無帳號就建立四個示範帳號；`app_users.manager_id` 自我參照直屬主管，`sales`、`sales2` 皆指向 `manager`。
 
 | 欄位 | 型別 | 說明 |
 |---|---|---|
@@ -72,6 +72,7 @@ Token 的簽署與解析使用目前主流且穩定的 `io.jsonwebtoken`（jjwt�
 | 示範帳號 | 角色 | 密碼 |
 |---|---|---|
 | `sales` | `SALES` 業務 | `password123` |
+| `sales2` | `SALES` 業務（第二位，用來示範看不到別人的客戶） | `password123` |
 | `manager` | `MANAGER` 主管 | `password123` |
 | `admin` | `ADMIN` 管理員 | `password123` |
 
