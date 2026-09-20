@@ -15,9 +15,26 @@
 - **微懸停動畫 (Micro-interactions)**：滑鼠懸停於客戶摘要、待辦任務卡片時，加入 `transform: translateY(-4px) scale(1.01)` 與 `transition`，讓卡片活起來。
 - **骨架屏載入動畫 (Skeleton Screen)**：資料載入中（例如 AI 正在思考或呼叫 Tool）時，顯示灰白色的骨架屏閃爍 (shimmer keyframe)，大幅降低等待期間的無聊感。
 
-### uiuxpromax 的「安裝」與配置方式
+### uiuxpromax 的安裝方式：裝的是 AI 技能，不是 npm 套件
 
-`uiuxpromax` 並非傳統的 npm 第三方套件，因此**不需要執行 `npm install`**。它的「安裝與引入方式」是將以下精心調校的 Vanilla CSS 樣式直接整合進 React 專案的 `src/index.css`（或 `App.css`）中，讓元件直接透過 `className` 引用：
+`uiuxpromax`（正式名稱 ui-ux-pro-max）不是前端第三方套件，專案裡**不需要執行 `npm install`**。透過 AI 開發時，我們是把它當成一個「設計知識技能」裝進 AI Agent，之後只要用自然語言提出設計需求，AI 就會先查它內建的設計風格、配色、字體與 UX 準則資料庫，再動手寫 CSS。
+
+在 Claude Code 裡安裝（擇一）：
+
+```text
+# 方式一：Claude Code 外掛市集（在 Claude Code 對話框輸入）
+/plugin marketplace add nextlevelbuilder/ui-ux-pro-max-skill
+/plugin install ui-ux-pro-max@ui-ux-pro-max-skill
+
+# 方式二：官方 CLI，裝到目前專案的 .claude/skills/（PowerShell）
+npm install -g ui-ux-pro-max-cli
+uipro init --ai claude
+# 想讓所有專案都能用，改加 --global（裝到 ~/.claude/skills/）
+```
+
+安裝後不需要任何 import：直接對 AI 說「幫我把客戶列表做成有現代感的後台工作台風格」，技能會自動被觸發；想確認有沒有裝好，可以問 AI「你現在有哪些技能可用」，清單裡要看得到 ui-ux-pro-max。
+
+AI 套用技能後，通常會在 `src/index.css`（或 `App.css`）產出類似下面這組樣式，之後元件透過 `className` 引用。這段是給你**對照驗收**用的，不必手動貼：
 
 ```css
 /* uiuxpromax 核心樣式配置 */
@@ -61,7 +78,7 @@
 視覺骨架的建置提示詞（與單元 1 的骨架提示詞相同，本節聚焦其中的視覺要求）：
 
 ```text
-請幫我做出這套系統的網頁畫面外觀：要有現代感的設計（例如漸層的標題列、卡片式的區塊、載入時有過場動畫），先把整體版面骨架架好，內容之後再填。請加中文註解，完成後告訴我怎麼打開來看。
+請幫我做出這套系統的網頁畫面外觀：要有現代感的設計（例如漸層的標題列、卡片式的區塊、載入時有過場動畫）；如果你有 ui-ux-pro-max 這類設計技能，請先查一下「後台工作台」該用什麼風格和配色再動手；先把整體版面骨架架好，內容之後再填。請加中文註解，完成後告訴我怎麼打開來看。
 ```
 
 **驗證方式**：頁面上能看到漸層 Header 與毛玻璃卡片；滑鼠懸停卡片會浮起；模擬資料載入中時出現 shimmer 骨架屏動畫。
@@ -70,7 +87,7 @@
 
 ### 以 Vanilla CSS 驗證視覺與三態
 
-1. 在 `src/index.css` 或 `App.css` 加入 `.glass-card`、`.gradient-header`、`.micro-interaction` 與 `.skeleton-shimmer`，先在一張測試卡上套用，逐項確認效果。
+1. 先確認 AI Agent 已裝好 ui-ux-pro-max 技能，再請 AI 產出 `.glass-card`、`.gradient-header`、`.micro-interaction` 與 `.skeleton-shimmer` 到 `src/index.css` 或 `App.css`，先在一張測試卡上套用，逐項對照上方樣式確認效果。
 2. 啟動 Vite 後檢查 Header 的漸層、卡片的 blur、hover 的 transform；開啟瀏覽器效能或 accessibility 工具，確認動畫不影響文字可讀性。
 3. 在元件中建立 loading、error、empty、success 四個狀態，分別顯示 skeleton、錯誤訊息、無資料提示與內容；不要只用一個 `isLoading` 真假值涵蓋所有狀態。
 4. 用窄螢幕和鍵盤操作檢查 overflow、focus、對比度與 `prefers-reduced-motion`；完成後執行 `npm run build`。
@@ -78,7 +95,7 @@
 ### 預期結果與證據
 
 - 四種狀態皆能切換，視覺樣式在正常與窄螢幕可讀；hover、loading 動畫和 focus 不會遮住操作。
-- 交付 CSS diff、四態畫面截圖、可及性檢查筆記與 build 輸出；uiuxpromax 在此以 CSS 指引使用，不宣稱是 npm 套件。
+- 交付 CSS diff、四態畫面截圖、可及性檢查筆記與 build 輸出；uiuxpromax 以 AI 技能安裝、由 AI 套用，不是 npm 套件。
 
 ### 失敗分流與銜接
 

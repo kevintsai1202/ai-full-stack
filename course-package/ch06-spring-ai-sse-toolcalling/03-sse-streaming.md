@@ -66,7 +66,7 @@ const detectAndAttachCards = (text) => {
 > 即時打字效果，而且要確認是已登入的人
 
 ```text
-請在網頁上做一個 AI 聊天室（放在客戶詳情頁的側欄，也能從導覽列打開），連上剛才的助手，要有訊息即時一個字一個字跳出來的效果：前端用 EventSource 連 /api/ai/stream?message=…&sessionId=…&token=…，把 localStorage 的 JWT 用網址參數帶上；後端的 JwtAuthenticationFilter 除了 Authorization 標頭，也要能從 token 這個網址參數驗證，確保只有「已經登入的人」才能使用這個聊天，外人不能亂用。畫面要有送出中的骨架屏、錯誤提示、清除對話（清除時換一個新的 sessionId）。請加繁體中文註解。
+請在網頁上做一個 AI 聊天室（放在客戶詳情頁的側欄，也能從導覽列打開），連上剛才的助手，要有訊息即時一個字一個字跳出來的效果：前端用 EventSource 連 /api/ai/stream?message=…&sessionId=…&token=…，把 localStorage 的 JWT 用網址參數帶上；後端的 JwtAuthenticationFilter 除了 Authorization 標頭，也要能從 token 這個網址參數驗證，確保只有「已經登入的人」才能使用這個聊天，外人不能亂用。畫面要有送出中的骨架屏、錯誤提示、清除對話（清除時換一個新的 sessionId）。畫面設計請用 uiuxpromax 技能來決定風格、配色與載入／錯誤／沒資料時的呈現，和已經做好的頁面保持一致。請加繁體中文註解。
 ```
 
 ## 逐步操作與驗收
