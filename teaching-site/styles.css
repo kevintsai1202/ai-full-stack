@@ -758,6 +758,45 @@ body.topbar-collapsed .sidebar-restore-btn {
   font-size: 1.08rem;
 }
 
+/* 三個技能的安裝與用途卡片 */
+.sp-toolkits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+.sp-toolkit {
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+  background: rgba(255, 255, 255, 0.55);
+  min-width: 0;
+}
+.sp-toolkit-header h4 { margin: 4px 0 0; font-size: 1.05rem; }
+.sp-toolkit-text {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.7;
+  font-size: 0.94rem;
+}
+.sp-install { margin-top: 12px; }
+.sp-install h5 { margin: 0 0 6px; font-size: 0.9rem; color: var(--accent-deep); }
+.sp-install-label { margin: 8px 0 4px; font-size: 0.88rem; line-height: 1.6; }
+.sp-install-code {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  /* 指令較長時自動換行，避免卡片內只看得到前半段 */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sp-toolkit-link { margin: 10px 0 0; font-size: 0.88rem; }
+.sp-members-title { margin-top: 26px; }
+
 /* superpowers 技能組補充區塊 */
 .sp-group { margin-top: 22px; }
 .sp-phase {

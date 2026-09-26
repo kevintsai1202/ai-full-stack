@@ -671,9 +671,34 @@ function renderFeatureRoadmap(course) {
   return `<section class="section glass-card" id="feature-roadmap"><div class="section-header"><h3>AI CRM 功能藍圖</h3><p>每一站都為同一套 AI CRM 補上一塊可運作的功能，像一條完整的產品生產線。點任一卡片即可跳到該章節。</p></div><div class="feature-roadmap-grid">${cards}</div></section>`;
 }
 
-/** 課程最後補充：superpowers 技能組，依階段分組列出每個技能的用途 */
+/**
+ * 渲染單一技能的「安裝與用途」卡片（superpowers / ui-ux-pro-max / deep-memory）
+ * @param {object} tk 技能資料：name、zh、purpose、when、install[]、verify、link
+ * @returns {string} HTML 字串
+ */
+function renderToolkitCard(tk) {
+  // 每個安裝方式：一行說明 + 可複製的指令區塊
+  const steps = (tk.install || []).map((step) =>
+    `<div class="sp-install-step"><p class="sp-install-label">${inlineMarkdown(step.label)}</p><pre class="sp-install-code"><code>${esc(step.code)}</code></pre></div>`
+  ).join("");
+  const link = tk.link ? `<p class="sp-toolkit-link"><a href="${esc(tk.link)}" target="_blank" rel="noopener">原始碼與說明 ↗</a></p>` : "";
+  return `<article class="sp-toolkit">
+    <header class="sp-toolkit-header"><code class="sp-skill-name">${esc(tk.name)}</code><h4>${esc(tk.zh)}</h4></header>
+    <p class="sp-toolkit-text">${inlineMarkdown(tk.purpose)}</p>
+    <p class="sp-toolkit-text"><strong>什麼時候用：</strong>${inlineMarkdown(tk.when)}</p>
+    <div class="sp-install"><h5>安裝方式</h5>${steps}</div>
+    <p class="sp-toolkit-text"><strong>裝好沒？</strong>${inlineMarkdown(tk.verify)}</p>
+    ${link}
+  </article>`;
+}
+
+/** 課程最後補充：三個技能的安裝與用途，接著依階段分組列出 superpowers 每個成員技能的用途 */
 function renderSuperpowers(sp) {
   if (!sp) return "";
+  // 三個技能的安裝與用途卡片
+  const toolkits = (sp.toolkits || []).length
+    ? `<div class="sp-toolkits">${sp.toolkits.map(renderToolkitCard).join("")}</div><h4 class="sp-phase sp-members-title">superpowers 各成員技能的用途</h4>`
+    : "";
   // 將每個階段渲染成一個子區塊，內含該階段的技能卡片
   const groups = (sp.groups || []).map((group) => {
     const cards = (group.skills || []).map((skill) =>
@@ -681,7 +706,7 @@ function renderSuperpowers(sp) {
     ).join("");
     return `<div class="sp-group"><h4 class="sp-phase">${esc(group.phase)}</h4><div class="summary-grid">${cards}</div></div>`;
   }).join("");
-  return `<section class="section glass-card" id="superpowers"><div class="section-header"><h3>${esc(sp.title)}</h3><p>${esc(sp.intro)}</p></div>${groups}</section>`;
+  return `<section class="section glass-card" id="superpowers"><div class="section-header"><h3>${esc(sp.title)}</h3><p>${esc(sp.intro)}</p></div>${toolkits}${groups}</section>`;
 }
 
 /** 貫穿全程的 AI CRM 情境 */
@@ -1194,7 +1219,7 @@ function renderSidebar(course) {
       ${navGroups}
       <a class="nav-link" href="#materials-overview" data-target="materials-overview"><strong>素材總覽</strong><span>講義與附件</span></a>
       <a class="nav-link" href="#quiz" data-target="quiz"><strong>結訓測驗</strong><span>學習驗收</span></a>
-      <a class="nav-link" href="#superpowers" data-target="superpowers"><strong>superpowers 補充</strong><span>規格先行技能組</span></a>
+      <a class="nav-link" href="#superpowers" data-target="superpowers"><strong>開發技能補充</strong><span>superpowers・ui-ux-pro-max・deep-memory</span></a>
     </nav>
     <div class="sidebar-tools">
       <div class="progress-box"><strong>全課學習進度</strong><p id="progressText">${done} / ${total} 任務已完成 (${percent}%)</p><div class="progress-track" aria-hidden="true"><div id="progressFill" class="progress-fill" style="width:${percent}%"></div></div></div>
