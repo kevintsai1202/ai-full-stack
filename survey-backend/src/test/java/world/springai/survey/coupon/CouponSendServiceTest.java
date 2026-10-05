@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -63,7 +64,8 @@ class CouponSendServiceTest {
         when(emailLogRepository.findByTypeAndStatus(anyString(), anyString())).thenReturn(List.of());
         when(formSchemaService.listDefinitions()).thenReturn(List.of());
         when(mailRenderer.subject(any(CouponCampaign.class))).thenReturn("《AI 全端開發》讀者專屬優惠");
-        when(mailRenderer.body(any(CouponCampaign.class), anyString(), anyString())).thenReturn("<html/>");
+        // 第二參數（寄送原因的問卷標題）single 模式會傳 null，用 any() 才匹配得到
+        when(mailRenderer.body(any(CouponCampaign.class), any(), anyString())).thenReturn("<html/>");
         // 逐 email 不同值，驗證每人拿到專屬退訂連結
         when(linkBuilder.unsubscribeLink(anyString()))
             .thenAnswer(i -> "UNSUB_LINK_FOR:" + i.getArgument(0));
@@ -265,5 +267,118 @@ class CouponSendServiceTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
         verify(mailSender, never()).send(any(), any(), any());
+    }
+
+    /**
+     * 單筆寄送（問卷分析逐列寄券）不驗券的命中名單：收件人不必填過該券的名單來源問卷，
+     * 改由訂閱資格判斷放行。findIllegal 一次都不能被呼叫——否則不同問卷的讀者仍會被 400 擋下。
+     */
+    @Test
+    void single模式不驗命中名單改驗訂閱資格() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+        // 命中名單驗證若被呼叫會判違規，用來抓「single 仍走 findIllegal」的回歸
+        when(couponRecipientService.findIllegal(any(), any())).thenReturn(List.of("one@example.com"));
+        when(couponRecipientService.findSingleSendRejection("one@example.com")).thenReturn(Optional.empty());
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        CouponSendService.SendResult result = service.send(1L, List.of("one@example.com"), 1, true);
+
+        assertEquals(1, result.sent());
+        verify(couponRecipientService).findSingleSendRejection("one@example.com");
+        verify(couponRecipientService, never()).findIllegal(any(), any());
+    }
+
+    /** 單筆寄送資格不符（已退訂／未同意）回 400，訊息帶出原因，且不觸發任何寄信 */
+    @Test
+    void single模式資格不符回400且不寄信() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+        when(couponRecipientService.findSingleSendRejection("gone@example.com"))
+            .thenReturn(Optional.of("收件人已退訂，不寄送行銷信：gone@example.com"));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> service.send(1L, List.of("gone@example.com"), 1, true));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        assertTrue(ex.getReason().contains("已退訂"));
+        verifyNoInteractions(mailSender);
+    }
+
+    /**
+     * 單筆寄送必須剛好一位收件人：single 跳過了命中名單驗證，若允許多人，
+     * 就能拿 single=true 一次寄給整批人、繞過批次寄送的名單限制。
+     */
+    @Test
+    void single模式收件人不是剛好一位回400() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+
+        for (List<String> emails : List.of(
+                List.of("a@example.com", "b@example.com"),
+                List.<String>of(),
+                java.util.Collections.<String>singletonList(null),
+                List.of("   "))) {
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> service.send(1L, emails, 1, true), "收件人 " + emails + " 應回 400");
+            assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        }
+        verifyNoInteractions(mailSender);
+        verify(couponRecipientService, never()).findSingleSendRejection(any());
+    }
+
+    /** 同一人大小寫不同的兩筆在批內去重後只算一位，single 模式照常寄出 */
+    @Test
+    void single模式同一人大小寫重複視為一位() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+        when(couponRecipientService.findSingleSendRejection(anyString())).thenReturn(Optional.empty());
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        CouponSendService.SendResult result =
+            service.send(1L, List.of("One@Example.com", "one@example.com"), 1, true);
+
+        assertEquals(1, result.sent());
+    }
+
+    /**
+     * 單筆寄送的信件不帶寄送原因：收件人不一定填過券的名單來源問卷，
+     * 傳 null 讓渲染器省略「你收到這封信是因為你填過問卷『…』」，也不必查問卷標題。
+     */
+    @Test
+    void single模式信件不帶寄送原因() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        service.send(1L, List.of("one@example.com"), 1, true);
+
+        verify(mailRenderer).body(eq(campaign), isNull(), eq("UNSUB_LINK_FOR:one@example.com"));
+        verifyNoInteractions(formSchemaService);
+    }
+
+    /** 對照組：批次寄送的信件照舊帶寄送原因（查無問卷版本時退回 formKey 原字串） */
+    @Test
+    void 批次模式信件仍帶寄送原因() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        service.send(1L, List.of("one@example.com"), null, false);
+
+        verify(mailRenderer).body(eq(campaign), eq("reader-poll"), anyString());
+    }
+
+    /** 對照組：批次寄送（single=false）仍走命中名單驗證，不使用單筆資格判斷 */
+    @Test
+    void 批次模式仍驗命中名單() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        service.send(1L, List.of("one@example.com"), null, false);
+
+        verify(couponRecipientService).findIllegal(eq(campaign), any());
+        verify(couponRecipientService, never()).findSingleSendRejection(any());
     }
 }

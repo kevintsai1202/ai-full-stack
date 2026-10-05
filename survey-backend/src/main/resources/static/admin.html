@@ -1599,7 +1599,10 @@
       opt.disabled=sent.includes(c.id);
       select.add(opt);
     });
-    $('#coupon-send-dialog-msg').textContent=candidates.length?'':'沒有可寄送的未過期優惠券';
+    // 每次開啟都重設訊息框，避免上一列的錯誤殘留；.msg 預設 display:none，必須帶 err 才看得到
+    const msgBox=$('#coupon-send-dialog-msg');
+    msgBox.className=candidates.length?'msg':'msg err';
+    msgBox.textContent=candidates.length?'':'沒有可寄送的未過期優惠券';
     dialog.dataset.email=email;
     dialog.showModal();
   }
@@ -1608,8 +1611,9 @@
     const dialog=$('#coupon-send-dialog');
     const email=dialog.dataset.email;
     const id=Number($('#coupon-send-dialog-select').value);
-    if(!id)return;
     const msgBox=$('#coupon-send-dialog-msg');
+    // 下拉為空或選項全部停用（皆已寄過）時 value 為空字串，明確提示而非靜默無反應
+    if(!id){msgBox.className='msg err';msgBox.textContent='沒有可寄送的優惠券：請選擇一張未寄過的券';return;}
     try{
       const result=await api(`/api/admin/coupons/${id}/send`,{method:'POST',body:JSON.stringify({emails:[email],limit:1,single:true})});
       if(result.sent>0){
@@ -1618,9 +1622,10 @@
         renderRawTable();
         dialog.close();
       }else{
+        msgBox.className='msg err';
         msgBox.textContent=`未寄出（skipped ${result.skipped}、failed ${result.failed}）`;
       }
-    }catch(e){msgBox.textContent='寄送失敗：'+e.message;}  // 含「不在命中名單」的 400 訊息原样呈現
+    }catch(e){msgBox.className='msg err';msgBox.textContent='寄送失敗：'+e.message;}  // 後端 400 原因（已退訂／未同意等）原樣呈現
   }
 
   /** 透過受保護請求下載資料，不將管理金鑰放進 URL。 */

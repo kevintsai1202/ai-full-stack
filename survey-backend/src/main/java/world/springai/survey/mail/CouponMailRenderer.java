@@ -62,7 +62,9 @@ public class CouponMailRenderer {
      * 渲染優惠卡＋寄送原因／退訂頁腳，組成完整信件內文 HTML。
      *
      * @param campaign        優惠券活動（課程名／文案／連結／優惠碼／期限）
-     * @param formTitle       寄送原因顯示的問卷名稱，頁腳文案「你收到這封信是因為你填過問卷『{formTitle}』」
+     * @param formTitle       寄送原因顯示的問卷名稱，頁腳文案「你收到這封信是因為你填過問卷『{formTitle}』」；
+     *                        null 或空白時整句省略——單筆寄送（問卷分析逐列寄券）的收件人不一定填過
+     *                        券的名單來源問卷，該句會是不實陳述。退訂連結不論如何都保留（行銷信法定要求）
      * @param unsubscribeLink 逐收件人退訂連結，由呼叫端以 SubscriptionLinkBuilder.unsubscribeLink(email) 產生
      */
     public String body(CouponCampaign campaign, String formTitle, String unsubscribeLink) {
@@ -81,9 +83,12 @@ public class CouponMailRenderer {
                 .append(campaign.getExpiresAt()).append("</p>");
         }
         html.append(CARD_CLOSE);
-        html.append("<p style=\"").append(FOOTER_STYLE)
-            .append("\">你收到這封信是因為你填過問卷『").append(escapeHtml(formTitle))
-            .append("』。若不想再收到，<a href=\"").append(escapeHtml(unsubscribeLink))
+        html.append("<p style=\"").append(FOOTER_STYLE).append("\">");
+        // 寄送原因只在有問卷標題時才寫（見 @param formTitle）
+        if (formTitle != null && !formTitle.isBlank()) {
+            html.append("你收到這封信是因為你填過問卷『").append(escapeHtml(formTitle)).append("』。");
+        }
+        html.append("若不想再收到，<a href=\"").append(escapeHtml(unsubscribeLink))
             .append("\">點此取消訂閱</a>。</p>");
         return html.toString();
     }
