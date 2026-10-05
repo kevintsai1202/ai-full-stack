@@ -62,6 +62,31 @@ class CouponMailRendererTest {
         assertFalse(html.contains("href=\"https://x/unsub?t=\"onmouseover"));
     }
 
+    /**
+     * 單筆寄送（問卷分析逐列寄券）不傳問卷標題：收件人不一定填過券的名單來源問卷，
+     * 「你收到這封信是因為你填過問卷『…』」會是不實陳述，必須整句省略；
+     * 退訂連結是行銷信的法定要求，不論有無寄送原因都必須保留。
+     */
+    @Test
+    void 問卷標題為空時省略寄送原因但保留退訂連結() {
+        for (String formTitle : new String[] {null, "", "   "}) {
+            String html = renderer.body(campaign("AI 全端開發", "超值文案", "https://hahow.in/cr/x",
+                "SAVE300", null), formTitle, "https://x/unsub");
+            assertFalse(html.contains("你收到這封信是因為"), "formTitle=" + formTitle + " 不應出現寄送原因");
+            assertFalse(html.contains("填過問卷"), "formTitle=" + formTitle + " 不應出現寄送原因");
+            assertTrue(html.contains("href=\"https://x/unsub\""), "formTitle=" + formTitle + " 必須保留退訂連結");
+            assertTrue(html.contains("點此取消訂閱"), "formTitle=" + formTitle + " 必須保留退訂文案");
+        }
+    }
+
+    /** 對照組：有問卷標題時寄送原因照舊顯示（防止省略分支被改成無條件生效） */
+    @Test
+    void 有問卷標題時仍顯示寄送原因() {
+        String html = renderer.body(campaign("AI 全端開發", "超值文案", "https://hahow.in/cr/x",
+            "SAVE300", null), "讀者意見調查", "https://x/unsub");
+        assertTrue(html.contains("你收到這封信是因為你填過問卷『讀者意見調查』"));
+    }
+
     /** 建一筆測試用優惠券活動，formKey／answerFilter 用固定值（渲染器不會用到這兩個欄位） */
     private CouponCampaign campaign(String courseName, String pitch, String courseUrl,
                                      String couponCode, LocalDate expiresAt) {

@@ -57,7 +57,9 @@ import world.springai.survey.mail.MailSender;
  * 多半沒填過該券的「名單來源問卷」，若沿用命中名單驗證會一律 400。因此 single 模式不呼叫
  * {@link CouponRecipientService#findIllegal}，改以 {@link CouponRecipientService#findSingleSendRejection}
  * 驗訂閱資格（未退訂，且已確認訂閱或問卷勾選同意），並限定收件人剛好一位，避免 single
- * 被拿來繞過批次寄送的名單驗證。已寄過跳過的冪等行為兩種模式相同。</p>
+ * 被拿來繞過批次寄送的名單驗證。已寄過跳過的冪等行為兩種模式相同。同理，single 模式的信件
+ * 不帶「你收到這封信是因為你填過問卷『…』」寄送原因（對未填該問卷的收件人是不實陳述），
+ * 退訂連結照常保留。</p>
  */
 @Service
 public class CouponSendService {
@@ -169,8 +171,9 @@ public class CouponSendService {
             ? eligible.subList(0, limit) : eligible;
         int remaining = eligible.size() - targets.size();
 
-        // 寄送原因：取該 formKey 最新版問卷標題，查無版本時退回 formKey 原字串（不擋寄送）
-        String formTitle = resolveFormTitle(campaign.getFormKey());
+        // 寄送原因：取該 formKey 最新版問卷標題，查無版本時退回 formKey 原字串（不擋寄送）；
+        // 單筆寄送的收件人不一定填過該問卷，傳 null 讓信件省略寄送原因，也就不必查標題
+        String formTitle = single ? null : resolveFormTitle(campaign.getFormKey());
         String subject = mailRenderer.subject(campaign);
 
         int sent = 0;

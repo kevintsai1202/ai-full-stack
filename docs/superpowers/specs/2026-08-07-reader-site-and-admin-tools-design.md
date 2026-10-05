@@ -142,6 +142,7 @@ body: { emails: ["one@example.com"], limit: 1, single: true }
    - 否則 `survey_response` 有該 email 且勾選同意 → 可寄（使用者決策：尚未點確認信也允許）
    - 以上皆非 → 400（未同意）
 3. 已寄過跳過、D6 狀態語意不變；批次寄送（`single` 未帶或為 `false`）行為完全不變
+4. 單筆寄送的信件**省略**頁尾的寄送原因「你收到這封信是因為你填過問卷『…』」（收件人不一定填過該問卷，該句會失真），退訂連結照常保留；批次寄送的頁尾不變
 
 前端同步修正：寄券視窗的錯誤、`sent=0`、無可寄券、選項全部停用四種情況都以 `msg err` 顯示，每次開窗重設訊息框。驗證：`CouponSingleSendEligibilityPersistenceTest`（真實 PostgreSQL）、`CouponSendServiceTest` 的 single 情境、`scripts/verify-raw-row-coupon-errors.mjs`。
 
