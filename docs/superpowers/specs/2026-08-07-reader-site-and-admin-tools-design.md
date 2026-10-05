@@ -31,6 +31,7 @@
 | D6 | 單筆寄券**不**把 `coupon_campaign.status` 翻成 `SENT` | `SENT` 語意是「批次發放已完成」；逐人發放是持續動作，第一次單筆就結案會與實際狀態不符 |
 | D7 | 漏斗圖**先修資料語意再畫圖**：頂端為平行入口的加總 | 使用者指出「倒掛就是數據換算錯誤，上層應加總」——這是對的，形狀問題的根因在資料建模 |
 | D8 | 讀者站暗色模式的所有修改**一律 scoped 於 `[data-theme="dark"]`**，亮色規則零改動 | `reader.css` 已有完整變數（`--fg`、`--muted` 等），但有 17 處硬編 `color:#…` 與 16 處硬編亮底；比照 admin.html 以暗色補丁規則覆蓋，亮色模式不動任何一行（見 §3.2） |
+| D9 | （2026-10-06 修訂）單筆寄券**不驗券的命中名單**，改驗訂閱資格；問卷勾選同意但尚未點確認信者也可寄；批次寄送不變 | 原始資料表的人多半沒填過券的「名單來源問卷」，沿用 `findIllegal` 會一律 400，逐列寄券形同失效（見 §4.2 修訂） |
 
 ## 3. 章節 A：讀者站
 
@@ -127,6 +128,22 @@ body: { emails: ["one@example.com"], limit: 1, single: true }
 **已寄券的顯示**：資料已存在，**不需要新表**。`CouponSendService` 刻意以 `type = "coupon:" + campaignId` 在 `email_log` 表達關聯（`campaignId` 欄位留 null，因其語意是電子報 `Campaign`）。查詢該表即可得出每個 email 收過哪些券。
 
 **狀態語意（D6）**：單筆寄送時 `coupon_campaign.status` 維持 `DRAFT`，`sent_count` 照實累加，`sent_at` 記錄最後一次寄送時間。
+
+#### 2026-10-06 修訂：單筆寄送的收件資格（D9）
+
+上線後發現逐列寄券幾乎寄不出去：券的命中名單只含「名單來源問卷」的填答者（且限 `survey_form`／`newsletter_survey` 來源、`CONFIRMED`），而問卷分析原始資料表來自另一份問卷（`survey_response`），子集驗證因此一律回 400；前端的 `#coupon-send-dialog-msg` 又缺 `err` class，被 `.msg{display:none}` 藏起來，畫面看起來像按鈕失效。
+
+修訂後 `single: true` 的驗證改為：
+
+1. 收件人必須剛好一位（去重後），否則 400——避免 `single` 成為繞過批次名單驗證的後門
+2. 不呼叫 `findIllegal`，改由 `CouponRecipientService#findSingleSendRejection` 判斷訂閱資格，依序：
+   - 名單中心最新 EMAIL 同意事件為 `UNSUBSCRIBED`，或 `survey_response` 任一列已退訂 → 400（已退訂）
+   - 最新同意事件為 `CONFIRMED` → 可寄
+   - 否則 `survey_response` 有該 email 且勾選同意 → 可寄（使用者決策：尚未點確認信也允許）
+   - 以上皆非 → 400（未同意）
+3. 已寄過跳過、D6 狀態語意不變；批次寄送（`single` 未帶或為 `false`）行為完全不變
+
+前端同步修正：寄券視窗的錯誤、`sent=0`、無可寄券、選項全部停用四種情況都以 `msg err` 顯示，每次開窗重設訊息框。驗證：`CouponSingleSendEligibilityPersistenceTest`（真實 PostgreSQL）、`CouponSendServiceTest` 的 single 情境、`scripts/verify-raw-row-coupon-errors.mjs`。
 
 ### 4.3 B3：行銷漏斗圖
 

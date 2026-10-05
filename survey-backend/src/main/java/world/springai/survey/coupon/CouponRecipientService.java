@@ -2,6 +2,7 @@ package world.springai.survey.coupon;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -9,20 +10,25 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
+import world.springai.survey.audience.AudiencePlatformService;
 import world.springai.survey.audience.AudienceSearchService;
 import world.springai.survey.mail.EmailLog;
 import world.springai.survey.mail.EmailLogRepository;
 
 /**
- * 優惠券活動的名單查詢與子集驗證。
+ * 優惠券活動的名單查詢與收件資格驗證，依寄送模式分兩種口徑。
  *
- * <p>以活動建立當下快照的問卷篩選條件（{@code formKey}＋{@code answerFilter}）
- * 向 {@link AudienceSearchService} 查詢命中名單；不論快照本身是否指定同意狀態，
- * 一律強制覆寫為 {@code CONFIRMED}——這是行銷寄送不得繞過的合規防線，也是
- * {@link #findIllegal} 存在的注入防線：後台勾選補寄名單時，只能從這份命中集合
- * 挑人，外部夾帶的 email 一律視為不合法。</p>
+ * <p><b>批次寄送（優惠券分頁）</b>：以活動建立當下快照的問卷篩選條件
+ * （{@code formKey}＋{@code answerFilter}）向 {@link AudienceSearchService} 查詢命中名單；
+ * 不論快照本身是否指定同意狀態，一律強制覆寫為 {@code CONFIRMED}。{@link #findIllegal}
+ * 是批次寄送的注入防線：後台勾選補寄名單時，只能從這份命中集合挑人。</p>
+ *
+ * <p><b>單筆寄送（問卷分析逐列寄券）</b>：不看命中名單——收件人不必填過該券的名單來源問卷，
+ * 改以 {@link #findSingleSendRejection} 判斷訂閱資格（2026-10-06 使用者決策：
+ * 問卷勾選同意但尚未點確認信者也可寄）。退訂者在兩種模式下都不會收到信。</p>
  */
 @Service
 public class CouponRecipientService {
@@ -71,14 +77,70 @@ public class CouponRecipientService {
     private final AudienceSearchService audienceSearchService;
     private final EmailLogRepository emailLogRepository;
     private final ObjectMapper objectMapper;
+    /** 單筆寄送訂閱資格查詢用（名單中心同意事件與 survey_response 旗標） */
+    private final JdbcTemplate jdbc;
 
-    /** 注入 audience 搜尋服務、寄送記錄與 JSON 解析器 */
+    /** 注入 audience 搜尋服務、寄送記錄、JSON 解析器與 JDBC 查詢 */
     public CouponRecipientService(AudienceSearchService audienceSearchService,
                                    EmailLogRepository emailLogRepository,
-                                   ObjectMapper objectMapper) {
+                                   ObjectMapper objectMapper,
+                                   JdbcTemplate jdbc) {
         this.audienceSearchService = audienceSearchService;
         this.emailLogRepository = emailLogRepository;
         this.objectMapper = objectMapper;
+        this.jdbc = jdbc;
+    }
+
+    /**
+     * 單筆寄送的訂閱資格判斷：回傳拒絕原因，可寄時回傳空值。
+     *
+     * <p>判斷順序（退訂優先，任何同意證據都蓋不過退訂）：</p>
+     * <ol>
+     *   <li>名單中心最新 EMAIL 同意事件為 {@code UNSUBSCRIBED}，或 {@code survey_response}
+     *       任一列已退訂 → 拒絕。兩處都要看：退訂連結會同時寫兩處，但匯入與歷史資料
+     *       不保證兩邊一致，寧可多擋。</li>
+     *   <li>最新同意事件為 {@code CONFIRMED} → 可寄。最新事件為準，與
+     *       {@code SurveyResponseRepository#findRecipients} 的寄送名單口徑一致。</li>
+     *   <li>否則 {@code survey_response} 有該 email 且勾選同意 → 可寄（使用者決策：
+     *       問卷勾選同意但尚未點確認信者也可寄）。</li>
+     *   <li>以上皆非 → 拒絕（未同意）。</li>
+     * </ol>
+     *
+     * @param email 收件人 email（大小寫不敏感、忽略前後空白）
+     * @return 拒絕原因；可寄時為 {@link Optional#empty()}
+     */
+    public Optional<String> findSingleSendRejection(String email) {
+        String normalized = AudiencePlatformService.normalizeEmail(email);
+        if (normalized.isEmpty()) {
+            return Optional.of("收件人 email 不得為空");
+        }
+        // 名單中心最新一筆 EMAIL 同意事件（查無人物或查無事件時為 null）
+        String latestConsent = jdbc.query("""
+            SELECT c.status
+              FROM audience_person p
+              JOIN audience_consent c ON c.person_id = p.id
+             WHERE p.email_normalized = ? AND c.channel = ?
+             ORDER BY c.occurred_at DESC, c.id DESC
+             LIMIT 1
+            """, (rs, rowNum) -> rs.getString("status"), normalized, AudiencePlatformService.CHANNEL_EMAIL)
+            .stream().findFirst().orElse(null);
+        // survey_response 多列彙整：同一人可能填過多次問卷，任一列退訂即算退訂、任一列同意即算同意
+        Map<String, Object> flags = jdbc.queryForMap("""
+            SELECT COALESCE(bool_or(s.unsubscribed), false) AS any_unsubscribed,
+                   COALESCE(bool_or(s.consent), false)      AS any_consent
+              FROM survey_response s
+             WHERE lower(btrim(s.email)) = ?
+            """, normalized);
+        boolean anyUnsubscribed = Boolean.TRUE.equals(flags.get("any_unsubscribed"));
+        boolean anyConsent = Boolean.TRUE.equals(flags.get("any_consent"));
+
+        if (AudiencePlatformService.CONSENT_UNSUBSCRIBED.equals(latestConsent) || anyUnsubscribed) {
+            return Optional.of("收件人已退訂，不寄送行銷信：" + email.trim());
+        }
+        if (AudiencePlatformService.CONSENT_CONFIRMED.equals(latestConsent) || anyConsent) {
+            return Optional.empty();
+        }
+        return Optional.of("收件人未同意接收行銷信，不寄送：" + email.trim());
     }
 
     /** 單一收件人：email 完整值（admin 介面）、稱呼、是否已寄過本活動 */

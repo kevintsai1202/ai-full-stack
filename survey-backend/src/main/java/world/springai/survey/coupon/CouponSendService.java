@@ -25,8 +25,9 @@ import world.springai.survey.mail.MailSender;
  * <p>迴圈語意逐字比照 {@code world.springai.survey.newsletter.InviteService#sendInvites}——
  * 已寄集合正規化小寫比對、{@code limit} 截斷 remaining、逐封 {@code try-catch} 不因單封失敗
  * 中斷整批、{@link EmailLog} 成功記 {@code "sent"}／失敗記 {@code "failed"}＋錯誤訊息。
- * 與邀請信不同之處：本服務多一層「後台勾選名單必須是命中集合子集」的驗證
- * （見 {@link CouponRecipientService#findIllegal}），防止外部夾帶未命中名單的 email。</p>
+ * 與邀請信不同之處：本服務多一層收件資格驗證，依模式分兩種口徑——批次寄送要求
+ * 「後台勾選名單必須是命中集合子集」（見 {@link CouponRecipientService#findIllegal}），
+ * 防止外部夾帶未命中名單的 email；單筆寄送則改驗訂閱資格，見下方「single 模式（D6）」。</p>
  *
  * <p>{@link #send} 刻意不加 {@code @Transactional}：迴圈夾外部 ZSend 呼叫，且 provider
  * 副作用無法回滾——若迴圈跑完後 {@code campaignRepository.save} 拋例外，整顆交易回滾會把
@@ -51,6 +52,12 @@ import world.springai.survey.mail.MailSender;
  * （記錄最後一次寄送時間，而非批次模式的「首次寄送時間」）；{@code sentCount} 累加邏輯與批次
  * 模式相同。既有三參 {@link #send(long, List, Integer)} overload 委派 {@code single=false}，
  * 行為與此改動前完全一致。</p>
+ *
+ * <p><b>single 模式的收件資格（2026-10-06 起）</b>：單筆寄送來自問卷分析原始資料表，收件人
+ * 多半沒填過該券的「名單來源問卷」，若沿用命中名單驗證會一律 400。因此 single 模式不呼叫
+ * {@link CouponRecipientService#findIllegal}，改以 {@link CouponRecipientService#findSingleSendRejection}
+ * 驗訂閱資格（未退訂，且已確認訂閱或問卷勾選同意），並限定收件人剛好一位，避免 single
+ * 被拿來繞過批次寄送的名單驗證。已寄過跳過的冪等行為兩種模式相同。</p>
  */
 @Service
 public class CouponSendService {
@@ -127,11 +134,22 @@ public class CouponSendService {
         // 批內去重：同批同一 email（正規化後）只保留第一次出現，避免同一人被誤寄兩封、
         // sent_count 重複累計（見類別 Javadoc「批內去重」說明）
         List<String> requested = dedupeNormalized(emails == null ? List.of() : emails);
-        // 子集驗證：後台勾選名單必須全部落在活動命中集合內，否則整批拒絕、不觸發任何寄信
-        List<String> illegal = recipientService.findIllegal(campaign, requested);
-        if (!illegal.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "以下收件人不在本活動命中名單內，拒絕寄送：" + String.join(", ", illegal));
+        if (single) {
+            // 單筆寄送（問卷分析逐列寄券）：跳過命中名單、改驗訂閱資格，因此必須限定剛好一位，
+            // 否則 single=true 會變成繞過批次名單驗證、一次寄給整批人的後門
+            if (requested.size() != 1 || requested.getFirst() == null || requested.getFirst().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "單筆寄送必須剛好指定一位收件人");
+            }
+            recipientService.findSingleSendRejection(requested.getFirst()).ifPresent(reason -> {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, reason);
+            });
+        } else {
+            // 批次寄送子集驗證：後台勾選名單必須全部落在活動命中集合內，否則整批拒絕、不觸發任何寄信
+            List<String> illegal = recipientService.findIllegal(campaign, requested);
+            if (!illegal.isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "以下收件人不在本活動命中名單內，拒絕寄送：" + String.join(", ", illegal));
+            }
         }
 
         String type = "coupon:" + campaignId;

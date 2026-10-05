@@ -266,4 +266,89 @@ class CouponSendServiceTest {
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
         verify(mailSender, never()).send(any(), any(), any());
     }
+
+    /**
+     * 單筆寄送（問卷分析逐列寄券）不驗券的命中名單：收件人不必填過該券的名單來源問卷，
+     * 改由訂閱資格判斷放行。findIllegal 一次都不能被呼叫——否則不同問卷的讀者仍會被 400 擋下。
+     */
+    @Test
+    void single模式不驗命中名單改驗訂閱資格() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+        // 命中名單驗證若被呼叫會判違規，用來抓「single 仍走 findIllegal」的回歸
+        when(couponRecipientService.findIllegal(any(), any())).thenReturn(List.of("one@example.com"));
+        when(couponRecipientService.findSingleSendRejection("one@example.com")).thenReturn(Optional.empty());
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        CouponSendService.SendResult result = service.send(1L, List.of("one@example.com"), 1, true);
+
+        assertEquals(1, result.sent());
+        verify(couponRecipientService).findSingleSendRejection("one@example.com");
+        verify(couponRecipientService, never()).findIllegal(any(), any());
+    }
+
+    /** 單筆寄送資格不符（已退訂／未同意）回 400，訊息帶出原因，且不觸發任何寄信 */
+    @Test
+    void single模式資格不符回400且不寄信() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+        when(couponRecipientService.findSingleSendRejection("gone@example.com"))
+            .thenReturn(Optional.of("收件人已退訂，不寄送行銷信：gone@example.com"));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+            () -> service.send(1L, List.of("gone@example.com"), 1, true));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        assertTrue(ex.getReason().contains("已退訂"));
+        verifyNoInteractions(mailSender);
+    }
+
+    /**
+     * 單筆寄送必須剛好一位收件人：single 跳過了命中名單驗證，若允許多人，
+     * 就能拿 single=true 一次寄給整批人、繞過批次寄送的名單限制。
+     */
+    @Test
+    void single模式收件人不是剛好一位回400() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+
+        for (List<String> emails : List.of(
+                List.of("a@example.com", "b@example.com"),
+                List.<String>of(),
+                java.util.Collections.<String>singletonList(null),
+                List.of("   "))) {
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                () -> service.send(1L, emails, 1, true), "收件人 " + emails + " 應回 400");
+            assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        }
+        verifyNoInteractions(mailSender);
+        verify(couponRecipientService, never()).findSingleSendRejection(any());
+    }
+
+    /** 同一人大小寫不同的兩筆在批內去重後只算一位，single 模式照常寄出 */
+    @Test
+    void single模式同一人大小寫重複視為一位() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+        when(couponRecipientService.findSingleSendRejection(anyString())).thenReturn(Optional.empty());
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        CouponSendService.SendResult result =
+            service.send(1L, List.of("One@Example.com", "one@example.com"), 1, true);
+
+        assertEquals(1, result.sent());
+    }
+
+    /** 對照組：批次寄送（single=false）仍走命中名單驗證，不使用單筆資格判斷 */
+    @Test
+    void 批次模式仍驗命中名單() {
+        CouponCampaign campaign = withId(campaign(), 1L);
+        when(campaignRepository.findById(1L)).thenReturn(Optional.of(campaign));
+        when(mailSender.send(anyString(), anyString(), anyString())).thenReturn("msg-1");
+
+        service.send(1L, List.of("one@example.com"), null, false);
+
+        verify(couponRecipientService).findIllegal(eq(campaign), any());
+        verify(couponRecipientService, never()).findSingleSendRejection(any());
+    }
 }

@@ -42,7 +42,9 @@ class CouponRecipientServiceTest {
         // 預設無寄送記錄；個別測試視需要覆寫
         when(emailLogRepository.findByTypeAndStatus(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
             .thenReturn(List.of());
-        service = new CouponRecipientService(audienceSearchService, emailLogRepository, new ObjectMapper());
+        // JdbcTemplate 只供單筆寄送資格查詢使用，該查詢由 CouponSingleSendEligibilityPersistenceTest 以真實資料庫驗證
+        service = new CouponRecipientService(audienceSearchService, emailLogRepository, new ObjectMapper(),
+            mock(org.springframework.jdbc.core.JdbcTemplate.class));
     }
 
     /** 建一筆測試用優惠券活動（狀態、寄送統計對本服務無關） */
