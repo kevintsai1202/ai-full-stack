@@ -126,3 +126,8 @@ sesmail:
   # 資料表由 Flyway V27 建立，不由 starter 建
   queue:
     initialize-schema: false
+  # 退信／檢舉事件：SNS 以 HTTPS 推送到 POST /sesmail/sns（問卷網域，讀者網域會被擋）
+  sns:
+    enabled: ${SESMAIL_SNS_ENABLED:false}
+    # 允許的 SNS topic ARN，多個以逗號分隔
+    topic-arns: ${SESMAIL_SNS_TOPIC_ARNS:}

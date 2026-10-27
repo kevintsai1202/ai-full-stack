@@ -4,7 +4,13 @@ import io.github.kevintsai1202.sesmail.DeliveryListener;
 import io.github.kevintsai1202.sesmail.ScheduledMailDispatcher;
 import io.github.kevintsai1202.sesmail.SesMailClient;
 import io.github.kevintsai1202.sesmail.SesQuotaService;
+import io.github.kevintsai1202.sesmail.events.SesEventListener;
 import org.flywaydb.core.Flyway;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
+import world.springai.survey.audience.SesSuppressionListener;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +27,8 @@ import java.sql.Statement;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * SESMAIL_ENABLED=true 時整個 Spring context 要能啟動，且 starter 的 SES bean 都接上。
@@ -37,7 +45,9 @@ import static org.junit.jupiter.api.Assertions.fail;
     "sesmail.enabled=true",
     "sesmail.access-key-id=AKIATESTONLY",
     "sesmail.secret-access-key=test-only-secret",
-    "sesmail.dispatch-interval=1h"
+    "sesmail.dispatch-interval=1h",
+    "sesmail.sns.enabled=true",
+    "sesmail.sns.topic-arns=arn:aws:sns:ap-northeast-1:123456789012:ses-events"
 })
 class SesMailWiringTest {
 
@@ -66,6 +76,8 @@ class SesMailWiringTest {
 
     @Autowired ApplicationContext context;
     @Autowired MailSender mailSender;
+    /** 用來建 MockMvc，走過完整的 filter 鏈 */
+    @Autowired WebApplicationContext webContext;
 
     /** 重建乾淨資料庫並套用全部 migration */
     @BeforeAll
@@ -94,5 +106,21 @@ class SesMailWiringTest {
     void deliveryListenerIsRegistered() {
         assertTrue(context.getBeansOfType(DeliveryListener.class).values().stream()
             .anyMatch(l -> l instanceof EmailLogDeliveryListener));
+    }
+
+    /**
+     * 退信／檢舉 webhook 要經過本專案所有 filter（Host 白名單、安全標頭）後仍打得到 controller：
+     * 偽造的訊息應由 starter 驗簽拒絕回 403，而不是被 filter 擋成 404 或被導向。
+     */
+    @Test
+    void snsWebhookIsReachableThroughFilters() throws Exception {
+        assertTrue(context.getBeansOfType(SesEventListener.class).values().stream()
+            .anyMatch(l -> l instanceof SesSuppressionListener));
+        MockMvc mvc = MockMvcBuilders.webAppContextSetup(webContext)
+            .addFilters(context.getBeansOfType(jakarta.servlet.Filter.class).values().toArray(new jakarta.servlet.Filter[0]))
+            .build();
+        mvc.perform(post("/sesmail/sns").contentType(MediaType.TEXT_PLAIN)
+                .content("{\"Type\":\"Notification\",\"SigningCertURL\":\"https://evil.example.com/c.pem\"}"))
+            .andExpect(status().isForbidden());
     }
 }

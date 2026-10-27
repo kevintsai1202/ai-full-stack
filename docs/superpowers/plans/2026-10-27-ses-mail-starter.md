@@ -60,4 +60,4 @@
 - [x] S3 建 GitHub repo、推送、tag 0.1.0、觸發 JitPack 建置並確認成功
 - [x] S4 survey-backend 改用套件（清快取後以 JitPack 產物跑測試）
 - [x] S5 commit survey-backend、更新切換手冊
-- [ ] S6 0.2.0：SNS webhook + SesEventListener（套件）＋ survey-backend 退訂實作
+- [x] S6 0.2.0：SNS webhook + SesEventListener（套件）＋ survey-backend 退訂實作

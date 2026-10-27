@@ -116,8 +116,25 @@ psql $env:JDBC_PSQL_URL -c "SELECT id, recipient, subject, updated_at FROM sched
 - SES 主控台 **Reputation metrics**：退信率維持在 5% 以下、檢舉率 0.1% 以下，超過會被 AWS 警告甚至暫停寄送（後台額度列會顯示「SES 寄送已暫停」）。
 - 停寄名單：**Configuration → Suppression list**，退信與檢舉的地址會自動進來、之後不會再寄。
 
-## 尚未實作（第二階段）
+## 10. 退信／檢舉事件（自動退訂）
 
-- SES 退信／檢舉事件（configuration set → SNS → webhook），自動把讀者標成退信或退訂。
+starter 0.2.0 起提供 `POST /sesmail/sns`。永久退信與檢舉會自動把讀者退訂（來源 `ses-bounce`／`ses-complaint`），暫時退信只記 log。
+
+順序很重要：webhook 要先上線，SNS 才能完成訂閱確認。
+
+1. **建 SNS topic**：AWS 主控台 → SNS（區域 Tokyo）→ Topics → Create topic，類型 **Standard**，名稱 `ses-events`，記下 Topic ARN。
+2. **設環境變數並部署**：
+
+| 變數 | 值 |
+| --- | --- |
+| `SESMAIL_SNS_ENABLED` | `true` |
+| `SESMAIL_SNS_TOPIC_ARNS` | 上一步的 Topic ARN |
+
+3. **建 HTTPS 訂閱**：該 topic → Create subscription，Protocol **HTTPS**，Endpoint `https://springai-survey.zeabur.app/sesmail/sns`（**問卷網域**；讀者網域會被 Host 白名單擋掉），**不要**勾 raw message delivery。建立後 webhook 會自動確認，訂閱狀態幾秒內變成 Confirmed；沒變的話看 log 有沒有 `SNS 訊息簽章驗證失敗` 或 `未允許的 topic`。
+4. **把 SES 回饋送到 topic**：SES → Identities → `springai.world` → **Notifications** → Feedback notifications → Edit，Bounce 與 Complaint 都選 `ses-events`（Delivery 不用）。
+5. **驗證**：用 SES 主控台的「傳送測試電子郵件」寄到模擬信箱 `bounce@simulator.amazonses.com` 與 `complaint@simulator.amazonses.com`（不影響信譽），log 應出現對應事件；模擬信箱不在名單上，所以不會有人被退訂。
+
+## 尚未實作
+
 - 一鍵退訂標頭（`List-Unsubscribe`、`List-Unsubscribe-Post`）。
 - 定期清理 `scheduled_mail` 已送出的舊資料（每封信存著完整 HTML）。
