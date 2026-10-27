@@ -113,6 +113,15 @@ psql $env:JDBC_PSQL_URL -c "SELECT id, recipient, subject, updated_at FROM sched
 
 ## 9. 日常監控
 
+已設定的警報（2026-10-27，CloudWatch 東京區，通知經 SNS topic `ses-alerts` 寄到 kevintsai1202@gmail.com，訂閱需先在信箱點確認）：
+
+| 警報 | 指標 | 門檻（每小時最大值） | AWS 介入門檻 |
+| --- | --- | --- | --- |
+| `ses-bounce-rate-high` | `AWS/SES Reputation.BounceRate` | > 2% | 5% 警告、10% 可能暫停 |
+| `ses-complaint-rate-high` | `AWS/SES Reputation.ComplaintRate` | > 0.05% | 0.1% 警告、0.5% 可能暫停 |
+
+還沒開始寄信時狀態是 INSUFFICIENT_DATA，屬正常；缺資料視為未超標。恢復正常時也會寄一封 OK 通知。
+
 - SES 主控台 **Reputation metrics**：退信率維持在 5% 以下、檢舉率 0.1% 以下，超過會被 AWS 警告甚至暫停寄送（後台額度列會顯示「SES 寄送已暫停」）。
 - 停寄名單：**Configuration → Suppression list**，退信與檢舉的地址會自動進來、之後不會再寄。
 
