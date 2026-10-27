@@ -508,7 +508,7 @@ public class CampaignDeliveryService {
         boolean retryable = ("FAILED".equals(savedStatus) || "CANCELLED".equals(savedStatus))
             && currentlyEligible;
         String reason = switch (savedStatus) {
-            case "SENT" -> "已寄出（服務商已接受）";
+            case "SENT" -> saved.getDeliveredAt() != null ? "已送達（收件端已收下）" : "已寄出（服務商已接受）";
             case "SCHEDULED" -> "已排程，需先取消才能重選";
             case "SENDING" -> "正在寄送";
             case "FAILED" -> currentlyEligible ? "寄送失敗，可重試" : "寄送失敗且目前不可寄送";

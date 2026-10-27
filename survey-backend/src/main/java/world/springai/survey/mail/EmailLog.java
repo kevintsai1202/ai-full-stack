@@ -42,6 +42,10 @@ public class EmailLog {
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
+    /** SES 送達時間（收件端收下）；由 {@link EmailLogRepository#markDelivered} 以原生 UPDATE 寫入 */
+    @Column(name = "delivered_at", insertable = false, updatable = false)
+    private OffsetDateTime deliveredAt;
+
     /** JPA 需要的無參數建構子 */
     protected EmailLog() {
     }
@@ -74,6 +78,7 @@ public class EmailLog {
     public Long getCampaignId() { return campaignId; }
     public Long getBatchId() { return batchId; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
+    public OffsetDateTime getDeliveredAt() { return deliveredAt; }
     public void setStatus(String status) { this.status = status; }
     public void setBatchId(Long batchId) { this.batchId = batchId; }
 }

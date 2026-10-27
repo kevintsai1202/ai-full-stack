@@ -39,7 +39,7 @@ class SesSuppressionListenerTest {
     void permanentBounceUnsubscribes() {
         when(repository.unsubscribeByEmail("gone@example.com")).thenReturn(1);
 
-        listener.onBounce(new SesBounce("Permanent", "NoEmail", List.of(" Gone@Example.COM "), "m-1"));
+        listener.onBounce(new SesBounce("m-1", "Permanent", "NoEmail", List.of(" Gone@Example.COM "), "m-1"));
 
         verify(repository).unsubscribeByEmail("gone@example.com");
         ArgumentCaptor<Map<String, Object>> evidence = ArgumentCaptor.forClass(Map.class);
@@ -53,7 +53,7 @@ class SesSuppressionListenerTest {
     /** 暫時退信（信箱滿等）：不退訂 */
     @Test
     void transientBounceIsIgnored() {
-        listener.onBounce(new SesBounce("Transient", "MailboxFull", List.of("full@example.com"), "m-2"));
+        listener.onBounce(new SesBounce("m-2", "Transient", "MailboxFull", List.of("full@example.com"), "m-2"));
 
         verify(repository, never()).unsubscribeByEmail(anyString());
     }
@@ -63,7 +63,7 @@ class SesSuppressionListenerTest {
     void complaintUnsubscribes() {
         when(repository.unsubscribeByEmail("angry@example.com")).thenReturn(1);
 
-        listener.onComplaint(new SesComplaint(List.of("angry@example.com"), null, "m-3"));
+        listener.onComplaint(new SesComplaint("m-3", List.of("angry@example.com"), null, "m-3"));
 
         verify(repository).unsubscribeByEmail("angry@example.com");
         verify(audience).appendConsentByEmail(eq("angry@example.com"),
@@ -75,7 +75,7 @@ class SesSuppressionListenerTest {
     void alreadyUnsubscribedWritesNoEvent() {
         when(repository.unsubscribeByEmail("gone@example.com")).thenReturn(0);
 
-        listener.onBounce(new SesBounce("Permanent", "General", List.of("gone@example.com"), "m-4"));
+        listener.onBounce(new SesBounce("m-4", "Permanent", "General", List.of("gone@example.com"), "m-4"));
 
         verify(audience, never()).appendConsentByEmail(anyString(), anyString(), anyString(), any(), any());
     }

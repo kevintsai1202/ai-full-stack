@@ -51,4 +51,19 @@ public interface EmailLogRepository extends JpaRepository<EmailLog, Long> {
         """, nativeQuery = true)
     int markDeliveryFailed(@Param("ref") String ref, @Param("recipient") String recipient,
                            @Param("error") String error);
+
+    /**
+     * SES 送達事件：記下送達時間。只保留第一次的時間（重送冪等），不動 status。
+     *
+     * @param ref       呼叫端參照（ses-batch-*／ses-sched-*，交易信為 SES MessageId）
+     * @param recipient 收件人（大小寫不敏感）
+     */
+    @Modifying
+    @Transactional
+    @Query(value = """
+        UPDATE email_log SET delivered_at = COALESCE(delivered_at, :at)
+        WHERE provider_message_id = :ref AND lower(recipient) = lower(:recipient)
+        """, nativeQuery = true)
+    int markDelivered(@Param("ref") String ref, @Param("recipient") String recipient,
+                      @Param("at") java.time.OffsetDateTime at);
 }

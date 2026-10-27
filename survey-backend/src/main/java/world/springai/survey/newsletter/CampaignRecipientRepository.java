@@ -157,4 +157,20 @@ public interface CampaignRecipientRepository extends JpaRepository<CampaignRecip
          WHERE id = :id AND batch_id = :batchId AND status = 'SCHEDULED'
         """, nativeQuery = true)
     int markCancelled(@Param("id") Long id, @Param("batchId") Long batchId);
+
+    /**
+     * SES 送達事件：記下送達時間。只保留第一次的時間（重送冪等），不動 status——
+     * 群發統計與讀者收信數都以 status='SENT' 計算，送達只是附加資訊。
+     *
+     * @param ref             寄送時存的 provider_message_id（ses-batch-*／ses-sched-*）
+     * @param emailNormalized 正規化後的收件人
+     */
+    @Modifying
+    @Transactional
+    @Query(value = """
+        UPDATE campaign_recipient SET delivered_at = COALESCE(delivered_at, :at)
+        WHERE provider_message_id = :ref AND email_normalized = :email
+        """, nativeQuery = true)
+    int markDelivered(@Param("ref") String ref, @Param("email") String emailNormalized,
+                      @Param("at") OffsetDateTime at);
 }

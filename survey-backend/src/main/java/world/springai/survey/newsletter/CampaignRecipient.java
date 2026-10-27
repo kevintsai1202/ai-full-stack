@@ -47,6 +47,10 @@ public class CampaignRecipient {
     @Column(name = "sent_at")
     private OffsetDateTime sentAt;
 
+    /** SES 送達時間（收件端收下）；由 CampaignRecipientRepository#markDelivered 以原生 UPDATE 寫入 */
+    @Column(name = "delivered_at", insertable = false, updatable = false)
+    private OffsetDateTime deliveredAt;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -68,6 +72,7 @@ public class CampaignRecipient {
     public String getError() { return error; }
     public OffsetDateTime getScheduledAt() { return scheduledAt; }
     public OffsetDateTime getSentAt() { return sentAt; }
+    public OffsetDateTime getDeliveredAt() { return deliveredAt; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
 }

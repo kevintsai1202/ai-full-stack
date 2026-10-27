@@ -82,6 +82,13 @@ class CampaignDeliveryServiceTest {
         assertTrue(page.items().getFirst().newlyEligible());
         assertTrue(page.items().get(1).selectable());
         assertFalse(sentView(service).selectable());
+        assertEquals("已寄出（服務商已接受）", sentView(service).reason());
+
+        // 收到 SES 送達事件後：狀態值不變（仍是 SENT、仍不可勾選），只有說明文字多了「已送達」
+        ReflectionTestUtils.setField(sent, "deliveredAt", java.time.OffsetDateTime.now());
+        assertEquals("SENT", sentView(service).status());
+        assertEquals("已送達（收件端已收下）", sentView(service).reason());
+        assertFalse(sentView(service).selectable());
     }
 
     /** 取得已寄出列並驗證永久不可勾選。 */

@@ -46,13 +46,15 @@ We rely on the SES account-level suppression list for bounces and complaints, an
 
 ## 3. 建立 IAM 金鑰
 
-建立一個專用 IAM 使用者（例如 `survey-backend-ses`），只掛這份 inline policy，再建立 Access key：
+建立一個專用 IAM 使用者（例如 `survey-backend-ses`），只掛這份 inline policy，再建立 Access key（SQS 那段由第 10 節的腳本加上）：
 
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
-    { "Effect": "Allow", "Action": ["ses:SendEmail", "ses:GetAccount"], "Resource": "*" }
+    { "Effect": "Allow", "Action": ["ses:SendEmail", "ses:GetAccount"], "Resource": "*" },
+    { "Effect": "Allow", "Action": ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility"],
+      "Resource": "arn:aws:sqs:ap-northeast-1:322987693466:ses-events" }
   ]
 }
 ```
@@ -125,29 +127,40 @@ psql $env:JDBC_PSQL_URL -c "SELECT id, recipient, subject, updated_at FROM sched
 - SES 主控台 **Reputation metrics**：退信率維持在 5% 以下、檢舉率 0.1% 以下，超過會被 AWS 警告甚至暫停寄送（後台額度列會顯示「SES 寄送已暫停」）。
 - 停寄名單：**Configuration → Suppression list**，退信與檢舉的地址會自動進來、之後不會再寄。
 
-## 10. 退信／檢舉事件（自動退訂）
+## 10. 退信／檢舉／送達事件（SQS）
 
-starter 0.2.0 起提供 `POST /sesmail/sns`。永久退信與檢舉會自動把讀者退訂（來源 `ses-bounce`／`ses-complaint`），暫時退信只記 log。
+starter 0.3.0 起，事件走 **SES configuration set → SNS topic → SQS 佇列 → survey-backend 拉取**。服務停機期間的事件留在佇列，處理失敗會重試，重試 5 次仍失敗進死信佇列。
 
-順序很重要：webhook 要先上線，SNS 才能完成訂閱確認。
+- 永久退信、檢舉 → 讀者自動退訂（同意事件來源 `ses-bounce`／`ses-complaint`）；暫時退信只記 log。
+- 送達 → `email_log.delivered_at`、`campaign_recipient.delivered_at` 記下第一次送達時間，後台收件人清單顯示「已送達（收件端已收下）」。狀態值不變。
 
-1. **建 SNS topic**：AWS 主控台 → SNS（區域 Tokyo）→ Topics → Create topic，類型 **Standard**，名稱 `ses-events`，記下 Topic ARN。
-2. **設環境變數並部署**：
+AWS 資源（東京區）以 [`survey-backend/scripts/aws/setup-ses-events.sh`](../survey-backend/scripts/aws/setup-ses-events.sh) 在 CloudShell 建立（可重複執行），結束時會印出要設的環境變數：
+
+| 資源 | 名稱 |
+| --- | --- |
+| SNS topic | `ses-events`（存取政策允許本帳號的 SES 發佈） |
+| SQS 佇列 | `ses-events`（可見逾時 60 秒、重試 5 次後轉死信佇列；佇列政策只允許 `ses-events` topic 發送） |
+| SQS 死信佇列 | `ses-events-dlq`（保留 14 天） |
+| 訂閱 | `ses-events` topic → `ses-events` 佇列（不開 raw message delivery） |
+| SES configuration set | `newsletter`，事件目的地 Bounce、Complaint、Delivery → `ses-events` topic |
+| IAM | `survey-backend-ses` 的 `ses-send-only` 政策加 `sqs:ReceiveMessage`、`sqs:DeleteMessage`、`sqs:ChangeMessageVisibility`（只限 `ses-events` 佇列） |
+
+**不要**再到 SES 身分頁設定 Feedback notifications：configuration set 已經會發佈退信與檢舉，兩邊都設的話每封退信會收到兩次。
+
+Zeabur 環境變數（AWS 資源建好後才設；`AWS_SES_CONFIGURATION_SET` 指向不存在的 configuration set 會讓寄信失敗）：
 
 | 變數 | 值 |
 | --- | --- |
-| `SESMAIL_SNS_ENABLED` | `true` |
-| `SESMAIL_SNS_TOPIC_ARNS` | 上一步的 Topic ARN |
+| `SESMAIL_SQS_ENABLED` | `true` |
+| `SESMAIL_SQS_QUEUE_URL` | `https://sqs.ap-northeast-1.amazonaws.com/322987693466/ses-events` |
+| `SESMAIL_SNS_TOPIC_ARNS` | `arn:aws:sns:ap-northeast-1:322987693466:ses-events` |
+| `AWS_SES_CONFIGURATION_SET` | `newsletter` |
 
-   部署後先確認 webhook 從外面打得到（必須回 **403**：程式收到了、偽造內容被驗簽拒絕；回 404 代表請求沒進到程式，先別建訂閱）：
+驗證（切到 SES 之後）：在 SES 主控台「傳送測試電子郵件」，收件人填模擬信箱 `bounce@simulator.amazonses.com`、`complaint@simulator.amazonses.com`、`success@simulator.amazonses.com`，configuration set 選 `newsletter`。log 應出現對應事件；模擬信箱不在名單上，不會有人被退訂。
 
-```powershell
-curl.exe -s -o NUL -w "%{http_code}" -X POST https://springai-survey.zeabur.app/sesmail/sns -d '{}'
-```
+死信佇列有訊息時，代表某些事件連續處理失敗，先看 log 的錯誤，修好後到 SQS 主控台把 `ses-events-dlq` 的訊息「開始重新驅動」回 `ses-events`。
 
-3. **建 HTTPS 訂閱**：該 topic → Create subscription，Protocol **HTTPS**，Endpoint `https://springai-survey.zeabur.app/sesmail/sns`（**問卷網域**；讀者網域會被 Host 白名單擋掉），**不要**勾 raw message delivery。建立後 webhook 會自動確認，訂閱狀態幾秒內變成 Confirmed；沒變的話看 log 有沒有 `SNS 訊息簽章驗證失敗` 或 `未允許的 topic`。
-4. **把 SES 回饋送到 topic**：SES → Identities → `springai.world` → **Notifications** → Feedback notifications → Edit，Bounce 與 Complaint 都選 `ses-events`（Delivery 不用）。
-5. **驗證**：用 SES 主控台的「傳送測試電子郵件」寄到模擬信箱 `bounce@simulator.amazonses.com` 與 `complaint@simulator.amazonses.com`（不影響信譽），log 應出現對應事件；模擬信箱不在名單上，所以不會有人被退訂。
+已知限制：交易信（登入信等）的送達事件有極小機率比寄送記錄先到，那一封的送達時間會是空的，不影響任何功能。
 
 ## 尚未實作
 
