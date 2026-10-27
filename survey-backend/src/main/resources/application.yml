@@ -106,16 +106,23 @@ app:
     # 保留給交易信（登入／確認／歡迎）的額度，行銷群發不得吃掉這部分；
     # 群發把額度用光會導致讀者無法登入，那是產品故障而非延遲
     transactional-reserve: ${MAIL_TRANSACTIONAL_RESERVE:50}
-    # 寄信服務：zsend（Zeabur Email，預設）或 ses（Amazon SES）。切換步驟見 docs/ses-migration-runbook.md
-    provider: ${MAIL_PROVIDER:zsend}
-    # 以下只在 provider=ses 時使用；金鑰只需 ses:SendEmail 與 ses:GetAccount 權限
-    ses:
-      region: ${AWS_SES_REGION:ap-northeast-1}
-      access-key-id: ${AWS_SES_ACCESS_KEY_ID:}
-      secret-access-key: ${AWS_SES_SECRET_ACCESS_KEY:}
-      # 選填：日後接退信／檢舉事件用的 configuration set
-      configuration-set: ${AWS_SES_CONFIGURATION_SET:}
-      # 待寄佇列每秒最多送幾封，不要高於 SES 主控台顯示的 Maximum send rate（沙箱為 1）
-      max-send-rate: ${MAIL_SES_MAX_SEND_RATE:5}
-      # 派送器多久掃一次待寄佇列（毫秒）
-      dispatch-interval-ms: ${MAIL_SES_DISPATCH_INTERVAL_MS:10000}
+
+# Amazon SES 寄信（ses-mail-spring-boot-starter）。SESMAIL_ENABLED=true 即改用 SES，關掉就回到 ZSend。
+# 切換步驟見 docs/ses-migration-runbook.md；金鑰只需 ses:SendEmail 與 ses:GetAccount 權限。
+sesmail:
+  enabled: ${SESMAIL_ENABLED:false}
+  region: ${AWS_SES_REGION:ap-northeast-1}
+  access-key-id: ${AWS_SES_ACCESS_KEY_ID:}
+  secret-access-key: ${AWS_SES_SECRET_ACCESS_KEY:}
+  # 寄件人與回信地址沿用上方 app.mail 的設定
+  from: ${app.mail.from}
+  reply-to: ${app.mail.reply-to}
+  # 選填：接退信／檢舉事件用的 configuration set
+  configuration-set: ${AWS_SES_CONFIGURATION_SET:}
+  # 待寄佇列每秒最多送幾封，不要高於 SES 主控台顯示的 Maximum send rate（沙箱為 1）
+  max-send-rate: ${MAIL_SES_MAX_SEND_RATE:5}
+  # 派送器多久掃一次待寄佇列
+  dispatch-interval: ${MAIL_SES_DISPATCH_INTERVAL:10s}
+  # 資料表由 Flyway V27 建立，不由 starter 建
+  queue:
+    initialize-schema: false

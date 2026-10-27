@@ -86,20 +86,11 @@
         </exclusion>
       </exclusions>
     </dependency>
+    <!-- Amazon SES 寄信（自製 starter，JitPack 發佈；sesv2 由它帶入，同樣排除 Apache／Netty client） -->
     <dependency>
-      <groupId>software.amazon.awssdk</groupId>
-      <artifactId>sesv2</artifactId>
-      <!-- 寄信（Amazon SES）同樣只用 URLConnection client，理由同上方 s3 -->
-      <exclusions>
-        <exclusion>
-          <groupId>software.amazon.awssdk</groupId>
-          <artifactId>apache5-client</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>software.amazon.awssdk</groupId>
-          <artifactId>netty-nio-client</artifactId>
-        </exclusion>
-      </exclusions>
+      <groupId>com.github.kevintsai1202</groupId>
+      <artifactId>ses-mail-spring-boot-starter</artifactId>
+      <version>0.1.1</version>
     </dependency>
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
@@ -132,6 +123,13 @@
          每次重建乾淨的 survey_migration_test 資料庫。既維持自動化（每次 mvn test 都驗證），
          也不新增任何測試依賴。 -->
   </dependencies>
+  <!-- ses-mail-spring-boot-starter 由 JitPack 從 GitHub tag 建置發佈 -->
+  <repositories>
+    <repository>
+      <id>jitpack.io</id>
+      <url>https://jitpack.io</url>
+    </repository>
+  </repositories>
   <build>
     <plugins>
       <plugin>

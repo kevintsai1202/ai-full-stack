@@ -1,12 +1,15 @@
 package world.springai.survey.mail;
 
+import io.github.kevintsai1202.sesmail.DeliveryListener;
+import io.github.kevintsai1202.sesmail.ScheduledMailDispatcher;
+import io.github.kevintsai1202.sesmail.SesMailClient;
+import io.github.kevintsai1202.sesmail.SesQuotaService;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
-import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -14,14 +17,13 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * MAIL_PROVIDER=ses 時整個 Spring context 要能啟動，且 SES 相關 bean 都接上。
+ * SESMAIL_ENABLED=true 時整個 Spring context 要能啟動，且 starter 的 SES bean 都接上。
  *
  * <p>單元測試各自 new 物件，驗不到 {@code @ConditionalOnProperty}、{@code ObjectProvider}
  * 與 {@link MailQuotaService} 多個建構子的注入選擇；這些只有真的啟動 context 才看得出來。
@@ -32,10 +34,10 @@ import static org.junit.jupiter.api.Assertions.fail;
     "spring.jpa.hibernate.ddl-auto=validate",
     "spring.datasource.hikari.maximum-pool-size=2",
     "spring.datasource.hikari.minimum-idle=1",
-    "app.mail.provider=ses",
-    "app.mail.ses.access-key-id=AKIATESTONLY",
-    "app.mail.ses.secret-access-key=test-only-secret",
-    "app.mail.ses.dispatch-interval-ms=3600000"
+    "sesmail.enabled=true",
+    "sesmail.access-key-id=AKIATESTONLY",
+    "sesmail.secret-access-key=test-only-secret",
+    "sesmail.dispatch-interval=1h"
 })
 class SesMailWiringTest {
 
@@ -64,8 +66,6 @@ class SesMailWiringTest {
 
     @Autowired ApplicationContext context;
     @Autowired MailSender mailSender;
-    /** 負責登記 @Scheduled 方法的後處理器，用來確認派送器真的有被排程 */
-    @Autowired ScheduledAnnotationBeanPostProcessor scheduler;
 
     /** 重建乾淨資料庫並套用全部 migration */
     @BeforeAll
@@ -80,29 +80,19 @@ class SesMailWiringTest {
         Flyway.configure().dataSource(TEST_URL, USER, PASS).load().migrate();
     }
 
-    /** SES 寄信實作、派送器、額度探測器都要建立，對外的 MailSender 仍是包過額度失效的版本 */
+    /** starter 的客戶端、派送器、額度服務都建立，派送器已啟動；對外的 MailSender 仍是包過額度失效的版本 */
     @Test
     void sesBeansAreWired() {
-        assertEquals(1, context.getBeansOfType(SesMailSender.class).size());
-        assertEquals(1, context.getBeansOfType(ScheduledMailDispatcher.class).size());
-        assertEquals(1, context.getBeansOfType(SesQuotaProbe.class).size());
+        assertEquals(1, context.getBeansOfType(SesMailClient.class).size());
+        assertEquals(1, context.getBeansOfType(SesQuotaService.class).size());
+        assertTrue(context.getBean(ScheduledMailDispatcher.class).isRunning(), "派送器必須隨 context 啟動");
         assertTrue(mailSender instanceof QuotaAwareMailSender);
     }
 
-    /**
-     * 派送器的兩個 @Scheduled 方法（tick、stuckCheck）真的被排程器登記。
-     * 沒登記的話佇列永遠不會被清空，而其他測試全都看不出來。
-     */
+    /** email_log 回寫的 listener 有登記成 bean，starter 才找得到 */
     @Test
-    void dispatcherIsScheduled() {
-        // Spring 6.2 會把 ScheduledMethodRunnable 包在 Task$OutcomeTrackingRunnable 裡，
-        // 不能用 instanceof 判斷；兩者的 toString 都是「類別全名.方法名」
-        List<String> names = scheduler.getScheduledTasks().stream()
-            .map(task -> task.getTask().getRunnable().toString())
-            .toList();
-        String prefix = ScheduledMailDispatcher.class.getName() + ".";
-        assertEquals(List.of(prefix + "stuckCheck", prefix + "tick"),
-            names.stream().filter(name -> name.startsWith(prefix)).sorted().toList(),
-            "已登記的排程：" + names);
+    void deliveryListenerIsRegistered() {
+        assertTrue(context.getBeansOfType(DeliveryListener.class).values().stream()
+            .anyMatch(l -> l instanceof EmailLogDeliveryListener));
     }
 }

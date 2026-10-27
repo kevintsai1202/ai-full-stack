@@ -1,6 +1,7 @@
 package world.springai.survey.mail;
 
 import org.junit.jupiter.api.BeforeEach;
+import io.github.kevintsai1202.sesmail.SesMailClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.client.RestClient;
@@ -108,33 +109,36 @@ class QuotaAwareMailSenderTest {
     void springBeanIsAlwaysWrapped() {
         MailConfig config = new MailConfig();
         MailQuotaService quota = mock(MailQuotaService.class);
-        ObjectProvider<SesMailSender> noSes = mock(ObjectProvider.class);
-        ObjectProvider<SesMailSender> ses = mock(ObjectProvider.class);
-        when(ses.getIfAvailable()).thenReturn(mock(SesMailSender.class));
+        ObjectProvider<SesMailClient> noSes = mock(ObjectProvider.class);
+        ObjectProvider<SesMailClient> ses = mock(ObjectProvider.class);
+        when(ses.getIfAvailable()).thenReturn(mock(SesMailClient.class));
 
         MailSender noopBean = config.mailSender(
-            RestClient.builder(), quota, "zsend", "", "from@example.com", "", noSes);
+            RestClient.builder(), quota, "", "from@example.com", "", noSes);
         MailSender zsendBean = config.mailSender(
-            RestClient.builder(), quota, "zsend", "zs-key", "from@example.com", "", noSes);
+            RestClient.builder(), quota, "zs-key", "from@example.com", "", noSes);
         MailSender sesBean = config.mailSender(
-            RestClient.builder(), quota, "ses", "", "from@example.com", "", ses);
+            RestClient.builder(), quota, "zs-key", "from@example.com", "", ses);
 
         assertTrue(noopBean instanceof QuotaAwareMailSender, "未設金鑰時的 bean 也必須被包過");
         assertTrue(zsendBean instanceof QuotaAwareMailSender, "設了金鑰時的 bean 必須被包過");
         assertTrue(sesBean instanceof QuotaAwareMailSender, "SES 的 bean 也必須被包過");
     }
 
-    /** provider=ses 但 SES 實作沒建立、或 provider 打錯字：啟動失敗，不靜默退回 ZSend */
+    /** 啟用 SES（starter 建立了 SesMailClient）時一律走 SES，即使 ZSend 金鑰還留著（回滾用） */
     @Test
     @SuppressWarnings("unchecked")
-    void misconfiguredProviderFailsFast() {
+    void sesWinsWhenEnabled() {
         MailConfig config = new MailConfig();
-        MailQuotaService quota = mock(MailQuotaService.class);
-        ObjectProvider<SesMailSender> noSes = mock(ObjectProvider.class);
+        QuotaAwareMailSender bean;
+        ObjectProvider<SesMailClient> ses = mock(ObjectProvider.class);
+        SesMailClient client = mock(SesMailClient.class);
+        when(ses.getIfAvailable()).thenReturn(client);
+        when(client.send("to@example.com", "s", "h")).thenReturn("ses-msg");
 
-        assertThrows(IllegalStateException.class, () -> config.mailSender(
-            RestClient.builder(), quota, "ses", "", "from@example.com", "", noSes));
-        assertThrows(IllegalStateException.class, () -> config.mailSender(
-            RestClient.builder(), quota, "amazon", "zs-key", "from@example.com", "", noSes));
+        bean = (QuotaAwareMailSender) config.mailSender(
+            RestClient.builder(), mock(MailQuotaService.class), "zs-key", "from@example.com", "", ses);
+
+        assertEquals("ses-msg", bean.send("to@example.com", "s", "h"));
     }
 }

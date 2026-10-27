@@ -1,6 +1,6 @@
 # 寄信服務切換手冊：Zeabur Email（ZSend）→ Amazon SES
 
-適用：survey-backend（電子報後台）。程式已支援兩種寄信服務，用環境變數 `MAIL_PROVIDER` 切換，ZSend 保留為退路。
+適用：survey-backend（電子報後台）。SES 寄信由自製的 [ses-mail-spring-boot-starter](https://github.com/kevintsai1202/ses-mail-spring-boot-starter) 提供，環境變數 `SESMAIL_ENABLED=true` 就改用 SES，關掉即回到 ZSend（ZSend 金鑰保留為退路）。
 
 ## 0. 先知道的差異
 
@@ -61,7 +61,7 @@ We rely on the SES account-level suppression list for bounces and complaints, an
 
 | 變數 | 值 |
 | --- | --- |
-| `MAIL_PROVIDER` | `ses` |
+| `SESMAIL_ENABLED` | `true` |
 | `AWS_SES_REGION` | `ap-northeast-1` |
 | `AWS_SES_ACCESS_KEY_ID` | 上一步的 Access key ID |
 | `AWS_SES_SECRET_ACCESS_KEY` | 上一步的 Secret |
@@ -89,7 +89,7 @@ psql $env:JDBC_PSQL_URL -c "SELECT count(*) AS campaign_scheduled FROM campaign 
 
 ## 7. 回滾
 
-1. `MAIL_PROVIDER` 改回 `zsend` 並重新部署。
+1. `SESMAIL_ENABLED` 改回 `false`（或刪除）並重新部署。
 2. 佇列裡還沒送出的信不會再被派送，先看有多少、決定要不要取消：
 
 ```powershell
