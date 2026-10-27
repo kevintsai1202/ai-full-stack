@@ -130,6 +130,12 @@ starter 0.2.0 起提供 `POST /sesmail/sns`。永久退信與檢舉會自動把�
 | `SESMAIL_SNS_ENABLED` | `true` |
 | `SESMAIL_SNS_TOPIC_ARNS` | 上一步的 Topic ARN |
 
+   部署後先確認 webhook 從外面打得到（必須回 **403**：程式收到了、偽造內容被驗簽拒絕；回 404 代表請求沒進到程式，先別建訂閱）：
+
+```powershell
+curl.exe -s -o NUL -w "%{http_code}" -X POST https://springai-survey.zeabur.app/sesmail/sns -d '{}'
+```
+
 3. **建 HTTPS 訂閱**：該 topic → Create subscription，Protocol **HTTPS**，Endpoint `https://springai-survey.zeabur.app/sesmail/sns`（**問卷網域**；讀者網域會被 Host 白名單擋掉），**不要**勾 raw message delivery。建立後 webhook 會自動確認，訂閱狀態幾秒內變成 Confirmed；沒變的話看 log 有沒有 `SNS 訊息簽章驗證失敗` 或 `未允許的 topic`。
 4. **把 SES 回饋送到 topic**：SES → Identities → `springai.world` → **Notifications** → Feedback notifications → Edit，Bounce 與 Complaint 都選 `ses-events`（Delivery 不用）。
 5. **驗證**：用 SES 主控台的「傳送測試電子郵件」寄到模擬信箱 `bounce@simulator.amazonses.com` 與 `complaint@simulator.amazonses.com`（不影響信譽），log 應出現對應事件；模擬信箱不在名單上，所以不會有人被退訂。
