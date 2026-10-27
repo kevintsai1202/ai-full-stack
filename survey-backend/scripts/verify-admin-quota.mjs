@@ -188,9 +188,23 @@ try {
     remaining: 100, batchMax: 100, overageBillingEnabled: false,
     quotaResetAt: null, monthlyResetAt: null,
   }), 10);
-  has(await page.locator('#quota-info').textContent(), '未偵測到 Zeabur 額度', '額度說明列（fallback）');
+  has(await page.locator('#quota-info').textContent(), '未偵測到寄信額度', '額度說明列（fallback）');
   has(await page.locator('#quota-info').textContent(), '暫以 100 封為上限', '額度說明列（fallback）');
   eq(await page.locator('#invite-limit').getAttribute('max'), 50, '單次上限欄位 max（扣除保留額度後）');
+  await page.close();
+
+  // 案例 5b：改用 Amazon SES → 說明列顯示「24 小時上限」而非「本期額度」，
+  // 沙箱模式要明講只能寄給已驗證信箱（否則管理者只會看到信寄不出去）。
+  console.log('\n[5b] SES 額度（沙箱）');
+  page = await openAdmin(quota({
+    source: 'ses', status: 'sandbox',
+    dailyQuota: 200, dailySent: 3, dailyRemaining: 197,
+    monthlyQuota: 200, monthlySent: 3, monthlyRemaining: 197,
+    remaining: 197, batchMax: 197, overageBillingEnabled: false,
+    quotaResetAt: null, monthlyResetAt: null,
+  }), 10);
+  has(await page.locator('#quota-info').textContent(), 'SES 24 小時上限 200 封，已寄 3，剩餘 197', '額度說明列（SES）');
+  has(await page.locator('#quota-info').textContent(), '沙箱模式', '額度說明列（SES 沙箱）');
   await page.close();
 
   // 案例 6：帳號狀態異常 → 警告優先提示帳號狀態，而非只看額度數字

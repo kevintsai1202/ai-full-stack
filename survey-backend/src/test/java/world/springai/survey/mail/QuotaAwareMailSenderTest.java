@@ -2,6 +2,7 @@ package world.springai.survey.mail;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.client.RestClient;
 
 import java.time.Instant;
@@ -103,16 +104,37 @@ class QuotaAwareMailSenderTest {
      * 本機/測試環境（Noop）與線上（ZSend）的行為必須一致。</p>
      */
     @Test
+    @SuppressWarnings("unchecked")
     void springBeanIsAlwaysWrapped() {
         MailConfig config = new MailConfig();
         MailQuotaService quota = mock(MailQuotaService.class);
+        ObjectProvider<SesMailSender> noSes = mock(ObjectProvider.class);
+        ObjectProvider<SesMailSender> ses = mock(ObjectProvider.class);
+        when(ses.getIfAvailable()).thenReturn(mock(SesMailSender.class));
 
         MailSender noopBean = config.mailSender(
-            RestClient.builder(), quota, "", "from@example.com", "");
+            RestClient.builder(), quota, "zsend", "", "from@example.com", "", noSes);
         MailSender zsendBean = config.mailSender(
-            RestClient.builder(), quota, "zs-key", "from@example.com", "");
+            RestClient.builder(), quota, "zsend", "zs-key", "from@example.com", "", noSes);
+        MailSender sesBean = config.mailSender(
+            RestClient.builder(), quota, "ses", "", "from@example.com", "", ses);
 
         assertTrue(noopBean instanceof QuotaAwareMailSender, "未設金鑰時的 bean 也必須被包過");
         assertTrue(zsendBean instanceof QuotaAwareMailSender, "設了金鑰時的 bean 必須被包過");
+        assertTrue(sesBean instanceof QuotaAwareMailSender, "SES 的 bean 也必須被包過");
+    }
+
+    /** provider=ses 但 SES 實作沒建立、或 provider 打錯字：啟動失敗，不靜默退回 ZSend */
+    @Test
+    @SuppressWarnings("unchecked")
+    void misconfiguredProviderFailsFast() {
+        MailConfig config = new MailConfig();
+        MailQuotaService quota = mock(MailQuotaService.class);
+        ObjectProvider<SesMailSender> noSes = mock(ObjectProvider.class);
+
+        assertThrows(IllegalStateException.class, () -> config.mailSender(
+            RestClient.builder(), quota, "ses", "", "from@example.com", "", noSes));
+        assertThrows(IllegalStateException.class, () -> config.mailSender(
+            RestClient.builder(), quota, "amazon", "zs-key", "from@example.com", "", noSes));
     }
 }

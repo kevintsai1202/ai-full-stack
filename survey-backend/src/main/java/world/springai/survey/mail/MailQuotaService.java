@@ -2,6 +2,8 @@ package world.springai.survey.mail;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -13,6 +15,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * 寄信額度偵測：向 Zeabur GraphQL API 查詢 ZSend 帳號的真實日／月額度與已寄量，
@@ -21,6 +24,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>注意：此查詢用的是 <b>Zeabur 帳號 token</b>（sk-...，即 CLI 登入用的那把），
  * 與 {@code app.mail.api-key}（ZSend 寄信金鑰）是不同的憑證；ZSend 寄信 REST API
  * 本身沒有提供額度查詢端點。</p>
+ *
+ * <p>{@code app.mail.provider=ses} 時改向 Amazon SES 查（{@link SesQuotaProbe}）：
+ * SES 是 24 小時滾動上限，沒有月額度，日／月欄位填同一組數字。</p>
  */
 @Service
 public class MailQuotaService {
@@ -45,6 +51,12 @@ public class MailQuotaService {
 
     /** {@link Quota#source()} 的值：偵測不可用，數字為設定檔推測值 */
     public static final String SOURCE_FALLBACK = "fallback";
+
+    /** {@link Quota#source()} 的值：實際向 Amazon SES 偵測而來 */
+    public static final String SOURCE_SES = "ses";
+
+    /** app.mail.provider 為 SES 時的值 */
+    static final String PROVIDER_SES = "ses";
 
     /**
      * fallback 路徑的行銷可用量硬上限（封）。
@@ -86,6 +98,12 @@ public class MailQuotaService {
      */
     private final long transactionalReserve;
 
+    /** 目前使用的寄信服務（zsend／ses），決定向哪裡查額度 */
+    private final String provider;
+
+    /** SES 額度探測器；只有 provider=ses 且 SES bean 已建立時才取得到（否則為 null） */
+    private final Supplier<SesQuotaProbe> sesProbe;
+
     /** 快取的查詢結果與寫入時間（null 表示尚未查過或已失效） */
     private final AtomicReference<Cached> cache = new AtomicReference<>();
 
@@ -121,13 +139,31 @@ public class MailQuotaService {
      * marketingRemaining=1500——保留機制反向放大可用量，群發被允許超額寄出 500 封。
      * 負值一律視為 0 並留下警告，讓設定錯誤在 log 裡看得見而不是靜默生效。</p>
      */
+    @Autowired
     public MailQuotaService(RestClient.Builder builder,
                             @Value("${app.mail.zeabur-token:}") String zeaburToken,
                             @Value("${app.mail.fallback-quota:100}") long fallbackQuota,
-                            @Value("${app.mail.transactional-reserve:50}") long transactionalReserve) {
+                            @Value("${app.mail.transactional-reserve:50}") long transactionalReserve,
+                            @Value("${app.mail.provider:zsend}") String provider,
+                            ObjectProvider<SesQuotaProbe> sesProbe) {
+        this(builder, zeaburToken, fallbackQuota, transactionalReserve, provider,
+            (Supplier<SesQuotaProbe>) sesProbe::getIfAvailable);
+    }
+
+    /** ZSend 專用的建構子（既有測試沿用）：provider 固定 zsend、不查 SES */
+    public MailQuotaService(RestClient.Builder builder, String zeaburToken,
+                            long fallbackQuota, long transactionalReserve) {
+        this(builder, zeaburToken, fallbackQuota, transactionalReserve, "zsend", () -> null);
+    }
+
+    /** 實際的建構子：SES 探測器以 Supplier 延遲取得，測試可直接給 lambda */
+    MailQuotaService(RestClient.Builder builder, String zeaburToken, long fallbackQuota,
+                     long transactionalReserve, String provider, Supplier<SesQuotaProbe> sesProbe) {
         this.client = builder.baseUrl("https://api.zeabur.com").build();
         this.zeaburToken = zeaburToken;
         this.fallbackQuota = fallbackQuota;
+        this.provider = provider == null ? "zsend" : provider.trim();
+        this.sesProbe = sesProbe;
         if (transactionalReserve < 0) {
             log.warn("app.mail.transactional-reserve 為負值（{}），已視為 0；"
                 + "負的保留額度會反向放大群發可用量，請檢查 MAIL_TRANSACTIONAL_RESERVE 設定",
@@ -145,17 +181,39 @@ public class MailQuotaService {
         if (c != null && Duration.between(c.at(), Instant.now()).compareTo(CACHE_TTL) < 0) {
             return c.quota();
         }
-        if (!StringUtils.hasText(zeaburToken)) {
+        boolean ses = PROVIDER_SES.equalsIgnoreCase(provider);
+        if (!ses && !StringUtils.hasText(zeaburToken)) {
             return fallback(); // 未設定 ZEABUR_API_TOKEN：不打 API，直接用保守值
         }
         try {
-            Quota q = fetch();
+            Quota q = ses ? fetchSes() : fetch();
             cache.set(new Cached(q, Instant.now()));
             return q;
         } catch (Exception e) {
-            log.warn("查詢 Zeabur 寄信額度失敗，改用預設額度 {} 封：{}", fallbackQuota, e.getMessage());
+            log.warn("查詢寄信額度失敗（provider={}），改用預設額度 {} 封：{}",
+                provider, fallbackQuota, e.getMessage());
             return fallback();
         }
+    }
+
+    /**
+     * 向 SES 查額度：剩餘 = 24 小時上限 − 已寄 − 本機佇列待寄。
+     * SES 沒有月額度，日／月欄位填同一組數字，後台依 source 顯示「24 小時上限」。
+     */
+    private Quota fetchSes() {
+        SesQuotaProbe probe = sesProbe == null ? null : sesProbe.get();
+        if (probe == null) {
+            throw new IllegalStateException("app.mail.provider=ses 但 SES 額度探測器未建立");
+        }
+        SesQuotaProbe.Snapshot s = probe.fetch();
+        long remaining = Math.max(0, s.max24h() - s.sent24h() - s.pending());
+        long[] marketing = marketingLimits(remaining);
+        return new Quota(SOURCE_SES, s.status(),
+            s.max24h(), s.sent24h(), remaining,
+            s.max24h(), s.sent24h(), remaining,
+            remaining, Math.min(remaining, BATCH_CAP),
+            transactionalReserve, marketing[0], marketing[1],
+            false, null, null);
     }
 
     /**

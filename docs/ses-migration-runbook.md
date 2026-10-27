@@ -1,0 +1,123 @@
+# 寄信服務切換手冊：Zeabur Email（ZSend）→ Amazon SES
+
+適用：survey-backend（電子報後台）。程式已支援兩種寄信服務，用環境變數 `MAIL_PROVIDER` 切換，ZSend 保留為退路。
+
+## 0. 先知道的差異
+
+| | ZSend | SES（本系統的做法） |
+| --- | --- | --- |
+| 交易信（登入、確認、歡迎） | 同步寄出 | 同步寄出 |
+| 批次群發 | ZSend 批次 API | 寫入本機佇列 `scheduled_mail`，派送器每 10 秒依速率送出 |
+| 排程與取消 | ZSend 排程 API | 本機佇列；取消只對還沒被派送器認領的信有效 |
+| 額度 | 每日／每月額度 | 24 小時滾動上限，剩餘已扣掉佇列待寄 |
+| 退信 | — | 第一階段只靠 SES 帳號層級停寄名單（第二階段再接 SNS 事件） |
+
+後台群發顯示「已送出」時，信是**進了佇列**，實際寄出約在一分鐘內完成。派送失敗會把對應的 `email_log` 改成 `failed`。
+
+## 1. 開 SES 與驗證網域
+
+1. AWS 主控台 → Amazon SES，右上角區域選 **Asia Pacific (Tokyo) `ap-northeast-1`**（要與 `AWS_SES_REGION` 一致）。
+2. **Configuration → Identities → Create identity → Domain**，輸入 `springai.world`：
+   - 勾選 **Easy DKIM**（RSA 2048）。
+   - 勾選 **Use a custom MAIL FROM domain**，填 `mail.springai.world`，「Behavior on MX failure」選 *Use default MAIL FROM domain*。
+3. `springai.world` 的 DNS 在 **GoDaddy**（名稱伺服器 `domaincontrol.com`），不在 Route53，所以建立身分時兩個「發佈 DNS 記錄至 Route53」都要取消勾選。到 GoDaddy → 網域 → DNS → 新增記錄，照主控台給的值新增（GoDaddy 的「名稱」只填子網域部分，不含 `.springai.world`）：
+   - 3 筆 DKIM `CNAME`：`xxxx._domainkey` → `xxxx.dkim.amazonses.com`。
+   - `mail.springai.world` 的 `MX`：`10 feedback-smtp.ap-northeast-1.amazonses.com`。
+   - `mail.springai.world` 的 `TXT`：`v=spf1 include:amazonses.com ~all`。
+   - **根網域的 SPF 不用動**：SPF 是對 MAIL FROM（`mail.springai.world`）檢查的。一個網域只能有一筆 `v=spf1`，不要在根網域再加第二筆。
+   - DMARC（`_dmarc.springai.world`）沿用現有設定即可；DKIM 對齊 `springai.world`，DMARC 會通過。
+4. 等主控台的 Identity 狀態變成 **Verified**、DKIM 與 MAIL FROM 都是 **Successful**（通常幾分鐘到一小時）。
+
+## 2. 申請離開沙箱
+
+沙箱只能寄給已驗證的信箱，每天 200 封、每秒 1 封。**Account dashboard → Request production access**：
+
+- Mail type：**Marketing**
+- Website URL：讀者站網址
+- Use case 可參考：
+
+```text
+We send a personal technical newsletter (Traditional Chinese) to about 310 subscribers, 1–2 issues per week, plus transactional emails (magic-link login, subscription confirmation, welcome).
+All subscribers opted in through our website with double opt-in confirmation. Every newsletter contains a one-click personal unsubscribe link, and unsubscribes are applied immediately.
+We rely on the SES account-level suppression list for bounces and complaints, and we monitor bounce and complaint rates in the SES console. We expect fewer than 5,000 emails per month.
+```
+
+通常一天內會回覆；被要求補資料就照實補上退訂與名單來源的說明。
+
+## 3. 建立 IAM 金鑰
+
+建立一個專用 IAM 使用者（例如 `survey-backend-ses`），只掛這份 inline policy，再建立 Access key：
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Effect": "Allow", "Action": ["ses:SendEmail", "ses:GetAccount"], "Resource": "*" }
+  ]
+}
+```
+
+## 4. 設定環境變數（Zeabur 服務）
+
+| 變數 | 值 |
+| --- | --- |
+| `MAIL_PROVIDER` | `ses` |
+| `AWS_SES_REGION` | `ap-northeast-1` |
+| `AWS_SES_ACCESS_KEY_ID` | 上一步的 Access key ID |
+| `AWS_SES_SECRET_ACCESS_KEY` | 上一步的 Secret |
+| `MAIL_SES_MAX_SEND_RATE` | 沙箱填 `1`；離開沙箱後依主控台顯示的 *Maximum send rate*，建議填 `5` |
+
+`SEND_MAIL_API`、`ZEABUR_API_TOKEN` 先**保留**，回滾時用得到。`MAIL_FROM` 沿用即可，中文顯示名稱程式會自動編碼。
+
+## 5. 切換前檢查
+
+切換那一刻，ZSend 上已排程的信會留在 ZSend（照常寄出），但後台再也取消不了。所以要挑**沒有待寄排程**的時候切換：
+
+```powershell
+# 連線字串改成正式資料庫；兩個數字都要是 0 才切換
+psql $env:JDBC_PSQL_URL -c "SELECT count(*) AS zsend_scheduled FROM email_log WHERE status = 'scheduled';"
+psql $env:JDBC_PSQL_URL -c "SELECT count(*) AS campaign_scheduled FROM campaign WHERE status = 'scheduled';"
+```
+
+## 6. 切換與驗證
+
+1. 改好環境變數後重新部署，啟動 log 要看到 `寄信服務：Amazon SES`。
+2. 後台寄信額度列要顯示 `SES 24 小時上限 …`；還在沙箱會註明「沙箱模式」。
+3. 用自己的信箱走一次讀者登入（交易信，同步寄出）。在 Gmail 的「顯示原始郵件」確認 **SPF、DKIM、DMARC 都是 PASS**，寄件人顯示「凱文大叔」。
+4. 挑一期 **BASIC** 的舊文，對 1～2 個自己的信箱補寄（批次，走佇列），約一分鐘內要收到。PREMIUM 文章不能補寄，後台會擋。
+5. 觀察 log 有沒有 `SES 寄信失敗`、`SES 寄信暫時失敗`。
+
+## 7. 回滾
+
+1. `MAIL_PROVIDER` 改回 `zsend` 並重新部署。
+2. 佇列裡還沒送出的信不會再被派送，先看有多少、決定要不要取消：
+
+```powershell
+psql $env:JDBC_PSQL_URL -c "SELECT status, count(*) FROM scheduled_mail GROUP BY status;"
+# 確定不寄了才執行：
+psql $env:JDBC_PSQL_URL -c "UPDATE scheduled_mail SET status = 'CANCELLED', updated_at = now() WHERE status = 'PENDING';"
+```
+
+## 8. 卡在 SENDING 的信（程序中斷後）
+
+派送器認領一封信後、呼叫 SES 前後若程序被重啟，那一列會停在 `SENDING`。程式**不會自動重寄**：無法得知 SES 到底收到了沒，重複寄出一期電子報比漏寄一封更糟。log 每 30 分鐘會出現一次 `卡在 SENDING` 的警告。
+
+```powershell
+psql $env:JDBC_PSQL_URL -c "SELECT id, recipient, subject, updated_at FROM scheduled_mail WHERE status = 'SENDING' AND updated_at < now() - interval '10 minutes';"
+```
+
+逐筆判斷：
+
+- 確定讀者有收到（或寧可漏寄）：`UPDATE scheduled_mail SET status = 'SENT', updated_at = now() WHERE id = <id>;`
+- 確定沒收到、要補寄：`UPDATE scheduled_mail SET status = 'PENDING', next_attempt_at = now(), updated_at = now() WHERE id = <id>;`
+
+## 9. 日常監控
+
+- SES 主控台 **Reputation metrics**：退信率維持在 5% 以下、檢舉率 0.1% 以下，超過會被 AWS 警告甚至暫停寄送（後台額度列會顯示「SES 寄送已暫停」）。
+- 停寄名單：**Configuration → Suppression list**，退信與檢舉的地址會自動進來、之後不會再寄。
+
+## 尚未實作（第二階段）
+
+- SES 退信／檢舉事件（configuration set → SNS → webhook），自動把讀者標成退信或退訂。
+- 一鍵退訂標頭（`List-Unsubscribe`、`List-Unsubscribe-Post`）。
+- 定期清理 `scheduled_mail` 已送出的舊資料（每封信存著完整 HTML）。

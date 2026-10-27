@@ -2083,7 +2083,12 @@
     // 只顯示總剩餘會讓管理者以為還能寄那麼多，實際卻被靜默截斷。
     const marketing=`　│　剩餘額度 ${q.remaining} 封（保留 ${marketingReserve()} 封給登入信等交易信，行銷可用 ${marketingRemaining()} 封）`;
     if(q.source==='fallback'){
-      info.textContent=`未偵測到 Zeabur 額度（未設定 ZEABUR_API_TOKEN），暫以 ${q.remaining} 封為上限。`+marketing;
+      info.textContent=`未偵測到寄信額度（Zeabur 未設定 ZEABUR_API_TOKEN，或 SES 查詢失敗），暫以 ${q.remaining} 封為上限。`+marketing;
+    }else if(q.source==='ses'){
+      // SES 是 24 小時滾動上限、沒有月額度；剩餘已扣掉本機佇列裡還沒送出的信
+      const state=q.status==='sandbox'?'（沙箱模式：只能寄給已驗證的信箱）'
+        :q.status==='paused'?'（SES 寄送已暫停，請到 AWS 主控台查看）':'';
+      info.textContent=`SES 24 小時上限 ${q.dailyQuota} 封，已寄 ${q.dailySent}，剩餘 ${q.dailyRemaining}（已扣佇列待寄）${state}`+marketing;
     }else{
       // 日額度在付費方案下近似無限，僅在它確實比月剩餘更緊時才顯示，避免誤導
       const daily=q.dailyRemaining<q.monthlyRemaining?`　今日剩餘 ${q.dailyRemaining} 封${resetAt(q.quotaResetAt)}`:'';

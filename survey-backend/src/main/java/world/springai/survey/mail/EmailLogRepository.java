@@ -1,6 +1,10 @@
 package world.springai.survey.mail;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -30,4 +34,21 @@ public interface EmailLogRepository extends JpaRepository<EmailLog, Long> {
 
     /** 依 type 前綴＋狀態查詢：供優惠券「已寄總覽」以 coupon: 前綴一次撈出所有活動的寄送記錄 */
     List<EmailLog> findByTypeStartingWithAndStatus(String typePrefix, String status);
+
+    /**
+     * SES 待寄佇列派送失敗時回寫：把對應參照與收件人的 sent／scheduled 記錄改成 failed。
+     *
+     * <p>批次群發的 email_log 在「入列」當下就記成 sent，實際送出是之後的事；
+     * 送不出去時靠這支讓記錄反映事實，邀請信等「看 sent 判斷寄過沒」的流程下次才會重寄。</p>
+     */
+    @Modifying
+    @Transactional
+    @Query(value = """
+        UPDATE email_log SET status = 'failed', error = :error
+        WHERE provider_message_id = :ref
+          AND lower(recipient) = lower(:recipient)
+          AND status IN ('sent', 'scheduled')
+        """, nativeQuery = true)
+    int markDeliveryFailed(@Param("ref") String ref, @Param("recipient") String recipient,
+                           @Param("error") String error);
 }
