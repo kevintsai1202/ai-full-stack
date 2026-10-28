@@ -127,12 +127,24 @@ psql $env:JDBC_PSQL_URL -c "SELECT id, recipient, subject, updated_at FROM sched
 - SES 主控台 **Reputation metrics**：退信率維持在 5% 以下、檢舉率 0.1% 以下，超過會被 AWS 警告甚至暫停寄送（後台額度列會顯示「SES 寄送已暫停」）。
 - 停寄名單：**Configuration → Suppression list**，退信與檢舉的地址會自動進來、之後不會再寄。
 
-## 10. 退信／檢舉／送達事件（SQS）
+## 10. 退信／檢舉／送達事件（SQS 或 webhook 二選一）
 
-starter 0.3.0 起，事件走 **SES configuration set → SNS topic → SQS 佇列 → survey-backend 拉取**。服務停機期間的事件留在佇列，處理失敗會重試，重試 5 次仍失敗進死信佇列。
+事件一律由 **SES configuration set → SNS topic** 發出，survey-backend 有兩種接收方式，用環境變數切換，**只開一個**（兩個都開會收到重複事件）：
+
+| | SQS 拉取（建議） | HTTPS webhook |
+| --- | --- | --- |
+| 流程 | SNS → SQS 佇列 → 本服務長輪詢 | SNS → `POST /sesmail/sns` |
+| 開關 | `SESMAIL_SQS_ENABLED=true` | `SESMAIL_SNS_ENABLED=true` |
+| 要建的 AWS 資源 | SQS 佇列、死信佇列、IAM SQS 權限 | 只有 SNS 的 HTTPS 訂閱 |
+| 服務停機、重新部署時 | 事件留在佇列，回來再處理 | SNS 短暫重試（預設約 1 分鐘）後遺失 |
+| 處理失敗（例如資料庫錯誤） | 不刪訊息，SQS 重送，5 次仍失敗進死信佇列 | 只記 log，不重試 |
+
+兩種模式共用同一套驗簽、topic 白名單（`SESMAIL_SNS_TOPIC_ARNS` 都必填）與事件處理：
 
 - 永久退信、檢舉 → 讀者自動退訂（同意事件來源 `ses-bounce`／`ses-complaint`）；暫時退信只記 log。
 - 送達 → `email_log.delivered_at`、`campaign_recipient.delivered_at` 記下第一次送達時間，後台收件人清單顯示「已送達（收件端已收下）」。狀態值不變。
+
+### 10.1 SQS 拉取
 
 AWS 資源（東京區）以 [`survey-backend/scripts/aws/setup-ses-events.sh`](../survey-backend/scripts/aws/setup-ses-events.sh) 在 CloudShell 建立（可重複執行），結束時會印出要設的環境變數：
 
@@ -159,6 +171,23 @@ Zeabur 環境變數（AWS 資源建好後才設；`AWS_SES_CONFIGURATION_SET` �
 驗證（切到 SES 之後）：在 SES 主控台「傳送測試電子郵件」，收件人填模擬信箱 `bounce@simulator.amazonses.com`、`complaint@simulator.amazonses.com`、`success@simulator.amazonses.com`，configuration set 選 `newsletter`。log 應出現對應事件；模擬信箱不在名單上，不會有人被退訂。
 
 死信佇列有訊息時，代表某些事件連續處理失敗，先看 log 的錯誤，修好後到 SQS 主控台把 `ses-events-dlq` 的訊息「開始重新驅動」回 `ses-events`。
+
+### 10.2 HTTPS webhook（不用 SQS）
+
+適合不想多管 SQS、能接受停機期間漏掉少數事件的情況。順序很重要：webhook 要先上線，SNS 才能完成訂閱確認。
+
+1. **SNS topic** `ses-events` 與 **configuration set** `newsletter` 的事件目的地同 10.1 表格（可在 SES 主控台手動建，或在 CloudShell 只執行 `setup-ses-events.sh` 第 4 段）。不要建 SQS 佇列的訂閱，否則改回 SQS 前事件會堆在佇列裡。
+2. **設環境變數並部署**：`SESMAIL_SNS_ENABLED=true`、`SESMAIL_SNS_TOPIC_ARNS=arn:aws:sns:ap-northeast-1:322987693466:ses-events`，`SESMAIL_SQS_ENABLED` 保持 `false`。
+3. **確認 webhook 從外面打得到**（必須回 **403**：程式收到了、偽造內容被驗簽拒絕；回 404 代表請求沒進到程式，先別建訂閱）：
+
+```powershell
+curl.exe -s -o NUL -w "%{http_code}" -X POST https://springai-survey.zeabur.app/sesmail/sns -d '{}'
+```
+
+4. **建 HTTPS 訂閱**：SNS → `ses-events` topic → Create subscription，Protocol **HTTPS**，Endpoint `https://springai-survey.zeabur.app/sesmail/sns`（**問卷網域**；讀者網域會被 Host 白名單擋掉），**不要**勾 raw message delivery。webhook 會自動確認，訂閱狀態幾秒內變成 Confirmed；沒變的話看 log 有沒有 `SNS 訊息簽章驗證失敗` 或 `未允許的 topic`。
+5. **設 `AWS_SES_CONFIGURATION_SET=newsletter`**，再照 10.1 的模擬信箱方式驗證。
+
+從 webhook 改成 SQS：先照 10.1 建資源並設好 SQS 變數，再把 `SESMAIL_SNS_ENABLED` 改回 `false`，最後刪掉 HTTPS 訂閱。
 
 已知限制：交易信（登入信等）的送達事件有極小機率比寄送記錄先到，那一封的送達時間會是空的，不影響任何功能。
 

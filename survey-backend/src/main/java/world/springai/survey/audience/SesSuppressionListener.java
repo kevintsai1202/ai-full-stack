@@ -24,7 +24,8 @@ import java.util.Map;
  *
  * <p>SNS 可能重送同一則通知：{@code unsubscribeByEmail} 重做沒有副作用，且只有真的改到資料時
  * 才寫同意事件，所以整體是冪等的。email 正規化必須與退訂連結端點一致（{@code trim().toLowerCase(Locale.ROOT)}）。
- * 只有啟用 {@code sesmail.sns.enabled} 時 starter 才會呼叫本類。</p>
+ * 只有啟用 {@code sesmail.sqs.enabled}（SQS 拉取）或 {@code sesmail.sns.enabled}（HTTPS webhook）時
+ * starter 才會呼叫本類。</p>
  */
 @Component
 public class SesSuppressionListener implements SesEventListener {
